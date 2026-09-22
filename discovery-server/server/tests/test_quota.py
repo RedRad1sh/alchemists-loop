@@ -1,6 +1,8 @@
 """Регрессии квоты LLM: квота резервируется по ФАКТУ генерации, а не по
 клиентскому флагу experiment (обход «experiment:false» закрыт); при отказе
-модели квота возвращается; письма — отдельный дневной бюджет per-device+global.
+модели квота возвращается; письма — отдельный дневной бюджет per-device+global;
+атлас (третий оракул, _ensure_atlas) — мировой бюджет под ключом "" с теми же
+возвратами резерва при LLMError/пустом намёке.
 
 NOTE: тесты написаны в стиле test_experiment_limits.py (TestClient, monkeypatch
 констант сервера). На машине разработки не запускались (нет fastapi, py<3.10);
@@ -60,6 +62,14 @@ class _DownLLM(_ExternalLLM):
         return LLMError("модель недоступна")
 
 
+class _EmptyHintLLM(_ExternalLLM):
+    """Внешний провайдер, который отвечает, но намёк всегда пустой."""
+
+    def generate_hint(self, *args, **kwargs):
+        self.hint_calls += 1
+        return {"hint": "   "}
+
+
 def _experiment_tuned(srv, monkeypatch, daily=1, cooldown=0.0, global_daily=100):
     """Понятные детерминированные лимиты экспериментов (без реальных 5 сек/200)."""
     monkeypatch.setattr(srv, "EXPERIMENT_DAILY_LIMIT", daily)
@@ -71,6 +81,19 @@ def _letter_tuned(srv, monkeypatch, daily=3, cooldown=0.0, global_daily=100):
     monkeypatch.setattr(srv, "LETTER_DAILY_LIMIT", daily)
     monkeypatch.setattr(srv, "LETTER_COOLDOWN_SEC", cooldown)
     monkeypatch.setattr(srv, "LETTER_GLOBAL_DAILY_LIMIT", global_daily)
+
+
+def _atlas_tuned(srv, monkeypatch, daily=100, cooldown=0.0):
+    """Атлас — мировой бюджет под ключом "" (одна страница на весь сервер)."""
+    monkeypatch.setattr(srv, "ATLAS_DAILY_LIMIT", daily)
+    monkeypatch.setattr(srv, "ATLAS_COOLDOWN_SEC", cooldown)
+
+
+def _atlas_attempts(srv):
+    row = srv.get_db().execute(
+        "SELECT attempts FROM atlas_limits WHERE device_id = ?", ("",)
+    ).fetchone()
+    return int(row["attempts"]) if row else 0
 
 
 class TestQuotaKeysOnGenerationFact:
@@ -233,3 +256,88 @@ class TestLetterQuota:
             assert limited.json()["status"] == "rate_limited"
             letter = client.get("/api/letter/today", params={"device_id": "dev-1"})
             assert letter.json()["today"] is not None
+
+
+class TestAtlasQuota:
+    """Регресс третьего оракула: _ensure_atlas без квоты при пустом намёке или
+    LLMError заставлял каждый запрос к /api/atlas/today молотить generate_hint."""
+
+    def test_failure_loop_capped_by_cooldown(self, tmp_path, monkeypatch):
+        """Цикл отказных генераций: кулдаун гасит молотилку, LLM — ровно 1 вызов."""
+        down = _DownLLM()
+        srv, client = _client(tmp_path, monkeypatch, down)
+        _atlas_tuned(srv, monkeypatch, daily=100, cooldown=3600.0)
+        with client:
+            for _ in range(5):
+                r = client.get("/api/atlas/today")
+                assert r.json()["today"] is None
+        assert down.hint_calls == 1
+        # возврат резерва не сбрасывает last_at: кулдаун продолжает работать
+        assert _atlas_attempts(srv) == 0
+
+    def test_atlas_cap_blocks_generation_before_llm(self, tmp_path, monkeypatch):
+        """Исчерпанный мировой лимит атласа не доходит до LLM."""
+        llm = _ExternalLLM()
+        srv, client = _client(tmp_path, monkeypatch, llm)
+        _atlas_tuned(srv, monkeypatch, daily=1, cooldown=0.0)
+        with client:
+            conn = srv.get_db()
+            conn.execute(
+                "INSERT INTO atlas_limits(day, device_id, attempts, last_at) "
+                "VALUES (?, ?, 1, 0)",
+                (srv._today(), ""),
+            )
+            conn.commit()
+            conn.close()
+            r = client.get("/api/atlas/today")
+        assert r.json()["today"] is None
+        assert llm.hint_calls == 0
+
+    def test_empty_hint_refunds_quota_and_retry_succeeds(self, tmp_path, monkeypatch):
+        """Пустой намёк — страница не фиксируется, резерв возвращается, ретрай проходит."""
+        empty = _EmptyHintLLM()
+        srv, client = _client(tmp_path, monkeypatch, empty)
+        _atlas_tuned(srv, monkeypatch, daily=1, cooldown=0.0)
+        with client:
+            r = client.get("/api/atlas/today")
+            assert r.json()["today"] is None
+            assert srv.get_db().execute(
+                "SELECT COUNT(*) AS c FROM atlas_pages"
+            ).fetchone()["c"] == 0
+            assert _atlas_attempts(srv) == 0
+            good = _ExternalLLM()
+            monkeypatch.setattr(srv, "get_llm", lambda: good)
+            ok = client.get("/api/atlas/today")
+            assert ok.json()["today"] is not None
+            assert good.hint_calls == 1
+            # успешная генерация списывает ровно одну попытку мирового бюджета
+            assert _atlas_attempts(srv) == 1
+
+    def test_llm_error_refunds_quota_and_retry_succeeds(self, tmp_path, monkeypatch):
+        """LLMError в атласе возвращает резерв, как на пути писем."""
+        down = _DownLLM()
+        srv, client = _client(tmp_path, monkeypatch, down)
+        _atlas_tuned(srv, monkeypatch, daily=1, cooldown=0.0)
+        with client:
+            r = client.get("/api/atlas/today")
+            assert r.json()["today"] is None
+            assert _atlas_attempts(srv) == 0
+            good = _ExternalLLM()
+            monkeypatch.setattr(srv, "get_llm", lambda: good)
+            ok = client.get("/api/atlas/today")
+            assert ok.json()["today"] is not None
+            assert good.hint_calls == 1
+
+    def test_cached_atlas_page_costs_nothing(self, tmp_path, monkeypatch):
+        """Кэш страницы дня не расходует квоту и не зовёт LLM повторно."""
+        llm = _ExternalLLM()
+        srv, client = _client(tmp_path, monkeypatch, llm)
+        _atlas_tuned(srv, monkeypatch, daily=1, cooldown=0.0)
+        with client:
+            first = client.get("/api/atlas/today")
+            assert first.json()["today"] is not None
+            for _ in range(3):
+                again = client.get("/api/atlas/today")
+                assert again.json()["today"] is not None
+        assert llm.hint_calls == 1
+        assert _atlas_attempts(srv) == 1

@@ -218,11 +218,16 @@ OpenRouter свои ~50–1000 запросов/день).
 Письма Светика (`/api/letter/today`) имеют ОТДЕЛЬНЫЙ дневной бюджет LLM-вызовов
 в таблицах `letter_limits` / `letter_global_limits`: по умолчанию 3 генерации
 намёка на устройство в сутки, cooldown 30 секунд и 3000 на весь сервер. При
-исчерпании письмо просто не генерируется (ответ остаётся корректным). Все
+исчерпании письмо просто не генерируется (ответ остаётся корректным). Страница
+Атласа (`/api/atlas/today`) — третий LLM-оракул — имеет свой мировой бюджет в
+таблицах `atlas_limits` / `atlas_global_limits` (без device-ключа, по
+фиксированному ключу `""`): по умолчанию 10 генераций в сутки на весь сервер,
+cooldown 60 секунд; при `LLMError` или пустой загадке резерв возвращается. Все
 лимиты настраиваются окружением: `ALCHEMY_EXPERIMENT_DAILY_LIMIT`,
 `ALCHEMY_EXPERIMENT_COOLDOWN_SEC`, `ALCHEMY_EXPERIMENT_GLOBAL_DAILY_LIMIT`,
 `ALCHEMY_LETTER_DAILY_LIMIT`, `ALCHEMY_LETTER_COOLDOWN_SEC`,
-`ALCHEMY_LETTER_GLOBAL_DAILY_LIMIT`.
+`ALCHEMY_LETTER_GLOBAL_DAILY_LIMIT`, `ALCHEMY_ATLAS_DAILY_LIMIT`,
+`ALCHEMY_ATLAS_COOLDOWN_SEC`.
 
 ### Настройка генерации (env)
 

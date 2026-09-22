@@ -101,6 +101,13 @@ EXPERIMENT_GLOBAL_DAILY_LIMIT = int(os.environ.get("ALCHEMY_EXPERIMENT_GLOBAL_DA
 LETTER_COOLDOWN_SEC = float(os.environ.get("ALCHEMY_LETTER_COOLDOWN_SEC", "30"))
 LETTER_DAILY_LIMIT = int(os.environ.get("ALCHEMY_LETTER_DAILY_LIMIT", "3"))
 LETTER_GLOBAL_DAILY_LIMIT = int(os.environ.get("ALCHEMY_LETTER_GLOBAL_DAILY_LIMIT", "3000"))
+# Атлас — общемировая страница (1 генерация на сутки), device-ключа нет:
+# квота резервируется по факту LLM-вызова под фиксированным мировым ключом ""
+# (см. _ensure_atlas). Отдельный бюджет, чтобы отказные ретраи атласа не
+# сжигали письма/эксперименты; дневной лимит считается вместе (per-key и
+# мировой счётчики здесь совпадают по смыслу).
+ATLAS_COOLDOWN_SEC = float(os.environ.get("ALCHEMY_ATLAS_COOLDOWN_SEC", "60"))
+ATLAS_DAILY_LIMIT = int(os.environ.get("ALCHEMY_ATLAS_DAILY_LIMIT", "10"))
 
 # Резонанс первооткрывателя (v24): чужой повтор твоего вещества → отголосок.
 ECHO_ETHER = 5   # эфир за один забранный отголосок
@@ -558,6 +565,22 @@ def init_db():
                )"""
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_letter_limits_device ON letter_limits(device_id)")
+        # Атлас: дневной бюджет LLM-вызовов генерации страницы (мировой ключ "").
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS atlas_limits (
+                   day TEXT NOT NULL,
+                   device_id TEXT NOT NULL,
+                   attempts INTEGER NOT NULL DEFAULT 0,
+                   last_at REAL NOT NULL DEFAULT 0,
+                   PRIMARY KEY (day, device_id)
+               )"""
+        )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS atlas_global_limits (
+                   day TEXT NOT NULL PRIMARY KEY,
+                   attempts INTEGER NOT NULL DEFAULT 0
+               )"""
+        )
         conn.execute(
 
             """CREATE TABLE IF NOT EXISTS letters (
@@ -1138,6 +1161,29 @@ def _refund_letter(conn: sqlite3.Connection, device_id: str):
     )
 
 
+ATLAS_QUOTA_KEY = ""  # атлас общемировой: квота на весь сервер под фиксированным ключом
+
+
+def _admit_atlas(conn: sqlite3.Connection) -> tuple[bool, str]:
+    """Reserve one atlas-page LLM generation for today (world-wide budget)."""
+    return _reserve_llm_generation(
+        conn, ATLAS_QUOTA_KEY,
+        limits_table="atlas_limits", global_table="atlas_global_limits",
+        cooldown_sec=ATLAS_COOLDOWN_SEC, daily_limit=ATLAS_DAILY_LIMIT,
+        global_daily_limit=ATLAS_DAILY_LIMIT,
+        cooldown_msg="Страницу атласа можно запросить через %d с.",
+        daily_msg="Дневной лимит генераций атласа исчерпан.",
+        global_msg="Дневной лимит генераций атласа исчерпан.",
+    )
+
+
+def _refund_atlas(conn: sqlite3.Connection):
+    _refund_llm_generation(
+        conn, ATLAS_QUOTA_KEY,
+        limits_table="atlas_limits", global_table="atlas_global_limits",
+    )
+
+
 def _challenge_target_for(day: str) -> str:
     """Детерминированный целевой ингредиент дня (одинаков для всех игроков)."""
     h = int(hashlib.sha256(("challenge_" + day).encode("utf-8")).hexdigest(), 16)
@@ -1429,8 +1475,10 @@ def _atlas_candidates(conn: sqlite3.Connection):
 def _ensure_atlas(conn, day: str, llm=None):
     """Страница Атласа на день: вернуть строку или None (LLM недоступна / пусто).
 
-    Одна страница на весь мир, загадка генерируется 1 раз и кэшируется —
-    не более 1 LLM-запроса в сутки на весь сервер.
+    Одна страница на весь мир, загадка генерируется 1 раз и кэшируется.
+    Квота — отдельный дневной бюджет генераций атласа (мировой ключ),
+    резервируется по факту LLM-вызова; при отказе модели или пустом
+    намёке резерв возвращается, кулдаун гасит молотилку эндпоинта.
     """
     row = conn.execute(
         "SELECT day, a, b, a_name, b_name, riddle FROM atlas_pages WHERE day = ?",
@@ -1447,12 +1495,18 @@ def _ensure_atlas(conn, day: str, llm=None):
     b_info = _parent(conn, pb)
     if llm is None:
         llm = get_llm()
+    # Резерв квоты — прямо перед платным вызовом генератора загадки.
+    allowed, _ = _admit_atlas(conn)
+    if not allowed:
+        return None
     try:
         res = llm.generate_hint(a_info["name"], b_info["name"])
     except LLMError:
+        _refund_atlas(conn)
         return None
     riddle = str(res.get("hint", "")).strip()
     if not riddle:
+        _refund_atlas(conn)
         return None
     conn.execute(
         "INSERT OR IGNORE INTO atlas_pages (day, a, b, a_name, b_name, riddle) "
