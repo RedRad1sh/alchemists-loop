@@ -1,0 +1,2550 @@
+#!/usr/bin/env python3
+"""
+Сервер "первооткрытий" для игры "Петля алхимика".
+Стек: Python 3 + FastAPI + uvicorn + SQLite.
+Порт по умолчанию: 8080.
+
+Запуск:
+    uvicorn server:app --host 0.0.0.0 --port 8080 --reload
+"""
+
+import hashlib
+import json
+import logging
+import random
+import shutil
+import math
+import os
+import re
+import sys
+import time
+import uuid
+from datetime import datetime, timedelta
+from typing import Optional
+
+import sqlite3
+
+# seed.py лежит рядом с server.py и содержит стартовый граф веществ.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import seed
+from gen_llm import GLYPH_PARAM, GLYPHS, LLMGenerator, LLMError, TAGS, is_glyph
+
+# Логирование: «alchemy.llm» (gen_llm.py) и «alchemy» (этот модуль).
+# Уровень INFO по умолчанию; DEBUG при ALCHEMY_DEBUG=1 или LLM_DEBUG=1.
+log = logging.getLogger("alchemy")
+
+
+def _setup_logging() -> None:
+    if logging.getLogger().handlers:
+        return
+    level = logging.DEBUG if (os.environ.get("ALCHEMY_DEBUG") == "1" or os.environ.get("LLM_DEBUG") == "1") else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+
+_setup_logging()
+
+from fastapi import FastAPI, HTTPException, Query, Response
+from pydantic import BaseModel, Field
+from pydantic import ValidationError
+
+# ---------------------------------------------------------------------------
+# Конфигурация
+# ---------------------------------------------------------------------------
+def _user_data_db_path() -> str:
+    """БД в пользовательской папке данных (appdata), а не рядом с кодом."""
+    app = "AlchemistsLoop"
+    if os.name == "nt":  # Windows: %APPDATA%
+        base = os.environ.get("APPDATA") or os.path.expanduser("~")
+    elif sys.platform == "darwin":  # macOS: ~/Library/Application Support
+        base = os.path.expanduser("~/Library/Application Support")
+    else:  # Linux: $XDG_DATA_HOME или ~/.local/share
+        base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    return os.path.join(base, app, "discoveries.db")
+
+
+def _resolve_db_path() -> str:
+    # Явный путь из окружения (ALCHEMY_DB_PATH или старый DB_PATH) имеет приоритет.
+    env = os.environ.get("ALCHEMY_DB_PATH") or os.environ.get("DB_PATH")
+    if env:
+        return os.path.abspath(env)
+    target = _user_data_db_path()
+    legacy = os.path.join(os.path.dirname(os.path.abspath(__file__)), "discoveries.db")
+    # Миграция: если в новом месте БД ещё нет, а рядом со скриптом лежит старая —
+    # переносим её, чтобы не потерять уже открытые вещества.
+    if not os.path.exists(target) and os.path.exists(legacy):
+        try:
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            shutil.copy2(legacy, target)
+            print(f"База перенесена: {legacy} -> {target}")
+        except OSError as e:
+            print(f"Не удалось перенести базу {legacy} -> {target}: {e}")
+    return target
+
+
+DB_PATH = _resolve_db_path()
+SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:8080")
+LOCK_TTL = 40.0  # секунд: сколько пара считается «в обработке» (защита от гонок)
+# Эксперименты — это явные LLM-backed запросы из Experiment Bench. Значения
+# намеренно конфигурируются окружением: расходы на LLM не должны быть спрятаны
+# в клиентской экономике. Кэшированные/curated ответы лимит не расходуют.
+EXPERIMENT_COOLDOWN_SEC = float(os.environ.get("ALCHEMY_EXPERIMENT_COOLDOWN_SEC", "5"))
+EXPERIMENT_DAILY_LIMIT = int(os.environ.get("ALCHEMY_EXPERIMENT_DAILY_LIMIT", "200"))
+EXPERIMENT_GLOBAL_DAILY_LIMIT = int(os.environ.get("ALCHEMY_EXPERIMENT_GLOBAL_DAILY_LIMIT", "10000"))
+
+# Резонанс первооткрывателя (v24): чужой повтор твоего вещества → отголосок.
+ECHO_ETHER = 5   # эфир за один забранный отголосок
+ECHO_CAP = 20    # максимум незабранных отголосков (вечный счётчик без капа)
+RES_MILESTONES = (10, 50, 100)  # вехи: +реген / +кап / золотая рамка
+# При недоступности LLM решение НЕ фиксируется: пара остаётся кандидатом,
+# её можно будет сгенерировать позже (никаких «пулов» произвольных имён).
+
+# Ежедневная цель-гонка: целевой ингредиент дня (кто первым откроет вещество,
+# рождённое из него, — тот победил). Выбор детерминирован по дате.
+CHALLENGE_TARGETS = [
+    "gold", "crystal", "lightning", "volcano", "rainbow", "sun",
+    "ice", "storm", "tornado", "metal", "life", "desert", "boat", "person",
+]
+
+app = FastAPI(
+    title="Алхимические первооткрытия",
+    description="Сервер для регистрации нового вещества, полученного варкой неизвестной пары",
+    version="1.0.0",
+)
+
+# ---------------------------------------------------------------------------
+# Pydantic-модели
+# ---------------------------------------------------------------------------
+
+class BrewCheckRequest(BaseModel):
+    a: str = Field(..., min_length=1, description="ID первого ингредиента")
+    b: str = Field(..., min_length=1, description="ID второго ингредиента")
+    nick: str = Field(..., min_length=1, max_length=64, description="Ник игрока")
+    device_id: str = Field(..., min_length=1, max_length=128, description="Уникальный ID устройства/保存")
+    # Явная метка Experiment Bench. В первой версии arity=2; поле позволяет
+    # отличить оплаченный LLM-запрос от обычного чтения известной пары.
+    experiment: bool = False
+
+class BrewCheckResponse(BaseModel):
+    ok: bool
+    pair_key: str
+    found: bool
+    status: str = "candidate"  # known | candidate | not_combinable | processing
+    out: Optional[dict] = None
+    discoverer: Optional[dict] = None
+    pending: bool = False
+    message: str
+
+class DiscoverRequest(BrewCheckRequest):
+    pass
+
+class DiscoveryData(BaseModel):
+    id: int
+    slug: str
+    name: str
+    color: str
+    layer: int
+    category: str
+    glyph: str = ""
+    d: str = ""
+    pair_key: str
+    a: str
+    b: str
+    author: Optional[str] = None
+    avatar: Optional[dict] = None
+    seq: int
+    created_at: Optional[str] = None
+    gen_method: Optional[str] = None  # "llm" | "linked"
+    reused: bool = False  # результат привязан к уже существующему веществу
+    tag: str = ""  # тег природы (v30, недельный слой)
+
+class DiscoverResponse(BaseModel):
+    ok: bool
+    discovery: Optional[DiscoveryData] = None
+    already_known: bool = False
+    status: str = "created"  # created | known | not_combinable | unavailable
+    message: str
+    challenge: Optional[dict] = None  # состояние ежедневной цели-гонки
+    vein: Optional[dict] = None  # бонус жилы: {tag, points, streak} | None
+
+class EventData(BaseModel):
+    pair_key: str
+    a: str
+    b: str
+    a_name: str = ""
+    b_name: str = ""
+    out: str
+    out_name: str
+    discoverer: Optional[str] = None
+    avatar: Optional[dict] = None
+    created_at: Optional[str] = None
+    ago_sec: int = 0
+
+class EventsResponse(BaseModel):
+    ok: bool
+    events: list[EventData]
+
+class ChallengeResponse(BaseModel):
+    ok: bool
+    day: str
+    target: str
+    target_name: str
+    hint: str
+    first_nick: Optional[str] = None
+    first_avatar: Optional[dict] = None
+    completions: int = 0
+    my_points: int = 0
+    my_points_total: int = 0  # вечный суммарный счёт очков (вехи Дневного круга, v29)
+    today_events: int = 0
+
+class ElementData(BaseModel):
+    id: int
+    slug: str
+    name: str
+    color: str
+    layer: int
+    category: str
+    glyph: str = ""
+    d: str = ""
+    author: Optional[str] = None
+    avatar: Optional[dict] = None
+    created_at: Optional[str] = None
+
+class WorldResponse(BaseModel):
+    ok: bool
+    elements: list[ElementData]
+    page: int
+    per_page: int
+    total: int
+
+class HallEntry(BaseModel):
+    rank: int
+    nick: str
+    avatar: Optional[dict] = None
+    count: int
+    updated_at: Optional[str] = None
+
+class HallResponse(BaseModel):
+    ok: bool
+    hall: list[HallEntry]
+
+class HealthResponse(BaseModel):
+    ok: bool
+    version: str
+
+class ProfileRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128, description="Уникальный ID устройства")
+    nick: str = Field("", max_length=64, description="Ник игрока (2..24 символа после очистки)")
+
+class ProfileResponse(BaseModel):
+    ok: bool
+    nick: str
+    device_id: str
+    avatar: dict
+
+
+class RejectedResponse(BaseModel):
+    ok: bool
+    rejected: list[str]
+
+
+class HouseRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    nick: str = Field(..., min_length=1, max_length=64)
+    house: dict = {}
+
+
+class HouseResponse(BaseModel):
+    ok: bool
+    nick: str
+    avatar: Optional[dict] = None
+    house: Optional[dict] = None
+    found: bool = True
+
+
+class RatingRow(BaseModel):
+    rank: int
+    nick: str
+    avatar: Optional[dict] = None
+    discoveries: int = 0
+    elements: int = 0
+    points: int = 0
+    house_built: bool = False
+    updated_at: Optional[str] = None
+
+
+class RatingResponse(BaseModel):
+    ok: bool
+    rows: list[RatingRow]
+    me: Optional[RatingRow] = None
+
+
+class EchoDescendant(BaseModel):
+    name: str
+    slug: str
+    by: Optional[str] = None
+    at: Optional[str] = None
+
+
+class EchoTop(BaseModel):
+    name: str
+    slug: str
+    count: int = 0
+
+
+class EchoesResponse(BaseModel):
+    ok: bool
+    nick: str = ""
+    balance: int = 0
+    total: int = 0
+    cap: int = 20
+    echo_ether: int = 5
+    milestones: dict = {}
+    top: list[EchoTop] = []
+    descendants: list[EchoDescendant] = []
+    descendants_total: int = 0
+    apprentice: Optional[dict] = None
+
+
+class EchoesClaimRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+
+
+class EchoesClaimResponse(BaseModel):
+    ok: bool
+    claimed: int = 0
+    ether: int = 0
+    total: int = 0
+
+
+class LetterData(BaseModel):
+    # NOTE: слаги ответа (a/b) клиенту не отдаём никогда — иначе спойлер.
+    day: str
+    a_name: str = ""  # только если разгадано / приоткрыто (см. ниже)
+    b_name: str = ""
+    len_a: int = 0  # длины слов — рамка загадки, видны всегда
+    len_b: int = 0
+    known_a: list = []  # приоткрытые буквы [[idx, char], ...]
+    known_b: list = []
+    hint: str = ""
+    solved: bool = False
+    revealed: bool = False  # лежит ≥2 дней — Светик называет первое вещество
+
+
+class LettersResponse(BaseModel):
+    ok: bool
+    today: Optional[LetterData] = None
+    backlog: list[LetterData] = []
+    solved_total: int = 0
+
+
+class LetterSolveRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    a: str = Field(..., min_length=1, max_length=128)  # слаги сваренной пары
+    b: str = Field(..., min_length=1, max_length=128)
+
+
+class LetterSolveResponse(BaseModel):
+    ok: bool
+    matched: bool = False  # пара совпала с неразгаданным письмом
+    day: str = ""  # день разгаданного письма ("" если не совпало)
+    solved_total: int = 0
+    milestone: bool = False  # каждое 5-е → +кап на клиенте
+
+
+class AtlasTodayData(BaseModel):
+    # NOTE: слаги ответа клиенту не отдаём никогда (как в письмах).
+    day: str
+    riddle: str = ""
+    len_a: int = 0
+    len_b: int = 0
+    known_a: list = []
+    known_b: list = []
+    solvers: int = 0  # сколько устройств уже разгадали
+    solved_by_me: bool = False
+    # имена — только если я разгадал (для просмотра своей страницы)
+    a_name: str = ""
+    b_name: str = ""
+
+
+class AtlasHistoryData(BaseModel):
+    day: str
+    riddle: str = ""
+    a_name: str = ""
+    b_name: str = ""
+    solved_by_me: bool = False
+
+
+class AtlasTodayResponse(BaseModel):
+    ok: bool
+    today: Optional[AtlasTodayData] = None  # None = LLM недоступна, день ждёт
+    history: list[AtlasHistoryData] = []  # прошлые дни с ответами (до 7)
+    solved_total: int = 0  # моих разгаданных страниц
+
+
+class AtlasSolveRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    a: str = Field(..., min_length=1, max_length=128)
+    b: str = Field(..., min_length=1, max_length=128)
+
+
+class AtlasSolveResponse(BaseModel):
+    ok: bool
+    matched: bool = False
+    solved_total: int = 0
+    milestone: bool = False  # каждая 10-я → +кап на клиенте
+
+
+class WeekStatusResponse(BaseModel):
+    ok: bool
+    week: str = ""
+    vein: dict = {}  # {tag1, tag2, spread, my_hits, my_streaks, streak_cap}
+    fair: dict = {}  # {tag, goal, progress, apprentice, closed, my_contrib, claimed, prev}
+
+
+class FairBrewRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    a: str = Field(..., min_length=1, max_length=128)
+    b: str = Field(..., min_length=1, max_length=128)
+
+
+class FairBrewResponse(BaseModel):
+    ok: bool
+    counted: bool = False
+    progress: int = 0
+    goal: int = 0
+    contrib: int = 0
+    closed: bool = False
+
+
+class FairClaimRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+
+
+class FairClaimResponse(BaseModel):
+    ok: bool
+    grants: list = []  # [{week, kind: regen|ether, amount}]
+
+# ---------------------------------------------------------------------------
+# Работа с БД
+# ---------------------------------------------------------------------------
+
+def get_db() -> sqlite3.Connection:
+    """Фабрика соединений. Каждый запрос получает своё соединение."""
+    os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+def canonical_pair_key(a: str, b: str) -> str:
+    """Нормализованный ключ пары (сортировка по алфавиту)."""
+    if a == b:
+        return f"{a}|{a}"
+    return f"{min(a, b)}|{max(a, b)}"
+
+def init_db():
+    """Инициализация БД: создать таблицы и загрузить стартовый граф веществ."""
+    conn = get_db()
+    try:
+        # Выполняем schema.sql (только DDL)
+        schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
+        if os.path.exists(schema_path):
+            with open(schema_path, "r", encoding="utf-8") as f:
+                schema_sql = f.read()
+            conn.executescript(schema_sql)
+
+        # миграция старых БД: колонки glyph и d
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(elements)").fetchall()}
+        if "glyph" not in cols:
+            conn.execute("ALTER TABLE elements ADD COLUMN glyph TEXT NOT NULL DEFAULT ''")
+        if "d" not in cols:
+            conn.execute("ALTER TABLE elements ADD COLUMN d TEXT NOT NULL DEFAULT ''")
+        if "name_norm" not in cols:
+            conn.execute("ALTER TABLE elements ADD COLUMN name_norm TEXT")
+        if "resonance_count" not in cols:
+            conn.execute("ALTER TABLE elements ADD COLUMN resonance_count INTEGER NOT NULL DEFAULT 0")
+        if "tag" not in cols:
+            conn.execute("ALTER TABLE elements ADD COLUMN tag TEXT NOT NULL DEFAULT ''")
+
+        # миграция players: колонки домика (для открытия чужих домов)
+        pcols = {r["name"] for r in conn.execute("PRAGMA table_info(players)").fetchall()}
+        if "house" not in pcols:
+            conn.execute("ALTER TABLE players ADD COLUMN house TEXT")
+        if "house_updated_at" not in pcols:
+            conn.execute("ALTER TABLE players ADD COLUMN house_updated_at TEXT")
+        if "last_seen" not in pcols:
+            conn.execute("ALTER TABLE players ADD COLUMN last_seen TEXT")
+
+        # миграция challenges: winner_* → first_* (личная цель вместо гонки)
+        ccols = {r["name"] for r in conn.execute("PRAGMA table_info(challenges)").fetchall()}
+        if "first_nick" not in ccols:
+            conn.execute("ALTER TABLE challenges ADD COLUMN first_nick TEXT")
+        if "first_device" not in ccols:
+            conn.execute("ALTER TABLE challenges ADD COLUMN first_device TEXT")
+
+        # Стартовый граф: 57 веществ / 53 рецепта из локальной игры
+        seed.seed_db(conn)
+        seed.seed_bots(conn)
+        # backfill name_norm (дедупликация имён) для строк старых БД
+        for r in conn.execute("SELECT id, name FROM elements WHERE name_norm IS NULL").fetchall():
+            conn.execute("UPDATE elements SET name_norm = ? WHERE id = ?",
+                         (seed.norm_name(r["name"]), r["id"]))
+        conn.execute("UPDATE elements SET glyph = slug WHERE glyph = ''")
+        # v30: backfill тегов (сиды — по карте, чужие/LLM-строки — из категории)
+        for r in conn.execute("SELECT id, slug, category FROM elements WHERE tag = ''").fetchall():
+            conn.execute("UPDATE elements SET tag = ? WHERE id = ?",
+                         (seed.tag_for(r["slug"], r["category"]), r["id"]))
+        # схлопнуть существующие дубли по name_norm (напр. два «огонь» из старых
+        # версий): оставляем строку с наименьшим id, перенаправляем ссылки рецептов
+        _merge_duplicate_elements(conn)
+        # индекс по name_norm создаём только здесь: на старых БД колонка появляется
+        # в миграции выше, а не в исходной схеме
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_elements_name_norm ON elements(name_norm)")
+        # v24: таблица отголосков + индексы для родословной (безопасно для старых БД:
+        # CREATE TABLE/INDEX IF NOT EXISTS)
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS echoes (
+                   device_id TEXT NOT NULL PRIMARY KEY,
+                   balance INTEGER NOT NULL DEFAULT 0,
+                   total INTEGER NOT NULL DEFAULT 0,
+                   last_apprentice_day TEXT
+               )"""
+        )
+        # Experiment Bench: durable per-device and global LLM budgets. Existing
+        # world/discovery tables remain untouched, so old servers migrate safely.
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS experiment_limits (
+                   day TEXT NOT NULL,
+                   device_id TEXT NOT NULL,
+                   attempts INTEGER NOT NULL DEFAULT 0,
+                   last_at REAL NOT NULL DEFAULT 0,
+                   PRIMARY KEY (day, device_id)
+               )"""
+        )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS experiment_global_limits (
+                   day TEXT NOT NULL PRIMARY KEY,
+                   attempts INTEGER NOT NULL DEFAULT 0
+               )"""
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_experiment_limits_device ON experiment_limits(device_id)")
+        conn.execute(
+
+            """CREATE TABLE IF NOT EXISTS letters (
+                   device_id TEXT NOT NULL,
+                   day TEXT NOT NULL,
+                   a TEXT NOT NULL,
+                   b TEXT NOT NULL,
+                   a_name TEXT NOT NULL,
+                   b_name TEXT NOT NULL,
+                   hint TEXT NOT NULL DEFAULT '',
+                   solved INTEGER NOT NULL DEFAULT 0,
+                   created_at TEXT DEFAULT (datetime('now')),
+                   PRIMARY KEY (device_id, day)
+               )"""
+        )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS atlas_pages (
+                   day TEXT PRIMARY KEY,
+                   a TEXT NOT NULL,
+                   b TEXT NOT NULL,
+                   a_name TEXT NOT NULL,
+                   b_name TEXT NOT NULL,
+                   riddle TEXT NOT NULL DEFAULT '',
+                   created_at TEXT DEFAULT (datetime('now'))
+               )"""
+        )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS atlas_solves (
+                   device_id TEXT NOT NULL,
+                   day TEXT NOT NULL,
+                   PRIMARY KEY (device_id, day)
+               )"""
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_atlas_solves_device ON atlas_solves(device_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_recipes_a_id ON recipes(a_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_recipes_b_id ON recipes(b_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_elements_author ON elements(author)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _merge_duplicate_elements(conn: sqlite3.Connection) -> None:
+    """Схлопнуть дубли элементов с одинаковым name_norm (напр. «Огонь» и «огонь» из
+    старых версий). Оставляем строку с наименьшим id, ссылки рецептов (a_id/b_id/
+    out_id) перенаправляем на неё, дубликаты удаляем."""
+    dups = conn.execute(
+        "SELECT name_norm, COUNT(*) AS n FROM elements "
+        "WHERE name_norm IS NOT NULL AND name_norm != '' "
+        "GROUP BY name_norm HAVING n > 1"
+    ).fetchall()
+    for d in dups:
+        rows = conn.execute(
+            "SELECT id FROM elements WHERE name_norm = ? ORDER BY id", (d["name_norm"],)
+        ).fetchall()
+        keep_id = rows[0]["id"]
+        for r in rows[1:]:
+            drop_id = r["id"]
+            conn.execute("UPDATE recipes SET a_id = ? WHERE a_id = ?", (keep_id, drop_id))
+            conn.execute("UPDATE recipes SET b_id = ? WHERE b_id = ?", (keep_id, drop_id))
+            conn.execute("UPDATE recipes SET out_id = ? WHERE out_id = ?", (keep_id, drop_id))
+            conn.execute("DELETE FROM elements WHERE id = ?", (drop_id,))
+
+
+def reset_world(conn: sqlite3.Connection) -> None:
+    """Полный сброс первооткрытий: удалить все элементы, рецепты, отказы и
+    блокировки, затем заново загрузить чистый стартовый граф (57 веществ /
+    53 рецепта). Нужно, чтобы вычистить результаты старой логики генерации
+    (например, имена из удалённых «пулов»)."""
+    conn.execute("DELETE FROM recipes")
+    conn.execute("DELETE FROM elements")
+    conn.execute("DELETE FROM rejected_pairs")
+    conn.execute("DELETE FROM pending_pairs")
+    conn.execute("DELETE FROM echoes")
+    seed.seed_db(conn)
+    seed.seed_bots(conn)
+    conn.execute("UPDATE elements SET glyph = slug WHERE glyph = ''")
+
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Хеш-функция для детерминированных решений (слаг, цвет)
+# ---------------------------------------------------------------------------
+def _hash_to_int(s: str, mod: int) -> int:
+    """Определённая хеш-функция строки в [0, mod)."""
+    h = int(hashlib.sha256(s.encode("utf-8")).hexdigest(), 16)
+    return h % mod
+
+# Палитра аватаров (10 цветов) — совпадает с game/avatar.gd на клиенте.
+# Палитра построена по цветовому кругу (10 оттенков через 36°, S≈0.47/V≈0.80) —
+# совпадает с game/avatar.gd на клиенте.
+AVATAR_PALETTE = [
+    "#cc6c6c", "#cca66c", "#b9cc6c", "#7fcc6c", "#6ccc92",
+    "#6ccccc", "#6c92cc", "#7f6ccc", "#b96ccc", "#cc6ca6",
+]
+
+def avatar_for(seed: str) -> dict:
+    """Детерминированный процедурный аватар из строки-сида (ник игрока).
+
+    Клиент (game/avatar.gd) реализует ТОТ ЖЕ алгоритм, поэтому аватар,
+    посчитанный сервером, совпадает с локальной отрисовкой. Возвращает
+    словарь {bg, accent, sym, ring}: цвета из палитры, индекс символа 0..11,
+    флаг внешнего кольца.
+    """
+    h = hashlib.sha256(("avatar_" + (seed or "")).encode("utf-8")).digest()
+    bg_idx = h[0] % len(AVATAR_PALETTE)
+    # split-complementary: акцент на 4..6 позиций (144°..180°) от фона,
+    # чтобы символ/кольцо контрастировали и не сливались с фоном.
+    accent_idx = (bg_idx + 4 + h[1] % 3) % len(AVATAR_PALETTE)
+    sym = h[2] % 12
+    ring = bool(h[3] & 1)
+    return {
+        "bg": AVATAR_PALETTE[bg_idx],
+        "accent": AVATAR_PALETTE[accent_idx],
+        "sym": sym,
+        "ring": ring,
+    }
+
+def clean_nick(raw: str) -> str:
+    """Нормализация ника: обрезка, схлопывание пробелов, только буквы/цифры/
+    пробел/дефис/подчёркивание, длина 2..24. Пустое/невалидное -> ""."""
+    if not raw:
+        return ""
+    s = str(raw)
+    s = re.sub(r"\s+", " ", s).strip()
+    s = re.sub(r"[^\w\s\-]", "", s, flags=re.UNICODE)
+    s = re.sub(r"\s+", " ", s).strip()
+    if len(s) < 2 or len(s) > 24:
+        return ""
+    return s
+
+def slugify(name: str) -> str:
+    """Преобразование русского имени в латинский слаг."""
+    # Транслитерация базовых символов
+    replacements = {
+        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd',
+        'е': 'e', 'ё': 'yo', 'ж': 'zh', 'з': 'z', 'и': 'i',
+        'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n',
+        'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't',
+        'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch',
+        'ш': 'sh', 'щ': 'shch', 'ъ': '', 'ы': 'y', 'ь': '',
+        'э': 'e', 'ю': 'yu', 'я': 'ya',
+    }
+    slug = ""
+    for ch in name.lower():
+        if ch in replacements:
+            slug += replacements[ch]
+        elif ch.isalnum():
+            slug += ch.lower()
+        elif ch in "-_":
+            slug += ch
+        else:
+            slug += "-"
+    # Убираем повторяющиеся дефисы и обрезаем
+    slug = re.sub(r"-+", "-", slug).strip("-")
+    slug = re.sub(r"[^a-z0-9-]", "", slug)
+    return slug or "element"
+
+def generate_slug(name: str, pair_key: str, existing_slugs: set[str]) -> str:
+    """Генерация уникального слага."""
+    base_slug = slugify(name)
+    
+    if base_slug not in existing_slugs:
+        return base_slug
+    
+    # При коллизии добавляем суффикс по hash(pair_key)
+    hash_int = _hash_to_int(pair_key, 997)
+    counter = 1
+    while True:
+        candidate = f"{base_slug}-{counter}"
+        if candidate not in existing_slugs:
+            return candidate
+        candidate = f"{base_slug}{hash_int}"
+        if candidate not in existing_slugs:
+            return candidate
+        counter += 1
+        if counter > 10:
+            # Фантастический случай — добавляем UUID-суффикс
+            return f"{base_slug}-{uuid.uuid4().hex[:6]}"
+
+def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    """Преобразование #RRGGBB в (R, G, B)."""
+    h = hex_color.lstrip("#")
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+def rgb_to_hex(r: int, g: int, b: int) -> str:
+    """Преобразование (R, G, B) в #RRGGBB."""
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+def color_distance(c1: tuple[int, int, int], c2: tuple[int, int, int]) -> float:
+    """Euclidean distance в RGB."""
+    return math.sqrt(sum((a - b) ** 2 for a, b in zip(c1, c2)))
+
+def mix_colors(
+    color_a: str,
+    color_b: str,
+    layer_a: int,
+    layer_b: int,
+    pair_key: str,
+    existing_colors: set[str],
+) -> str:
+    """
+    Детерминированная смесь цветов родителей.
+
+    Вес = 1 + layer/10 (более глубокие элементы сильнее влияют на цвет).
+    Результат обязан отличаться от обоих родителей (мин. 32 ед. RGB) и,
+    по возможности, от уже существующих цветов. При несоответствии —
+    детерминированный сдвиг (LCG по hash(pair_key)).
+    """
+    r_a, g_a, b_a = hex_to_rgb(color_a)
+    r_b, g_b, b_b = hex_to_rgb(color_b)
+
+    w_a = 1.0 + layer_a / 10.0
+    w_b = 1.0 + layer_b / 10.0
+
+    r = round((r_a * w_a + r_b * w_b) / (w_a + w_b))
+    g = round((g_a * w_a + g_b * w_b) / (w_a + w_b))
+    b = round((b_a * w_a + b_b * w_b) / (w_a + w_b))
+
+    new = (r, g, b)
+    seed = _hash_to_int(pair_key, 10000)
+
+    for _ in range(24):
+        new_hex = rgb_to_hex(*new)
+        dist_a = color_distance(new, (r_a, g_a, b_a))
+        dist_b = color_distance(new, (r_b, g_b, b_b))
+        if min(dist_a, dist_b) >= 32 and new_hex not in existing_colors:
+            return new_hex
+        # Детерминированный сдвиг (LCG), чтобы уйти от родительских цветов.
+        seed = (seed * 1103515245 + 12345) % (2**31)
+        new = (
+            max(0, min(255, r + (seed % 51) - 25)),
+            max(0, min(255, g + ((seed // 51) % 51) - 25)),
+            max(0, min(255, b + ((seed // 2601) % 51) - 25)),
+        )
+
+    return rgb_to_hex(*new)
+
+
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Недельный слой (v30): туманная жила + ярмарка гильдии
+# ---------------------------------------------------------------------------
+
+VEIN_POINTS = 2          # очков дня за первооткрытие в жиле
+VEIN_STREAK_CHANCE = 0.10  # шанс прожилки (+1 кап на клиенте)
+VEIN_STREAK_CAP = 5      # прожилок в неделю на устройство
+FAIR_MIN_CONTRIB = 3     # вклад для награды регеном при закрытом котле
+FAIR_CONSOLATION = 30    # эфира за 1 вклад при незакрытом котле
+FAIR_CONSOLATION_CAP = 20  # потолок вкладов для утешения
+
+
+def _week_key(day=None) -> str:
+    from datetime import date as _date
+    d = _date.fromisoformat(day) if isinstance(day, str) else (day or _date.today())
+    iso = d.isocalendar()
+    return f"{iso[0]}-W{iso[1]:02d}"
+
+
+def _week_monday(week: str):
+    from datetime import date as _date
+    y, w = week.split("-W")
+    return _date.fromisocalendar(int(y), int(w), 1)
+
+
+def _week_tags(conn: sqlite3.Connection) -> list:
+    tags = [r["tag"] for r in conn.execute(
+        "SELECT DISTINCT tag FROM elements WHERE tag != '' ORDER BY tag").fetchall()]
+    return tags or sorted(TAGS)
+
+
+def _week_pick(salt: str, week: str, tags: list) -> str:
+    i = int(hashlib.sha256((salt + week).encode("utf-8")).hexdigest(), 16) % len(tags)
+    return tags[i]
+
+
+def _vein_state(conn: sqlite3.Connection, week: str, today=None):
+    """Теги жилы недели + расползся ли туман (0 находок к среде → второй тег)."""
+    from datetime import date as _date
+    tags = _week_tags(conn)
+    tag1 = _week_pick("vein1_", week, tags)
+    tag2 = _week_pick("vein2_", week, tags)
+    if tag2 == tag1 and len(tags) > 1:
+        tag2 = tags[(tags.index(tag1) + 1) % len(tags)]
+    monday = _week_monday(week).isoformat()
+    hits = conn.execute(
+        "SELECT COUNT(*) AS c FROM recipes r JOIN elements e ON r.out_id = e.id "
+        "WHERE e.tag = ? AND date(r.created_at) >= date(?) AND r.discoverer IS NOT NULL",
+        (tag1, monday),
+    ).fetchone()["c"]
+    day = today or _date.today()
+    spread = hits == 0 and day.weekday() >= 2
+    return tag1, tag2, spread
+
+
+def _fair_ensure(conn: sqlite3.Connection, week: str) -> dict:
+    row = conn.execute("SELECT * FROM fair_weeks WHERE week = ?", (week,)).fetchone()
+    if row:
+        return dict(row)
+    tags = _week_tags(conn)
+    tag = _week_pick("fair_", week, tags)
+    since = (_week_monday(week) - timedelta(days=6)).isoformat()
+    active7 = conn.execute(
+        "SELECT COUNT(*) AS c FROM players WHERE last_seen IS NOT NULL AND last_seen >= date(?)",
+        (since,),
+    ).fetchone()["c"]
+    active7 = max(int(active7), 1)
+    goal = max(10, round(3 * active7 * 1.5))
+    conn.execute("INSERT INTO fair_weeks (week, tag, goal, progress) VALUES (?, ?, ?, 0)",
+                 (week, tag, goal))
+    conn.commit()
+    return {"week": week, "tag": tag, "goal": goal, "progress": 0}
+
+
+def _fair_virtual(progress: int, goal: int, days_elapsed: int) -> int:
+    # подмастерья гильдии доваривают 10% цели в день (на чтении, не в БД)
+    return progress + int(goal * 0.1 * min(max(days_elapsed, 0), 7))
+
+
+def _add_challenge_points(conn: sqlite3.Connection, day: str, device_id: str, nick: str, pts: int) -> None:
+    conn.execute(
+        """INSERT INTO challenge_scores (day, device_id, nick, points)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(day, device_id) DO UPDATE SET
+             points = points + excluded.points, nick = excluded.nick""",
+        (day, device_id, nick, pts),
+    )
+
+
+def _score_vein(conn: sqlite3.Connection, week: str, tag: str, day: str,
+                device_id: str, nick: str, today=None):
+    """Находка в жиле: +очки дня, счётчик, бросок прожилки. None — мимо жилы."""
+    tag1, tag2, spread = _vein_state(conn, week, today)
+    active = {tag1} | ({tag2} if spread else set())
+    if tag not in active:
+        return None
+    conn.execute(
+        """INSERT INTO vein_hits (week, device_id, count, streaks) VALUES (?, ?, 1, 0)
+           ON CONFLICT(week, device_id) DO UPDATE SET count = count + 1""",
+        (week, device_id),
+    )
+    streak = False
+    cur = conn.execute("SELECT streaks FROM vein_hits WHERE week = ? AND device_id = ?",
+                       (week, device_id)).fetchone()["streaks"]
+    if cur < VEIN_STREAK_CAP and random.random() < VEIN_STREAK_CHANCE:
+        conn.execute("UPDATE vein_hits SET streaks = streaks + 1 WHERE week = ? AND device_id = ?",
+                     (week, device_id))
+        streak = True
+    if device_id:
+        _add_challenge_points(conn, day, device_id, nick, VEIN_POINTS)
+    return {"tag": tag, "points": VEIN_POINTS, "streak": streak}
+
+
+# API-endpoints
+# ---------------------------------------------------------------------------
+
+@app.on_event("startup")
+async def startup():
+    """Инициализация БД при старте."""
+    init_db()
+    gen = get_llm()
+    prov = getattr(gen, "provider", "?")
+    models = ", ".join(getattr(gen, "models", []) or [])
+    if prov in ("openrouter", "openai_compatible") and getattr(gen, "api_key", ""):
+        print(f"[world] LLM: {prov} (ключ задан) — генерация через модель")
+        print(f"[world] Модели: {models}")
+    elif prov in ("openrouter", "openai_compatible"):
+        print("[world] LLM: нет ключа — задайте OPENROUTER_API_KEY или LLM_API_KEY+LLM_BASE_URL")
+    elif prov == "local":
+        print("[world] Генерация: локальная (очевидные пары). Для полной LLM задайте ключ.")
+    else:
+        print(f"[world] LLM-провайдер: {prov}")
+
+@app.get("/api/health", response_model=HealthResponse)
+async def health():
+    """Проверка доступности сервера."""
+    return {"ok": True, "version": "1.0.0"}
+
+def _upsert_player(conn: sqlite3.Connection, nick: str, device_id: str) -> None:
+    """Зарегистрировать игрока (или обновить ник), чтобы он попадал в зал славы."""
+    nick = clean_nick(nick) or nick
+    try:
+        conn.execute(
+            "INSERT INTO players (nick, device_id, last_seen, created_at) VALUES (?, ?, date('now'), datetime('now'))",
+            (nick, device_id),
+        )
+    except sqlite3.IntegrityError:
+        conn.execute("UPDATE players SET nick = ?, last_seen = date('now') WHERE device_id = ?",
+                     (nick, device_id))
+
+
+_LLM_GEN = None
+
+
+def get_llm() -> "LLMGenerator":
+    """Синглтон LLM-генератора (лениво читает env)."""
+    global _LLM_GEN
+    if _LLM_GEN is None:
+        _LLM_GEN = LLMGenerator()
+    return _LLM_GEN
+
+
+def _parent(conn: sqlite3.Connection, slug: str) -> dict:
+    row = conn.execute(
+        "SELECT id, slug, name, color, layer, category FROM elements WHERE slug = ?",
+        (slug,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=400, detail=f"Ингредиент '{slug}' не найден в базе")
+    return {
+        "id": row["id"], "slug": row["slug"], "name": row["name"],
+        "color": row["color"], "layer": row["layer"], "category": row["category"],
+    }
+
+
+def _result_category(a_info: dict, b_info: dict) -> str:
+    if a_info["layer"] > b_info["layer"]:
+        return a_info["category"]
+    if b_info["layer"] > a_info["layer"]:
+        return b_info["category"]
+    return b_info["category"]
+
+
+CATEGORY_GLYPH = {"огонь": "fire", "вода": "water", "земля": "earth", "воздух": "air"}
+
+
+def _category_glyph(category: str) -> str:
+    return CATEGORY_GLYPH.get(category, "")
+
+
+def _fallback_glyph(name: str, category: str) -> str:
+    """Глиф, если модель не дала своего: базовые категории — тематический образ,
+    иначе — детерминированный параметрический глиф по имени (уникальный и
+    стабильный, не повторяет иконки базовых стихий)."""
+    g = _category_glyph(category)
+    if g:
+        return g
+    h = int(hashlib.sha256(("glyph_" + (name or "")).encode("utf-8")).hexdigest(), 16)
+    bases = list(GLYPH_PARAM.keys())
+    base = bases[h % len(bases)]
+    lo, hi = GLYPH_PARAM[base]
+    return f"{base}{lo + h % (hi - lo + 1)}"
+
+
+def _today() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def _experiment_uses_llm() -> bool:
+    """True when a new experiment can spend an external LLM request.
+
+    The local/mock providers are deterministic and do not consume the external
+    budget. The off provider will return unavailable without a network call.
+    """
+    try:
+        provider = str(get_llm().provider).strip().lower()
+    except Exception:
+        return True
+    return provider not in ("", "local", "mock", "off")
+
+
+def _admit_experiment(conn: sqlite3.Connection, device_id: str) -> tuple[bool, str]:
+    """Reserve one explicit LLM-backed experiment for this device/day.
+
+    The database is the source of truth, so restarting the server does not reset
+    the per-device quota. A zero global limit disables only the global guard.
+    Cached and curated/local resolutions never call this helper.
+    """
+    if not _experiment_uses_llm():
+        return True, ""
+    now = time.time()
+    day = _today()
+    row = conn.execute(
+        "SELECT attempts, last_at FROM experiment_limits WHERE day = ? AND device_id = ?",
+        (day, device_id),
+    ).fetchone()
+    attempts = int(row["attempts"]) if row else 0
+    last_at = float(row["last_at"]) if row else 0.0
+    if now - last_at < max(0.0, EXPERIMENT_COOLDOWN_SEC):
+        wait = max(1, int(math.ceil(EXPERIMENT_COOLDOWN_SEC - (now - last_at))))
+        return False, f"Эксперимент можно отправить через {wait} с."
+    if EXPERIMENT_DAILY_LIMIT > 0 and attempts >= EXPERIMENT_DAILY_LIMIT:
+        return False, "Дневной лимит экспериментов исчерпан."
+    global_row = conn.execute(
+        "SELECT attempts FROM experiment_global_limits WHERE day = ?", (day,)
+    ).fetchone()
+    global_attempts = int(global_row["attempts"]) if global_row else 0
+    if EXPERIMENT_GLOBAL_DAILY_LIMIT > 0 and global_attempts >= EXPERIMENT_GLOBAL_DAILY_LIMIT:
+        return False, "Мировой лимит экспериментов на сегодня исчерпан."
+    conn.execute(
+        "INSERT INTO experiment_limits(day, device_id, attempts, last_at) VALUES (?, ?, 1, ?) "
+        "ON CONFLICT(day, device_id) DO UPDATE SET attempts = attempts + 1, last_at = excluded.last_at",
+        (day, device_id, now),
+    )
+    conn.execute(
+        "INSERT INTO experiment_global_limits(day, attempts) VALUES (?, 1) "
+        "ON CONFLICT(day) DO UPDATE SET attempts = attempts + 1",
+        (day,),
+    )
+    conn.commit()
+    return True, ""
+
+
+def _challenge_target_for(day: str) -> str:
+    """Детерминированный целевой ингредиент дня (одинаков для всех игроков)."""
+    h = int(hashlib.sha256(("challenge_" + day).encode("utf-8")).hexdigest(), 16)
+    return CHALLENGE_TARGETS[h % len(CHALLENGE_TARGETS)]
+
+
+def _ensure_challenge(conn: sqlite3.Connection) -> dict:
+    """Вернуть сегодняшнюю цель (создать, если ещё нет). БД — источник истины."""
+    day = _today()
+    row = conn.execute("SELECT * FROM challenges WHERE day = ?", (day,)).fetchone()
+    if not row:
+        target = _challenge_target_for(day)
+        trow = conn.execute("SELECT name FROM elements WHERE slug = ?", (target,)).fetchone()
+        target_name = trow["name"] if trow else target
+        hint = "Вещество, рождённое из «%s»." % target_name
+        conn.execute(
+            "INSERT INTO challenges (day, target, target_name, hint, created_at) VALUES (?, ?, ?, ?, ?)",
+            (day, target, target_name, hint, datetime.now().isoformat()),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM challenges WHERE day = ?", (day,)).fetchone()
+    return dict(row)
+
+
+def _score_challenge(conn: sqlite3.Connection, a: str, b: str, nick: str, device_id: str) -> dict:
+    """Личная ежедневная цель после первооткрытия.
+
+    Гонка НЕ закрывается первым победителем: каждый игрок, открывший вещество
+    из целевого ингредиента, получает награду. День не «заканчивается за
+    секунды» при 1000 игроков. Возвращает {won, first, target_name}:
+      won   — первое выполнение цели этим устройством за сегодня (выдать награду);
+      first — это первое выполнение цели вообще за сегодня (для ленты).
+    """
+    ch = _ensure_challenge(conn)
+    if not (a == ch["target"] or b == ch["target"]):
+        return {"won": False, "first": False, "target_name": ch["target_name"]}
+    row = conn.execute(
+        "SELECT points FROM challenge_scores WHERE day = ? AND device_id = ?",
+        (ch["day"], device_id),
+    ).fetchone()
+    if row:
+        conn.execute(
+            "UPDATE challenge_scores SET points = points + 1, nick = ? WHERE day = ? AND device_id = ?",
+            (nick, ch["day"], device_id),
+        )
+        conn.commit()
+        return {"won": False, "first": False, "target_name": ch["target_name"]}
+    conn.execute(
+        "INSERT INTO challenge_scores (day, device_id, nick, points, first_at) VALUES (?, ?, ?, 1, ?)",
+        (ch["day"], device_id, nick, datetime.now().isoformat()),
+    )
+    n = conn.execute("SELECT COUNT(*) AS c FROM challenge_scores WHERE day = ?", (ch["day"],)).fetchone()["c"]
+    first = n == 1
+    if first:
+        conn.execute(
+            "UPDATE challenges SET first_nick = ?, first_device = ? WHERE day = ?",
+            (nick, device_id, ch["day"]),
+        )
+    conn.commit()
+    return {"won": True, "first": first, "target_name": ch["target_name"]}
+
+
+def _echo_row(conn: sqlite3.Connection, device_id: str):
+    """Строка отголосков устройства (создаёт при отсутствии). Коммит — на вызывающем."""
+    conn.execute(
+        "INSERT OR IGNORE INTO echoes (device_id, balance, total) VALUES (?, 0, 0)",
+        (device_id,),
+    )
+    return conn.execute(
+        "SELECT balance, total, last_apprentice_day FROM echoes WHERE device_id = ?",
+        (device_id,),
+    ).fetchone()
+
+
+def _credit_resonance(conn: sqlite3.Connection, out_id: int, author_nick, brewer_nick: str) -> bool:
+    """Чужой повтор вещества: +1 к счётчику вещества и отголосок всем устройствам
+    первооткрывателя. Свои повторы и вещества без автора не засчитываются.
+    Коммит — на вызывающем."""
+    if not author_nick or author_nick == brewer_nick:
+        return False
+    conn.execute(
+        "UPDATE elements SET resonance_count = resonance_count + 1 WHERE id = ?",
+        (out_id,),
+    )
+    credited = False
+    for prow in conn.execute(
+        "SELECT device_id FROM players WHERE nick = ?", (author_nick,)
+    ).fetchall():
+        _echo_row(conn, prow["device_id"])
+        conn.execute(
+            "UPDATE echoes SET balance = MIN(balance + 1, ?), total = total + 1 "
+            "WHERE device_id = ?",
+            (ECHO_CAP, prow["device_id"]),
+        )
+        credited = True
+    return credited
+
+
+def _descendants_for(conn: sqlite3.Connection, nick: str, limit: int = 20):
+    """Потомки: вещества, открытые ДРУГИМИ игроками из моих первооткрытий.
+    Родословная строится по готовым a_id/b_id рецептов — новых таблиц не нужно."""
+    if not nick:
+        return [], 0
+    ids = [
+        r["id"]
+        for r in conn.execute(
+            "SELECT id FROM elements WHERE author = ?", (nick,)
+        ).fetchall()
+    ]
+    if not ids:
+        return [], 0
+    ph = ",".join("?" for _ in ids)
+    where = (
+        f"(r.a_id IN ({ph}) OR r.b_id IN ({ph})) "
+        "AND r.discoverer IS NOT NULL AND r.discoverer != ?"
+    )
+    rows = conn.execute(
+        "SELECT e.name AS name, e.slug AS slug, r.discoverer AS by, "
+        "r.created_at AS at FROM recipes r JOIN elements e ON e.id = r.out_id "
+        f"WHERE {where} ORDER BY r.id DESC LIMIT ?",
+        (*ids, *ids, nick, limit),
+    ).fetchall()
+    total = conn.execute(
+        f"SELECT COUNT(*) AS c FROM recipes r WHERE {where}",
+        (*ids, *ids, nick),
+    ).fetchone()["c"]
+    return [dict(r) for r in rows], total
+
+
+def _apprentice_grant(conn: sqlite3.Connection, device_id: str, nick: str):
+    """«Подмастерья гильдии»: раз в сутки +1 резонанс детерминированно выбранному
+    своему веществу. Fallback малой аудитории — прогресс идёт и без толпы.
+    Возвращает {name, slug} или None. Коммитит только при гранте."""
+    if not device_id or not nick:
+        return None
+    row = _echo_row(conn, device_id)
+    today = _today()
+    if row["last_apprentice_day"] == today:
+        conn.commit()
+        return None
+    mine = conn.execute(
+        "SELECT id, name, slug FROM elements WHERE author = ? ORDER BY id",
+        (nick,),
+    ).fetchall()
+    if not mine:
+        conn.commit()
+        return None
+    pick = mine[_hash_to_int("apprentice_" + today + "_" + device_id, len(mine))]
+    conn.execute(
+        "UPDATE elements SET resonance_count = resonance_count + 1 WHERE id = ?",
+        (pick["id"],),
+    )
+    conn.execute(
+        "UPDATE echoes SET balance = MIN(balance + 1, ?), total = total + 1, "
+        "last_apprentice_day = ? WHERE device_id = ?",
+        (ECHO_CAP, today, device_id),
+    )
+    conn.commit()
+    return {"name": pick["name"], "slug": pick["slug"]}
+
+
+def _claim_echoes(conn: sqlite3.Connection, device_id: str):
+    """Списать баланс отголосков в эфир. Возвращает (claimed, ether, total)."""
+    row = _echo_row(conn, device_id)
+    claimed = row["balance"]
+    conn.execute("UPDATE echoes SET balance = 0 WHERE device_id = ?", (device_id,))
+    conn.commit()
+    return claimed, claimed * ECHO_ETHER, row["total"]
+
+
+LETTER_BACKLOG_MAX = 7  # конвертов в запасе (недоделки старше — в архив)
+LETTER_REVEAL_DAYS = 2  # через столько дней Светик называет одно вещество
+ATLAS_MILE_EVERY = 10  # каждая N-я страница → +кап на клиенте
+ATLAS_HISTORY_MAX = 7  # прошлых страниц в ответе (альбом)
+
+
+def _date_minus(days: int) -> str:
+    from datetime import date, timedelta
+    return (date.today() - timedelta(days=days)).isoformat()
+
+
+def _letter_candidates(conn: sqlite3.Connection, nick: str, device_id: str):
+    """Пары-кандидаты в письмо: дают вещество из БД, не мои, ещё не загадывались.
+
+    Решение пары уже зафиксировано в БД — LLM генерирует только текст намёка.
+    Уровни fallback: чужие/стартовые → любые незагаданные → любые (повторы).
+    """
+    base_q = (
+        "SELECT r.pair_key, r.a, r.b FROM recipes r "
+        "JOIN elements e ON e.id = r.out_id "
+    )
+    not_lettered = (
+        "r.pair_key NOT IN (SELECT a || '|' || b FROM letters WHERE device_id = ? "
+        "UNION SELECT b || '|' || a FROM letters WHERE device_id = ?)"
+    )
+    # NOTE: pair_key в recipes канонический (a<b); в letters a/b тоже пишем
+    # канонически, так что сравнение через NOT IN по обеим склейкам надёжно.
+    tiers = [
+        base_q + f"WHERE (r.discoverer IS NULL OR r.discoverer != ?) AND {not_lettered} "
+        "ORDER BY r.pair_key",
+        base_q + f"WHERE {not_lettered} ORDER BY r.pair_key",
+        base_q + "ORDER BY r.pair_key",
+    ]
+    for i, q in enumerate(tiers):
+        params = (nick, device_id, device_id) if i == 0 else (
+            (device_id, device_id) if i == 1 else ()
+        )
+        rows = conn.execute(q, params).fetchall()
+        if rows:
+            return rows
+    return []
+
+
+def _ensure_letter(conn, device_id: str, nick: str, day: str, llm=None):
+    """Письмо на день: вернуть строку или None (LLM недоступна — день ждёт).
+
+    Намёк генерируется 1 раз и кэшируется; недоделки старше лимита уходят.
+    """
+    row = conn.execute(
+        "SELECT day, a, b, a_name, b_name, hint, solved FROM letters "
+        "WHERE device_id = ? AND day = ?",
+        (device_id, day),
+    ).fetchone()
+    if row:
+        return row
+    cands = _letter_candidates(conn, nick, device_id)
+    if not cands:
+        return None
+    pick = cands[_hash_to_int("letter_" + day + "_" + device_id, len(cands))]
+    pa, pb = sorted([pick["a"], pick["b"]])
+    a_info = _parent(conn, pa)
+    b_info = _parent(conn, pb)
+    if llm is None:
+        llm = get_llm()
+    try:
+        res = llm.generate_hint(a_info["name"], b_info["name"])
+    except LLMError:
+        return None
+    hint = str(res.get("hint", "")).strip()
+    if not hint:
+        return None
+    conn.execute(
+        "INSERT INTO letters (device_id, day, a, b, a_name, b_name, hint, solved) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+        (device_id, day, pa, pb, a_info["name"], b_info["name"], hint),
+    )
+    # конвертов — не больше лимита: старые недоделки тихо уходят в архив
+    conn.execute(
+        "DELETE FROM letters WHERE device_id = ? AND solved = 0 AND day NOT IN "
+        "(SELECT day FROM letters WHERE device_id = ? AND solved = 0 "
+        "ORDER BY day DESC LIMIT ?)",
+        (device_id, device_id, LETTER_BACKLOG_MAX),
+    )
+    conn.commit()
+    return conn.execute(
+        "SELECT day, a, b, a_name, b_name, hint, solved FROM letters "
+        "WHERE device_id = ? AND day = ?",
+        (device_id, day),
+    ).fetchone()
+
+
+def _atlas_candidates(conn: sqlite3.Connection):
+    """Пары в Атлас: дают вещество из БД, ещё не загадывались (фолбэк — любые).
+
+    Атлас общемировой: персональных исключений нет, только антиповтор.
+    """
+    base_q = (
+        "SELECT r.pair_key, r.a, r.b FROM recipes r "
+        "JOIN elements e ON e.id = r.out_id "
+    )
+    fresh = base_q + (
+        "WHERE r.pair_key NOT IN (SELECT a || '|' || b FROM atlas_pages "
+        "UNION SELECT b || '|' || a FROM atlas_pages) ORDER BY r.pair_key"
+    )
+    rows = conn.execute(fresh).fetchall()
+    if rows:
+        return rows
+    return conn.execute(base_q + "ORDER BY r.pair_key").fetchall()
+
+
+def _ensure_atlas(conn, day: str, llm=None):
+    """Страница Атласа на день: вернуть строку или None (LLM недоступна / пусто).
+
+    Одна страница на весь мир, загадка генерируется 1 раз и кэшируется —
+    не более 1 LLM-запроса в сутки на весь сервер.
+    """
+    row = conn.execute(
+        "SELECT day, a, b, a_name, b_name, riddle FROM atlas_pages WHERE day = ?",
+        (day,),
+    ).fetchone()
+    if row:
+        return row
+    cands = _atlas_candidates(conn)
+    if not cands:
+        return None
+    pick = cands[_hash_to_int("atlas_" + day, len(cands))]
+    pa, pb = sorted([pick["a"], pick["b"]])
+    a_info = _parent(conn, pa)
+    b_info = _parent(conn, pb)
+    if llm is None:
+        llm = get_llm()
+    try:
+        res = llm.generate_hint(a_info["name"], b_info["name"])
+    except LLMError:
+        return None
+    riddle = str(res.get("hint", "")).strip()
+    if not riddle:
+        return None
+    conn.execute(
+        "INSERT OR IGNORE INTO atlas_pages (day, a, b, a_name, b_name, riddle) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (day, pa, pb, a_info["name"], b_info["name"], riddle),
+    )
+    conn.commit()
+    return conn.execute(
+        "SELECT day, a, b, a_name, b_name, riddle FROM atlas_pages WHERE day = ?",
+        (day,),
+    ).fetchone()
+
+
+def _known_discovery(conn: sqlite3.Connection, recipe_row, pair_key: str, a: str, b: str):
+    """Ответ для уже открытой пары (DiscoverResponse или None)."""
+    out_row = conn.execute(
+        "SELECT id, slug, name, color, layer, category, glyph, d, author, tag, created_at FROM elements WHERE id = ?",
+        (recipe_row["out_id"],),
+    ).fetchone()
+    if not out_row:
+        return None
+    discoverer = recipe_row["discoverer"]
+    return DiscoverResponse(
+        ok=True,
+        status="known",
+        discovery=DiscoveryData(
+            id=out_row["id"], slug=out_row["slug"], name=out_row["name"],
+            color=out_row["color"], layer=out_row["layer"], category=out_row["category"],
+            glyph=out_row["glyph"], d=out_row["d"],
+            pair_key=pair_key, a=a, b=b, author=out_row["author"], seq=0,
+            created_at=out_row["created_at"], tag=out_row["tag"],
+        ),
+        already_known=True,
+        avatar=avatar_for(out_row["author"]) if out_row["author"] else None,
+        message=(
+            f"Пара {a}+{b} уже открыта {discoverer}"
+            if discoverer
+            else f"Пара {a}+{b} уже известна"
+        ),
+    )
+
+
+def _link_existing(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, row):
+    """Привязать новую пару к уже существующему элементу (дедупликация имён).
+
+    Новый элемент НЕ создаётся: рецепт (a,b) указывает на существующий элемент,
+    игрок получает его же. DiscoveryData возвращается с reused=True — клиент
+    не засчитывает это как «первооткрытие» и не создаёт дубль в своей БД.
+    """
+    created_at = datetime.now().isoformat()
+    conn.execute(
+        """INSERT INTO recipes (pair_key, a, b, a_id, b_id, out_id, discoverer, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (pair_key, a_slug, b_slug, a_info["id"], b_info["id"], row["id"], nick, created_at),
+    )
+    # новая пара дала чужое вещество — автору тоже капает резонанс
+    _credit_resonance(conn, row["id"], row["author"], nick)
+    seq_row = conn.execute(
+        "SELECT COUNT(*) + 1 FROM recipes WHERE created_at < ?", (created_at,)
+    ).fetchone()
+    return DiscoveryData(
+        id=row["id"], slug=row["slug"], name=row["name"], color=row["color"],
+        layer=row["layer"], category=row["category"], glyph=row["glyph"], d=row["d"],
+        pair_key=pair_key, a=a_slug, b=b_slug, author=row["author"],
+        avatar=avatar_for(row["author"]) if row["author"] else None,
+        seq=(seq_row[0] if seq_row else 0), created_at=row["created_at"],
+        gen_method="linked", reused=True, tag=row["tag"] if "tag" in row.keys() else "",
+    )
+
+
+def _materialize(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, name, category, gen_method, glyph="", d="", tag=""):
+    """Создать элемент и рецепт; вернуть DiscoveryData."""
+    layer = max(a_info["layer"], b_info["layer"]) + 1
+    existing_names = {row["name"] for row in conn.execute("SELECT name FROM elements").fetchall()}
+    existing_slugs = {row["slug"] for row in conn.execute("SELECT slug FROM elements").fetchall()}
+    existing_colors = {row["color"] for row in conn.execute("SELECT color FROM elements").fetchall()}
+
+    slug = generate_slug(name, pair_key, existing_slugs)
+    color = mix_colors(
+        a_info["color"], b_info["color"],
+        a_info["layer"], b_info["layer"], pair_key, existing_colors,
+    )
+
+    created_at = datetime.now().isoformat()
+    element_cursor = conn.execute(
+        """INSERT INTO elements (slug, name, name_norm, color, layer, category, glyph, d, author, tag, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (slug, name, seed.norm_name(name), color, layer, category, glyph, d, nick, tag, created_at),
+    )
+    element_id = element_cursor.lastrowid
+    conn.execute(
+        """INSERT INTO recipes (pair_key, a, b, a_id, b_id, out_id, discoverer, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (pair_key, a_slug, b_slug, a_info["id"], b_info["id"], element_id, nick, created_at),
+    )
+    seq_cursor = conn.execute("SELECT COUNT(*) + 1 FROM recipes WHERE created_at < ?", (created_at,))
+    seq_row = seq_cursor.fetchone()
+    return DiscoveryData(
+        id=element_id, slug=slug, name=name, color=color, layer=layer,
+        category=category, glyph=glyph, d=d, pair_key=pair_key, a=a_slug, b=b_slug,
+        author=nick, avatar=avatar_for(nick), seq=(seq_row[0] if seq_row else 0),
+        created_at=created_at, gen_method=gen_method, tag=tag,
+    )
+
+
+def _generate_for_pair(conn, a_slug, b_slug, pair_key, nick, llm=None):
+    """Решить судьбу неизвестной пары через LLM.
+
+    БД — источник истины: вызов сюда означает, что пары нет ни в recipes, ни в
+    rejected_pairs (это уже проверил вызывающий эндпоинт). Сгенерированный
+    однажды результат фиксируется в БД и больше не пересчитывается.
+
+    Возвращает:
+      ("created", DiscoveryData) — LLM дала имя, элемент создан;
+      ("not_combinable", None)   — LLM сказала combinable:false (отказ фиксируется);
+      ("unavailable", None)      — LLM недоступна (решение НЕ фиксируется, пара
+                                   остаётся кандидатом для будущей генерации).
+    """
+    a_info = _parent(conn, a_slug)
+    b_info = _parent(conn, b_slug)
+
+    if llm is None:
+        llm = get_llm()
+
+    try:
+        # LLM отвечает только {"combinable": true, "name": "..."} | {"combinable": false}
+        t0 = time.time()
+        res = llm.generate(a_slug, b_slug, a_info["name"], b_info["name"], pair_key)
+        log.info("пара %s+%s: генерация заняла %.1fs", a_slug, b_slug, time.time() - t0)
+    except LLMError as e:
+        # модель недоступна → не выдумываем имя и не фиксируем отказ
+        log.warning("пара %s+%s: LLM недоступна → unavailable (%s)", a_slug, b_slug, e)
+        return "unavailable", None
+
+    if res.get("combinable") is False:
+        return "not_combinable", None
+
+    name = str(res.get("name", "")).strip()
+    if not name or "-" in name or "_" in name or any(ch.isdigit() for ch in name):
+        # модель исчерпала попытки и не дала корректного имени → отказ
+        return "not_combinable", None
+
+    # категория — по родителям; глиф, описание и тег берём у модели (с фоллбэком)
+    category = _result_category(a_info, b_info)
+    glyph = str(res.get("glyph", "")).strip().lower()
+    if not is_glyph(glyph):
+        glyph = _fallback_glyph(name, category)
+    tag = str(res.get("tag", "")).strip().lower()
+    if tag not in TAGS:
+        tag = category if category in TAGS else ""
+    d = str(res.get("description", "")).strip().replace("\n", " ")
+    d = " ".join(d.split())
+    if not d or len(d) > 160 or d[:1].isdigit():
+        d = "Рождено из «%s» и «%s»." % (a_info["name"], b_info["name"])
+
+    # Дедупликация имён: если вещество с таким именем уже есть в БД (например,
+    # LLM снова выдала «Огонь»), НЕ создаём копию — привязываем пару к нему.
+    existing = conn.execute(
+        "SELECT id, slug, name, color, layer, category, glyph, d, author, tag, created_at "
+        "FROM elements WHERE name_norm = ? ORDER BY id LIMIT 1",
+        (seed.norm_name(name),),
+    ).fetchone()
+    if existing:
+        return "created", _link_existing(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, existing)
+
+    return "created", _materialize(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, name, category, "llm", glyph, d, tag)
+
+
+@app.post("/api/brew-check", response_model=BrewCheckResponse)
+async def brew_check(req: BrewCheckRequest):
+    """
+    Проверить, является ли пара кандидатом на первооткрытие.
+
+    Читающий эндпоинт: авторегистрирует игрока и сообщает статус пары
+    (известна / отвергнута / в обработке / кандидат). Блокировку не ставит.
+    """
+    conn = get_db()
+    try:
+        pair_key = canonical_pair_key(req.a, req.b)
+
+        _upsert_player(conn, req.nick, req.device_id)
+        conn.commit()
+
+        recipe_row = conn.execute(
+            "SELECT out_id, discoverer FROM recipes WHERE pair_key = ?",
+            (pair_key,),
+        ).fetchone()
+
+        if recipe_row:
+            # повтор чужого вещества — резонанс первооткрывателю
+            _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], req.nick)
+            conn.commit()
+            out_row = conn.execute(
+                "SELECT id, slug, name, color, layer, category, glyph, d, author, created_at FROM elements WHERE id = ?",
+                (recipe_row["out_id"],),
+            ).fetchone()
+
+            discoverer = recipe_row["discoverer"]
+            seq = 0
+            if discoverer:
+                seq_row = conn.execute(
+                    "SELECT COUNT(*) + 1 as seq FROM recipes WHERE discoverer = ? AND created_at < (SELECT created_at FROM recipes WHERE pair_key = ?)",
+                    (discoverer, pair_key),
+                ).fetchone()
+                seq = seq_row["seq"] if seq_row and seq_row["seq"] else 0
+
+            if out_row:
+                return BrewCheckResponse(
+                    ok=True,
+                    pair_key=pair_key,
+                    found=True,
+                    status="known",
+                    out={
+                        "id": out_row["id"],
+                        "slug": out_row["slug"],
+                        "name": out_row["name"],
+                        "color": out_row["color"],
+                        "layer": out_row["layer"],
+                        "category": out_row["category"],
+                        "glyph": out_row["glyph"],
+                        "d": out_row["d"],
+                        "author": out_row["author"],
+                        "created_at": out_row["created_at"],
+                    },
+                    discoverer={"nick": discoverer, "seq": seq} if discoverer else None,
+                    pending=False,
+                    message=(
+                        f"Рецепт {req.a}+{req.b} уже открыт {discoverer}"
+                        if discoverer
+                        else f"Рецепт {req.a}+{req.b} уже известен"
+                    ),
+                )
+
+        # Пара признана несочетаемой?
+        if conn.execute("SELECT 1 FROM rejected_pairs WHERE pair_key = ?", (pair_key,)).fetchone():
+            return BrewCheckResponse(
+                ok=True, pair_key=pair_key, found=False, status="not_combinable",
+                out=None, discoverer=None, pending=False,
+                message=f"«{req.a}» и «{req.b}» не сочетаются",
+            )
+
+        # Пара неизвестна — сообщить, идёт ли сейчас её обработка
+        pending_row = conn.execute(
+            "SELECT state, lock_ts FROM pending_pairs WHERE pair_key = ?",
+            (pair_key,),
+        ).fetchone()
+        if pending_row and pending_row["state"] == "locked" and time.time() - pending_row["lock_ts"] < LOCK_TTL:
+            return BrewCheckResponse(
+                ok=True, pair_key=pair_key, found=False, status="processing",
+                out=None, discoverer=None, pending=True,
+                message="Пара в обработке — подождите",
+            )
+
+        return BrewCheckResponse(
+            ok=True, pair_key=pair_key, found=False, status="candidate",
+            out=None, discoverer=None, pending=False,
+            message="Пара — кандидат на открытие",
+        )
+
+    finally:
+        conn.close()
+
+@app.post("/api/discover", response_model=DiscoverResponse)
+async def discover(req: DiscoverRequest):
+    """
+    Атомарно зарегистрировать новое первооткрытие.
+
+    Идемпотентно: если пара уже открыта — вернуть существующий элемент;
+    если признана несочетаемой — вернуть «туман» (решение фиксируется в БД).
+    Новая пара: LLM-генерация. При недоступности LLM пара остаётся кандидатом
+    (решение не фиксируется) — её можно сгенерировать позже.
+    """
+    conn = get_db()
+    try:
+        pair_key = canonical_pair_key(req.a, req.b)
+
+        _upsert_player(conn, req.nick, req.device_id)
+        conn.commit()
+
+        # 1. Пара уже открыта?
+        recipe_row = conn.execute(
+            "SELECT out_id, discoverer FROM recipes WHERE pair_key = ?",
+            (pair_key,),
+        ).fetchone()
+        if recipe_row:
+            known = _known_discovery(conn, recipe_row, pair_key, req.a, req.b)
+            if known is not None:
+                _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], req.nick)
+                conn.commit()
+                return known
+
+        # 2. Пара признана несочетаемой?
+        if conn.execute("SELECT 1 FROM rejected_pairs WHERE pair_key = ?", (pair_key,)).fetchone():
+            return DiscoverResponse(
+                ok=True, status="not_combinable", discovery=None, already_known=False,
+                message=f"Туман рассеялся: «{req.a}» и «{req.b}» не сочетаются — элемент не создан.",
+            )
+
+        # 3. Блокировка пары (race-condition protection)
+        now = time.time()
+        pending_row = conn.execute(
+            "SELECT state, lock_ts FROM pending_pairs WHERE pair_key = ?",
+            (pair_key,),
+        ).fetchone()
+        if pending_row and pending_row["state"] == "locked" and now - pending_row["lock_ts"] < LOCK_TTL:
+            raise HTTPException(status_code=409, detail="Пара в обработке — повторите запрос")
+
+        conn.execute(
+            """INSERT INTO pending_pairs (pair_key, state, lock_ts, owner, attempted_by)
+               VALUES (?, 'locked', ?, ?, ?)
+               ON CONFLICT(pair_key) DO UPDATE SET
+                 state='locked', lock_ts=excluded.lock_ts,
+                 owner=excluded.owner, attempted_by=excluded.attempted_by""",
+            (pair_key, now, req.nick, req.nick),
+        )
+        conn.commit()
+
+        # 4. Explicit Experiment Bench requests reserve the external LLM budget
+        # only after the pair lock is acquired. Cached/curated pairs return before
+        # this point and cost neither quota nor a network generation.
+        if req.experiment:
+            allowed, rate_message = _admit_experiment(conn, req.device_id)
+            if not allowed:
+                conn.execute("DELETE FROM pending_pairs WHERE pair_key = ?", (pair_key,))
+                conn.commit()
+                return DiscoverResponse(
+                    ok=False, status="rate_limited", discovery=None, already_known=False,
+                    message=rate_message,
+                )
+
+        # 5. Генерация (только LLM)
+        try:
+            kind, discovery = _generate_for_pair(conn, req.a, req.b, pair_key, req.nick)
+
+            if kind == "not_combinable":
+                # решение модели фиксируется в БД навсегда
+                conn.execute("INSERT OR IGNORE INTO rejected_pairs (pair_key) VALUES (?)", (pair_key,))
+                conn.commit()
+                return DiscoverResponse(
+                    ok=True, status="not_combinable", discovery=None, already_known=False,
+                    message=f"Туман рассеялся: «{req.a}» и «{req.b}» не сочетаются — элемент не создан.",
+                )
+
+            if kind == "unavailable":
+                # LLM недоступна: решение НЕ фиксируем — пара остаётся кандидатом,
+                # её можно сгенерировать позже, когда модель вернётся.
+                return DiscoverResponse(
+                    ok=True, status="unavailable", discovery=None, already_known=False,
+                    message="Мир сейчас не может оценить эту пару — попробуйте позже.",
+                )
+
+            # лента событий мира
+            conn.execute(
+                "INSERT INTO world_events (pair_key, a, b, out, out_name, discoverer, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (pair_key, req.a, req.b, discovery.slug, discovery.name, req.nick,
+                 datetime.now().isoformat()),
+            )
+            # ежедневная цель-гонка
+            challenge_info = _score_challenge(conn, req.a, req.b, req.nick, req.device_id)
+            # туманная жила: находка с тегом недели → +очки и бросок прожилки
+            vein_info = _score_vein(conn, _week_key(), discovery.tag or "", _today(),
+                                    req.device_id, req.nick)
+            conn.commit()
+            return DiscoverResponse(
+                ok=True, status="created", discovery=discovery, already_known=False,
+                message=f"ПЕРВООТКРЫТИЕ: {discovery.name} автор — {req.nick}!",
+                challenge=challenge_info,
+                vein=vein_info,
+            )
+
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            # гонка: пара вставлена другим запросом — отдать существующую
+            recipe_row = conn.execute(
+                "SELECT out_id, discoverer FROM recipes WHERE pair_key = ?",
+                (pair_key,),
+            ).fetchone()
+            if recipe_row:
+                known = _known_discovery(conn, recipe_row, pair_key, req.a, req.b)
+                if known is not None:
+                    _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], req.nick)
+                    conn.commit()
+                    return known
+            raise
+
+        finally:
+            # Сброс блокировки
+            conn.execute(
+                "UPDATE pending_pairs SET state = 'resolved', owner = NULL WHERE pair_key = ?",
+                (pair_key,),
+            )
+            conn.commit()
+
+    finally:
+        conn.close()
+
+@app.get("/api/world", response_model=WorldResponse)
+async def world(
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    per_page: int = Query(50, ge=1, le=100, description="Количество на странице"),
+):
+    """
+    Получить список всех известных элементов с пагинацией.
+    """
+    conn = get_db()
+    try:
+        total_cursor = conn.execute("SELECT COUNT(*) as total FROM elements")
+        total_row = total_cursor.fetchone()
+        total = total_row["total"]
+        
+        offset = (page - 1) * per_page
+        
+        elements_cursor = conn.execute(
+            "SELECT id, slug, name, color, layer, category, glyph, d, author, created_at FROM elements ORDER BY id LIMIT ? OFFSET ?",
+            (per_page, offset),
+        )
+        rows = elements_cursor.fetchall()
+        
+        elements = [
+            ElementData(
+                id=r["id"],
+                slug=r["slug"],
+                name=r["name"],
+                color=r["color"],
+                layer=r["layer"],
+                category=r["category"],
+                glyph=r["glyph"],
+                d=r["d"],
+                author=r["author"],
+                avatar=avatar_for(r["author"]) if r["author"] else None,
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]
+        
+        return WorldResponse(
+            ok=True,
+            elements=elements,
+            page=page,
+            per_page=per_page,
+            total=total,
+        )
+        
+    finally:
+        conn.close()
+
+@app.get("/api/hall-of-fame", response_model=HallResponse)
+async def hall_of_fame():
+    """
+    Топ-10 игроков по количеству первооткрытий.
+    """
+    conn = get_db()
+    try:
+        hall_cursor = conn.execute(
+            """SELECT 
+                p.nick,
+                COUNT(r.id) as count,
+                MAX(r.created_at) as updated_at
+            FROM recipes r
+            JOIN players p ON r.discoverer = p.nick
+            WHERE p.device_id NOT LIKE 'bot-%'
+            GROUP BY p.nick
+            ORDER BY count DESC, updated_at DESC
+            LIMIT 10""",
+        )
+        rows = hall_cursor.fetchall()
+        
+        hall = [
+            HallEntry(
+                rank=i + 1,
+                nick=r["nick"],
+                avatar=avatar_for(r["nick"]),
+                count=r["count"],
+                updated_at=r["updated_at"],
+            )
+            for i, r in enumerate(rows)
+        ]
+        
+        return HallResponse(ok=True, hall=hall)
+        
+    finally:
+        conn.close()
+
+@app.get("/api/events", response_model=EventsResponse)
+async def events(limit: int = Query(20, ge=1, le=100)):
+    """Лента последних первооткрытий мира (для «живой ленты» в игре)."""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT e.*, ea.name AS a_name, eb.name AS b_name "
+            "FROM world_events e "
+            "LEFT JOIN elements ea ON ea.slug = e.a "
+            "LEFT JOIN elements eb ON eb.slug = e.b "
+            "ORDER BY e.id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        now = time.time()
+        evs = []
+        for r in rows:
+            ago = 0
+            try:
+                ago = max(0, int(now - datetime.fromisoformat(r["created_at"]).timestamp()))
+            except (ValueError, TypeError):
+                ago = 0
+            evs.append({
+                "pair_key": r["pair_key"], "a": r["a"], "b": r["b"],
+                "a_name": r["a_name"] or "", "b_name": r["b_name"] or "",
+                "out": r["out"], "out_name": r["out_name"],
+                "discoverer": r["discoverer"],
+                "avatar": avatar_for(r["discoverer"]) if r["discoverer"] else None,
+                "created_at": r["created_at"],
+                "ago_sec": ago,
+            })
+        return EventsResponse(ok=True, events=evs)
+    finally:
+        conn.close()
+
+
+@app.get("/api/challenge", response_model=ChallengeResponse)
+async def challenge(device_id: str = Query("", max_length=128)):
+    """Ежедневная цель: целевой ингредиент, первый справившийся, счётчик дня."""
+    conn = get_db()
+    try:
+        ch = _ensure_challenge(conn)
+        today_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM world_events WHERE date(created_at) = date('now')"
+        ).fetchone()["c"]
+        first = ch["first_nick"]
+        completions = conn.execute(
+            "SELECT COUNT(*) AS c FROM challenge_scores WHERE day = ?", (ch["day"],)
+        ).fetchone()["c"]
+        my_points = 0
+        my_points_total = 0
+        if device_id:
+            r = conn.execute(
+                "SELECT points FROM challenge_scores WHERE day = ? AND device_id = ?",
+                (ch["day"], device_id),
+            ).fetchone()
+            my_points = r["points"] if r else 0
+            t = conn.execute(
+                "SELECT COALESCE(SUM(points), 0) AS s FROM challenge_scores WHERE device_id = ?",
+                (device_id,),
+            ).fetchone()
+            my_points_total = t["s"] if t else 0
+        return ChallengeResponse(
+            ok=True, day=ch["day"], target=ch["target"],
+            target_name=ch["target_name"], hint=ch["hint"],
+            first_nick=first,
+            first_avatar=avatar_for(first) if first else None,
+            completions=completions,
+            my_points=my_points,
+            my_points_total=my_points_total,
+            today_events=today_count,
+        )
+    finally:
+        conn.close()
+
+
+@app.post("/api/player/register")
+async def register_player(req: BrewCheckRequest):
+    """
+    Регистрация игрока (device_id должен быть уникальным).
+    """
+    conn = get_db()
+    try:
+        try:
+            conn.execute(
+                "INSERT INTO players (nick, device_id, created_at) VALUES (?, ?, datetime('now'))",
+                (clean_nick(req.nick) or req.nick, req.device_id),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            # device_id уже существует — просто обновляем ник, если он изменился
+            conn.execute(
+                "UPDATE players SET nick = ? WHERE device_id = ?",
+                (clean_nick(req.nick) or req.nick, req.device_id),
+            )
+            conn.commit()
+        
+        return {"ok": True, "nick": req.nick, "device_id": req.device_id}
+        
+    finally:
+        conn.close()
+
+
+@app.get("/api/me", response_model=ProfileResponse)
+async def get_me(device_id: str = Query(..., min_length=1, max_length=128)):
+    """Профиль игрока: ник и процедурный аватар по device_id."""
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT nick FROM players WHERE device_id = ?", (device_id,)
+        ).fetchone()
+        nick = row["nick"] if row else ""
+        return ProfileResponse(
+            ok=True, nick=nick, device_id=device_id, avatar=avatar_for(nick or device_id),
+        )
+    finally:
+        conn.close()
+
+
+@app.post("/api/me", response_model=ProfileResponse)
+async def set_me(req: ProfileRequest):
+    """Установить ник игрока (уникальное имя); аватар считается из ника."""
+    nick = clean_nick(req.nick)
+    if not nick:
+        raise HTTPException(status_code=400, detail="Ник должен быть 2–24 символа и без спецсимволов")
+    conn = get_db()
+    try:
+        conn.execute(
+            """INSERT INTO players (nick, device_id, created_at) VALUES (?, ?, datetime('now'))
+               ON CONFLICT(device_id) DO UPDATE SET nick = excluded.nick""",
+            (nick, req.device_id),
+        )
+        conn.commit()
+        return ProfileResponse(ok=True, nick=nick, device_id=req.device_id, avatar=avatar_for(nick))
+    finally:
+        conn.close()
+
+
+@app.get("/api/account/export")
+async def export_account(device_id: str = Query(..., min_length=1, max_length=128)):
+    """Экспорт серверных данных игрока перед удалением аккаунта.
+
+    Игровой мир публичен, но персональная связь с ним возвращается в экспорте
+    и удаляется/анонимизируется отдельным DELETE-запросом.
+    """
+    conn = get_db()
+    try:
+        player = conn.execute(
+            "SELECT nick, house, created_at, last_seen FROM players WHERE device_id = ?",
+            (device_id,),
+        ).fetchone()
+        if player is None:
+            return {"ok": True, "found": False, "device_id": device_id, "data": {}}
+        nick = player["nick"]
+        discoveries = [dict(row) for row in conn.execute(
+            """SELECT slug, name, layer, category, created_at
+               FROM elements WHERE author = ? ORDER BY created_at""", (nick,)
+        ).fetchall()]
+        echoes_row = conn.execute(
+            "SELECT balance, total FROM echoes WHERE device_id = ?", (device_id,)
+        ).fetchone()
+        house = None
+        if player["house"]:
+            try:
+                house = json.loads(player["house"])
+            except (TypeError, json.JSONDecodeError):
+                house = None
+        return {
+            "ok": True,
+            "found": True,
+            "device_id": device_id,
+            "data": {
+                "profile": {
+                    "nick": nick,
+                    "created_at": player["created_at"],
+                    "last_seen": player["last_seen"],
+                },
+                "house": house,
+                "discoveries": discoveries,
+                "echoes": dict(echoes_row) if echoes_row else {"balance": 0, "total": 0},
+            },
+        }
+    finally:
+        conn.close()
+
+
+@app.delete("/api/account")
+async def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
+    """Удалить профиль и персональные связи, сохранив общий мир.
+
+    Вещества, уже опубликованные в мир, не удаляются: иначе удаление одного
+    игрока ломало бы рецепты остальных. Поля авторства и публичная лента
+    заменяются на «Анонимный алхимик».
+    """
+    conn = get_db()
+    try:
+        player = conn.execute("SELECT nick FROM players WHERE device_id = ?", (device_id,)).fetchone()
+        if player is None:
+            return {"ok": True, "deleted": False, "message": "Профиль уже удалён"}
+        nick = player["nick"]
+        conn.execute("UPDATE elements SET author = NULL WHERE author = ?", (nick,))
+        conn.execute("UPDATE recipes SET discoverer = NULL WHERE discoverer = ?", (nick,))
+        conn.execute(
+            "UPDATE world_events SET discoverer = 'Анонимный алхимик' WHERE discoverer = ?", (nick,)
+        )
+        conn.execute(
+            "UPDATE challenges SET first_nick = 'Анонимный алхимик', first_device = NULL WHERE first_device = ?",
+            (device_id,),
+        )
+        for table in [
+            "echoes", "letters", "challenge_scores", "atlas_solves",
+            "fair_pairs", "fair_contrib", "fair_claims", "vein_hits",
+        ]:
+            conn.execute(f"DELETE FROM {table} WHERE device_id = ?", (device_id,))
+        conn.execute("DELETE FROM players WHERE device_id = ?", (device_id,))
+        conn.commit()
+        return {"ok": True, "deleted": True}
+    finally:
+        conn.close()
+
+
+@app.get("/api/rejected", response_model=RejectedResponse)
+async def rejected(limit: int = Query(5000, ge=1, le=200000)):
+    """Пары, которые сервер уже признал несочетаемыми (для фильтрации намёков)."""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT pair_key FROM rejected_pairs ORDER BY rowid DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return RejectedResponse(ok=True, rejected=[r["pair_key"] for r in rows])
+    finally:
+        conn.close()
+
+
+@app.post("/api/house", response_model=HouseResponse)
+async def save_house(req: HouseRequest):
+    """Сохранить домик игрока, чтобы его могли открывать другие игроки."""
+    conn = get_db()
+    try:
+        _upsert_player(conn, req.nick, req.device_id)
+        house_json = json.dumps(req.house, ensure_ascii=False)
+        if len(house_json) > 16384:
+            raise HTTPException(status_code=400, detail="Домик слишком большой")
+        conn.execute(
+            "UPDATE players SET house = ?, house_updated_at = ? WHERE device_id = ?",
+            (house_json, datetime.now().isoformat(), req.device_id),
+        )
+        conn.commit()
+        nick = clean_nick(req.nick) or req.nick
+        return HouseResponse(ok=True, nick=nick, avatar=avatar_for(nick), house=req.house)
+    finally:
+        conn.close()
+
+
+@app.get("/api/house", response_model=HouseResponse)
+async def get_house(nick: str = Query(..., min_length=1, max_length=64)):
+    """Домик игрока по нику (публичный; None, если не построен)."""
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT nick, house FROM players WHERE nick = ? ORDER BY id DESC LIMIT 1", (nick,)
+        ).fetchone()
+        if not row:
+            return HouseResponse(ok=True, nick=nick, avatar=avatar_for(nick), house=None, found=False)
+        house = None
+        if row["house"]:
+            try:
+                house = json.loads(row["house"])
+            except ValueError:
+                house = None
+        return HouseResponse(ok=True, nick=row["nick"], avatar=avatar_for(row["nick"]), house=house)
+    finally:
+        conn.close()
+
+
+@app.get("/api/rating", response_model=RatingResponse)
+async def rating(device_id: str = Query("", max_length=128)):
+    """Рейтинг игроков: открытия, вещества, очки целей, наличие домика."""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT p.nick, p.house, p.created_at,
+                   (SELECT COUNT(*) FROM recipes r WHERE r.discoverer = p.nick) AS discoveries,
+                   (SELECT COUNT(*) FROM elements e WHERE e.author = p.nick) AS elements,
+                   (SELECT COALESCE(SUM(c.points), 0) FROM challenge_scores c WHERE c.nick = p.nick) AS points
+            FROM players p
+            ORDER BY discoveries DESC, elements DESC, points DESC, p.created_at ASC"""
+        ).fetchall()
+        built = [
+            RatingRow(
+                rank=i + 1, nick=r["nick"], avatar=avatar_for(r["nick"]),
+                discoveries=r["discoveries"], elements=r["elements"],
+                points=r["points"], house_built=bool(r["house"]),
+                updated_at=r["created_at"],
+            )
+            for i, r in enumerate(rows)
+        ]
+        me = None
+        if device_id:
+            mrow = conn.execute("SELECT nick FROM players WHERE device_id = ?", (device_id,)).fetchone()
+            if mrow:
+                me = next((x for x in built if x.nick == mrow["nick"]), None)
+        return RatingResponse(ok=True, rows=built[:50], me=me)
+    finally:
+        conn.close()
+
+
+@app.get("/api/echoes", response_model=EchoesResponse)
+async def echoes(device_id: str = Query("", max_length=128)):
+    """Резонанс 2.0: баланс отголосков, вечный счётчик, топ веществ и потомки."""
+    conn = get_db()
+    try:
+        nick = ""
+        if device_id:
+            prow = conn.execute(
+                "SELECT nick FROM players WHERE device_id = ?", (device_id,)
+            ).fetchone()
+            if prow and prow["nick"]:
+                nick = prow["nick"]
+        apprentice = _apprentice_grant(conn, device_id, nick) if device_id else None
+        balance, total = 0, 0
+        if device_id:
+            erow = conn.execute(
+                "SELECT balance, total FROM echoes WHERE device_id = ?",
+                (device_id,),
+            ).fetchone()
+            if erow:
+                balance, total = erow["balance"], erow["total"]
+        top = []
+        if nick:
+            for t in conn.execute(
+                "SELECT name, slug, resonance_count FROM elements "
+                "WHERE author = ? AND resonance_count > 0 "
+                "ORDER BY resonance_count DESC, id ASC LIMIT 5",
+                (nick,),
+            ).fetchall():
+                top.append(EchoTop(name=t["name"], slug=t["slug"], count=t["resonance_count"]))
+        desc, desc_total = _descendants_for(conn, nick)
+        return EchoesResponse(
+            ok=True, nick=nick, balance=balance, total=total,
+            cap=ECHO_CAP, echo_ether=ECHO_ETHER,
+            milestones={
+                "m10": total >= RES_MILESTONES[0],
+                "m50": total >= RES_MILESTONES[1],
+                "m100": total >= RES_MILESTONES[2],
+            },
+            top=top,
+            descendants=[EchoDescendant(**d) for d in desc],
+            descendants_total=desc_total,
+            apprentice=apprentice,
+        )
+    finally:
+        conn.close()
+
+
+@app.post("/api/echoes/claim", response_model=EchoesClaimResponse)
+async def echoes_claim(req: EchoesClaimRequest):
+    """Забрать накопленные отголоски эфиром. Вечный счётчик не уменьшается."""
+    conn = get_db()
+    try:
+        claimed, ether, total = _claim_echoes(conn, req.device_id)
+        return EchoesClaimResponse(ok=True, claimed=claimed, ether=ether, total=total)
+    finally:
+        conn.close()
+
+
+def _letter_row_to_data(row, reveal_before: str, yesterday: str) -> LetterData:
+    """Строка письма → ответ клиенту: без слагов, имена дозированно.
+
+    Прогрессия подсказок: сегодня — только длины; вчера — первая буква A;
+    ≥2 дней (revealed) — имя A целиком + первая буква B; разгадано — оба.
+    """
+    solved = bool(row["solved"])
+    an, bn = row["a_name"] or "", row["b_name"] or ""
+    revealed = (not solved) and row["day"] <= reveal_before
+    show_a, show_b, ka, kb = "", "", [], []
+    if solved:
+        show_a, show_b = an, bn
+    elif revealed:
+        show_a = an
+        if bn:
+            kb = [[0, bn[0]]]
+    elif row["day"] == yesterday and an:
+        ka = [[0, an[0]]]
+    return LetterData(
+        day=row["day"], a_name=show_a, b_name=show_b,
+        len_a=len(an), len_b=len(bn), known_a=ka, known_b=kb,
+        hint=row["hint"], solved=solved, revealed=revealed,
+    )
+
+
+@app.get("/api/letter/today", response_model=LettersResponse)
+async def letter_today(device_id: str = Query("", max_length=128)):
+    """Письмо Светика: сегодняшнее (лениво, 1 LLM-запрос) + конверты + счётчик."""
+    conn = get_db()
+    try:
+        nick = ""
+        if device_id:
+            prow = conn.execute(
+                "SELECT nick FROM players WHERE device_id = ?", (device_id,)
+            ).fetchone()
+            if prow and prow["nick"]:
+                nick = prow["nick"]
+        day = _today()
+        today = _ensure_letter(conn, device_id, nick, day) if device_id else None
+        reveal_before = _date_minus(LETTER_REVEAL_DAYS)
+        yesterday = _date_minus(1)
+        backlog = []
+        if device_id:
+            for r in conn.execute(
+                "SELECT day, a, b, a_name, b_name, hint, solved FROM letters "
+                "WHERE device_id = ? AND solved = 0 AND day != ? "
+                "ORDER BY day DESC LIMIT ?",
+                (device_id, day, LETTER_BACKLOG_MAX),
+            ).fetchall():
+                backlog.append(_letter_row_to_data(r, reveal_before, yesterday))
+        solved_total = 0
+        if device_id:
+            solved_total = conn.execute(
+                "SELECT COUNT(*) AS c FROM letters WHERE device_id = ? AND solved = 1",
+                (device_id,),
+            ).fetchone()["c"]
+        return LettersResponse(
+            ok=True,
+            today=_letter_row_to_data(today, reveal_before, yesterday) if today else None,
+            backlog=backlog,
+            solved_total=solved_total,
+        )
+    finally:
+        conn.close()
+
+
+@app.post("/api/letter/solve", response_model=LetterSolveResponse)
+async def letter_solve(req: LetterSolveRequest):
+    """Проверить сваренную пару против неразгаданных писем (сегодня + бэклог).
+
+    Клиент никогда не получает слаги ответа, поэтому матчинг — только здесь.
+    Совпало самое раннее письмо с такой парой → solved=1. Повтор той же пары
+    (или чужая пара) → matched=false, счётчики не меняются (идемпотентно).
+    """
+    conn = get_db()
+    try:
+        want = canonical_pair_key(req.a.strip().lower(), req.b.strip().lower())
+        day = ""
+        for row in conn.execute(
+            "SELECT day, a, b FROM letters "
+            "WHERE device_id = ? AND solved = 0 ORDER BY day ASC",
+            (req.device_id,),
+        ):
+            if canonical_pair_key(row["a"], row["b"]) == want:
+                day = row["day"]
+                break
+        matched = False
+        if day:
+            cur = conn.execute(
+                "UPDATE letters SET solved = 1 "
+                "WHERE device_id = ? AND day = ? AND solved = 0",
+                (req.device_id, day),
+            )
+            matched = cur.rowcount > 0
+            conn.commit()
+        total = conn.execute(
+            "SELECT COUNT(*) AS c FROM letters WHERE device_id = ? AND solved = 1",
+            (req.device_id,),
+        ).fetchone()["c"]
+        return LetterSolveResponse(
+            ok=True, matched=matched, day=day if matched else "",
+            solved_total=total,
+            milestone=(matched and total > 0 and total % 5 == 0),
+        )
+    finally:
+        conn.close()
+
+@app.get("/api/atlas/today", response_model=AtlasTodayResponse)
+async def atlas_today(device_id: str = Query("", max_length=128)):
+    """Страница Атласа: сегодняшняя общемировая (лениво, 1 LLM-запрос/сутки) + альбом."""
+    conn = get_db()
+    try:
+        day = _today()
+        today = _ensure_atlas(conn, day)
+        data = None
+        if today:
+            solvers = conn.execute(
+                "SELECT COUNT(*) AS c FROM atlas_solves WHERE day = ?", (day,)
+            ).fetchone()["c"]
+            mine = False
+            if device_id:
+                mine = conn.execute(
+                    "SELECT 1 FROM atlas_solves WHERE device_id = ? AND day = ?",
+                    (device_id, day),
+                ).fetchone() is not None
+            data = AtlasTodayData(
+                day=day, riddle=today["riddle"],
+                len_a=len(today["a_name"] or ""), len_b=len(today["b_name"] or ""),
+                solvers=solvers, solved_by_me=mine,
+                a_name=today["a_name"] if mine else "",
+                b_name=today["b_name"] if mine else "",
+            )
+        history = []
+        my_days: set = set()
+        if device_id:
+            my_days = {
+                r["day"] for r in conn.execute(
+                    "SELECT day FROM atlas_solves WHERE device_id = ?",
+                    (device_id,),
+                ).fetchall()
+            }
+        for r in conn.execute(
+            "SELECT day, a_name, b_name, riddle FROM atlas_pages "
+            "WHERE day < ? ORDER BY day DESC LIMIT ?",
+            (day, ATLAS_HISTORY_MAX),
+        ).fetchall():
+            history.append(AtlasHistoryData(
+                day=r["day"], riddle=r["riddle"],
+                a_name=r["a_name"], b_name=r["b_name"],
+                solved_by_me=r["day"] in my_days,
+            ))
+        solved_total = 0
+        if device_id:
+            solved_total = conn.execute(
+                "SELECT COUNT(*) AS c FROM atlas_solves WHERE device_id = ?",
+                (device_id,),
+            ).fetchone()["c"]
+        return AtlasTodayResponse(
+            ok=True, today=data, history=history, solved_total=solved_total,
+        )
+    finally:
+        conn.close()
+
+
+@app.post("/api/atlas/solve", response_model=AtlasSolveResponse)
+async def atlas_solve(req: AtlasSolveRequest):
+    """Проверить сваренную пару против сегодняшней страницы Атласа.
+
+    Разгадывается только сегодняшний день (прошлое — альбом, не игра).
+    Повтор и чужая пара → matched=false (идемпотентно).
+    """
+    conn = get_db()
+    try:
+        day = _today()
+        row = conn.execute(
+            "SELECT a, b FROM atlas_pages WHERE day = ?", (day,),
+        ).fetchone()
+        matched = False
+        if row and canonical_pair_key(
+            req.a.strip().lower(), req.b.strip().lower()
+        ) == canonical_pair_key(row["a"], row["b"]):
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO atlas_solves (device_id, day) VALUES (?, ?)",
+                (req.device_id, day),
+            )
+            matched = cur.rowcount > 0
+            conn.commit()
+        total = conn.execute(
+            "SELECT COUNT(*) AS c FROM atlas_solves WHERE device_id = ?",
+            (req.device_id,),
+        ).fetchone()["c"]
+        return AtlasSolveResponse(
+            ok=True, matched=matched, solved_total=total,
+            milestone=(matched and total > 0 and total % ATLAS_MILE_EVERY == 0),
+        )
+    finally:
+        conn.close()
+
+
+@app.get("/api/week/status", response_model=WeekStatusResponse)
+async def week_status(device_id: str = Query("", max_length=128)):
+    """Недельный слой: жила (теги, мои находки/прожилки) + котёл ярмарки."""
+    from datetime import date as _date
+    conn = get_db()
+    try:
+        today = _date.today()
+        week = _week_key(today)
+        tag1, tag2, spread = _vein_state(conn, week, today)
+        my_hits = 0
+        my_streaks = 0
+        if device_id:
+            r = conn.execute("SELECT count, streaks FROM vein_hits WHERE week = ? AND device_id = ?",
+                             (week, device_id)).fetchone()
+            if r:
+                my_hits, my_streaks = r["count"], r["streaks"]
+        fair = _fair_ensure(conn, week)
+        days = min(today.weekday() + 1, 7)
+        apprentice = int(fair["goal"] * 0.1 * days)
+        closed = fair["progress"] + apprentice >= fair["goal"]
+        my_contrib = 0
+        claimed = False
+        prev = None
+        if device_id:
+            c = conn.execute("SELECT count FROM fair_contrib WHERE week = ? AND device_id = ?",
+                             (week, device_id)).fetchone()
+            my_contrib = c["count"] if c else 0
+            claimed = conn.execute("SELECT 1 FROM fair_claims WHERE week = ? AND device_id = ?",
+                                   (week, device_id)).fetchone() is not None
+            pw = _week_key(_week_monday(week) - timedelta(days=7))
+            pc = conn.execute("SELECT count FROM fair_contrib WHERE week = ? AND device_id = ?",
+                              (pw, device_id)).fetchone()
+            if pc and pc["count"] > 0 and conn.execute(
+                    "SELECT 1 FROM fair_claims WHERE week = ? AND device_id = ?",
+                    (pw, device_id)).fetchone() is None:
+                prow = conn.execute("SELECT * FROM fair_weeks WHERE week = ?", (pw,)).fetchone()
+                if prow:
+                    pclosed = _fair_virtual(prow["progress"], prow["goal"], 7) >= prow["goal"]
+                    if pclosed and pc["count"] >= FAIR_MIN_CONTRIB:
+                        prev = {"week": pw, "kind": "regen"}
+                    else:
+                        prev = {"week": pw, "kind": "ether",
+                                "amount": FAIR_CONSOLATION * min(pc["count"], FAIR_CONSOLATION_CAP)}
+        return WeekStatusResponse(
+            ok=True, week=week,
+            vein={"tag1": tag1, "tag2": tag2, "spread": spread,
+                  "my_hits": my_hits, "my_streaks": my_streaks, "streak_cap": VEIN_STREAK_CAP},
+            fair={"tag": fair["tag"], "goal": fair["goal"], "progress": fair["progress"],
+                  "apprentice": apprentice, "closed": closed, "my_contrib": my_contrib,
+                  "claimed": claimed, "prev": prev},
+        )
+    finally:
+        conn.close()
+
+
+@app.post("/api/fair/brew", response_model=FairBrewResponse)
+async def fair_brew(req: FairBrewRequest):
+    """Зачесть варку в котёл ярмарки, если выход пары — с тегом недели.
+
+    Выход сверяется с recipes (античит надуманного out); одна пара считается
+    раз в неделю с устройства (антифлуд повторных варок)."""
+    from datetime import date as _date
+    from gen_llm import canonical_pair_key
+    conn = get_db()
+    try:
+        today = _date.today()
+        week = _week_key(today)
+        fair = _fair_ensure(conn, week)
+        pair_key = canonical_pair_key(req.a, req.b)
+        out_tag = conn.execute(
+            "SELECT e.tag FROM recipes r JOIN elements e ON r.out_id = e.id WHERE r.pair_key = ?",
+            (pair_key,),
+        ).fetchone()
+        counted = False
+        if out_tag and out_tag["tag"] == fair["tag"]:
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO fair_pairs (week, device_id, pair_key) VALUES (?, ?, ?)",
+                (week, req.device_id, pair_key),
+            )
+            if cur.rowcount > 0:
+                counted = True
+                conn.execute("UPDATE fair_weeks SET progress = progress + 1 WHERE week = ?", (week,))
+                conn.execute(
+                    """INSERT INTO fair_contrib (week, device_id, count) VALUES (?, ?, 1)
+                       ON CONFLICT(week, device_id) DO UPDATE SET count = count + 1""",
+                    (week, req.device_id),
+                )
+                conn.commit()
+        fair = _fair_ensure(conn, week)
+        days = min(today.weekday() + 1, 7)
+        apprentice = int(fair["goal"] * 0.1 * days)
+        c = conn.execute("SELECT count FROM fair_contrib WHERE week = ? AND device_id = ?",
+                         (week, req.device_id)).fetchone()
+        return FairBrewResponse(
+            ok=True, counted=counted, progress=fair["progress"], goal=fair["goal"],
+            contrib=c["count"] if c else 0,
+            closed=fair["progress"] + apprentice >= fair["goal"],
+        )
+    finally:
+        conn.close()
+
+
+@app.post("/api/fair/claim", response_model=FairClaimResponse)
+async def fair_claim(req: FairClaimRequest):
+    """Забрать награды котла: текущая неделя (если закрыта) + прошлая.
+
+    Закрытый котёл + вклад ≥3 → вечный реген (клиент капает +1.0 суммарно);
+    иначе — утешение эфиром 30×вклад (кап 20). Повторный забор запрещён."""
+    from datetime import date as _date
+    conn = get_db()
+    try:
+        today = _date.today()
+        week = _week_key(today)
+        prev_week = _week_key(_week_monday(week) - timedelta(days=7))
+        grants = []
+        for w, days in ((week, min(today.weekday() + 1, 7)), (prev_week, 7)):
+            if w == week:
+                f = _fair_ensure(conn, w)
+            else:
+                r = conn.execute("SELECT * FROM fair_weeks WHERE week = ?", (w,)).fetchone()
+                if not r:
+                    continue
+                f = dict(r)
+            if conn.execute("SELECT 1 FROM fair_claims WHERE week = ? AND device_id = ?",
+                            (w, req.device_id)).fetchone():
+                continue
+            c = conn.execute("SELECT count FROM fair_contrib WHERE week = ? AND device_id = ?",
+                             (w, req.device_id)).fetchone()
+            contrib = c["count"] if c else 0
+            if contrib == 0:
+                continue
+            if w == week and _fair_virtual(f["progress"], f["goal"], days) < f["goal"]:
+                continue  # текущий котёл ещё варится
+            closed = _fair_virtual(f["progress"], f["goal"], days) >= f["goal"]
+            if closed and contrib >= FAIR_MIN_CONTRIB:
+                grants.append({"week": w, "kind": "regen", "amount": 0})
+                conn.execute("INSERT INTO fair_claims (week, device_id, kind) VALUES (?, ?, 'regen')",
+                             (w, req.device_id))
+            else:
+                amount = FAIR_CONSOLATION * min(contrib, FAIR_CONSOLATION_CAP)
+                grants.append({"week": w, "kind": "ether", "amount": amount})
+                conn.execute("INSERT INTO fair_claims (week, device_id, kind) VALUES (?, ?, 'ether')",
+                             (w, req.device_id))
+        conn.commit()
+        return FairClaimResponse(ok=True, grants=grants)
+    finally:
+        conn.close()
+
+# ---------------------------------------------------------------------------
+# Запуск
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    print(f"Запуск сервера на http://{SERVER_URL}")
+    print(f"База данных: {DB_PATH}")
+    uvicorn.run("server:app", host="0.0.0.0", port=8080, reload=True)

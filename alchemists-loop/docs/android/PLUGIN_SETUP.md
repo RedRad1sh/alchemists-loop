@@ -1,0 +1,76 @@
+# Android-интеграция ALCHEMIST'S LOOP
+
+Проект уже содержит фасады и два варианта сборки. В репозитории намеренно нет
+`.aar`, ключей подписи, App ID рекламных кабинетов и store credentials.
+Секреты не должны попадать в Git.
+
+## 1. Общая настройка
+
+- Godot 4.7.x, Android export template с Gradle.
+- `minSdk 24`, `targetSdk 36`, Compatibility renderer, только `arm64-v8a` для
+  первого закрытого теста (при необходимости добавить `armeabi-v7a`).
+- Сохранения: `user://alchemy_save.json` + backup/temp; служебные данные:
+  `user://alchemists_loop_user.json`; оба файла удаляются через кнопку удаления
+  данных.
+- Build features: `google_play` для GP и `rustore` для RuStore.
+- В релизном CI задавать `ALCHEMY_STORE`, `ALCHEMY_PRIVACY_URL` и реальные SKU
+  только через секреты/консоли, не в GDScript.
+
+## 2. Google Play
+
+1. Установить официальный `GodotGooglePlayBilling` v3.x для Godot 4.2+ в
+   `addons/GodotGooglePlayBilling` и включить плагин.
+2. Создать в Play Console продукты с SKU из `data/monetization.json`:
+   `al_loop_ether_500`, `al_loop_ether_1500`, `al_loop_sage_gold_1`,
+   `al_loop_starter_2026`, `al_loop_remove_ads`.
+3. Добавить лицензионных тестеров; проверять purchase/restore/consume после
+   загрузки AAB во внутренний или закрытый трек. В приложении покупки не
+   выдаются по SKU из UI: только после callback с purchase token.
+4. Фасад ищет `GodotGooglePlayBilling`, `BillingClient` или
+   `GooglePlayBilling` и нормализует callback в `{provider, sku, token, state}`.
+   Если выбранная версия addon использует другой autoload, зарегистрировать его
+   под одним из этих имён либо добавить имя в
+   `platform/google_play_billing.gd`.
+5. Для production включить серверную проверку purchase token через Google Play
+   Developer API. Service-account JSON не хранить в приложении.
+
+## 3. RuStore
+
+1. Взять официальные `rustore-billing-release.aar` и `RustoreBilling.gdap`
+   совместимой версии, положить в `android/plugins/`, включить плагин.
+2. Названия singleton/API зависят от версии пакета из кабинета RuStore. В
+   адаптере предусмотрены `RuStoreGodotPayClient`, `RuStoreGodotPay`,
+   `RustoreBilling` и `RuStoreBilling`; перед сборкой сверить фактический
+   контракт `.aar/.gdap` и при необходимости добавить его имя в адаптер.
+3. В RuStore Console завести те же логические товары с рублёвыми ценами.
+   Реальные SKU задаются в `data/monetization.json`, app id и deeplink scheme —
+   через `RUSTORE_APPLICATION_ID` и `RUSTORE_DEEPLINK_SCHEME`.
+4. В activity/manifest обязательно обработать deeplink, `singleTop` и вызов
+   `proceedIntent`/`onNewIntent` по документации SDK; это нужно для СБП/SberPay.
+5. Для consumable после выдачи вызвать `confirm_purchase`/
+   `confirm_two_step_purchase`; восстановление на старте делает `get_purchases`.
+   Серверную проверку `subscriptionToken`/invoice id включить перед релизом.
+
+## 4. Реклама и согласия
+
+- Google build: AdMob; RuStore build: Яндекс Mobile Ads. Фасад ищет
+  `AdMob/GodotAdMob/MobileAds` или `YandexMobileAds/YandexAds`.
+- SDK не инициализируется до решения пользователя о рекламе.
+- Rewarded: добровольная кнопка, cooldown 150 с, не более 5/день.
+- Interstitial: отдельный метод с cooldown 1500 с; не показывать в первые
+  10 минут первой сессии, в первые два дня и во время открытий/варки.
+- Для локальной проверки можно задать `ALCHEMY_ADS_STUB=1` или запустить
+  `--ads-stub`. Это не включать в release.
+
+## 5. Релизный smoke-чек
+
+- [ ] GP: pending, cancel, successful purchase, restore, consume, refund.
+- [ ] RuStore: PAID → confirm, cancel, restore, deeplink после внешней оплаты.
+- [ ] Процесс убит между callback и save: повторный restore не даёт двойную награду.
+- [ ] Плагин отсутствует: игра остаётся играбельной, магазин показывает статус.
+- [ ] Consent `unknown/denied`: реклама не стартует, события аналитики не уходят.
+- [ ] Экспорт создаёт локальную копию и запрашивает `GET /api/account/export`.
+- [ ] Удаление данных удаляет локальный прогресс и отправляет
+  `DELETE /api/account?device_id=...`; мировые вещества сохраняются, но
+  авторство анонимизируется.
+- [ ] AAB анализируется на 16 KB page size; target API 36.

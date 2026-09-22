@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "catalog_version": "2026-09-16",
+  "currency": "RUB",
+  "products": [
+    {
+      "id": "ether_pack_small",
+      "type": "consumable",
+      "title": "Мешок эфира",
+      "description": "+500 эфира для личных варок и улучшений",
+      "price_hint": "99 ₽",
+      "reward": {"ether": 500},
+      "store_sku": {"google_play": "al_loop_ether_500", "rustore": "al_loop_ether_500"}
+    },
+    {
+      "id": "ether_pack_large",
+      "type": "consumable",
+      "title": "Большой мешок эфира",
+      "description": "+1500 эфира для личной лаборатории",
+      "price_hint": "199 ₽",
+      "reward": {"ether": 1500},
+      "store_sku": {"google_play": "al_loop_ether_1500", "rustore": "al_loop_ether_1500"}
+    },
+    {
+      "id": "sage_gold_pack",
+      "type": "consumable",
+      "title": "Золото мудрецов",
+      "description": "+1 золото престижа. Не влияет на шанс мирового первооткрытия",
+      "price_hint": "149 ₽",
+      "reward": {"sage_gold": 1},
+      "store_sku": {"google_play": "al_loop_sage_gold_1", "rustore": "al_loop_sage_gold_1"}
+    },
+    {
+      "id": "starter_bundle",
+      "type": "consumable",
+      "title": "Том лаборатории",
+      "description": "500 эфира, 1 золото мудрецов и янтарная тема",
+      "price_hint": "199 ₽",
+      "reward": {"ether": 500, "sage_gold": 1, "theme": "ember"},
+      "store_sku": {"google_play": "al_loop_starter_2026", "rustore": "al_loop_starter_2026"}
+    },
+    {
+      "id": "remove_ads",
+      "type": "non_consumable",
+      "title": "Тихая лаборатория",
+      "description": "Отключает межэкранную рекламу. Rewarded остаётся только по желанию",
+      "price_hint": "299 ₽",
+      "reward": {"remove_ads": true},
+      "store_sku": {"google_play": "al_loop_remove_ads", "rustore": "al_loop_remove_ads"}
+    }
+  ],
+  "ads": {
+    "rewarded_daily_cap": 5,
+    "rewarded_cooldown_sec": 150,
+    "interstitial_cooldown_sec": 1500,
+    "minimum_session_number": 3,
+    "minimum_account_age_days": 2,
+    "placements": [
+      {
+        "id": "source_boost_60",
+        "title": "Раздуть огонь",
+        "description": "Удвоить добычу источников на 60 секунд",
+        "reward": {"source_boost_seconds": 60}
+      },
+      {
+        "id": "extra_brew",
+        "title": "Вторая искра",
+        "description": "+12 эфира — ровно на одну варку",
+        "reward": {"ether": 12}
+      }
+    ]
+  }
+}

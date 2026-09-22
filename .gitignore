@@ -1,0 +1,8 @@
+.env
+.godot/
+__pycache__/
+.pytest_cache/
+*.pyc
+node_modules/
+.superpowers/
+superpowers/
