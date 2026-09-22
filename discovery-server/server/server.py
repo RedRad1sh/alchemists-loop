@@ -133,9 +133,16 @@ app = FastAPI(
 # Pydantic-модели
 # ---------------------------------------------------------------------------
 
+# Слаг вещества: вывод slugify() — строчные латиница/цифры/дефис. Валидируется
+# на уровне модели (T07): в a/b чужеродный текст (HTML/эмодзи/мусор) не должен
+# доходить до БД и генератора.
+_SLUG_PATTERN = r"^[a-z0-9][a-z0-9\-]{0,63}$"
+
 class BrewCheckRequest(BaseModel):
-    a: str = Field(..., min_length=1, description="ID первого ингредиента")
-    b: str = Field(..., min_length=1, description="ID второго ингредиента")
+    a: str = Field(..., min_length=1, max_length=64, pattern=_SLUG_PATTERN,
+                   description="ID первого ингредиента (слаг)")
+    b: str = Field(..., min_length=1, max_length=64, pattern=_SLUG_PATTERN,
+                   description="ID второго ингредиента (слаг)")
     nick: str = Field(..., min_length=1, max_length=64, description="Ник игрока")
     device_id: str = Field(..., min_length=1, max_length=128, description="Уникальный ID устройства/保存")
     # Явная метка Experiment Bench. В первой версии arity=2; поле позволяет
@@ -618,9 +625,82 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_recipes_a_id ON recipes(a_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_recipes_b_id ON recipes(b_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_elements_author ON elements(author)")
+        # T02: авторство по device_id + players.nick UNIQUE (миграция старых БД,
+        # идемпотентна: PRAGMA-проверки колонок/индексов, дедуп по суффиксу).
+        _migrate_nick_identity(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+def _migrate_nick_identity(conn: sqlite3.Connection) -> None:
+    """Миграция идентичности (T02/T07). Идемпотентна, вызывается из init_db().
+
+    1. elements.author_device / recipes.discoverer_device — экономически
+       значимые связи (резонанс, export, delete) ключуются по device_id,
+       nick остаётся витриной.
+    2. players.nick: разрешение исторических коллизий (двойники, нажитые
+       прежним «UPDATE nick на любом запросе») + UNIQUE-индекс. Nick при
+       переименовании получает детерминированный суффикс по sha256(device_id).
+    3. Backfill author_device/discoverer_device для легаси-строк по нику
+       (первый владелец ника = минимальный id). Строки, где автор уже удалён,
+       остаются с NULL — для них в коде сохранён fallback по nick.
+    """
+    ecols = {r["name"] for r in conn.execute("PRAGMA table_info(elements)").fetchall()}
+    if "author_device" not in ecols:
+        conn.execute("ALTER TABLE elements ADD COLUMN author_device TEXT")
+    rcols = {r["name"] for r in conn.execute("PRAGMA table_info(recipes)").fetchall()}
+    if "discoverer_device" not in rcols:
+        conn.execute("ALTER TABLE recipes ADD COLUMN discoverer_device TEXT")
+
+    # (2) переименовать дубли: ник сохраняет «оригинал» — живой игрок важнее
+    # бота, среди равных — минимальный id; остальные получают nick-<hash4>.
+    for d in conn.execute(
+        "SELECT nick FROM players GROUP BY nick HAVING COUNT(*) > 1"
+    ).fetchall():
+        nick = d["nick"]
+        rivals = conn.execute(
+            "SELECT id, device_id FROM players WHERE nick = ? "
+            "ORDER BY device_id LIKE 'bot-%', id",
+            (nick,),
+        ).fetchall()
+        for r in rivals[1:]:
+            suffix = hashlib.sha256(r["device_id"].encode("utf-8")).hexdigest()[:4]
+            candidate = f"{nick}-{suffix}"
+            bump = 1
+            while conn.execute(
+                "SELECT 1 FROM players WHERE nick = ?", (candidate,)
+            ).fetchone():
+                candidate = f"{nick}-{suffix}{bump}"
+                bump += 1
+            conn.execute(
+                "UPDATE players SET nick = ? WHERE id = ?", (candidate, r["id"])
+            )
+
+    idx = {
+        r["name"]: r for r in conn.execute("PRAGMA index_list(players)").fetchall()
+    }
+    cur = idx.get("idx_players_nick")
+    if cur is not None and not cur["unique"]:
+        conn.execute("DROP INDEX idx_players_nick")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_players_nick ON players(nick)")
+
+    # (3) backfill авторства по device — только для строк без device-ключа
+    conn.execute(
+        """UPDATE elements SET author_device =
+               (SELECT p.device_id FROM players p
+                 WHERE p.nick = elements.author ORDER BY p.id LIMIT 1)
+           WHERE author_device IS NULL AND author IS NOT NULL AND author <> ''
+             AND EXISTS (SELECT 1 FROM players p2 WHERE p2.nick = elements.author)"""
+    )
+    conn.execute(
+        """UPDATE recipes SET discoverer_device =
+               (SELECT p.device_id FROM players p
+                 WHERE p.nick = recipes.discoverer ORDER BY p.id LIMIT 1)
+           WHERE discoverer_device IS NULL
+             AND discoverer IS NOT NULL AND discoverer <> ''
+             AND EXISTS (SELECT 1 FROM players p2 WHERE p2.nick = recipes.discoverer)"""
+    )
 
 
 def _merge_duplicate_elements(conn: sqlite3.Connection) -> None:
@@ -958,17 +1038,39 @@ async def health():
     """Проверка доступности сервера."""
     return {"ok": True, "version": "1.0.0"}
 
-def _upsert_player(conn: sqlite3.Connection, nick: str, device_id: str) -> None:
-    """Зарегистрировать игрока (или обновить ник), чтобы он попадал в зал славы."""
-    nick = clean_nick(nick) or nick
+def _upsert_player(conn: sqlite3.Connection, nick: str, device_id: str) -> str:
+    """Зарегистрировать игрока и вернуть его «витринный» ник.
+
+    T02: идентичность — device_id; nick для существующего устройства здесь
+    НЕ меняется (раньше любой brew-check мог присвоить чужой ник). Переименование
+    — только через POST /api/me с проверкой занятости.
+    T07: новая регистрация принимает только нормализованный ник (clean_nick),
+    иначе 400 и ничего не записывается.
+    """
+    existing = conn.execute(
+        "SELECT nick FROM players WHERE device_id = ?", (device_id,)
+    ).fetchone()
+    if existing is not None:
+        conn.execute(
+            "UPDATE players SET last_seen = date('now') WHERE device_id = ?",
+            (device_id,),
+        )
+        return existing["nick"]
+    cleaned = clean_nick(nick)
+    if not cleaned or cleaned != nick:
+        raise HTTPException(
+            status_code=400,
+            detail="Ник должен быть 2–24 символа: буквы, цифры, пробел, дефис или подчёркивание",
+        )
     try:
         conn.execute(
             "INSERT INTO players (nick, device_id, last_seen, created_at) VALUES (?, ?, date('now'), datetime('now'))",
             (nick, device_id),
         )
     except sqlite3.IntegrityError:
-        conn.execute("UPDATE players SET nick = ?, last_seen = date('now') WHERE device_id = ?",
-                     (nick, device_id))
+        # занятый ник (idx_players_nick) или гонка по device_id — не угоняем чужое
+        raise HTTPException(status_code=400, detail="Ник уже занят")
+    return nick
 
 
 _LLM_GEN = None
@@ -1258,25 +1360,44 @@ def _echo_row(conn: sqlite3.Connection, device_id: str):
     ).fetchone()
 
 
-def _credit_resonance(conn: sqlite3.Connection, out_id: int, author_nick, brewer_nick: str) -> bool:
-    """Чужой повтор вещества: +1 к счётчику вещества и отголосок всем устройствам
-    первооткрывателя. Свои повторы и вещества без автора не засчитываются.
-    Коммит — на вызывающем."""
-    if not author_nick or author_nick == brewer_nick:
+def _credit_resonance(conn: sqlite3.Connection, out_id: int, author_nick, brewer_nick: str,
+                      author_device: str = "", brewer_device: str = "") -> bool:
+    """Чужой повтор вещества: +1 к счётчику вещества и отголосок
+    первооткрывателю. Свои повторы и вещества без автора не засчитываются.
+    Коммит — на вызывающем.
+
+    T02: получатель ищем по device_id автора — ник — витрина, им можно
+    «наследовать» чужие отголоски (смена ника/двойники). author_device пуст
+    только для легаси-строк, чей автор не резолвится по нику (например, аккаунт
+    удалён): для них сохранён fallback по нику, а коллизии ников устранены
+    миграцией players.nick UNIQUE.
+    """
+    if not author_nick and not author_device:
+        return False
+    if author_device and brewer_device and author_device == brewer_device:
+        return False  # своё вещество (даже после переименования автора)
+    if not author_device and author_nick and author_nick == brewer_nick:
         return False
     conn.execute(
         "UPDATE elements SET resonance_count = resonance_count + 1 WHERE id = ?",
         (out_id,),
     )
+    if author_device:
+        recipients = [author_device]
+    else:
+        # легаси-fallback: nick после миграции UNIQUE — один владелец
+        recipients = [
+            prow["device_id"] for prow in conn.execute(
+                "SELECT device_id FROM players WHERE nick = ?", (author_nick,)
+            ).fetchall()
+        ]
     credited = False
-    for prow in conn.execute(
-        "SELECT device_id FROM players WHERE nick = ?", (author_nick,)
-    ).fetchall():
-        _echo_row(conn, prow["device_id"])
+    for dev in recipients:
+        _echo_row(conn, dev)
         conn.execute(
             "UPDATE echoes SET balance = MIN(balance + 1, ?), total = total + 1 "
             "WHERE device_id = ?",
-            (ECHO_CAP, prow["device_id"]),
+            (ECHO_CAP, dev),
         )
         credited = True
     return credited
@@ -1324,9 +1445,13 @@ def _apprentice_grant(conn: sqlite3.Connection, device_id: str, nick: str):
     if row["last_apprentice_day"] == today:
         conn.commit()
         return None
+    # T02: «свои» вещества — по device_id (легаси-fallback по нику), иначе
+    # переименованный игрок терял грант, а двойник ника получал чужой.
     mine = conn.execute(
-        "SELECT id, name, slug FROM elements WHERE author = ? ORDER BY id",
-        (nick,),
+        "SELECT id, name, slug FROM elements "
+        "WHERE author_device = ? OR (author_device IS NULL AND author = ?) "
+        "ORDER BY id",
+        (device_id, nick),
     ).fetchall()
     if not mine:
         conn.commit()
@@ -1549,7 +1674,7 @@ def _known_discovery(conn: sqlite3.Connection, recipe_row, pair_key: str, a: str
     )
 
 
-def _link_existing(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, row):
+def _link_existing(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, row, device_id=""):
     """Привязать новую пару к уже существующему элементу (дедупликация имён).
 
     Новый элемент НЕ создаётся: рецепт (a,b) указывает на существующий элемент,
@@ -1558,12 +1683,14 @@ def _link_existing(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, row):
     """
     created_at = datetime.now().isoformat()
     conn.execute(
-        """INSERT INTO recipes (pair_key, a, b, a_id, b_id, out_id, discoverer, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (pair_key, a_slug, b_slug, a_info["id"], b_info["id"], row["id"], nick, created_at),
+        """INSERT INTO recipes (pair_key, a, b, a_id, b_id, out_id, discoverer, discoverer_device, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (pair_key, a_slug, b_slug, a_info["id"], b_info["id"], row["id"], nick, device_id, created_at),
     )
     # новая пара дала чужое вещество — автору тоже капает резонанс
-    _credit_resonance(conn, row["id"], row["author"], nick)
+    _credit_resonance(conn, row["id"], row["author"], nick,
+                      author_device=row["author_device"] if "author_device" in row.keys() else "",
+                      brewer_device=device_id)
     seq_row = conn.execute(
         "SELECT COUNT(*) + 1 FROM recipes WHERE created_at < ?", (created_at,)
     ).fetchone()
@@ -1577,8 +1704,11 @@ def _link_existing(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, row):
     )
 
 
-def _materialize(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, name, category, gen_method, glyph="", d="", tag=""):
-    """Создать элемент и рецепт; вернуть DiscoveryData."""
+def _materialize(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, name, category, gen_method, glyph="", d="", tag="", device_id=""):
+    """Создать элемент и рецепт; вернуть DiscoveryData.
+
+    author/discoverer — витринный ник на момент открытия; author_device /
+    discoverer_device — авторитетный ключ для экономики (T02)."""
     layer = max(a_info["layer"], b_info["layer"]) + 1
     existing_names = {row["name"] for row in conn.execute("SELECT name FROM elements").fetchall()}
     existing_slugs = {row["slug"] for row in conn.execute("SELECT slug FROM elements").fetchall()}
@@ -1592,15 +1722,15 @@ def _materialize(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, name, cat
 
     created_at = datetime.now().isoformat()
     element_cursor = conn.execute(
-        """INSERT INTO elements (slug, name, name_norm, color, layer, category, glyph, d, author, tag, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (slug, name, seed.norm_name(name), color, layer, category, glyph, d, nick, tag, created_at),
+        """INSERT INTO elements (slug, name, name_norm, color, layer, category, glyph, d, author, author_device, tag, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (slug, name, seed.norm_name(name), color, layer, category, glyph, d, nick, device_id, tag, created_at),
     )
     element_id = element_cursor.lastrowid
     conn.execute(
-        """INSERT INTO recipes (pair_key, a, b, a_id, b_id, out_id, discoverer, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (pair_key, a_slug, b_slug, a_info["id"], b_info["id"], element_id, nick, created_at),
+        """INSERT INTO recipes (pair_key, a, b, a_id, b_id, out_id, discoverer, discoverer_device, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (pair_key, a_slug, b_slug, a_info["id"], b_info["id"], element_id, nick, device_id, created_at),
     )
     seq_cursor = conn.execute("SELECT COUNT(*) + 1 FROM recipes WHERE created_at < ?", (created_at,))
     seq_row = seq_cursor.fetchone()
@@ -1681,14 +1811,14 @@ def _generate_for_pair(conn, a_slug, b_slug, pair_key, nick, device_id="", llm=N
     # Дедупликация имён: если вещество с таким именем уже есть в БД (например,
     # LLM снова выдала «Огонь»), НЕ создаём копию — привязываем пару к нему.
     existing = conn.execute(
-        "SELECT id, slug, name, color, layer, category, glyph, d, author, tag, created_at "
+        "SELECT id, slug, name, color, layer, category, glyph, d, author, author_device, tag, created_at "
         "FROM elements WHERE name_norm = ? ORDER BY id LIMIT 1",
         (seed.norm_name(name),),
     ).fetchone()
     if existing:
-        return "created", _link_existing(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, existing)
+        return "created", _link_existing(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, existing, device_id)
 
-    return "created", _materialize(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, name, category, "llm", glyph, d, tag)
+    return "created", _materialize(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, name, category, "llm", glyph, d, tag, device_id)
 
 
 @app.post("/api/brew-check", response_model=BrewCheckResponse)
@@ -1703,17 +1833,21 @@ async def brew_check(req: BrewCheckRequest):
     try:
         pair_key = canonical_pair_key(req.a, req.b)
 
-        _upsert_player(conn, req.nick, req.device_id)
+        # T02: nick из запроса — только заявка новой системы; для известного
+        # устройства возвращается его хранящийся ник, и дальше в ход идёт он.
+        nick = _upsert_player(conn, req.nick, req.device_id)
         conn.commit()
 
         recipe_row = conn.execute(
-            "SELECT out_id, discoverer FROM recipes WHERE pair_key = ?",
+            "SELECT out_id, discoverer, discoverer_device FROM recipes WHERE pair_key = ?",
             (pair_key,),
         ).fetchone()
 
         if recipe_row:
-            # повтор чужого вещества — резонанс первооткрывателю
-            _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], req.nick)
+            # повтор чужого вещества — резонанс первооткрывателю (по device_id)
+            _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], nick,
+                              author_device=recipe_row["discoverer_device"],
+                              brewer_device=req.device_id)
             conn.commit()
             out_row = conn.execute(
                 "SELECT id, slug, name, color, layer, category, glyph, d, author, created_at FROM elements WHERE id = ?",
@@ -1799,18 +1933,22 @@ async def discover(req: DiscoverRequest):
     try:
         pair_key = canonical_pair_key(req.a, req.b)
 
-        _upsert_player(conn, req.nick, req.device_id)
+        # T02: nick — витрина; авторитетен device_id. Дальше используется
+        # канонический хранящийся ник устройства, а не переданный в запросе.
+        nick = _upsert_player(conn, req.nick, req.device_id)
         conn.commit()
 
         # 1. Пара уже открыта?
         recipe_row = conn.execute(
-            "SELECT out_id, discoverer FROM recipes WHERE pair_key = ?",
+            "SELECT out_id, discoverer, discoverer_device FROM recipes WHERE pair_key = ?",
             (pair_key,),
         ).fetchone()
         if recipe_row:
             known = _known_discovery(conn, recipe_row, pair_key, req.a, req.b)
             if known is not None:
-                _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], req.nick)
+                _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], nick,
+                                  author_device=recipe_row["discoverer_device"],
+                                  brewer_device=req.device_id)
                 conn.commit()
                 return known
 
@@ -1836,7 +1974,7 @@ async def discover(req: DiscoverRequest):
                ON CONFLICT(pair_key) DO UPDATE SET
                  state='locked', lock_ts=excluded.lock_ts,
                  owner=excluded.owner, attempted_by=excluded.attempted_by""",
-            (pair_key, now, req.nick, req.nick),
+            (pair_key, now, nick, nick),
         )
         conn.commit()
 
@@ -1846,7 +1984,7 @@ async def discover(req: DiscoverRequest):
         # клиентский флаг experiment её не обходит.
         try:
             kind, discovery = _generate_for_pair(
-                conn, req.a, req.b, pair_key, req.nick, req.device_id)
+                conn, req.a, req.b, pair_key, nick, req.device_id)
 
             if kind == "not_combinable":
                 # решение модели фиксируется в БД навсегда
@@ -1869,18 +2007,18 @@ async def discover(req: DiscoverRequest):
             conn.execute(
                 "INSERT INTO world_events (pair_key, a, b, out, out_name, discoverer, created_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (pair_key, req.a, req.b, discovery.slug, discovery.name, req.nick,
+                (pair_key, req.a, req.b, discovery.slug, discovery.name, nick,
                  datetime.now().isoformat()),
             )
             # ежедневная цель-гонка
-            challenge_info = _score_challenge(conn, req.a, req.b, req.nick, req.device_id)
+            challenge_info = _score_challenge(conn, req.a, req.b, nick, req.device_id)
             # туманная жила: находка с тегом недели → +очки и бросок прожилки
             vein_info = _score_vein(conn, _week_key(), discovery.tag or "", _today(),
-                                    req.device_id, req.nick)
+                                    req.device_id, nick)
             conn.commit()
             return DiscoverResponse(
                 ok=True, status="created", discovery=discovery, already_known=False,
-                message=f"ПЕРВООТКРЫТИЕ: {discovery.name} автор — {req.nick}!",
+                message=f"ПЕРВООТКРЫТИЕ: {discovery.name} автор — {nick}!",
                 challenge=challenge_info,
                 vein=vein_info,
             )
@@ -1899,13 +2037,15 @@ async def discover(req: DiscoverRequest):
             conn.rollback()
             # гонка: пара вставлена другим запросом — отдать существующую
             recipe_row = conn.execute(
-                "SELECT out_id, discoverer FROM recipes WHERE pair_key = ?",
+                "SELECT out_id, discoverer, discoverer_device FROM recipes WHERE pair_key = ?",
                 (pair_key,),
             ).fetchone()
             if recipe_row:
                 known = _known_discovery(conn, recipe_row, pair_key, req.a, req.b)
                 if known is not None:
-                    _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], req.nick)
+                    _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], nick,
+                                      author_device=recipe_row["discoverer_device"],
+                                      brewer_device=req.device_id)
                     conn.commit()
                     return known
             raise
@@ -2087,25 +2227,15 @@ async def challenge(device_id: str = Query("", max_length=128)):
 async def register_player(req: BrewCheckRequest):
     """
     Регистрация игрока (device_id должен быть уникальным).
+
+    T02: повторная «регистрация» чужим ником не переименовывает существующий
+    аккаунт — ник меняется только через POST /api/me.
     """
     conn = get_db()
     try:
-        try:
-            conn.execute(
-                "INSERT INTO players (nick, device_id, created_at) VALUES (?, ?, datetime('now'))",
-                (clean_nick(req.nick) or req.nick, req.device_id),
-            )
-            conn.commit()
-        except sqlite3.IntegrityError:
-            # device_id уже существует — просто обновляем ник, если он изменился
-            conn.execute(
-                "UPDATE players SET nick = ? WHERE device_id = ?",
-                (clean_nick(req.nick) or req.nick, req.device_id),
-            )
-            conn.commit()
-        
-        return {"ok": True, "nick": req.nick, "device_id": req.device_id}
-        
+        nick = _upsert_player(conn, req.nick, req.device_id)
+        conn.commit()
+        return {"ok": True, "nick": nick, "device_id": req.device_id}
     finally:
         conn.close()
 
@@ -2128,17 +2258,47 @@ async def get_me(device_id: str = Query(..., min_length=1, max_length=128)):
 
 @app.post("/api/me", response_model=ProfileResponse)
 async def set_me(req: ProfileRequest):
-    """Установить ник игрока (уникальное имя); аватар считается из ника."""
+    """Установить ник игрока (уникальное имя); аватар считается из ника.
+
+    Единственная дверь переименования (T02): ник занят другим устройством —
+    400. Легаси-авторство со старым ником перепривязывается на device_id
+    владельца, чтобы угон освободившегося ника не унаследовал отголоски.
+    """
     nick = clean_nick(req.nick)
     if not nick:
         raise HTTPException(status_code=400, detail="Ник должен быть 2–24 символа и без спецсимволов")
     conn = get_db()
     try:
-        conn.execute(
-            """INSERT INTO players (nick, device_id, created_at) VALUES (?, ?, datetime('now'))
-               ON CONFLICT(device_id) DO UPDATE SET nick = excluded.nick""",
+        taken = conn.execute(
+            "SELECT device_id FROM players WHERE nick = ? AND device_id <> ?",
             (nick, req.device_id),
-        )
+        ).fetchone()
+        if taken:
+            raise HTTPException(status_code=400, detail="Ник уже занят")
+        old = conn.execute(
+            "SELECT nick FROM players WHERE device_id = ?", (req.device_id,)
+        ).fetchone()
+        try:
+            conn.execute(
+                """INSERT INTO players (nick, device_id, created_at) VALUES (?, ?, datetime('now'))
+                   ON CONFLICT(device_id) DO UPDATE SET nick = excluded.nick""",
+                (nick, req.device_id),
+            )
+        except sqlite3.IntegrityError:
+            # гонка: ник заняли между проверкой и записью
+            raise HTTPException(status_code=400, detail="Ник уже занят")
+        if old and old["nick"] and old["nick"] != nick:
+            # перепривязка легаси-авторства (author_device ещё не заполнен)
+            conn.execute(
+                "UPDATE elements SET author_device = ? "
+                "WHERE author_device IS NULL AND author = ?",
+                (req.device_id, old["nick"]),
+            )
+            conn.execute(
+                "UPDATE recipes SET discoverer_device = ? "
+                "WHERE discoverer_device IS NULL AND discoverer = ?",
+                (req.device_id, old["nick"]),
+            )
         conn.commit()
         return ProfileResponse(ok=True, nick=nick, device_id=req.device_id, avatar=avatar_for(nick))
     finally:
@@ -2161,9 +2321,14 @@ async def export_account(device_id: str = Query(..., min_length=1, max_length=12
         if player is None:
             return {"ok": True, "found": False, "device_id": device_id, "data": {}}
         nick = player["nick"]
+        # T02: авторство — по device_id; легаси-строки без author_device
+        # сопоставляются по нику (ник после миграции уникален).
         discoveries = [dict(row) for row in conn.execute(
             """SELECT slug, name, layer, category, created_at
-               FROM elements WHERE author = ? ORDER BY created_at""", (nick,)
+               FROM elements
+               WHERE author_device = ?
+                  OR (author_device IS NULL AND author = ?)
+               ORDER BY created_at""", (device_id, nick)
         ).fetchall()]
         echoes_row = conn.execute(
             "SELECT balance, total FROM echoes WHERE device_id = ?", (device_id,)
@@ -2207,8 +2372,19 @@ async def delete_account(device_id: str = Query(..., min_length=1, max_length=12
         if player is None:
             return {"ok": True, "deleted": False, "message": "Профиль уже удалён"}
         nick = player["nick"]
-        conn.execute("UPDATE elements SET author = NULL WHERE author = ?", (nick,))
-        conn.execute("UPDATE recipes SET discoverer = NULL WHERE discoverer = ?", (nick,))
+        # T02: чистим авторство СВОЕГО устройства и легаси-строк, чей ник ещё
+        # не привязан к device. Раньше WHERE nick задевал всех
+        # однофамильцев — это был и угон, и порча чужих аккаунтов.
+        conn.execute(
+            "UPDATE elements SET author = NULL, author_device = NULL "
+            "WHERE author_device = ? OR (author_device IS NULL AND author = ?)",
+            (device_id, nick),
+        )
+        conn.execute(
+            "UPDATE recipes SET discoverer = NULL, discoverer_device = NULL "
+            "WHERE discoverer_device = ? OR (discoverer_device IS NULL AND discoverer = ?)",
+            (device_id, nick),
+        )
         conn.execute(
             "UPDATE world_events SET discoverer = 'Анонимный алхимик' WHERE discoverer = ?", (nick,)
         )
@@ -2246,7 +2422,9 @@ async def save_house(req: HouseRequest):
     """Сохранить домик игрока, чтобы его могли открывать другие игроки."""
     conn = get_db()
     try:
-        _upsert_player(conn, req.nick, req.device_id)
+        # T02: ник из запроса ничего не переименовывает — канонический ник
+        # возвращает _upsert_player (для знакомого устройства — хранящийся).
+        nick = _upsert_player(conn, req.nick, req.device_id)
         house_json = json.dumps(req.house, ensure_ascii=False)
         if len(house_json) > 16384:
             raise HTTPException(status_code=400, detail="Домик слишком большой")
@@ -2255,7 +2433,6 @@ async def save_house(req: HouseRequest):
             (house_json, datetime.now().isoformat(), req.device_id),
         )
         conn.commit()
-        nick = clean_nick(req.nick) or req.nick
         return HouseResponse(ok=True, nick=nick, avatar=avatar_for(nick), house=req.house)
     finally:
         conn.close()

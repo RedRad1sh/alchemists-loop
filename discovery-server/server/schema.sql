@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS elements (
     glyph TEXT NOT NULL DEFAULT '',
     d TEXT NOT NULL DEFAULT '',
     author TEXT,
+    -- device_id автора (T02): экономически значимые связи (резонанс, export,
+    -- delete) ключуются по нему; author/nick — только витрина. Для старых строк
+    -- заполняется backfill-ом в init_db(); NULL без backfill — fallback по nick.
+    author_device TEXT,
     resonance_count INTEGER NOT NULL DEFAULT 0,
     tag TEXT NOT NULL DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
@@ -31,10 +35,15 @@ CREATE TABLE IF NOT EXISTS recipes (
     b_id INTEGER REFERENCES elements(id),
     out_id INTEGER NOT NULL REFERENCES elements(id),
     discoverer TEXT,
+    -- первооткрыватель по device_id (T02) — см. elements.author_device
+    discoverer_device TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 
 -- Игроки
+-- nick без UNIQUE в DDL: уникальность наводит миграция init_db() (идемпотентно:
+-- разрешение коллизий + CREATE UNIQUE INDEX), чтобы старые БД не падали на
+-- «duplicate key» при первом старте после деплоя.
 CREATE TABLE IF NOT EXISTS players (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nick TEXT NOT NULL,
