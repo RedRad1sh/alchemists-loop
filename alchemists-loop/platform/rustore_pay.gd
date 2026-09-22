@@ -142,15 +142,33 @@ func _normalize_purchase(raw: Dictionary) -> Dictionary:
 	var token := String(raw.get("purchase_id", raw.get("purchaseId", raw.get("invoice_id", raw.get("invoiceId", raw.get("subscription_token", raw.get("subscriptionToken", "")))))))
 	if sku == "" or token == "":
 		return {}
-	var state := String(raw.get("purchase_state", raw.get("purchaseState", raw.get("state", "PAID"))).to_upper())
 	return {
 		"provider": provider_id(),
 		"sku": sku,
 		"token": token,
 		"purchase_id": token,
-		"state": state,
+		"state": _normalize_state(raw),
 		"raw": raw,
 	}
+
+# Контракт RuStore Pay: PAID = оплачено, PENDING = ожидает завершения
+# внешней оплаты, CANCELED/CANCELLED = отменена; в RuStore Store API
+# встречается BOUGHT/PURCHASED как синоним оплаченной. Неизвестный или
+# отсутствующий статус → "rejected": прежний дефолт "PAID" выдавал товар
+# при пустом поле, теперь неясные состояния никогда не подтверждают.
+func _normalize_state(raw: Dictionary) -> String:
+	var value := ""
+	for key in ["purchase_state", "purchaseState", "state"]:
+		if raw.has(key):
+			value = String(raw[key]).to_upper()
+			break
+	match value:
+		"PAID", "BOUGHT", "PURCHASED":
+			return "purchased"
+		"PENDING":
+			return "pending"
+		_:
+			return "rejected"
 
 func _looks_like_purchase(raw: Dictionary) -> bool:
 	return String(raw.get("purchase_id", raw.get("purchaseId", raw.get("invoice_id", raw.get("invoiceId", ""))))) != ""

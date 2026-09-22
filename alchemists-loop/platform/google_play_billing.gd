@@ -146,10 +146,34 @@ func _normalize_purchase(raw: Dictionary) -> Dictionary:
 		"provider": provider_id(),
 		"sku": sku,
 		"token": token,
-		"state": int(raw.get("purchase_state", raw.get("purchaseState", 1))),
+		"state": _normalize_state(raw),
 		"acknowledged": bool(raw.get("is_acknowledged", raw.get("acknowledged", false))),
 		"raw": raw,
 	}
+
+# Матрица Google Play Billing: purchaseState 0 = purchased, 1 = pending,
+# 2 = declined. Отсутствующее или незнакомое значение приводим к "rejected":
+# отсутствие поля не должно выглядеть как подтверждённая покупка, поэтому
+# здесь нет дефолта-«1». Фасад начисляет только строку "purchased".
+func _normalize_state(raw: Dictionary) -> String:
+	var value = null
+	if raw.has("purchase_state"):
+		value = raw["purchase_state"]
+	elif raw.has("purchaseState"):
+		value = raw["purchaseState"]
+	else:
+		return "rejected"
+	match value:
+		0:
+			return "purchased"
+		1:
+			return "pending"
+		2:
+			return "rejected"
+		_:
+			# Не-целочисленное или неизвестное состояние: подтверждающей
+			# покупки нет, отклоняем вместо угадывания.
+			return "rejected"
 
 func _extract_purchase_array(raw: Dictionary) -> Array:
 	for key in ["purchases", "items", "data"]:

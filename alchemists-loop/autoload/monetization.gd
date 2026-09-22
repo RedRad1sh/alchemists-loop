@@ -211,12 +211,17 @@ func _on_purchase_received(purchase: Dictionary) -> void:
 	var provider := String(purchase.get("provider", store_id))
 	var sku := String(purchase.get("sku", ""))
 	var token := String(purchase.get("token", ""))
-	var state = purchase.get("state", 1)
-	if state is int and int(state) != 1:
+	# Единый контракт адаптеров: state — нормализованная строка
+	# "purchased" / "pending" / "rejected". Начисляем только "purchased";
+	# отсутствующее или незнакомое значение всегда трактуем как отказ,
+	# никогда как подтверждение (Google Play: purchaseState 0 = purchased,
+	# 1 = pending, 2 = declined — числовые состояния адаптер не пропускает).
+	var state := String(purchase.get("state", ""))
+	if state == "pending":
 		purchase_failed.emit("", "purchase_pending", "Покупка ещё не подтверждена магазином")
 		return
-	if state is String and String(state).to_upper() not in ["PAID", "PURCHASED", "COMPLETED", "CONFIRMED"]:
-		purchase_failed.emit("", "purchase_pending", "Покупка ещё не подтверждена магазином")
+	if state != "purchased":
+		purchase_failed.emit("", "purchase_rejected", "Магазин не подтвердил покупку")
 		return
 	var product_id := _product_id_for_sku(sku)
 	if product_id == "":
