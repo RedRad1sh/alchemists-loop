@@ -91,9 +91,16 @@ LOCK_TTL = 40.0  # секунд: сколько пара считается «в
 # Эксперименты — это явные LLM-backed запросы из Experiment Bench. Значения
 # намеренно конфигурируются окружением: расходы на LLM не должны быть спрятаны
 # в клиентской экономике. Кэшированные/curated ответы лимит не расходуют.
+# Квота резервируется на сервере по ФАКТУ обращения к генератору (см.
+# _generate_for_pair), а не по клиентскому флагу experiment.
 EXPERIMENT_COOLDOWN_SEC = float(os.environ.get("ALCHEMY_EXPERIMENT_COOLDOWN_SEC", "5"))
 EXPERIMENT_DAILY_LIMIT = int(os.environ.get("ALCHEMY_EXPERIMENT_DAILY_LIMIT", "200"))
 EXPERIMENT_GLOBAL_DAILY_LIMIT = int(os.environ.get("ALCHEMY_EXPERIMENT_GLOBAL_DAILY_LIMIT", "10000"))
+# Письма Светика — отдельный дневной бюджет LLM-вызовов (не смешивать с
+# экспериментами): генерация намёка тоже стоит денег.
+LETTER_COOLDOWN_SEC = float(os.environ.get("ALCHEMY_LETTER_COOLDOWN_SEC", "30"))
+LETTER_DAILY_LIMIT = int(os.environ.get("ALCHEMY_LETTER_DAILY_LIMIT", "3"))
+LETTER_GLOBAL_DAILY_LIMIT = int(os.environ.get("ALCHEMY_LETTER_GLOBAL_DAILY_LIMIT", "3000"))
 
 # Резонанс первооткрывателя (v24): чужой повтор твоего вещества → отголосок.
 ECHO_ETHER = 5   # эфир за один забранный отголосок
@@ -126,6 +133,7 @@ class BrewCheckRequest(BaseModel):
     device_id: str = Field(..., min_length=1, max_length=128, description="Уникальный ID устройства/保存")
     # Явная метка Experiment Bench. В первой версии arity=2; поле позволяет
     # отличить оплаченный LLM-запрос от обычного чтения известной пары.
+    # Только UX/аналитика: квота LLM решается на сервере по факту генерации.
     experiment: bool = False
 
 class BrewCheckResponse(BaseModel):
@@ -533,6 +541,23 @@ def init_db():
                )"""
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_experiment_limits_device ON experiment_limits(device_id)")
+        # Письма: отдельный дневной бюджет LLM-вызовов (пер-девайс + мировой).
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS letter_limits (
+                   day TEXT NOT NULL,
+                   device_id TEXT NOT NULL,
+                   attempts INTEGER NOT NULL DEFAULT 0,
+                   last_at REAL NOT NULL DEFAULT 0,
+                   PRIMARY KEY (day, device_id)
+               )"""
+        )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS letter_global_limits (
+                   day TEXT NOT NULL PRIMARY KEY,
+                   attempts INTEGER NOT NULL DEFAULT 0
+               )"""
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_letter_limits_device ON letter_limits(device_id)")
         conn.execute(
 
             """CREATE TABLE IF NOT EXISTS letters (
@@ -993,46 +1018,124 @@ def _experiment_uses_llm() -> bool:
     return provider not in ("", "local", "mock", "off")
 
 
-def _admit_experiment(conn: sqlite3.Connection, device_id: str) -> tuple[bool, str]:
-    """Reserve one explicit LLM-backed experiment for this device/day.
+def _reserve_llm_generation(
+    conn: sqlite3.Connection, device_id: str, *, limits_table: str, global_table: str,
+    cooldown_sec: float, daily_limit: int, global_daily_limit: int,
+    cooldown_msg: str, daily_msg: str, global_msg: str,
+) -> tuple[bool, str]:
+    """Reserve one external LLM generation for this device/day.
 
     The database is the source of truth, so restarting the server does not reset
     the per-device quota. A zero global limit disables only the global guard.
-    Cached and curated/local resolutions never call this helper.
+    Callers invoke this at the FACT of an LLM call (inside the generators), not
+    on a client-supplied flag. Local/mock providers do not spend external
+    budget. Cooldown and daily counter are bumped here; a failed (unavailable)
+    generation must return the charge via _refund_llm_generation.
     """
     if not _experiment_uses_llm():
         return True, ""
     now = time.time()
     day = _today()
     row = conn.execute(
-        "SELECT attempts, last_at FROM experiment_limits WHERE day = ? AND device_id = ?",
+        f"SELECT attempts, last_at FROM {limits_table} WHERE day = ? AND device_id = ?",
         (day, device_id),
     ).fetchone()
     attempts = int(row["attempts"]) if row else 0
     last_at = float(row["last_at"]) if row else 0.0
-    if now - last_at < max(0.0, EXPERIMENT_COOLDOWN_SEC):
-        wait = max(1, int(math.ceil(EXPERIMENT_COOLDOWN_SEC - (now - last_at))))
-        return False, f"Эксперимент можно отправить через {wait} с."
-    if EXPERIMENT_DAILY_LIMIT > 0 and attempts >= EXPERIMENT_DAILY_LIMIT:
-        return False, "Дневной лимит экспериментов исчерпан."
+    if now - last_at < max(0.0, cooldown_sec):
+        wait = max(1, int(math.ceil(cooldown_sec - (now - last_at))))
+        return False, cooldown_msg % wait
+    if daily_limit > 0 and attempts >= daily_limit:
+        return False, daily_msg
     global_row = conn.execute(
-        "SELECT attempts FROM experiment_global_limits WHERE day = ?", (day,)
+        f"SELECT attempts FROM {global_table} WHERE day = ?", (day,)
     ).fetchone()
     global_attempts = int(global_row["attempts"]) if global_row else 0
-    if EXPERIMENT_GLOBAL_DAILY_LIMIT > 0 and global_attempts >= EXPERIMENT_GLOBAL_DAILY_LIMIT:
-        return False, "Мировой лимит экспериментов на сегодня исчерпан."
+    if global_daily_limit > 0 and global_attempts >= global_daily_limit:
+        return False, global_msg
     conn.execute(
-        "INSERT INTO experiment_limits(day, device_id, attempts, last_at) VALUES (?, ?, 1, ?) "
+        f"INSERT INTO {limits_table}(day, device_id, attempts, last_at) VALUES (?, ?, 1, ?) "
         "ON CONFLICT(day, device_id) DO UPDATE SET attempts = attempts + 1, last_at = excluded.last_at",
         (day, device_id, now),
     )
     conn.execute(
-        "INSERT INTO experiment_global_limits(day, attempts) VALUES (?, 1) "
+        f"INSERT INTO {global_table}(day, attempts) VALUES (?, 1) "
         "ON CONFLICT(day) DO UPDATE SET attempts = attempts + 1",
         (day,),
     )
     conn.commit()
     return True, ""
+
+
+def _refund_llm_generation(
+    conn: sqlite3.Connection, device_id: str, *, limits_table: str, global_table: str
+):
+    """Return a reserved charge when the LLM turned out to be unavailable:
+    the quota is spent only on real generations, not on failures.
+    last_at stays — the cooldown still guards against hammering a broken LLM."""
+    if not _experiment_uses_llm():
+        return
+    day = _today()
+    conn.execute(
+        f"UPDATE {limits_table} SET attempts = MAX(attempts - 1, 0) WHERE day = ? AND device_id = ?",
+        (day, device_id),
+    )
+    conn.execute(
+        f"UPDATE {global_table} SET attempts = MAX(attempts - 1, 0) WHERE day = ?",
+        (day,),
+    )
+    conn.commit()
+
+
+class QuotaExceeded(Exception):
+    """LLM-квота на сегодня исчерпана (дневной/мировой лимит или кулдаун).
+    text — готовое сообщение для клиента (response уже содержит статус
+    rate_limited). Поднимается из генераторов, квота резервируется по факту
+    обращения к LLM, а не по клиентскому флагу."""
+
+    def __init__(self, text: str):
+        super().__init__(text)
+        self.text = text
+
+
+def _admit_experiment(conn: sqlite3.Connection, device_id: str) -> tuple[bool, str]:
+    """Reserve one LLM-backed experiment for this device/day (see _reserve...)."""
+    return _reserve_llm_generation(
+        conn, device_id,
+        limits_table="experiment_limits", global_table="experiment_global_limits",
+        cooldown_sec=EXPERIMENT_COOLDOWN_SEC, daily_limit=EXPERIMENT_DAILY_LIMIT,
+        global_daily_limit=EXPERIMENT_GLOBAL_DAILY_LIMIT,
+        cooldown_msg="Эксперимент можно отправить через %d с.",
+        daily_msg="Дневной лимит экспериментов исчерпан.",
+        global_msg="Мировой лимит экспериментов на сегодня исчерпан.",
+    )
+
+
+def _refund_experiment(conn: sqlite3.Connection, device_id: str):
+    _refund_llm_generation(
+        conn, device_id,
+        limits_table="experiment_limits", global_table="experiment_global_limits",
+    )
+
+
+def _admit_letter(conn: sqlite3.Connection, device_id: str) -> tuple[bool, str]:
+    """Reserve one letter-hint LLM generation for this device/day."""
+    return _reserve_llm_generation(
+        conn, device_id,
+        limits_table="letter_limits", global_table="letter_global_limits",
+        cooldown_sec=LETTER_COOLDOWN_SEC, daily_limit=LETTER_DAILY_LIMIT,
+        global_daily_limit=LETTER_GLOBAL_DAILY_LIMIT,
+        cooldown_msg="Письмо можно запросить через %d с.",
+        daily_msg="Дневной лимит писем исчерпан.",
+        global_msg="Мировой лимит писем на сегодня исчерпан.",
+    )
+
+
+def _refund_letter(conn: sqlite3.Connection, device_id: str):
+    _refund_llm_generation(
+        conn, device_id,
+        limits_table="letter_limits", global_table="letter_global_limits",
+    )
 
 
 def _challenge_target_for(day: str) -> str:
@@ -1249,9 +1352,11 @@ def _letter_candidates(conn: sqlite3.Connection, nick: str, device_id: str):
 
 
 def _ensure_letter(conn, device_id: str, nick: str, day: str, llm=None):
-    """Письмо на день: вернуть строку или None (LLM недоступна — день ждёт).
+    """Письмо на день: вернуть строку или None (LLM недоступна / квота исчерпана — день ждёт).
 
     Намёк генерируется 1 раз и кэшируется; недоделки старше лимита уходят.
+    Квота — отдельный дневной бюджет писем, резервируется по факту LLM-вызова
+    (ключ — device_id); при отказе модели резерв возвращается.
     """
     row = conn.execute(
         "SELECT day, a, b, a_name, b_name, hint, solved FROM letters "
@@ -1269,12 +1374,18 @@ def _ensure_letter(conn, device_id: str, nick: str, day: str, llm=None):
     b_info = _parent(conn, pb)
     if llm is None:
         llm = get_llm()
+    # Резерв квоты — прямо перед платным вызовом генератора намёков.
+    allowed, _ = _admit_letter(conn, device_id)
+    if not allowed:
+        return None
     try:
         res = llm.generate_hint(a_info["name"], b_info["name"])
     except LLMError:
+        _refund_letter(conn, device_id)
         return None
     hint = str(res.get("hint", "")).strip()
     if not hint:
+        _refund_letter(conn, device_id)
         return None
     conn.execute(
         "INSERT INTO letters (device_id, day, a, b, a_name, b_name, hint, solved) "
@@ -1447,18 +1558,23 @@ def _materialize(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, name, cat
     )
 
 
-def _generate_for_pair(conn, a_slug, b_slug, pair_key, nick, llm=None):
+def _generate_for_pair(conn, a_slug, b_slug, pair_key, nick, device_id="", llm=None):
     """Решить судьбу неизвестной пары через LLM.
 
     БД — источник истины: вызов сюда означает, что пары нет ни в recipes, ни в
     rejected_pairs (это уже проверил вызывающий эндпоинт). Сгенерированный
     однажды результат фиксируется в БД и больше не пересчитывается.
 
+    Квота LLM резервируется ЗДЕСЬ, по факту обращения к генератору (ключ —
+    device_id). Клиентский флаг experiment на квоту не влияет (его можно
+    подделать). При отказе модели («unavailable») резерв возвращается; при
+    исчерпанной квоте поднимает QuotaExceeded (device_id пуст — резерв не нужен).
+
     Возвращает:
       ("created", DiscoveryData) — LLM дала имя, элемент создан;
       ("not_combinable", None)   — LLM сказала combinable:false (отказ фиксируется);
-      ("unavailable", None)      — LLM недоступна (решение НЕ фиксируется, пара
-                                   остаётся кандидатом для будущей генерации).
+      ("unavailable", None)      — LLM недоступна (решение НЕ фиксируется,
+                                   квота возвращена, пара остаётся кандидатом).
     """
     a_info = _parent(conn, a_slug)
     b_info = _parent(conn, b_slug)
@@ -1466,14 +1582,25 @@ def _generate_for_pair(conn, a_slug, b_slug, pair_key, nick, llm=None):
     if llm is None:
         llm = get_llm()
 
+    # Резерв квоты — непосредственно перед платным вызовом модели.
+    reserved = False
+    if device_id:
+        allowed, rate_message = _admit_experiment(conn, device_id)
+        if not allowed:
+            raise QuotaExceeded(rate_message)
+        reserved = True
+
     try:
         # LLM отвечает только {"combinable": true, "name": "..."} | {"combinable": false}
         t0 = time.time()
         res = llm.generate(a_slug, b_slug, a_info["name"], b_info["name"], pair_key)
         log.info("пара %s+%s: генерация заняла %.1fs", a_slug, b_slug, time.time() - t0)
     except LLMError as e:
-        # модель недоступна → не выдумываем имя и не фиксируем отказ
+        # модель недоступна → не выдумываем имя и не фиксируем отказ;
+        # списанную квоту возвращаем — вызова не было
         log.warning("пара %s+%s: LLM недоступна → unavailable (%s)", a_slug, b_slug, e)
+        if reserved:
+            _refund_experiment(conn, device_id)
         return "unavailable", None
 
     if res.get("combinable") is False:
@@ -1659,22 +1786,13 @@ async def discover(req: DiscoverRequest):
         )
         conn.commit()
 
-        # 4. Explicit Experiment Bench requests reserve the external LLM budget
-        # only after the pair lock is acquired. Cached/curated pairs return before
-        # this point and cost neither quota nor a network generation.
-        if req.experiment:
-            allowed, rate_message = _admit_experiment(conn, req.device_id)
-            if not allowed:
-                conn.execute("DELETE FROM pending_pairs WHERE pair_key = ?", (pair_key,))
-                conn.commit()
-                return DiscoverResponse(
-                    ok=False, status="rate_limited", discovery=None, already_known=False,
-                    message=rate_message,
-                )
-
-        # 5. Генерация (только LLM)
+        # 4. Генерация (только LLM). Кэшированные/curated пары вернулись выше —
+        # до этой точки ни квоты, ни сетевого вызова нет. Квота резервируется
+        # ВНУТРИ генератора по факту обращения к LLM (ключ — device_id):
+        # клиентский флаг experiment её не обходит.
         try:
-            kind, discovery = _generate_for_pair(conn, req.a, req.b, pair_key, req.nick)
+            kind, discovery = _generate_for_pair(
+                conn, req.a, req.b, pair_key, req.nick, req.device_id)
 
             if kind == "not_combinable":
                 # решение модели фиксируется в БД навсегда
@@ -1711,6 +1829,16 @@ async def discover(req: DiscoverRequest):
                 message=f"ПЕРВООТКРЫТИЕ: {discovery.name} автор — {req.nick}!",
                 challenge=challenge_info,
                 vein=vein_info,
+            )
+
+        except QuotaExceeded as e:
+            # квота исчерпана до обращения к LLM: пару разблокируем,
+            # она останется кандидатом на будущие дни
+            conn.execute("DELETE FROM pending_pairs WHERE pair_key = ?", (pair_key,))
+            conn.commit()
+            return DiscoverResponse(
+                ok=False, status="rate_limited", discovery=None, already_known=False,
+                message=e.text,
             )
 
         except sqlite3.IntegrityError:

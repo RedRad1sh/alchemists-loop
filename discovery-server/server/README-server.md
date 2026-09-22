@@ -202,18 +202,27 @@ OpenRouter свои ~50–1000 запросов/день).
 
 ### Experiment Bench и квоты
 
-Клиент помечает явный запрос из Experiment Bench полем `experiment=true` в
-`/api/brew-check` и `/api/discover`. Известные `recipes`, `rejected_pairs` и
-локальный/curated provider возвращаются без внешнего LLM-вызова и не расходуют
-quota. Для новой пары сервер после проверки cache/lock резервирует бюджет в
-SQLite-таблицах `experiment_limits` (устройство + день) и
-`experiment_global_limits` (весь сервер + день).
+Клиент может помечать явный запрос из Experiment Bench полем `experiment` в
+`/api/brew-check` и `/api/discover` — но только для UX/аналитики: на квоту оно
+НЕ влияет. Известные `recipes`, `rejected_pairs` и локальный/curated provider
+возвращаются без внешнего LLM-вызова и не расходуют quota. Для новой пары
+сервер резервирует бюджет по ФАКТУ обращения к генератору (внутри
+`_generate_for_pair`, ключ — `device_id`) в SQLite-таблицах `experiment_limits`
+(устройство + день) и `experiment_global_limits` (весь сервер + день). При
+`unavailable` резерв возвращается (квота сгорает только на реальные вызовы),
+а пару можно повторить после восстановления провайдера.
 
 Значения по умолчанию: 200 внешних попыток на устройство в сутки, cooldown 5
-секунд и 10000 попыток на весь сервер в сутки. `unavailable` не фиксирует
-новый рецепт, поэтому пару можно повторить после восстановления провайдера.
-Rate-limit применяется только к явному `experiment=true`; старые клиенты,
-читающие известные пары, не ломаются.
+секунд и 10000 попыток на весь сервер в сутки.
+
+Письма Светика (`/api/letter/today`) имеют ОТДЕЛЬНЫЙ дневной бюджет LLM-вызовов
+в таблицах `letter_limits` / `letter_global_limits`: по умолчанию 3 генерации
+намёка на устройство в сутки, cooldown 30 секунд и 3000 на весь сервер. При
+исчерпании письмо просто не генерируется (ответ остаётся корректным). Все
+лимиты настраиваются окружением: `ALCHEMY_EXPERIMENT_DAILY_LIMIT`,
+`ALCHEMY_EXPERIMENT_COOLDOWN_SEC`, `ALCHEMY_EXPERIMENT_GLOBAL_DAILY_LIMIT`,
+`ALCHEMY_LETTER_DAILY_LIMIT`, `ALCHEMY_LETTER_COOLDOWN_SEC`,
+`ALCHEMY_LETTER_GLOBAL_DAILY_LIMIT`.
 
 ### Настройка генерации (env)
 
