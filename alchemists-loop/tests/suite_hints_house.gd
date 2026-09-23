@@ -236,7 +236,7 @@ static func run(g: Game) -> void:
 	u14_view.set_editable(true)
 	u14_view.animate = true
 	u14_view.set_state(true, {"rug": "rug"}, null)
-	# за 0.1 с живого тика main.gd накрутит ether/regen/autosave — снимаем и возвращаем
+	# за живые тики окна (~0,6 с) main.gd накрутит ether/regen/autosave — снимаем и возвращаем
 	var u14_ether := g._engine.ether
 	var u14_regen := g._engine.regen_clock
 	var u14_autosave := g._engine.autosave_clock
@@ -249,11 +249,28 @@ static func run(g: Game) -> void:
 	u14_host.visible = true
 	Selftest.check("u14 host is visible in tree", u14_host.is_visible_in_tree())
 	Selftest.check("u14 process runs when ancestor shows", u14_view.is_processing())
-	# троттл: тики действительно есть (фаза копится), а аккумулятор перерисовок
-	# после каждого тика ниже порога — redraw'ов меньше кадров. Инвариант не
-	# зависит от fps: на превышении аккумулятор обнуляется.
-	await g.get_tree().create_timer(0.1).timeout
+	# Троттл меряем по числу РЕАЛЬНЫХ перерисовок: CanvasItem.draw срабатывает
+	# прямо перед каждым _draw(), т.е. это счётчик отрисовок, а не косвенный
+	# признак. Верхняя граница — по фактической длительности окна, а не по числу
+	# кадров: при 20 redraw/с их не больше одного на 50 мс, а безгейтная версия
+	# на типовых 30-60 к/с даёт вдвое-втрое больше. На движке медленнее ~25 к/с
+	# различающая сила теряется (граница сливается с кадровой частотой) — это
+	# сознательный компромисс: ложнокрасных на слабом железе не будет.
+	var u14_draws := [0]
+	u14_view.draw.connect(func() -> void: u14_draws[0] += 1)
+	var u14_t0 := Time.get_ticks_msec()
+	await g.get_tree().create_timer(0.5).timeout
+	var u14_elapsed: int = Time.get_ticks_msec() - u14_t0
+	# невакуумность всего блока: если draw-сигнал в этом окружении не считается,
+	# кейс красный, а не зелёный молча
+	Selftest.check("u14 view really redraws while shown", u14_draws[0] >= 3
+		and u14_elapsed > 0)
+	# +150 мс — три кадра на границы окна (redraw приходит на кадр позже queue_redraw)
+	Selftest.check("u14 redraw rate stays at or below 20 fps",
+		u14_draws[0] * 50 <= u14_elapsed + 150)
 	Selftest.check("u14 shown view really ticks", u14_view._phase > 0.0)
+	# и прямое свойство самого троттла: аккумулятор после каждого тика ниже порога
+	# (ловит вариант «копить, но не обнулять», который счётчик выше не заметит)
 	Selftest.check("u14 redraw accumulator stays below threshold",
 		u14_view._redraw_clock >= 0.0 and u14_view._redraw_clock < 0.05)
 	u14_host.visible = false

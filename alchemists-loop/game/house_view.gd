@@ -444,8 +444,9 @@ func set_solo(item_id: String) -> void:
 
 func _process(delta: float) -> void:
 	if not animate:
-		# animate выключают присваиванием поля (home.gd: thumb.animate = false),
-		# когда process уже был включён: паркуемся здесь же, на первом тике.
+		# Страховка на случай `animate = false` уже в дереве с включённым process:
+		# сегодня таких мест нет (все превью в home.gd пишут false до add_child и
+		# паркуются в _ready/_visibility_changed), но поле публичное.
 		set_process(false)
 		return
 	if not is_visible_in_tree():
