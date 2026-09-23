@@ -68,12 +68,22 @@ var _table_rect: Rect2 = Rect2()
 var _window_ok: bool = false  # окно отрисовано (для светового shaft)
 var _window_rect: Rect2 = Rect2()
 var _phase: float = 0.0
+var _redraw_clock: float = 0.0   # аккумулятор кадров: `_draw` всей сцены дороже одного тика
+var _press_layout: Dictionary = {}   # раскладка в момент захвата — эмитим только реальный сдвиг
 var _tx_cache: Dictionary = {}  # item_id -> Texture2D (кэш)
 var _content_cache: Dictionary = {}  # item_id -> непрозрачная часть PNG в пикселях
 var _fx: Dictionary = {}  # fx-имя -> Texture2D (кэш)
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP if editable else Control.MOUSE_FILTER_IGNORE
+	# Первый расчёт гейта: рисовать нужно только видимой и анимируемой сцене.
+	set_process(animate and is_visible_in_tree())
+
+
+func _visibility_changed() -> void:
+	# TabContainer прячет неактивные страницы, поэтому уход с вкладки «Дом»
+	# приходит сюда, а не в main: на скрытом виде `_draw` жжёт кадры и батарею.
+	set_process(animate and is_visible_in_tree())
 
 
 func set_editable(value: bool) -> void:
@@ -105,13 +115,23 @@ func _gui_input(event: InputEvent) -> void:
 							(r.position.x + r.size.x * 0.5) / size.x,
 							_table_surface_y() / size.y
 						)
+				# Снимок берётся после посадочных блоков: _tabletop_rect сам
+				# доводит якорь настольной лампы до поверхности стола, и это
+				# нормальная посадка, а не перетаскивание.
+				_press_layout = _layout_data()
 				mouse_filter = Control.MOUSE_FILTER_STOP
 		else:
 			if _drag_cat != "":
 				_drag_cat = ""
 				mouse_filter = Control.MOUSE_FILTER_STOP if editable else Control.MOUSE_FILTER_IGNORE
 				queue_redraw()
-				layout_changed.emit(_layout_data())
+				# Отпускание без движения тоже приходило сюда, и home.gd на каждый
+				# эмит делал _save_game() + _upload_house(): серийный тап по мебели
+				# спамил диск и сеть. Сравниваем раскладку, а не пиксели — возврат
+				# предмета на прежнее якорное место не изменение раскладки.
+				var released: Dictionary = _layout_data()
+				if released != _press_layout:
+					layout_changed.emit(released)
 	elif event is InputEventMouseMotion and _drag_cat != "":
 		var w: float = size.x
 		var h: float = size.y
@@ -424,9 +444,22 @@ func set_solo(item_id: String) -> void:
 
 func _process(delta: float) -> void:
 	if not animate:
+		# animate выключают присваиванием поля (home.gd: thumb.animate = false),
+		# когда process уже был включён: паркуемся здесь же, на первом тике.
+		set_process(false)
+		return
+	if not is_visible_in_tree():
+		# страховка за _visibility_changed: у скрытого вида рисовать нечего
+		set_process(false)
 		return
 	_phase += delta
-	queue_redraw()
+	_redraw_clock += delta
+	# Кадры режем до ~20 к/с (как cauldron_view): фаза копится по delta, поэтому
+	# анимация остаётся синхронной по времени, а `_draw` всей процедурной комнаты
+	# вызывается заметно реже.
+	if _redraw_clock >= 0.05:
+		_redraw_clock = 0.0
+		queue_redraw()
 
 
 # ---------- примитивы ----------
