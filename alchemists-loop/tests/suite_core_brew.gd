@@ -247,6 +247,15 @@ static func run(g: Game) -> void:
 	var u9_taps0 := g._engine._source_taps
 	var u9_last := g._engine._last_pair.duplicate(true)
 	var u9_qch0 := g._guild._quest_challenge
+	# U9-фикс I2: состояние, которое блок U9 тоже мутирует (через _init_new_game,
+	# шаги верстака и тик _process), — дополняем снимок/restore.
+	var u9_exp_day := g._engine._experiment_day
+	var u9_exp_cnt := g._engine._experiment_count
+	var u9_exp_last := g._engine._experiment_last_at
+	var u9_spring_on := g._engine.spring_on
+	var u9_spring_src := g._engine.spring_source
+	var u9_gift_clock := g._engine._gift_clock
+	var u9_bench_clock := g._pages._bench_clock
 	g._init_new_game()
 	g.BREW_SECONDS = 0.05
 	g._engine.ether = 1000
@@ -277,8 +286,15 @@ static func run(g: Game) -> void:
 	g._engine.selected = ["fire", "water"]
 	g._engine._brew()
 	Selftest.check("brew sets busy before await", g._engine.brewing)
-	var u9_exp := g._engine._experiment_status("fire", "water")
+	# U9-фикс I1: fire+water была в known_recipes с бутстрапа новой игры, и
+	# отказ проходил по гейту «уже известна» даже без мьютекса (вакусно).
+	# fire+air — не известна (после _init_new_game открыты только fire+water и
+	# earth+fire), не отклонена, в запасе (fire=4, air=5), эфир/кулдаун/лимит
+	# проходима — без гейта brewing||_auto||_bench_busy в _experiment_status
+	# вернулась бы ok:true, а с ним — ok:false именно с причиной мьютекса.
+	var u9_exp := g._engine._experiment_status("fire", "air")
 	Selftest.check("experiment refused during brew", not bool(u9_exp.get("ok", false))
+		and String(u9_exp.get("reason", "")).contains("Котёл занят варкой или производством")
 		and g._engine._experiment_pending_pair.is_empty())
 	Selftest.check("bench refused during brew", not g._engine._run_bench_plan("steam", u9_plan)
 		and not g._pages._bench_busy)
@@ -383,6 +399,13 @@ static func run(g: Game) -> void:
 	g._engine._source_taps = u9_taps0
 	g._engine._last_pair = u9_last
 	g._guild._quest_challenge = u9_qch0
+	g._engine._experiment_day = u9_exp_day
+	g._engine._experiment_count = u9_exp_cnt
+	g._engine._experiment_last_at = u9_exp_last
+	g._engine.spring_on = u9_spring_on
+	g._engine.spring_source = u9_spring_src
+	g._engine._gift_clock = u9_gift_clock
+	g._pages._bench_clock = u9_bench_clock
 	g._engine.selected.clear()
 	g._engine.brewing = false
 	g._engine._auto = false
@@ -395,3 +418,7 @@ static func run(g: Game) -> void:
 	g._engine._cost_cache.clear()
 	g._pages._bench_busy = false
 	g.BREW_SECONDS = 0.05
+	# U9-фикс I2: флаги чипов режимов и сейв selftest должны отражать
+	# восстановленный мир, а не форс-престиж из блока U9.
+	g._pages._ensure_modes()
+	g._saves._save_game()
