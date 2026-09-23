@@ -112,22 +112,62 @@ static func run(g: Game) -> void:
 	var _r0 := g._home._cp_r.value
 	var _g0 := g._home._cp_g.value
 	var _b0 := g._home._cp_b.value
+	var _oktext0 := g._home._cp_ok.text
+	var _cust_theme0 := bool(g._home._custom_unlocked.get("theme", false))
+	# _close_decor_popup прокручивает страницу дома наверх, если открыта вкладка «Дом»
+	var _page3: ScrollContainer = null
+	if g._tabs_ref != null and g._tabs_ref.get_child_count() > 3:
+		_page3 = g._tabs_ref.get_child(3) as ScrollContainer
+	var _scroll0 := 0
+	if _page3 != null:
+		_scroll0 = _page3.scroll_vertical
 
-	# T1: ничего не открыто -> false (Esc НЕ помечен потреблённым — выход из игры достижим)
-	Selftest.check("esc modals all closed precondition", _no_modal_visible(g))
-	Selftest.check("esc nothing open returns false", g._close_top_modal() == false)
+	# Слив возможных утечек из предыдущих сюит ДО проверок: иначе утёкшая попап
+	# (а) красит T1 чужим дефектом и (б) крадёт второй вызов в T2, отчего краснеет
+	# и «esc settings closes second». Красным остаётся ровно одна своя проверка.
+	var _drain := 0
+	while _drain < 25 and not _no_modal_visible(g):
+		if not g._close_top_modal():
+			break
+		_drain += 1
+	Selftest.check("esc stack was clean on entry", _drain == 0)
+
+	# T1: предикат ESC и решение «потреблять» наблюдаются через _handle_esc — иначе
+	# регрессия (безусловный set_input_as_handled, потерянный ke.pressed/keycode)
+	# проходит зелёной: булев шов _close_top_modal её не видит.
+	var _mk := InputEventKey.new()
+	_mk.pressed = true
+	_mk.keycode = KEY_A
+	var _unpressed := _esc_key()
+	_unpressed.pressed = false
+	var _not_key := InputEventMouseButton.new()
+	Selftest.check("esc wiring ignores non-key events", g._handle_esc(_not_key) == false)
+	Selftest.check("esc wiring ignores other keys", g._handle_esc(_mk) == false)
+	Selftest.check("esc wiring ignores key release", g._handle_esc(_unpressed) == false)
+	Selftest.check("esc nothing open returns false", g._handle_esc(_esc_key()) == false)
 	Selftest.check("esc false branch hid nothing", _no_modal_visible(g)
 		and g._engine._auto_cancel == _acancel0 and g._engine.status_text == _status0)
 
-	# T2: магазин декора (z=100) закрывается раньше нижнего попапа настроек хабa
+	# T2: магазин декора (z=100) закрывается раньше нижнего попапа настроек хабa —
+	# и закрывается именно хелпером (R4), а не «просто visible=false»: у хелпера
+	# есть наблюдаемый побочный эффект, пересборка страницы дома (текст кнопки
+	# палитры зависит от _custom_unlocked["theme"]).
+	var _t2_btn: Button = g._home._theme_btns.get("__custom", null)
+	g._home._custom_unlocked["theme"] = false
+	g._home._theme_custom_on = false
+	g._home._refresh_house_page()
+	var _t2_stale := "кнопки нет" if _t2_btn == null else _t2_btn.text
+	g._home._custom_unlocked["theme"] = true
 	g._home._decor_popup.visible = true
 	g._hub._settings_dim.visible = true
 	g._hub._settings_popup.visible = true
-	var _t2a := g._close_top_modal()
+	var _t2a := g._handle_esc(_esc_key())
 	Selftest.check("esc decor closes above settings", _t2a
 		and not g._home._decor_popup.visible
 		and g._hub._settings_popup.visible and g._hub._settings_dim.visible)
-	var _t2b := g._close_top_modal()
+	Selftest.check("esc decor close goes through the helper", _t2_btn != null
+		and _t2_btn.text != _t2_stale and _t2_btn.text == "Палитра")
+	var _t2b := g._handle_esc(_esc_key())
 	Selftest.check("esc settings closes second", _t2b
 		and not g._hub._settings_popup.visible and not g._hub._settings_dim.visible)
 
@@ -135,7 +175,7 @@ static func run(g: Game) -> void:
 	# тут быть не может: _close_house_popup (home.gd) лишь скрывает окно и играет
 	# звук — проверено статически, в headless-режиме вызовов Net не понаблюдать.
 	g._home._house_popup.visible = true
-	var _t3 := g._close_top_modal()
+	var _t3 := g._handle_esc(_esc_key())
 	Selftest.check("esc house popup close only", _t3 and not g._home._house_popup.visible)
 
 	# T4: Esc на палитре = отмена с откатом живого предпросмотра (R3).
@@ -151,7 +191,11 @@ static func run(g: Game) -> void:
 	Selftest.check("esc picker preview applied", _cost_positive
 		and g._home._color_picker.visible and g._home._color_target == "wall"
 		and g._home._cosmetic_wall != _wall_before)
-	var _t4 := g._close_top_modal()
+	# watch item для реального Godot-прогона: сравнение ниже опирается на то, что
+	# цвет из шестнадцатеричной константы (alpha 1.0, квантованный 0..255) проходит
+	# через слайдер без потери. Для нестандартного/полупрозрачного _cosmetic_wall
+	# равенство могло бы разойтись — на устройстве проверить первым делом.
+	var _t4 := g._handle_esc(_esc_key())
 	Selftest.check("esc picker cancel rolls back", _t4 and not g._home._color_picker.visible
 		and g._home._cosmetic_wall == _wall_before)
 	Selftest.check("esc picker cancel keeps unlock",
@@ -164,28 +208,39 @@ static func run(g: Game) -> void:
 	g._home._house_popup.visible = false
 	g._hub._settings_popup.visible = false
 	g._hub._settings_dim.visible = false
-	g._home._color_target = _tgt0
-	g._home._cp_old = _old0
-	g._home._cp_old_on = _oldon0
-	g._home._cosmetic_wall = _wall0
-	g._home._cosmetic_floor = _floor0
-	g._home._theme_custom_on = _themeon0
-	g._home._aura_custom_on = _auraon0
+	g._home._custom_unlocked["theme"] = _cust_theme0
+	# присваивание .value дёргает value_changed -> _on_cp_slider ->
+	# _set_custom_color(_color_target, ...). Таргет на время слайдеров пустой:
+	# если предыдущая сюита оставила "theme"/"aura", были бы перезаписаны
+	# _theme_custom/_aura_custom — Color-поля вне этого снапшота.
+	g._home._color_target = ""
 	g._home._cp_r.value = _r0
 	g._home._cp_g.value = _g0
 	g._home._cp_b.value = _b0
-	# присваивание .value дёргает value_changed -> _on_cp_slider; цвет уже
-	# восстановлен выше, переприменяем косметику в исходном виде
+	g._home._color_target = _tgt0
+	g._home._cp_old = _old0
+	g._home._cp_old_on = _oldon0
+	g._home._cp_ok.text = _oktext0
 	g._home._cosmetic_wall = _wall0
 	g._home._cosmetic_floor = _floor0
 	g._home._theme_custom_on = _themeon0
 	g._home._aura_custom_on = _auraon0
 	g._home._apply_cosmetic()
+	g._home._refresh_house_page()
+	if _page3 != null:
+		_page3.scroll_vertical = _scroll0
 	g._engine._auto = _auto0
 	g._engine._auto_cancel = _acancel0
 	g._engine.status_text = _status0
 	Selftest.check("esc state restored after suite", _no_modal_visible(g)
 		and g._home._cosmetic_wall == _wall0 and g._engine.ether == _ether_before)
+
+
+static func _esc_key() -> InputEventKey:
+	var k := InputEventKey.new()
+	k.pressed = true
+	k.keycode = KEY_ESCAPE
+	return k
 
 
 static func _no_modal_visible(g: Game) -> bool:
@@ -212,8 +267,13 @@ static func _no_modal_visible(g: Game) -> bool:
 		return false
 	if g._spirit._companion_dlg != null and g._spirit._companion_dlg.visible:
 		return false
-	if g._home._decor_popup.visible or g._home._color_picker.visible:
+	# home-ноды построены в _ready, но цепочка main.gd guard'ит их на != null —
+	# повторяем guard'ы, иначе битая сборка уронила бы весь selftest вместо одной
+	# красной проверки
+	if g._home._decor_popup != null and g._home._decor_popup.visible:
 		return false
-	if g._home._house_popup.visible:
+	if g._home._color_picker != null and g._home._color_picker.visible:
+		return false
+	if g._home._house_popup != null and g._home._house_popup.visible:
 		return false
 	return true

@@ -1336,13 +1336,19 @@ func _hide_popup() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Esc закрывает верхний попап
+	if _handle_esc(event):
+		get_viewport().set_input_as_handled()
+
+# Предикат ESC и сам уход собраны в одну булеву функцию: «потреблять или нет»
+# наблюдаемо из selftest (наблюдаемость самого set_input_as_handled в headless
+# проверить нечем — это оставленный, осознанный зазор в одну строку).
+func _handle_esc(event: InputEvent) -> bool:
 	if not (event is InputEventKey):
-		return
+		return false
 	var ke := event as InputEventKey
 	if not ke.pressed or ke.keycode != KEY_ESCAPE:
-		return
-	if _close_top_modal():
-		get_viewport().set_input_as_handled()
+		return false
+	return _close_top_modal()
 
 # Порядок elif-веток = порядок наложения (z): сначала модальные окна поверх
 # всего (autovark/consent, магазин декора z=100), затем попапы по убыванию z.
