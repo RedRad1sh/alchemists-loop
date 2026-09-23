@@ -598,7 +598,8 @@ class ReceiptVerifyResponse(BaseModel):
     verified: bool = False
     status: str = ""        # '' | pending | processed
     reason: str = ""        # verified | vendor_validation_* | vendor_rejected |
-                            # receipt_device_mismatch | unknown_* | empty_*
+                            # receipt_device_mismatch | receipt_sku_mismatch |
+                            # unknown_* | empty_*
     receipt_hash: str = ""  # SHA-256 токена: клиент сверяет ответ со своим запросом
 
 
@@ -3409,7 +3410,11 @@ def _receipt_validation_enabled() -> bool:
 
 def _receipt_error(reason: str) -> dict:
     """Тело отказа /api/receipt/verify: ok=False и verified=False идут в паре с
-    причиной всегда — чтобы клиент читал reason даже из 4xx/5xx-ответа."""
+    причиной всегда. reason — серверное audit-поле (в теле ответа и в БД/логе);
+    сам клиент его из 4xx/5xx не читает: net.gd тело non-2xx не разбирает и
+    отдаёт вверх только «HTTP <код>» (net.gd:273-282). Поэтому решение о выдаче
+    клиент принимает по коду ответа: 4xx — отказ по существу, 5xx — fail-safe
+    «валидатор не смог ответить» (в отладочной сборке допускается начисление)."""
     return {"ok": False, "verified": False, "reason": reason}
 
 
@@ -3450,6 +3455,8 @@ def receipt_verify(req: ReceiptVerifyRequest):
       становится processed; повтор processed-чека тем же устройством отдаёт
       РОВНО тот же ответ и повторно магазин не дёргает;
     * тот же чек с другим device_id → 409 (чек уже привязан к устройству);
+    * тот же токен с другим sku → 409 (receipt_hash — единственный PK, поэтому
+      чек нельзя предъявлять за другой товар);
     * сырой токен в БД не сохраняется, только его SHA-256.
 
     T04: sync `def` — будущий блокирующий вызов магазина (requests) уходит в
@@ -3492,6 +3499,15 @@ def receipt_verify(req: ReceiptVerifyRequest):
             raise HTTPException(
                 status_code=409,
                 detail={**_receipt_error("receipt_device_mismatch"), "receipt_hash": receipt_hash},
+            )
+        # M-3: PRIMARY KEY — только receipt_hash, поэтому один и тот же токен,
+        # предъявленный с ДРУГИМ sku, находит строку уже другого товара. Без сверки
+        # такой запрос получил бы верное echo processed (или вердикт по чужому SKU).
+        # Чек привязан к SKU, с которым его впервые увидели: несовпадение — отказ.
+        if row["sku"] != sku:
+            raise HTTPException(
+                status_code=409,
+                detail={**_receipt_error("receipt_sku_mismatch"), "receipt_hash": receipt_hash},
             )
         if row["status"] == "processed":
             return ReceiptVerifyResponse(

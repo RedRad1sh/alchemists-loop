@@ -28,6 +28,10 @@ signal changed
 
 var _data: Dictionary = {}
 var _processed: Dictionary = {}
+# T22/I-1: отметка «начислено, но магазин ещё не подтвердил consume» живёт в
+# том же неуязвимом файле журнала отдельной секцией, а НЕ в затираемом
+# purchases.pending — иначе вайп стирал бы её и restore лил бы награду повторно.
+var _granted: Dictionary = {}
 
 func _ready() -> void:
 	_load()
@@ -106,15 +110,23 @@ func _read_json(path: String) -> Dictionary:
 
 func _load_purchase_journal() -> void:
 	# Читается независимо от основного файла: «Удалить локальные данные» трогает
-	# основной файл, а журнал уже выданных чеков остаётся.
+	# основной файл, а журнал уже выданных чеков остаётся. Секция granted (I-1) —
+	# отметка «начислено, но хвост не закрыт»; она живёт здесь же, чтобы пережить
+	# и снятие pending, и вайп.
 	var stored := _read_json(PURCHASES_PATH)
 	_processed = {}
+	_granted = {}
 	var entries: Variant = stored.get("processed", null)
 	if entries is Dictionary:
 		_processed = (entries as Dictionary).duplicate(true)
+	var granted_entries: Variant = stored.get("granted", null)
+	if granted_entries is Dictionary:
+		_granted = (granted_entries as Dictionary).duplicate(true)
 	# Миграция (аддитивная, без bump'а DATA_VERSION): до T22 журнал лежал в
-	# стираемом purchases.processed основного файла. Если своего файла ещё нет,
-	# а записи в основном файле есть — переносим их сюда; иначе обновление
+	# стираемом purchases.processed основного файла. Переносим сюда все legacy-
+	# записи, которых ещё нет в новом журнале: мержим при ЛЮБОМ непустом legacy,
+	# а не только «когда своего файла ещё нет» — к этому моменту свой файл уже мог
+	# существовать, поэтому уже перенесённые ключи не перетираем. Иначе обновление
 	# тихо «подарило» бы существующим установкам повторную выдачу после удаления
 	# данных, то есть ровно тот дефект, который T22 чинит.
 	var purchases: Dictionary = _data.get("purchases", {})
@@ -125,10 +137,15 @@ func _load_purchase_journal() -> void:
 		var entry: Variant = (legacy as Dictionary)[key]
 		if entry is Dictionary and not _processed.has(String(key)):
 			_processed[String(key)] = (entry as Dictionary).duplicate(true)
+	_trim_processed()
+	# M-2: legacy-копию в стираемом файле затираем и основной файл перезаписываем
+	# ТОЛЬКО после успешной записи нового файла журнала. Иначе при неудачной записи
+	# перенесённые записи потерялись бы и там (нового файла нет), и тут (его
+	# затёрли бы) — окно безвозвратной потери журнала.
+	if not _save_purchases():
+		return
 	purchases["processed"] = {}
 	_data["purchases"] = purchases
-	_trim_processed()
-	_save_purchases()
 	_save()
 
 func _save_purchases() -> bool:
@@ -140,7 +157,7 @@ func _save_purchases() -> bool:
 	if file == null:
 		push_warning("UserData: не удалось открыть временный файл журнала покупок.")
 		return false
-	file.store_string(JSON.stringify({"version": PURCHASES_VERSION, "processed": _processed}, "\t"))
+	file.store_string(JSON.stringify({"version": PURCHASES_VERSION, "processed": _processed, "granted": _granted}, "\t"))
 	file.flush()
 	file.close()
 	var journal_abs := ProjectSettings.globalize_path(PURCHASES_PATH)
@@ -161,6 +178,18 @@ func _trim_processed() -> void:
 	keys.sort_custom(func(a, b): return float(_processed[a].get("processed_at", 0.0)) < float(_processed[b].get("processed_at", 0.0)))
 	for i in range(0, keys.size() - PROCESSED_CAP):
 		_processed.erase(keys[i])
+
+func _trim_granted() -> void:
+	# Тот же потолок и тот же порядок, что у processed: режем самые старые granted-
+	# отметки по granted_at. Протухание не нужно — granted означает «хвост consume
+	# не закрыт», такая отметка обязана дожить до ретрая, а расти в бесконечность
+	# ей не даёт этот рез.
+	if _granted.size() <= PROCESSED_CAP:
+		return
+	var keys: Array = _granted.keys()
+	keys.sort_custom(func(a, b): return float(_granted[a].get("granted_at", 0.0)) < float(_granted[b].get("granted_at", 0.0)))
+	for i in range(0, keys.size() - PROCESSED_CAP):
+		_granted.erase(keys[i])
 
 func _save() -> bool:
 	var file := FileAccess.open(TEMP_PATH, FileAccess.WRITE)
@@ -298,13 +327,51 @@ func has_processed_purchase(provider: String, token: String, sku: String) -> boo
 func mark_processed_purchase(provider: String, token: String, sku: String) -> bool:
 	if token == "" or has_processed_purchase(provider, token, sku):
 		return false
-	_processed[_token_key(provider, token, sku)] = {
+	var key := _token_key(provider, token, sku)
+	_processed[key] = {
 		"provider": provider,
 		"sku": sku,
 		"processed_at": Time.get_unix_time_from_system(),
 	}
 	_trim_processed()
+	if not _save_purchases():
+		return false
+	# I-1: чек закрыт в журнале — отдельная granted-отметка больше не нужна, иначе
+	# словарь рос бы без границы. Снимаем её ТОЛЬКО после успешной записи processed
+	# (иначе при неудачной записи отметка исчезнет, а строки processed нет — остаток
+	# снова получит двойное начисление на ретрае).
+	if _granted.has(key):
+		_granted.erase(key)
+		_save_purchases()
+	return true
+
+# --- Отметка «уже начислено» (I-1): своя секция того же неуязвимого журнала ----
+# Ключ — тот же _token_key, что у processed, чтобы granted и processed строка
+# чека соотносились один-к-одному. Живёт вне pending, поэтому переживает и снятие
+# pending, и «Удалить локальные данные» — restore не нальёт награду повторно.
+
+func is_purchase_granted(provider: String, token: String, sku: String) -> bool:
+	if token == "":
+		return false
+	return _granted.has(_token_key(provider, token, sku))
+
+func mark_purchase_granted(provider: String, token: String, sku: String) -> bool:
+	if token == "":
+		return false
+	_granted[_token_key(provider, token, sku)] = {
+		"provider": provider,
+		"sku": sku,
+		"granted_at": Time.get_unix_time_from_system(),
+	}
+	_trim_granted()
 	return _save_purchases()
+
+func clear_purchase_granted(provider: String, token: String, sku: String) -> void:
+	var key := _token_key(provider, token, sku)
+	if not _granted.has(key):
+		return
+	_granted.erase(key)
+	_save_purchases()
 
 func set_owned_product(sku: String, owned: bool = true) -> void:
 	var purchases: Dictionary = _data.get("purchases", {})
@@ -327,8 +394,9 @@ func set_pending_purchase(key: String, value: Dictionary) -> void:
 	_data["purchases"] = purchases
 	_save()
 
-# T22: чтение pending-записи (Monetization помечает её отметкой «уже начислено»,
-# когда магазин не подтвердил consume — см. autoload/monetization.gd).
+# T22: чтение pending-записи о начатой, но не закрытой покупке (provider/sku/
+# started_at). Отметка «уже начислено» с фикса I-1 живёт НЕ здесь, а в секции
+# granted журнала покупок (is_purchase_granted) — pending затирается вайпом.
 func get_pending_purchase(key: String) -> Dictionary:
 	var purchases: Dictionary = _data.get("purchases", {})
 	var pending: Dictionary = purchases.get("pending", {})
@@ -358,9 +426,10 @@ func export_data() -> Dictionary:
 	return out
 
 func delete_all_local_data() -> void:
-	# Журнал завершённых покупок (_processed / PURCHASES_PATH) здесь СОХРАНЯЕТСЯ:
-	# он защищает от повторной выдачи уже потреблённых чеков и не является
-	# поведенческими данными. Временный файл журнала — мусор, его удаляем.
+	# Журнал покупок (_processed и granted-отметки / PURCHASES_PATH) здесь
+	# СОХРАНЯЕТСЯ целиком: он защищает от повторной выдачи уже потреблённых и уже
+	# начисленных, но не закрытых чеков и не является поведенческими данными.
+	# Временный файл журнала — мусор, его удаляем.
 	_data = _defaults()
 	_save()
 	for path in [SAVE_PATH, TEMP_PATH, BACKUP_PATH, PURCHASES_TEMP_PATH]:

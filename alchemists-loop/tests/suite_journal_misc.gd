@@ -309,6 +309,7 @@ static func run(g: Game) -> void:
 	var _upt0 := UserData.PURCHASES_TEMP_PATH
 	var _data0: Dictionary = UserData._data.duplicate(true)
 	var _processed0: Dictionary = UserData._processed.duplicate(true)
+	var _granted0: Dictionary = UserData._granted.duplicate(true)
 	UserData.SAVE_PATH = "user://alchemy_st_user.json"
 	UserData.TEMP_PATH = "user://alchemy_st_user.tmp"
 	UserData.BACKUP_PATH = "user://alchemy_st_user.bak"
@@ -337,8 +338,9 @@ static func run(g: Game) -> void:
 		and (_t22_json(UserData.PURCHASES_PATH).get("processed", {}) as Dictionary).has(_legacy_key))
 	Selftest.check("t22 legacy copy cleared from the wipeable file",
 		((_t22_json(UserData.SAVE_PATH).get("purchases", {}) as Dictionary).get("processed", {}) as Dictionary).is_empty())
-	# Отметка «уже начислено» живёт в pending: она держит ретрай consume, но не
-	# трогает журнал завершённых чеков.
+	# I-1: отметка «уже начислено» живёт в неуязвимом журнале (секция granted),
+	# отдельной строкой от processed, а НЕ в затираемом pending: снятие pending и
+	# вайп не должны её убивать.
 	UserData.set_pending_purchase("starter_bundle", {"provider": "google_play", "sku": "al_loop_starter_2026"})
 	Selftest.check("t22 granted mark absent before granting",
 		not Monetization._purchase_already_granted("google_play", "al_loop_starter_2026", "tok_9", "starter_bundle"))
@@ -347,9 +349,21 @@ static func run(g: Game) -> void:
 		Monetization._purchase_already_granted("google_play", "al_loop_starter_2026", "tok_9", "starter_bundle"))
 	Selftest.check("t22 granted mark rejects another receipt",
 		not Monetization._purchase_already_granted("google_play", "al_loop_starter_2026", "tok_other", "starter_bundle"))
+	# Метка НЕ живёт в pending: снятие pending её не трогает (её снимает только
+	# успешно записанный processed или явный clear_purchase_granted).
 	UserData.clear_pending_purchase("starter_bundle")
-	Selftest.check("t22 granted mark dies with pending",
-		not Monetization._purchase_already_granted("google_play", "al_loop_starter_2026", "tok_9", "starter_bundle"))
+	Selftest.check("t22 granted mark survives clearing pending",
+		Monetization._purchase_already_granted("google_play", "al_loop_starter_2026", "tok_9", "starter_bundle"))
+	# Хранится в секции granted файла журнала, а не в pending стираемого сейва.
+	var _gkey := UserData._token_key("google_play", "tok_9", "al_loop_starter_2026")
+	Selftest.check("t22 granted mark stored in the journal file, not in pending",
+		(_t22_json(UserData.PURCHASES_PATH).get("granted", {}) as Dictionary).has(_gkey)
+		and ((_t22_json(UserData.SAVE_PATH).get("purchases", {}) as Dictionary).get("pending", {}) as Dictionary).is_empty())
+	# Явное снятие работает и персистится (готовит чистый _granted для wipe-кейсов).
+	UserData.clear_purchase_granted("google_play", "tok_9", "al_loop_starter_2026")
+	Selftest.check("t22 granted mark cleared explicitly",
+		not Monetization._purchase_already_granted("google_play", "al_loop_starter_2026", "tok_9", "starter_bundle")
+		and not (_t22_json(UserData.PURCHASES_PATH).get("granted", {}) as Dictionary).has(_gkey))
 	# Полная картина: чек закрыт, устройство «как новое», журнал на месте.
 	var _dev_before := UserData.get_or_create_device_id()
 	UserData.mark_processed_purchase("google_play", "secret_token_1", "sku_new")
@@ -380,6 +394,33 @@ static func run(g: Game) -> void:
 	var _export_text := JSON.stringify(UserData.export_data())
 	Selftest.check("t22 export carries the journal but no raw tokens", _export_text.contains("sku_new")
 		and not _export_text.contains("secret_token_1"))
+
+	# ---------- M-2: миграция журнала не затирает legacy при неудачной записи ----
+	# Если запись нового файла журнала падёт, legacy-копию в стираемом сейве
+	# затираать нельзя: перенесённые записи потерялись бы и там, и тут. Пишем
+	# свежий legacy-файл, ломаем запись журнала (временный путь в несуществующей
+	# папке → FileAccess.open возвращает null) и наблюдаем, что стираемый файл
+	# СОХРАНИЛ legacy-ключ.
+	var _m2_tmp0 := UserData.PURCHASES_TEMP_PATH
+	var _m2_key := "google_play:sku_m2:" + "m2_token_value".sha256_text()
+	var _m2_save := FileAccess.open(UserData.SAVE_PATH, FileAccess.WRITE)
+	if _m2_save != null:
+		_m2_save.store_string(JSON.stringify({
+			"version": UserData.DATA_VERSION,
+			"device_id": "install_m2_t22",
+			"purchases": {"processed": {_m2_key: {"provider": "google_play", "sku": "sku_m2", "processed_at": 50.0}},
+				"owned": {}, "pending": {}},
+		}))
+		_m2_save.close()
+	UserData._processed = {}
+	UserData._granted = {}
+	UserData._load()
+	UserData.PURCHASES_TEMP_PATH = "user://alchemy_st_no_such_dir/m2.tmp"
+	UserData._load_purchase_journal()
+	UserData.PURCHASES_TEMP_PATH = _m2_tmp0
+	Selftest.check("m2 migration keeps legacy when journal write fails",
+		((_t22_json(UserData.SAVE_PATH).get("purchases", {}) as Dictionary).get("processed", {}) as Dictionary).has(_m2_key)
+		and not (_t22_json(UserData.PURCHASES_PATH).get("processed", {}) as Dictionary).has(_m2_key))
 
 	# ---------- T22: порядок finish grant -> consume -> mark, ретрай и acknowledge ----------
 	# Фейковый адаптер — копия реального контракта: T22FakeBilling как rustore_pay.gd
@@ -428,9 +469,13 @@ static func run(g: Game) -> void:
 		not UserData.has_processed_purchase(_cprov, _ctok, _csku)
 		and UserData._processed.size() == _jp0
 		and not (_t22_json(UserData.PURCHASES_PATH).get("processed", {}) as Dictionary).has(_ckey))
-	Selftest.check("t22 unconfirmed consume keeps pending with granted mark",
+	# I-1: granted-отметка — в секции granted журнала (файл на диске), а не в
+	# pending; pending остаётся (его снимает только подтверждённый consume).
+	Selftest.check("t22 unconfirmed consume keeps pending and stores granted in the journal",
 		Monetization._purchase_already_granted(_cprov, _csku, _ctok, _cpid)
-		and not UserData.get_pending_purchase(_cpid).is_empty())
+		and not UserData.get_pending_purchase(_cpid).is_empty()
+		and (_t22_json(UserData.PURCHASES_PATH).get("granted", {}) as Dictionary).has(_ckey)
+		and not UserData.get_pending_purchase(_cpid).has("granted"))
 	# Порядок наблюдаем в момент самого вызова consume: начисление уже применено
 	# (сумма +500), журнал ещё закрыт — grant раньше consume, consume раньше mark.
 	Selftest.check("t22 consume observed grant-before and mark-after",
@@ -536,6 +581,115 @@ static func run(g: Game) -> void:
 		and g._engine.ether == _eth0 and g._engine.ether_overflow == _ovf0
 		and _probe.events.size() == 4)
 
+	# ---------- I-1: granted-отметка переживает wipe → нет двойной выдачи ----------
+	# Цепочка дефекта: consume вернул false (начислили, processed не записан,
+	# granted=true) → игрок жмёт «Удалить локальные данные» (pending и _data стёрты,
+	# RAM-эфир жив, журнал с granted цел) → restore приносит тот же непотреблённый
+	# чек → магазин теперь подтверждает → _finish_purchase НЕ должен лить награду
+	# второй раз, потому что is_purchase_granted читает уцелевший журнал. Награда
+	# наблюдается суммой ether + ether_overflow (как у соседей).
+	var _i1_eth0 := g._engine.ether + g._engine.ether_overflow
+	var _i1_prov := "google_play"
+	var _i1_sku := "al_loop_ether_500"
+	var _i1_tok := "t22_wipe_survives_token"
+	var _i1_pid := "ether_pack_small"
+	var _i1_req := {"provider": _i1_prov, "sku": _i1_sku, "token": _i1_tok, "product_id": _i1_pid}
+	var _i1_key := UserData._token_key(_i1_prov, _i1_tok, _i1_sku)
+	var _i1_probe := T22SignalProbe.new()
+	Monetization.purchase_succeeded.connect(_i1_probe._on_purchase_succeeded)
+	UserData.set_pending_purchase(_i1_pid, {"provider": _i1_prov, "sku": _i1_sku, "started_at": 1.0})
+	var _i1_deny := T22FakeBilling.new()
+	_i1_deny.ok = false
+	_i1_deny.provider = _i1_prov
+	_i1_deny.sku = _i1_sku
+	_i1_deny.token = _i1_tok
+	_i1_deny.product_id = _i1_pid
+	_i1_deny.game = g
+	Monetization._adapter = _i1_deny
+	Monetization._finish_purchase(_i1_req, false)
+	# Отметка легла в granted журнала (файл на диске), processed не тронут, pending жив.
+	Selftest.check("i1 first unconfirmed delivery grants once and marks granted in the journal",
+		g._engine.ether + g._engine.ether_overflow == _i1_eth0 + 500
+		and (_t22_json(UserData.PURCHASES_PATH).get("granted", {}) as Dictionary).has(_i1_key)
+		and not (_t22_json(UserData.PURCHASES_PATH).get("processed", {}) as Dictionary).has(_i1_key)
+		and not UserData.get_pending_purchase(_i1_pid).is_empty())
+	UserData.delete_all_local_data()
+	# Вайп стёр pending, но НЕ granted-отметку в журнале.
+	Selftest.check("i1 wipe removes pending but keeps the granted mark",
+		UserData.get_pending_purchase(_i1_pid).is_empty()
+		and not UserData.has_processed_purchase(_i1_prov, _i1_tok, _i1_sku)
+		and Monetization._purchase_already_granted(_i1_prov, _i1_sku, _i1_tok, _i1_pid))
+	var _i1_ok := T22FakeBilling.new()
+	_i1_ok.ok = true
+	_i1_ok.provider = _i1_prov
+	_i1_ok.sku = _i1_sku
+	_i1_ok.token = _i1_tok
+	_i1_ok.product_id = _i1_pid
+	_i1_ok.game = g
+	Monetization._adapter = _i1_ok
+	Monetization._finish_purchase(_i1_req, false)
+	# Ретрай после вайпа: награда НЕ начислена второй раз, журнал закрыт ровно раз,
+	# granted-отметка снята промоушеном (processed записан → granted удалён).
+	Selftest.check("i1 repeat after wipe does not grant a second time",
+		g._engine.ether + g._engine.ether_overflow == _i1_eth0 + 500
+		and UserData.has_processed_purchase(_i1_prov, _i1_tok, _i1_sku)
+		and (_t22_json(UserData.PURCHASES_PATH).get("processed", {}) as Dictionary).has(_i1_key)
+		and not (_t22_json(UserData.PURCHASES_PATH).get("granted", {}) as Dictionary).has(_i1_key)
+		and not Monetization._purchase_already_granted(_i1_prov, _i1_sku, _i1_tok, _i1_pid)
+		and _i1_probe.events.size() == 2)
+	Monetization.purchase_succeeded.disconnect(_i1_probe._on_purchase_succeeded)
+
+	# ---------- M-1: неудачная запись журнала не закрывает покупку ----------
+	# Начислили (granted в журнале), магазин подтвердил, НО запись processed упала
+	# (временный путь журнала в несуществующей папке → FileAccess.open == null).
+	# Покупка не считается закрытой: pending остаётся (restore повторит consume),
+	# granted не снимается, строки processed на диске нет.
+	var _m1_tmp0 := UserData.PURCHASES_TEMP_PATH
+	var _m1_eth0 := g._engine.ether + g._engine.ether_overflow
+	var _m1_prov := "google_play"
+	var _m1_sku := "al_loop_ether_500"
+	var _m1_tok := "t22_journal_write_fail_token"
+	var _m1_pid := "ether_pack_small"
+	var _m1_req := {"provider": _m1_prov, "sku": _m1_sku, "token": _m1_tok, "product_id": _m1_pid}
+	var _m1_key := UserData._token_key(_m1_prov, _m1_tok, _m1_sku)
+	var _m1_probe := T22SignalProbe.new()
+	Monetization.purchase_succeeded.connect(_m1_probe._on_purchase_succeeded)
+	UserData.set_pending_purchase(_m1_pid, {"provider": _m1_prov, "sku": _m1_sku, "started_at": 1.0})
+	var _m1_deny := T22FakeBilling.new()
+	_m1_deny.ok = false
+	_m1_deny.provider = _m1_prov
+	_m1_deny.sku = _m1_sku
+	_m1_deny.token = _m1_tok
+	_m1_deny.product_id = _m1_pid
+	_m1_deny.game = g
+	Monetization._adapter = _m1_deny
+	Monetization._finish_purchase(_m1_req, false)
+	# Теперь магазин подтверждает, но запись журнала падает.
+	UserData.PURCHASES_TEMP_PATH = "user://alchemy_st_no_such_dir/m1.tmp"
+	var _m1_ok := T22FakeBilling.new()
+	_m1_ok.ok = true
+	_m1_ok.provider = _m1_prov
+	_m1_ok.sku = _m1_sku
+	_m1_ok.token = _m1_tok
+	_m1_ok.product_id = _m1_pid
+	_m1_ok.game = g
+	Monetization._adapter = _m1_ok
+	Monetization._finish_purchase(_m1_req, false)
+	# Наблюдаемый побочный эффект M-1: pending НЕ снят, processed нет на диске
+	# (это же доказательство, что запись действительно упала — иначе ключ бы был),
+	# granted остался (промоушен только при успешной записи), награда один раз.
+	Selftest.check("m1 failed journal write keeps the purchase open",
+		not UserData.get_pending_purchase(_m1_pid).is_empty()
+		and not (_t22_json(UserData.PURCHASES_PATH).get("processed", {}) as Dictionary).has(_m1_key)
+		and Monetization._purchase_already_granted(_m1_prov, _m1_sku, _m1_tok, _m1_pid)
+		and g._engine.ether + g._engine.ether_overflow == _m1_eth0 + 500
+		and _m1_probe.events.size() == 2)
+	UserData.PURCHASES_TEMP_PATH = _m1_tmp0
+	Monetization.purchase_succeeded.disconnect(_m1_probe._on_purchase_succeeded)
+	Monetization._adapter = _ad0
+	g._engine.ether = _eth0
+	g._engine.ether_overflow = _ovf0
+
 	UserData.SAVE_PATH = _us0
 	UserData.TEMP_PATH = _ut0
 	UserData.BACKUP_PATH = _ub0
@@ -543,9 +697,11 @@ static func run(g: Game) -> void:
 	UserData.PURCHASES_TEMP_PATH = _upt0
 	UserData._data = _data0
 	UserData._processed = _processed0
+	UserData._granted = _granted0
 	_t22_remove_paths(_st_paths)
 	Selftest.check("t22 UserData paths and data restored", UserData.SAVE_PATH == _us0
-		and UserData.PURCHASES_PATH == _up0 and UserData._data == _data0 and UserData._processed == _processed0)
+		and UserData.PURCHASES_PATH == _up0 and UserData._data == _data0 and UserData._processed == _processed0
+		and UserData._granted == _granted0)
 
 
 static func _t22_json(path: String) -> Dictionary:

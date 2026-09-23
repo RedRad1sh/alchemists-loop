@@ -9,7 +9,8 @@
    выглядеть как подтверждённый чек.
 3. Идемпотентность журнала: первый подтверждённый чек → processed, повтор тем же
    устройством → байт-в-байт тот же ответ и БЕЗ нового обращения в магазин;
-   тот же чек с другого устройства → 409 и новая строка не появляется.
+   тот же чек с другого устройства → 409 и новая строка не появляется; тот же
+   токен с другим sku → 409 (receipt_hash — единственный PK, echo чужого товара).
 4. Отказ магазина («чека нет») — это НЕ unavailable: 200 ok=False, а не 503,
    иначе клиент в отладочной сборке начал бы начислять по настоящему отказу.
 5. Сырой токен в БД не хранится (только SHA-256) и белый список SKU не разъезжается
@@ -196,6 +197,32 @@ class TestVerifiedFlow:
         assert body["reason"] == "receipt_device_mismatch"
         # Чужое устройство не получило своей строки в журнале.
         assert len(rows) == 1 and rows[0]["device_id"] == DEVICE
+
+    def test_same_token_with_other_sku_is_rejected(self, tmp_path, monkeypatch):
+        """M-3: receipt_hash — единственный PRIMARY KEY, поэтому тот же токен с
+        другим sku иначе нашёл бы processed-строку первого товара и получил
+        verified=True без вердикта. Обязаны отдать 409 и НЕ заводить новую строку."""
+        srv, client = _client(tmp_path, monkeypatch)
+        _gate_on(srv, monkeypatch)
+        vendor = _vendor(srv, monkeypatch)
+        other_sku = "al_loop_ether_1500"
+        assert other_sku in srv.RECEIPT_SKUS and other_sku != SKU
+        with client:
+            first = _verify(client)                       # processed для SKU
+            clash = _verify(client, sku=other_sku)        # тот же токен, другой sku
+            rows = _receipts(srv)
+        assert first.status_code == 200
+        assert clash.status_code == 409
+        body = clash.json()["detail"]
+        assert body["ok"] is False and body["verified"] is False
+        assert body["reason"] == "receipt_sku_mismatch"
+        # receipt_hash в detail — тот же формат, что у device-mismatch.
+        assert body["receipt_hash"] == _sha(TOKEN)
+        # Новой строки нет: чек остаётся привязан к исходному SKU и не process-ится
+        # заново под другим товаром.
+        assert len(rows) == 1 and rows[0]["sku"] == SKU
+        # Магазин не дёргался повторно (отсечка раньше вердикта).
+        assert len(vendor.calls) == 1
 
     def test_raw_token_never_reaches_the_database(self, tmp_path, monkeypatch):
         srv, client = _client(tmp_path, monkeypatch)

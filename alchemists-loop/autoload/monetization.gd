@@ -21,8 +21,9 @@ const MAX_QUEUED_RECEIPT_CHECKS := 16
 #   0) сервер проверяет чек (Net.receipt_verify → receipt_verify_result);
 #   1) _grant_product; 2) consume/acknowledge с ЧТЕНИЕМ результата;
 #   3) только после подтверждённого магазина — журнал UserData.mark_processed +
-#   снятие pending. Если магазин не подтвердил — журнал не пишем, pending
-#   остаётся с отметкой «уже начислено», restore повторит только шаг 2.
+#   снятие pending. Если магазин не подтвердил — журнал не пишем, а отметка
+#   «уже начислено» (I-1) живёт в секции granted того же неуязвимого журнала,
+#   поэтому переживает и снятие pending, и wipe: restore повторит только шаг 2.
 
 signal initialized(store_id: String, billing_available: bool, ads_available: bool)
 signal purchase_started(product_id: String)
@@ -334,9 +335,16 @@ func _finish_purchase(request: Dictionary, unverified: bool) -> void:
 	# Шаг 3 — журнал «полностью завершено» и снятие pending только после
 	# подтверждённого потребления. Иначе consumable зависал: локально чек
 	# «закрыт», restore его больше не отдаст, а в магазине он не потреблён.
+	# M-1: результат записи журнала читается. Если строка processed НЕ записана,
+	# покупку не считаем закрытой: pending остаётся (restore повторит consume), а
+	# granted-отметка не снимается (mark_processed_purchase стирает её только при
+	# успешной записи). Порядок один: сначала успешная запись журнала, только затем
+	# снятие pending.
 	if confirmed:
-		UserData.mark_processed_purchase(provider, token, sku)
-		UserData.clear_pending_purchase(product_id)
+		if UserData.mark_processed_purchase(provider, token, sku):
+			UserData.clear_pending_purchase(product_id)
+		else:
+			push_warning("Monetization: журнал покупок не записан — покупку не считаем закрытой, повторим при следующем запуске.")
 	# Товар игрок уже получил (или получит при ретрае), поэтому успех
 	# показываем в обеих ветках; различает их только журнал.
 	purchase_succeeded.emit(product_id, provider)
@@ -369,27 +377,17 @@ func receipt_grant_allowed(result: Dictionary, is_debug: bool) -> bool:
 		return true
 	return is_debug and _receipt_validator_unavailable(result)
 
-func _purchase_already_granted(provider: String, sku: String, token: String, product_id: String) -> bool:
-	# Отметка о начислении живёт в pending, а НЕ в журнале processed: журнал
-	# означает «полностью завершено», а здесь как раз хвост не закрыт.
-	var pending := UserData.get_pending_purchase(product_id)
-	if pending.get("granted", false) != true:
-		return false
-	# Сверяем все три поля: другой токен под той же отметкой — это другая
-	# покупка того же товара, и её начислять надо.
-	return (String(pending.get("provider", "")) == provider
-		and String(pending.get("sku", "")) == sku
-		and String(pending.get("token_hash", "")) == token.sha256_text())
+func _purchase_already_granted(provider: String, sku: String, token: String, _product_id: String) -> bool:
+	# I-1: отметка о начислении живёт в неуязвимом журнале (секция granted), а не
+	# в затираемом pending и не в processed: журнал означает «полностью завершено»,
+	# а здесь как раз хвост consume не закрыт. Ключ — тот же provider/token/sku,
+	# поэтому product_id в расчёте не участвует.
+	return UserData.is_purchase_granted(provider, token, sku)
 
-func _mark_purchase_granted(provider: String, sku: String, token: String, product_id: String) -> void:
-	var pending := UserData.get_pending_purchase(product_id)
-	pending["provider"] = provider
-	pending["sku"] = sku
-	pending["granted"] = true
-	pending["token_hash"] = token.sha256_text()
-	if not pending.has("started_at"):
-		pending["started_at"] = Time.get_unix_time_from_system()
-	UserData.set_pending_purchase(product_id, pending)
+func _mark_purchase_granted(provider: String, sku: String, token: String, _product_id: String) -> void:
+	# Пишем отметку в журнал; pending остаётся только с provider/sku/started_at
+	# (как было до U17) — granted/token_hash из него убраны вместе с переносом.
+	UserData.mark_purchase_granted(provider, token, sku)
 
 func _confirm_purchase_with_store(token: String, sku: String, consumable: bool) -> bool:
 	# Честно о сигнале: bool у адаптеров означает «метод плагина нашёлся и был
