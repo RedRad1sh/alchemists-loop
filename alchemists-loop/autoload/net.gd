@@ -218,6 +218,11 @@ func _build_request(req: Dictionary) -> Dictionary:
 	return {"url": url, "method": method, "body": body}
 
 func _send_next() -> void:
+	# Re-entrant _send_next (подписчик синхронно enqueue-нулся во время _dispatch)
+	# не должен перетирать живой _inflight — продолжение идёт из следующего
+	# _on_completed / drain.
+	if not _inflight.is_empty():
+		return
 	if _queue.is_empty():
 		return
 	var req: Dictionary = _queue.pop_front()

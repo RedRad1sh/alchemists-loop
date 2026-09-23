@@ -93,6 +93,25 @@ static func run(g: Game) -> void:
 	var attempts_before := int(dead_net.attempts)
 	dead_net.world(3)
 	Selftest.check("net err queue live after fail", int(dead_net.attempts) == attempts_before + 1 and dead_net._inflight.is_empty())
+	# I1: ре-ентрантный _send_next при живом _inflight не должен снимать очередь
+	# с дрейна и перетирать «висящий» запрос (продолжение — из _on_completed).
+	# Форма с sentinel: у FailSendNet вся вложенная отправка падает синхронно и
+	# сама же гасит _inflight, поэтому «живой _inflight на внешнем хвосте» в том
+	# harness недостижим детерминированно — поле ставится напрямую.
+	var guard_net = FailSendNet.new()
+	var sink_guard = OfflineSink.new()
+	guard_net.world_result.connect(sink_guard.catch)
+	guard_net._inflight = {"kind": "sentinel"}
+	guard_net._enqueue({"kind": "world", "path": "/world?page=9"})
+	Selftest.check("net inflight guard holds", guard_net._queue.size() == 1 and guard_net.attempts == 0)
+	guard_net._send_next()
+	Selftest.check("net inflight guard blocks send", guard_net._queue.size() == 1 and guard_net.attempts == 0
+		and sink_guard.results.is_empty() and String(guard_net._inflight.get("kind", "")) == "sentinel")
+	guard_net._inflight = {}
+	guard_net._send_next()
+	Selftest.check("net inflight guard releases", guard_net._queue.is_empty() and guard_net.attempts == 1
+		and sink_guard.results.size() == 1 and guard_net._inflight.is_empty())
+	guard_net.free()
 	dead_net.free()
 	g._engine.ether = 300
 	var known_b2 := g._engine.known_recipes.size()
