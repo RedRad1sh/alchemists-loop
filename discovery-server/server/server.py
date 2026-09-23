@@ -88,6 +88,9 @@ def _resolve_db_path() -> str:
 DB_PATH = _resolve_db_path()
 SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:8080")
 LOCK_TTL = 40.0  # секунд: сколько пара считается «в обработке» (защита от гонок)
+# T04: после перевода генерирующих эндпоинтов в threadpool писатели — потоки;
+# ожидаем блокировку WAL-писателя не дольше этого, дальше — ошибка.
+DB_BUSY_TIMEOUT_SEC = float(os.environ.get("DB_BUSY_TIMEOUT_SEC", "10"))
 # Эксперименты — это явные LLM-backed запросы из Experiment Bench. Значения
 # намеренно конфигурируются окружением: расходы на LLM не должны быть спрятаны
 # в клиентской экономике. Кэшированные/curated ответы лимит не расходуют.
@@ -458,11 +461,20 @@ class FairClaimResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 def get_db() -> sqlite3.Connection:
-    """Фабрика соединений. Каждый запрос получает своё соединение."""
+    """Фабрика соединений. Каждый запрос получает своё соединение.
+
+    T04: после перевода генерирующих эндпоинтов на sync `def` (threadpool
+    Starlette) соединения создаются, используются и закрываются в одном
+    рабочем потоке — check_same_thread остаётся True (дефолт): любое
+    случайное перетекание соединения между потоками упадёт явно, а не
+    испорченной базой. WAL включён; busy_timeout задан явно (timeout=),
+    т.к. писатели теперь потоки и краткие блокировки сериализуются ожиданием.
+    """
     os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=DB_BUSY_TIMEOUT_SEC)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute(f"PRAGMA busy_timeout={int(DB_BUSY_TIMEOUT_SEC * 1000)}")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
@@ -1049,6 +1061,19 @@ def _score_vein(conn: sqlite3.Connection, week: str, tag: str, day: str,
 async def startup():
     """Инициализация БД при старте."""
     init_db()
+    # T08.2: зачистка старых «могил» pending_pairs (state='resolved' из-под
+    # прежней логики и протухшие блокировки). Новая логика их не создаёт:
+    # лок снимается DELETE-ом. Если процесс умер посреди генерации —
+    # протухший лок здесь снимается, пара снова становится кандидатом.
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM pending_pairs WHERE state != 'locked'")
+        conn.execute(
+            "DELETE FROM pending_pairs WHERE lock_ts <= ?", (time.time() - LOCK_TTL,)
+        )
+        conn.commit()
+    finally:
+        conn.close()
     gen = get_llm()
     prov = getattr(gen, "provider", "?")
     models = ", ".join(getattr(gen, "models", []) or [])
@@ -1356,7 +1381,11 @@ def _challenge_target_for(day: str) -> str:
 
 
 def _ensure_challenge(conn: sqlite3.Connection) -> dict:
-    """Вернуть сегодняшнюю цель (создать, если ещё нет). БД — источник истины."""
+    """Вернуть сегодняшнюю цель (создать, если ещё нет). БД — источник истины.
+
+    T08.3: INSERT OR IGNORE — при параллельном первом создании «дня» двумя
+    запросами второй не падает IntegrityError-500, а забирает чужую строку.
+    """
     day = _today()
     row = conn.execute("SELECT * FROM challenges WHERE day = ?", (day,)).fetchone()
     if not row:
@@ -1365,11 +1394,14 @@ def _ensure_challenge(conn: sqlite3.Connection) -> dict:
         target_name = trow["name"] if trow else target
         hint = "Вещество, рождённое из «%s»." % target_name
         conn.execute(
-            "INSERT INTO challenges (day, target, target_name, hint, created_at) VALUES (?, ?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO challenges (day, target, target_name, hint, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
             (day, target, target_name, hint, datetime.now().isoformat()),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM challenges WHERE day = ?", (day,)).fetchone()
+        if not row:  # фантастика: строку удалили между вставкой и чтением
+            raise HTTPException(status_code=503, detail="Цель дня не готова — повторите попытку")
     return dict(row)
 
 
@@ -1644,19 +1676,31 @@ def _ensure_letter(conn, device_id: str, nick: str, day: str, llm=None):
     if not hint:
         _refund_letter(conn, device_id)
         return None
-    conn.execute(
-        "INSERT INTO letters (device_id, day, a, b, a_name, b_name, hint, solved) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
-        (device_id, day, pa, pb, a_info["name"], b_info["name"], hint),
-    )
-    # конвертов — не больше лимита: старые недоделки тихо уходят в архив
-    conn.execute(
-        "DELETE FROM letters WHERE device_id = ? AND solved = 0 AND day NOT IN "
-        "(SELECT day FROM letters WHERE device_id = ? AND solved = 0 "
-        "ORDER BY day DESC LIMIT ?)",
-        (device_id, device_id, LETTER_BACKLOG_MAX),
-    )
-    conn.commit()
+    # Запись — атомарно (T08 по мотивам T04): под BEGIN IMMEDIATE два потока
+    # на одну (device_id, day) не вставят две строки; проигравший получает
+    # чужое письмо и возвращает зарезервированную квоту.
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO letters (device_id, day, a, b, a_name, b_name, hint, solved) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+            (device_id, day, pa, pb, a_info["name"], b_info["name"], hint),
+        )
+        inserted = cur.rowcount == 1
+        if inserted:
+            # конвертов — не больше лимита: старые недоделки тихо уходят в архив
+            conn.execute(
+                "DELETE FROM letters WHERE device_id = ? AND solved = 0 AND day NOT IN "
+                "(SELECT day FROM letters WHERE device_id = ? AND solved = 0 "
+                "ORDER BY day DESC LIMIT ?)",
+                (device_id, device_id, LETTER_BACKLOG_MAX),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    if not inserted:
+        _refund_letter(conn, device_id)
     return conn.execute(
         "SELECT day, a, b, a_name, b_name, hint, solved FROM letters "
         "WHERE device_id = ? AND day = ?",
@@ -1719,12 +1763,22 @@ def _ensure_atlas(conn, day: str, llm=None):
     if not riddle:
         _refund_atlas(conn)
         return None
-    conn.execute(
-        "INSERT OR IGNORE INTO atlas_pages (day, a, b, a_name, b_name, riddle) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (day, pa, pb, a_info["name"], b_info["name"], riddle),
-    )
-    conn.commit()
+    # Та же атомарность, что и для писем (T08): BEGIN IMMEDIATE + OR IGNORE;
+    # проигравший гонку возвращает мировой резерв и отдаёт чужую страницу.
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO atlas_pages (day, a, b, a_name, b_name, riddle) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (day, pa, pb, a_info["name"], b_info["name"], riddle),
+        )
+        inserted = cur.rowcount == 1
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    if not inserted:
+        _refund_atlas(conn)
     return conn.execute(
         "SELECT day, a, b, a_name, b_name, riddle FROM atlas_pages WHERE day = ?",
         (day,),
@@ -1908,6 +1962,52 @@ def _generate_for_pair(conn, a_slug, b_slug, pair_key, nick, device_id="", llm=N
     return "created", _materialize(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, name, category, "llm", glyph, d, tag, device_id)
 
 
+# ---------------------------------------------------------------------------
+# Атомарный лок пары (T08). Раньше: SELECT-then-INSERT был неатомарен, а после
+# перевода discover на sync-def (threadpool) гонка стала реальной.
+# Доказательство атомарности под потоками: tests/harness_atomicity_u5.py.
+# ВАЖНО: guarded UPSERT оборачивается BEGIN IMMEDIATE — вне явной транзакции
+# legacy-режим sqlite3 даёт протухшие снимки, и rowcount врал при гонке
+# (воспроизведено и исправлено тем же харнессом).
+# ---------------------------------------------------------------------------
+
+def _try_acquire_pair_lock(conn: sqlite3.Connection, pair_key: str, owner: str, now: float) -> bool:
+    """Атомарно захватить лок пары. True — захватили (строка вставлена или
+    взят протухший/не-locked лок); False — живой чужой лок (state='locked',
+    lock_ts свежее LOCK_TTL). Единый оператор-переход вместо check-then-act:
+    два concurrent-запроса не могут оба получить True."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        cur = conn.execute(
+            """INSERT INTO pending_pairs (pair_key, state, lock_ts, owner, attempted_by)
+               VALUES (?, 'locked', ?, ?, ?)
+               ON CONFLICT(pair_key) DO UPDATE SET
+                 state='locked', lock_ts=excluded.lock_ts,
+                 owner=excluded.owner, attempted_by=excluded.attempted_by
+               WHERE pending_pairs.state != 'locked'
+                  OR pending_pairs.lock_ts <= ?""",
+            (pair_key, now, owner, owner, now - LOCK_TTL),
+        )
+        grabbed = cur.rowcount == 1
+        conn.commit()
+        return grabbed
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _release_pair_lock(conn: sqlite3.Connection, pair_key: str, lock_ts: float):
+    """Снять СВОЙ лок: DELETE с guard по lock_ts захвата (не смахнёт чужой
+    перезахват, если наша генерация превысила TTL). Удаление вместо
+    UPDATE state='resolved' (T08.2): отказные/прошедшие лок-строки не
+    копятся вечно — таблица остаётся очередью живых блокировок."""
+    conn.execute(
+        "DELETE FROM pending_pairs WHERE pair_key = ? AND state = 'locked' AND lock_ts = ?",
+        (pair_key, lock_ts),
+    )
+    conn.commit()
+
+
 @app.post("/api/brew-check", response_model=BrewCheckResponse)
 async def brew_check(req: BrewCheckRequest):
     """
@@ -2009,7 +2109,7 @@ async def brew_check(req: BrewCheckRequest):
         conn.close()
 
 @app.post("/api/discover", response_model=DiscoverResponse)
-async def discover(req: DiscoverRequest):
+def discover(req: DiscoverRequest):
     """
     Атомарно зарегистрировать новое первооткрытие.
 
@@ -2017,6 +2117,10 @@ async def discover(req: DiscoverRequest):
     если признана несочетаемой — вернуть «туман» (решение фиксируется в БД).
     Новая пара: LLM-генерация. При недоступности LLM пара остаётся кандидатом
     (решение не фиксируется) — её можно сгенерировать позже.
+
+    T04: sync `def` — генерация (requests.post до 3×30с) уходит в threadpool
+    Starlette и не замораживает event loop (и /api/health вместе с ним).
+    Соединение SQLite создаётся/используется/закрывается в этом же потоке.
     """
     conn = get_db()
     try:
@@ -2048,24 +2152,12 @@ async def discover(req: DiscoverRequest):
                 message=f"Туман рассеялся: «{req.a}» и «{req.b}» не сочетаются — элемент не создан.",
             )
 
-        # 3. Блокировка пары (race-condition protection)
+        # 3. Блокировка пары — атомарный захват (T08.1): один guarded-переход
+        # вместо SELECT-then-INSERT. Отказ = живой чужой лок (409, контракт не
+        # менялся). now запоминается для освобождения строго своего лока.
         now = time.time()
-        pending_row = conn.execute(
-            "SELECT state, lock_ts FROM pending_pairs WHERE pair_key = ?",
-            (pair_key,),
-        ).fetchone()
-        if pending_row and pending_row["state"] == "locked" and now - pending_row["lock_ts"] < LOCK_TTL:
+        if not _try_acquire_pair_lock(conn, pair_key, nick, now):
             raise HTTPException(status_code=409, detail="Пара в обработке — повторите запрос")
-
-        conn.execute(
-            """INSERT INTO pending_pairs (pair_key, state, lock_ts, owner, attempted_by)
-               VALUES (?, 'locked', ?, ?, ?)
-               ON CONFLICT(pair_key) DO UPDATE SET
-                 state='locked', lock_ts=excluded.lock_ts,
-                 owner=excluded.owner, attempted_by=excluded.attempted_by""",
-            (pair_key, now, nick, nick),
-        )
-        conn.commit()
 
         # 4. Генерация (только LLM). Кэшированные/curated пары вернулись выше —
         # до этой точки ни квоты, ни сетевого вызова нет. Квота резервируется
@@ -2113,10 +2205,8 @@ async def discover(req: DiscoverRequest):
             )
 
         except QuotaExceeded as e:
-            # квота исчерпана до обращения к LLM: пару разблокируем,
-            # она останется кандидатом на будущие дни
-            conn.execute("DELETE FROM pending_pairs WHERE pair_key = ?", (pair_key,))
-            conn.commit()
+            # квота исчерпана до обращения к LLM: лок снимаем в finally,
+            # пара останется кандидатом на будущие дни
             return DiscoverResponse(
                 ok=False, status="rate_limited", discovery=None, already_known=False,
                 message=e.text,
@@ -2140,12 +2230,10 @@ async def discover(req: DiscoverRequest):
             raise
 
         finally:
-            # Сброс блокировки
-            conn.execute(
-                "UPDATE pending_pairs SET state = 'resolved', owner = NULL WHERE pair_key = ?",
-                (pair_key,),
-            )
-            conn.commit()
+            # Сброс блокировки: удаление СВОЕГО лока (по lock_ts захвата) —
+            # вместо UPDATE state='resolved', чьи строки-«могилы» копятся
+            # вечно даже при отказе валидации (T08.2).
+            _release_pair_lock(conn, pair_key, now)
 
     finally:
         conn.close()
@@ -2665,8 +2753,12 @@ def _letter_row_to_data(row, reveal_before: str, yesterday: str) -> LetterData:
 
 
 @app.get("/api/letter/today", response_model=LettersResponse)
-async def letter_today(device_id: str = Query("", max_length=128)):
-    """Письмо Светика: сегодняшнее (лениво, 1 LLM-запрос) + конверты + счётчик."""
+def letter_today(device_id: str = Query("", max_length=128)):
+    """Письмо Светика: сегодняшнее (лениво, 1 LLM-запрос) + конверты + счётчик.
+
+    T04: sync `def` — генерация намёка (requests, до 3×30с) идёт в threadpool
+    и не блокирует event loop.
+    """
     conn = get_db()
     try:
         nick = ""
@@ -2747,8 +2839,12 @@ async def letter_solve(req: LetterSolveRequest):
         conn.close()
 
 @app.get("/api/atlas/today", response_model=AtlasTodayResponse)
-async def atlas_today(device_id: str = Query("", max_length=128)):
-    """Страница Атласа: сегодняшняя общемировая (лениво, 1 LLM-запрос/сутки) + альбом."""
+def atlas_today(device_id: str = Query("", max_length=128)):
+    """Страница Атласа: сегодняшняя общемировая (лениво, 1 LLM-запрос/сутки) + альбом.
+
+    T04: sync `def` — генерация загадки (requests, до 3×30с) идёт в threadpool
+    и не блокирует event loop.
+    """
     conn = get_db()
     try:
         day = _today()
