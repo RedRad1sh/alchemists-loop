@@ -149,7 +149,8 @@ class TestFallback:
 
 
 class TestContractAndSemantics:
-    """Новый контракт: LLM отвечает только {combinable, name}; семантика — отдельным этапом."""
+    """Новый контракт: LLM решает сочетимость и имя; glyph/описание/tag — опционально и
+    только прошедшими валидацию; семантика — отдельным этапом."""
 
     def test_validate_result_is_technical_only(self):
         from gen_llm import validate_result

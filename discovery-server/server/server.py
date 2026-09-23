@@ -246,8 +246,9 @@ RES_MILESTONES = (10, 50, 100)  # вехи: +реген / +кап / золота
 # При недоступности LLM решение НЕ фиксируется: пара остаётся кандидатом,
 # её можно будет сгенерировать позже (никаких «пулов» произвольных имён).
 
-# Ежедневная цель-гонка: целевой ингредиент дня (кто первым откроет вещество,
-# рождённое из него, — тот победил). Выбор детерминирован по дате.
+# Ежедневная цель: целевой ингредиент дня. Цель личная — награду получает
+# первое закрытие цели этим устройством за день; от дня фиксируется только
+# первый справившийся (`first_nick`). Выбор детерминирован по дате.
 CHALLENGE_TARGETS = [
     "gold", "crystal", "lightning", "volcano", "rainbow", "sun",
     "ice", "storm", "tornado", "metal", "life", "desert", "boat", "person",
@@ -322,7 +323,7 @@ class DiscoverResponse(BaseModel):
     already_known: bool = False
     status: str = "created"  # created | known | not_combinable | unavailable
     message: str
-    challenge: Optional[dict] = None  # состояние ежедневной цели-гонки
+    challenge: Optional[dict] = None  # состояние ежедневной цели: {won, first, target_name}
     vein: Optional[dict] = None  # бонус жилы: {tag, points, streak} | None
 
 class EventData(BaseModel):
@@ -2183,7 +2184,6 @@ def _generate_for_pair(conn, a_slug, b_slug, pair_key, nick, device_id="", llm=N
         reserved = True
 
     try:
-        # LLM отвечает только {"combinable": true, "name": "..."} | {"combinable": false}
         t0 = time.time()
         res = llm.generate(a_slug, b_slug, a_info["name"], b_info["name"], pair_key)
         log.info("пара %s+%s: генерация заняла %.1fs", a_slug, b_slug, time.time() - t0)
@@ -2478,7 +2478,7 @@ def discover(req: DiscoverRequest):
                 (pair_key, req.a, req.b, discovery.slug, discovery.name, nick,
                  _now_iso()),
             )
-            # ежедневная цель-гонка
+            # ежедневная личная цель дня
             challenge_info = _score_challenge(conn, req.a, req.b, nick, req.device_id)
             # туманная жила: находка с тегом недели → +очки и бросок прожилки
             vein_info = _score_vein(conn, _week_key(), discovery.tag or "", _today(),
