@@ -146,13 +146,17 @@ def test_pair_lock_helpers_grab_decline_regrab(app_db):
     conn = server.get_db()
     try:
         now = time.time()
-        assert server._try_acquire_pair_lock(conn, PK, "перво", now) is True
-        assert server._try_acquire_pair_lock(conn, PK, "второй", now + 1) is False, \
+        assert server._try_acquire_pair_lock(conn, PK, "tok-1", "перво", now) is True
+        assert server._try_acquire_pair_lock(conn, PK, "tok-2", "второй", now + 1) is False, \
             "живой лок перезахватить нельзя"
-        server._release_pair_lock(conn, PK, now)
-        assert server._try_acquire_pair_lock(conn, PK, "второй", now + 2) is True, \
+        server._release_pair_lock(conn, PK, "tok-2")
+        assert conn.execute(
+            "SELECT 1 FROM pending_pairs WHERE pair_key = ?", (PK,)
+        ).fetchone(), "чужим токеном лок не снимается (U5-fix)"
+        server._release_pair_lock(conn, PK, "tok-1")
+        assert server._try_acquire_pair_lock(conn, PK, "tok-3", "второй", now + 2) is True, \
             "после освобождения пара снова захватываема"
-        server._release_pair_lock(conn, PK, now + 2)
+        server._release_pair_lock(conn, PK, "tok-3")
         assert _pending_count(conn) == 0
     finally:
         conn.close()
@@ -176,7 +180,7 @@ def test_expired_lock_is_reacquirable_by_exactly_one(app_db):
         cc = server.get_db()
         now = time.time()
         barrier.wait(timeout=5)
-        got = server._try_acquire_pair_lock(cc, PK, tag, now)
+        got = server._try_acquire_pair_lock(cc, PK, f"tok-{tag}", tag, now)
         with wlock:
             if got:
                 wins.append(tag)

@@ -87,7 +87,11 @@ def _resolve_db_path() -> str:
 
 DB_PATH = _resolve_db_path()
 SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:8080")
-LOCK_TTL = 40.0  # секунд: сколько пара считается «в обработке» (защита от гонок)
+# U5-fix (review): TTL обязан переживать худшее окно генерации, иначе живой
+# держатель лока теряет его посреди LLM-вызова и второй запрос лезет генерировать
+# ту же пару (двойная трата бюджета). Худшее окно: MAX_ATTEMPTS(3) ×
+# LLM_TIMEOUT(30с) = 90с; берём 120с с запасом на валидацию/запись.
+LOCK_TTL = 120.0  # секунд: сколько пара считается «в обработке» (защита от гонок)
 # T04: после перевода генерирующих эндпоинтов в threadpool писатели — потоки;
 # ожидаем блокировку WAL-писателя не дольше этого, дальше — ошибка.
 DB_BUSY_TIMEOUT_SEC = float(os.environ.get("DB_BUSY_TIMEOUT_SEC", "10"))
@@ -523,6 +527,44 @@ def init_db():
             conn.execute("ALTER TABLE challenges ADD COLUMN first_nick TEXT")
         if "first_device" not in ccols:
             conn.execute("ALTER TABLE challenges ADD COLUMN first_device TEXT")
+
+        # U6/T05: разнесение challenge/vein-каналов очков.
+        # 1) challenge_scores.completed_at — явный флаг «цель дня выполнена».
+        #    Раньше флагом был сам факт строки, а в таблицу лились и vein-очки:
+        #    игрок с попаданием в жилу больше не мог получить won.
+        # 2) vein_points — отдельная таблица vein-канала (создаётся выше из
+        #    schema.sql; дублируем CREATE по конвенции init_db для старых БД).
+        #    Начисление — только туда, challenge_scores больше не смешивается.
+        # Решение по prod-строкам (идемпотентно, forward-only): точки старых
+        # дней постфактум не раздельны (vein +2, challenge +1 в одной сумме),
+        # но строку-создателя различаем по first_at: _score_challenge пишет
+        # явный isoformat (разделитель 'T'), а vein-путь — sqlite
+        # datetime('now') (пробел). Ход миграции:
+        #   * first_at с 'T' — строка из challenge-канала: completed_at :=
+        #     first_at (реальные выполнения не теряют won);
+        #   * иначе — vein/смешанная строка: completed_at остаётся NULL. Это
+        #     ровно те игроки, которым won НЕ был выдан из-за бага — при первом
+        #     настоящем выполнении цели сегодня он его получит (корректно);
+        #   * my_points_total до деплоя включает vein-очки в challenge_scores:
+        #     не вычитаем — они были выданы по действовавшим правилам, изъятие
+        #     хуже погрешности в большую сторону. С суток деплоя каналы чистые.
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS vein_points (
+                   day TEXT NOT NULL,
+                   device_id TEXT NOT NULL,
+                   nick TEXT NOT NULL,
+                   points INTEGER NOT NULL DEFAULT 0,
+                   first_at TEXT DEFAULT (datetime('now')),
+                   PRIMARY KEY (day, device_id)
+               )"""
+        )
+        scols = {r["name"] for r in conn.execute("PRAGMA table_info(challenge_scores)").fetchall()}
+        if "completed_at" not in scols:
+            conn.execute("ALTER TABLE challenge_scores ADD COLUMN completed_at TEXT")
+            conn.execute(
+                "UPDATE challenge_scores SET completed_at = first_at "
+                "WHERE completed_at IS NULL AND first_at LIKE '%T%'"
+            )
 
         # Стартовый граф: 57 веществ / 53 рецепта из локальной игры
         seed.seed_db(conn)
@@ -1020,9 +1062,12 @@ def _fair_virtual(progress: int, goal: int, days_elapsed: int) -> int:
     return progress + int(goal * 0.1 * min(max(days_elapsed, 0), 7))
 
 
-def _add_challenge_points(conn: sqlite3.Connection, day: str, device_id: str, nick: str, pts: int) -> None:
+def _add_vein_points(conn: sqlite3.Connection, day: str, device_id: str, nick: str, pts: int) -> None:
+    """Vein-канал (U6/T05): очки жилы живут в vein_points, а не в
+    challenge_scores — строка в дневном счёте означает только «цель дня
+    выполнена» и участвует в completions/won."""
     conn.execute(
-        """INSERT INTO challenge_scores (day, device_id, nick, points)
+        """INSERT INTO vein_points (day, device_id, nick, points)
            VALUES (?, ?, ?, ?)
            ON CONFLICT(day, device_id) DO UPDATE SET
              points = points + excluded.points, nick = excluded.nick""",
@@ -1032,7 +1077,8 @@ def _add_challenge_points(conn: sqlite3.Connection, day: str, device_id: str, ni
 
 def _score_vein(conn: sqlite3.Connection, week: str, tag: str, day: str,
                 device_id: str, nick: str, today=None):
-    """Находка в жиле: +очки дня, счётчик, бросок прожилки. None — мимо жилы."""
+    """Находка в жиле: +очки дня (vein-канал), счётчик, бросок прожилки.
+    None — мимо жилы."""
     tag1, tag2, spread = _vein_state(conn, week, today)
     active = {tag1} | ({tag2} if spread else set())
     if tag not in active:
@@ -1050,7 +1096,7 @@ def _score_vein(conn: sqlite3.Connection, week: str, tag: str, day: str,
                      (week, device_id))
         streak = True
     if device_id:
-        _add_challenge_points(conn, day, device_id, nick, VEIN_POINTS)
+        _add_vein_points(conn, day, device_id, nick, VEIN_POINTS)
     return {"tag": tag, "points": VEIN_POINTS, "streak": streak}
 
 
@@ -1410,29 +1456,48 @@ def _score_challenge(conn: sqlite3.Connection, a: str, b: str, nick: str, device
 
     Гонка НЕ закрывается первым победителем: каждый игрок, открывший вещество
     из целевого ингредиента, получает награду. День не «заканчивается за
-    секунды» при 1000 игроков. Возвращает {won, first, target_name}:
+    секунды» при 1000 игроков.
+
+    U6/T05: флаг выполнения — completed_at, а не факт строки: раньше в
+    challenge_scores писал ещё и vein-канал, и строка-«жила» ложно гасила won.
+    Теперь здесь только challenge-канал; completed_at чинит и легаси-строки
+    (см. миграцию в init_db). Возвращает {won, first, target_name}:
       won   — первое выполнение цели этим устройством за сегодня (выдать награду);
       first — это первое выполнение цели вообще за сегодня (для ленты).
     """
     ch = _ensure_challenge(conn)
     if not (a == ch["target"] or b == ch["target"]):
         return {"won": False, "first": False, "target_name": ch["target_name"]}
+    now_iso = datetime.now().isoformat()
     row = conn.execute(
-        "SELECT points FROM challenge_scores WHERE day = ? AND device_id = ?",
+        "SELECT points, completed_at FROM challenge_scores WHERE day = ? AND device_id = ?",
         (ch["day"], device_id),
     ).fetchone()
-    if row:
+    if row and row["completed_at"]:
         conn.execute(
             "UPDATE challenge_scores SET points = points + 1, nick = ? WHERE day = ? AND device_id = ?",
             (nick, ch["day"], device_id),
         )
         conn.commit()
         return {"won": False, "first": False, "target_name": ch["target_name"]}
-    conn.execute(
-        "INSERT INTO challenge_scores (day, device_id, nick, points, first_at) VALUES (?, ?, ?, 1, ?)",
-        (ch["day"], device_id, nick, datetime.now().isoformat()),
-    )
-    n = conn.execute("SELECT COUNT(*) AS c FROM challenge_scores WHERE day = ?", (ch["day"],)).fetchone()["c"]
+    if row:
+        # легаси vein/смешанная строка до разнесения каналов: реального
+        # won это устройство ещё не получало — выдаём сейчас
+        conn.execute(
+            "UPDATE challenge_scores SET points = points + 1, nick = ?, completed_at = ? "
+            "WHERE day = ? AND device_id = ?",
+            (nick, now_iso, ch["day"], device_id),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO challenge_scores (day, device_id, nick, points, first_at, completed_at) "
+            "VALUES (?, ?, ?, 1, ?, ?)",
+            (ch["day"], device_id, nick, now_iso, now_iso),
+        )
+    n = conn.execute(
+        "SELECT COUNT(*) AS c FROM challenge_scores WHERE day = ? AND completed_at IS NOT NULL",
+        (ch["day"],),
+    ).fetchone()["c"]
     first = n == 1
     if first:
         conn.execute(
@@ -1814,6 +1879,34 @@ def _known_discovery(conn: sqlite3.Connection, recipe_row, pair_key: str, a: str
     )
 
 
+def _existing_pair_response(conn, pair_key, a, b, nick, device_id):
+    """Ответ по паре, если её судьба уже в БД (recipe/rejected) — без генерации.
+
+    T08/U5: общий шаг для трёх точек — до лока, ПОСЛЕ захвата лока (re-check:
+    воришка протухшего лока не должен второй раз платить LLM за пару, которую
+    предыдущий держатель уже материализовал) и в обработчике IntegrityError.
+    None — пара ещё не решена, можно генерировать.
+    """
+    recipe_row = conn.execute(
+        "SELECT out_id, discoverer, discoverer_device FROM recipes WHERE pair_key = ?",
+        (pair_key,),
+    ).fetchone()
+    if recipe_row:
+        known = _known_discovery(conn, recipe_row, pair_key, a, b)
+        if known is not None:
+            _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], nick,
+                              author_device=recipe_row["discoverer_device"],
+                              brewer_device=device_id, pair_key=pair_key)
+            conn.commit()
+            return known
+    if conn.execute("SELECT 1 FROM rejected_pairs WHERE pair_key = ?", (pair_key,)).fetchone():
+        return DiscoverResponse(
+            ok=True, status="not_combinable", discovery=None, already_known=False,
+            message=f"Туман рассеялся: «{a}» и «{b}» не сочетаются — элемент не создан.",
+        )
+    return None
+
+
 def _link_existing(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, row, device_id=""):
     """Привязать новую пару к уже существующему элементу (дедупликация имён).
 
@@ -1971,11 +2064,15 @@ def _generate_for_pair(conn, a_slug, b_slug, pair_key, nick, device_id="", llm=N
 # (воспроизведено и исправлено тем же харнессом).
 # ---------------------------------------------------------------------------
 
-def _try_acquire_pair_lock(conn: sqlite3.Connection, pair_key: str, owner: str, now: float) -> bool:
+def _try_acquire_pair_lock(conn: sqlite3.Connection, pair_key: str, owner: str,
+                           attempted_by: str, now: float) -> bool:
     """Атомарно захватить лок пары. True — захватили (строка вставлена или
     взят протухший/не-locked лок); False — живой чужой лок (state='locked',
     lock_ts свежее LOCK_TTL). Единый оператор-переход вместо check-then-act:
-    два concurrent-запроса не могут оба получить True."""
+    два concurrent-запроса не могут оба получить True.
+
+    U5-fix: owner — уникальный токен захвата (uuid4), а не ник: им защищено
+    освобождение (см. _release_pair_lock). Ник затеявшего — attempted_by."""
     conn.execute("BEGIN IMMEDIATE")
     try:
         cur = conn.execute(
@@ -1986,7 +2083,7 @@ def _try_acquire_pair_lock(conn: sqlite3.Connection, pair_key: str, owner: str, 
                  owner=excluded.owner, attempted_by=excluded.attempted_by
                WHERE pending_pairs.state != 'locked'
                   OR pending_pairs.lock_ts <= ?""",
-            (pair_key, now, owner, owner, now - LOCK_TTL),
+            (pair_key, now, owner, attempted_by, now - LOCK_TTL),
         )
         grabbed = cur.rowcount == 1
         conn.commit()
@@ -1996,14 +2093,16 @@ def _try_acquire_pair_lock(conn: sqlite3.Connection, pair_key: str, owner: str, 
         raise
 
 
-def _release_pair_lock(conn: sqlite3.Connection, pair_key: str, lock_ts: float):
-    """Снять СВОЙ лок: DELETE с guard по lock_ts захвата (не смахнёт чужой
-    перезахват, если наша генерация превысила TTL). Удаление вместо
-    UPDATE state='resolved' (T08.2): отказные/прошедшие лок-строки не
-    копятся вечно — таблица остаётся очередью живых блокировок."""
+def _release_pair_lock(conn: sqlite3.Connection, pair_key: str, owner: str):
+    """Снять СВОЙ лок: DELETE по токену захвата (owner). Токен надёжнее
+    guard-а по lock_ts (U5-fix): два захвата в один квант time.time() на
+    Windows больше не дают проигравшему «свой» lock_ts и право смахнуть
+    живой чужой лок. Удаление вместо UPDATE state='resolved' (T08.2):
+    отказные/прошедшие лок-строки не копятся вечно — таблица остаётся
+    очередью живых блокировок."""
     conn.execute(
-        "DELETE FROM pending_pairs WHERE pair_key = ? AND state = 'locked' AND lock_ts = ?",
-        (pair_key, lock_ts),
+        "DELETE FROM pending_pairs WHERE pair_key = ? AND state = 'locked' AND owner = ?",
+        (pair_key, owner),
     )
     conn.commit()
 
@@ -2131,32 +2230,20 @@ def discover(req: DiscoverRequest):
         nick = _upsert_player(conn, req.nick, req.device_id)
         conn.commit()
 
-        # 1. Пара уже открыта?
-        recipe_row = conn.execute(
-            "SELECT out_id, discoverer, discoverer_device FROM recipes WHERE pair_key = ?",
-            (pair_key,),
-        ).fetchone()
-        if recipe_row:
-            known = _known_discovery(conn, recipe_row, pair_key, req.a, req.b)
-            if known is not None:
-                _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], nick,
-                                  author_device=recipe_row["discoverer_device"],
-                                  brewer_device=req.device_id, pair_key=pair_key)
-                conn.commit()
-                return known
-
-        # 2. Пара признана несочетаемой?
-        if conn.execute("SELECT 1 FROM rejected_pairs WHERE pair_key = ?", (pair_key,)).fetchone():
-            return DiscoverResponse(
-                ok=True, status="not_combinable", discovery=None, already_known=False,
-                message=f"Туман рассеялся: «{req.a}» и «{req.b}» не сочетаются — элемент не создан.",
-            )
+        # 1-2. Пара уже открыта / признана несочетаемой? (общий шаг с
+        # post-lock re-check и IntegrityError-гонкой)
+        existing = _existing_pair_response(conn, pair_key, req.a, req.b, nick, req.device_id)
+        if existing is not None:
+            return existing
 
         # 3. Блокировка пары — атомарный захват (T08.1): один guarded-переход
         # вместо SELECT-then-INSERT. Отказ = живой чужой лок (409, контракт не
-        # менялся). now запоминается для освобождения строго своего лока.
+        # менялся). owner — одноразовый токен захвата (U5-fix): освобождение
+        # DELETE ... WHERE pair_key=? AND owner=? не даст проигравшему смахнуть
+        # живой чужой лок (guard по lock_ts был хрупок: time.time() квантуется).
         now = time.time()
-        if not _try_acquire_pair_lock(conn, pair_key, nick, now):
+        owner = uuid.uuid4().hex
+        if not _try_acquire_pair_lock(conn, pair_key, owner, nick, now):
             raise HTTPException(status_code=409, detail="Пара в обработке — повторите запрос")
 
         # 4. Генерация (только LLM). Кэшированные/curated пары вернулись выше —
@@ -2164,6 +2251,14 @@ def discover(req: DiscoverRequest):
         # ВНУТРИ генератора по факту обращения к LLM (ключ — device_id):
         # клиентский флаг experiment её не обходит.
         try:
+            # 4a. Post-lock re-check (U5-fix): между шагом 1-2 и захватом лока
+            # предыдущий держатель мог истечь по TTL, быть вытесненным нами и
+            # успеть материализовать/отвергнуть пару — не платим LLM второй раз
+            # за то, что уже в БД.
+            existing = _existing_pair_response(conn, pair_key, req.a, req.b, nick, req.device_id)
+            if existing is not None:
+                return existing
+
             kind, discovery = _generate_for_pair(
                 conn, req.a, req.b, pair_key, nick, req.device_id)
 
@@ -2182,6 +2277,18 @@ def discover(req: DiscoverRequest):
                 return DiscoverResponse(
                     ok=True, status="unavailable", discovery=None, already_known=False,
                     message="Мир сейчас не может оценить эту пару — попробуйте позже.",
+                )
+
+            # U6/T05: reused (дедуп имени: пара привязана к существующему
+            # веществу) — НЕ первооткрытие: linking и резонанс автору уже
+            # сделал _link_existing; серверных наград нет — ни world_event,
+            # ни challenge/vein-очков, ни звания «ПЕРВООТКРЫТИЕ». Иначе
+            # многопарный фарш на одно имя фармит дневные очки и спамит ленту.
+            if discovery.reused:
+                conn.commit()
+                return DiscoverResponse(
+                    ok=True, status="created", discovery=discovery, already_known=False,
+                    message=f"Пара {req.a}+{req.b} уже ведёт к веществу «{discovery.name}».",
                 )
 
             # лента событий мира
@@ -2215,25 +2322,18 @@ def discover(req: DiscoverRequest):
         except sqlite3.IntegrityError:
             conn.rollback()
             # гонка: пара вставлена другим запросом — отдать существующую
-            recipe_row = conn.execute(
-                "SELECT out_id, discoverer, discoverer_device FROM recipes WHERE pair_key = ?",
-                (pair_key,),
-            ).fetchone()
-            if recipe_row:
-                known = _known_discovery(conn, recipe_row, pair_key, req.a, req.b)
-                if known is not None:
-                    _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], nick,
-                                      author_device=recipe_row["discoverer_device"],
-                                      brewer_device=req.device_id, pair_key=pair_key)
-                    conn.commit()
-                    return known
+            # (тот же общий шаг; не_combinable-гонка тоже разрешается корректно)
+            existing = _existing_pair_response(conn, pair_key, req.a, req.b, nick, req.device_id)
+            if existing is not None:
+                return existing
             raise
 
         finally:
-            # Сброс блокировки: удаление СВОЕГО лока (по lock_ts захвата) —
-            # вместо UPDATE state='resolved', чьи строки-«могилы» копятся
-            # вечно даже при отказе валидации (T08.2).
-            _release_pair_lock(conn, pair_key, now)
+            # Сброс блокировки: удаление СВОЕГО лока по токену захвата (owner)
+            # — проигравший гонку перезахвата не смахнёт живой чужой лок
+            # (U5-fix; раньше guard был по lock_ts и ломался на квантах
+            # time.time()). Могилы state='resolved' не копятся (T08.2).
+            _release_pair_lock(conn, pair_key, owner)
 
     finally:
         conn.close()
@@ -2362,7 +2462,12 @@ async def events(limit: int = Query(20, ge=1, le=100)):
 
 @app.get("/api/challenge", response_model=ChallengeResponse)
 async def challenge(device_id: str = Query("", max_length=128)):
-    """Ежедневная цель: целевой ингредиент, первый справившийся, счётчик дня."""
+    """Ежедневная цель: целевой ингредиент, первый справившийся, счётчик дня.
+
+    U6/T05: completions — только реальные выполнения цели (challenge_scores,
+    completed_at); vein-строки больше не попадают в таблицу, а легаси-строки
+    без completed_at не считаются. my_points — сумма обоих каналов
+    (challenge + жила): игрок видит честно заработанные им очки дня."""
     conn = get_db()
     try:
         ch = _ensure_challenge(conn)
@@ -2371,21 +2476,27 @@ async def challenge(device_id: str = Query("", max_length=128)):
         ).fetchone()["c"]
         first = ch["first_nick"]
         completions = conn.execute(
-            "SELECT COUNT(*) AS c FROM challenge_scores WHERE day = ?", (ch["day"],)
+            "SELECT COUNT(*) AS c FROM challenge_scores "
+            "WHERE day = ? AND completed_at IS NOT NULL",
+            (ch["day"],),
         ).fetchone()["c"]
         my_points = 0
         my_points_total = 0
         if device_id:
-            r = conn.execute(
-                "SELECT points FROM challenge_scores WHERE day = ? AND device_id = ?",
-                (ch["day"], device_id),
-            ).fetchone()
-            my_points = r["points"] if r else 0
-            t = conn.execute(
-                "SELECT COALESCE(SUM(points), 0) AS s FROM challenge_scores WHERE device_id = ?",
-                (device_id,),
-            ).fetchone()
-            my_points_total = t["s"] if t else 0
+            def _chan_points(table):
+                d = conn.execute(
+                    f"SELECT points FROM {table} WHERE day = ? AND device_id = ?",
+                    (ch["day"], device_id),
+                ).fetchone()
+                t = conn.execute(
+                    f"SELECT COALESCE(SUM(points), 0) AS s FROM {table} WHERE device_id = ?",
+                    (device_id,),
+                ).fetchone()
+                return (d["points"] if d else 0), (t["s"] if t else 0)
+            ch_day, ch_total = _chan_points("challenge_scores")
+            vn_day, vn_total = _chan_points("vein_points")
+            my_points = ch_day + vn_day
+            my_points_total = ch_total + vn_total
         return ChallengeResponse(
             ok=True, day=ch["day"], target=ch["target"],
             target_name=ch["target_name"], hint=ch["hint"],
@@ -2570,7 +2681,7 @@ async def delete_account(device_id: str = Query(..., min_length=1, max_length=12
             (device_id,),
         )
         for table in [
-            "echoes", "letters", "challenge_scores", "atlas_solves",
+            "echoes", "letters", "challenge_scores", "vein_points", "atlas_solves",
             "fair_pairs", "fair_contrib", "fair_claims", "vein_hits",
         ]:
             conn.execute(f"DELETE FROM {table} WHERE device_id = ?", (device_id,))
@@ -2645,7 +2756,8 @@ async def rating(device_id: str = Query("", max_length=128)):
             """SELECT p.nick, p.house, p.created_at,
                    (SELECT COUNT(*) FROM recipes r WHERE r.discoverer = p.nick) AS discoveries,
                    (SELECT COUNT(*) FROM elements e WHERE e.author = p.nick) AS elements,
-                   (SELECT COALESCE(SUM(c.points), 0) FROM challenge_scores c WHERE c.nick = p.nick) AS points
+                   (SELECT COALESCE(SUM(c.points), 0) FROM challenge_scores c WHERE c.nick = p.nick)
+                 + (SELECT COALESCE(SUM(v.points), 0) FROM vein_points v WHERE v.nick = p.nick) AS points
             FROM players p
             ORDER BY discoveries DESC, elements DESC, points DESC, p.created_at ASC"""
         ).fetchall()

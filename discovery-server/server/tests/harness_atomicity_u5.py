@@ -21,7 +21,7 @@ import traceback
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA = os.path.join(HERE, "..", "schema.sql")
-LOCK_TTL = 40.0  # секунд; то же значение, что в server.py
+LOCK_TTL = 120.0  # секунд; то же значение, что в server.py (U5-fix: >= худшего окна генерации)
 
 UPSERT = (
     "INSERT INTO pending_pairs (pair_key, state, lock_ts, owner, attempted_by)"
@@ -42,11 +42,12 @@ def _db_conn(db):
 
 # --- копии операторов server.py -------------------------------------------
 
-def acquire(conn, pair_key, owner, now):
-    """Копия server._try_acquire_pair_lock: BEGIN IMMEDIATE + guarded UPSERT."""
+def acquire(conn, pair_key, owner, attempted_by, now):
+    """Копия server._try_acquire_pair_lock: BEGIN IMMEDIATE + guarded UPSERT.
+    owner — уникальный токен захвата (в проде uuid4.hex)."""
     conn.execute("BEGIN IMMEDIATE")
     try:
-        cur = conn.execute(UPSERT, (pair_key, now, owner, owner, now - LOCK_TTL))
+        cur = conn.execute(UPSERT, (pair_key, now, owner, attempted_by, now - LOCK_TTL))
         grabbed = cur.rowcount == 1
         conn.commit()
         return grabbed
@@ -55,11 +56,12 @@ def acquire(conn, pair_key, owner, now):
         raise
 
 
-def release(conn, pair_key, lock_ts):
-    """Копия server._release_pair_lock: DELETE, привязанный к своему захвату."""
+def release(conn, pair_key, owner):
+    """Копия server._release_pair_lock: DELETE, привязанный к токену СВОЕГО
+    захвата (U5-fix): чужой лок не смахнёт, даже если lock_ts совпали."""
     cur = conn.execute(
-        "DELETE FROM pending_pairs WHERE pair_key = ? AND state = 'locked' AND lock_ts = ?",
-        (pair_key, lock_ts),
+        "DELETE FROM pending_pairs WHERE pair_key = ? AND state = 'locked' AND owner = ?",
+        (pair_key, owner),
     )
     conn.commit()
     return cur.rowcount
@@ -79,10 +81,11 @@ def _run_harness(verbose=True):
     say("python:", sys.version.split()[0], "| sqlite:", sqlite3.sqlite_version)
 
     # 0) rowcount-семантика вне гонки (на ней держится захват)
-    assert acquire(conn, "t|one", "u1", time.time()) is True
-    assert acquire(conn, "t|one", "u2", time.time()) is False, "живой лок: отказ"
-    row = conn.execute("SELECT lock_ts FROM pending_pairs WHERE pair_key='t|one'").fetchone()
-    assert release(conn, "t|one", row["lock_ts"]) == 1
+    assert acquire(conn, "t|one", "u1", "u1", time.time()) is True
+    assert acquire(conn, "t|one", "u2", "u2", time.time()) is False, "живой лок: отказ"
+    # освобождение — только по своему токену: чужой лок не смахивается
+    assert release(conn, "t|one", "u2") == 0, "проигравший не снимает чужой лок"
+    assert release(conn, "t|one", "u1") == 1
     cur = conn.execute("INSERT OR IGNORE INTO challenges (day,target,target_name,hint,created_at)"
                        " VALUES ('2000-01-01','fire','Огонь','h','now')")
     conn.commit()
@@ -105,7 +108,7 @@ def _run_harness(verbose=True):
         try:
             cc = _db_conn(db)
             now = time.time()
-            if acquire(cc, pk, tag, now):
+            if acquire(cc, pk, tag, tag, now):
                 with jlock:
                     stats["holders"] += 1
                     stats["peak"] = max(stats["peak"], stats["holders"])
@@ -115,7 +118,7 @@ def _run_harness(verbose=True):
                 with jlock:
                     stats["holders"] -= 1
                     stats["declines"] += 0
-                assert release(cc, pk, now) == 1, "освобождение своего свежего лока"
+                assert release(cc, pk, tag) == 1, "освобождение своего лока по токену"
             else:
                 with jlock:
                     stats["declines"] += 1
@@ -140,7 +143,7 @@ def _run_harness(verbose=True):
 
     # 2) протухший лок (сбой держателя) — перезахват также не более одного
     cc = _db_conn(db)
-    assert acquire(cc, pk, "stale", time.time() - LOCK_TTL - 5) is True
+    assert acquire(cc, pk, "stale", "stale", time.time() - LOCK_TTL - 5) is True
     cc.close()
     s2 = race(8)
     say("round2 (протухший лок): побед всего =", len(s2["wins"]),

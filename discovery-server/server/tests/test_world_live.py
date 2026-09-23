@@ -21,14 +21,17 @@ def _srv(tmp_path, monkeypatch, fake_llm=None):
 
 
 class FakeOK:
+    """Имя уникально на пару: U6/T05 при дедупе имени (reused) награды больше
+    не начисляются — тесты не должны случайно попадать в ветку reused."""
+
     def __init__(self, name="Свежее"):
         self.name = name
 
     def available(self):
         return True
 
-    def generate(self, *a, **k):
-        return {"combinable": True, "name": self.name}
+    def generate(self, a_slug, b_slug, a_name, b_name, pair_key):
+        return {"combinable": True, "name": f"{self.name} {a_name} {b_name}"}
 
 
 class TestEvents:
@@ -41,7 +44,7 @@ class TestEvents:
             ev = client.get("/api/events").json()
             assert ev["ok"] is True
             names = [e["out_name"] for e in ev["events"]]
-            assert "Свежее" in names
+            assert any(n.startswith("Свежее") for n in names)
             e0 = ev["events"][0]
             assert e0["discoverer"] == "Варда"
             assert e0["a"] in ("dust", "sky") and e0["b"] in ("dust", "sky")

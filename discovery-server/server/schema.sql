@@ -91,6 +91,9 @@ CREATE TABLE IF NOT EXISTS letters (
 );
 
 -- Очередь блокировок для race-condition
+-- owner (U5-fix): уникальный токен захвата (uuid4.hex) — освобождение идёт
+-- DELETE ... WHERE pair_key=? AND owner=?, проигравший не может смахнуть
+-- живой чужой лок. attempted_by — ник затеявшего генерацию (отладка).
 CREATE TABLE IF NOT EXISTS pending_pairs (
     pair_key TEXT NOT NULL PRIMARY KEY,
     state TEXT NOT NULL DEFAULT 'pending',
@@ -133,7 +136,23 @@ CREATE TABLE IF NOT EXISTS challenges (
 );
 
 -- Личный счёт в ежедневной цели: по очку за каждое новое вещество из цели дня.
+-- U6/T05: строка здесь = «цель дня выполнена». Флаг завершения — completed_at
+-- (не сам факт строки: раньше сюда же лились vein-очки, и попадание в жилу
+-- ложно помечало выполнение). Vein-очки живут в отдельном канале vein_points.
 CREATE TABLE IF NOT EXISTS challenge_scores (
+    day TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    nick TEXT NOT NULL,
+    points INTEGER NOT NULL DEFAULT 0,
+    first_at TEXT DEFAULT (datetime('now')),
+    completed_at TEXT,
+    PRIMARY KEY (day, device_id)
+);
+
+-- Очки туманной жилы (v30, канал U6/T05): +VEIN_POINTS за первооткрытие с
+-- тегом недели. Отдельно от challenge_scores: жила не даёт won/completions
+-- дневной цели. my_points на чтении = сумма обоих каналов.
+CREATE TABLE IF NOT EXISTS vein_points (
     day TEXT NOT NULL,
     device_id TEXT NOT NULL,
     nick TEXT NOT NULL,

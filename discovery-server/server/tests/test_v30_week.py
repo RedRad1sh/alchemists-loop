@@ -136,9 +136,15 @@ class TestVein:
                 "device_id": "dev-v"}).json()
             assert r["status"] == "created"
             assert r["vein"] is not None and r["vein"]["points"] == 2
-            pts = sqlite3.connect(str(tmp_path / "week.db")).execute(
+            # U6/T05: vein-очки — отдельный канал vein_points (не challenge)
+            db = sqlite3.connect(str(tmp_path / "week.db"))
+            pts = db.execute(
+                "SELECT points FROM vein_points WHERE device_id='dev-v'").fetchone()
+            assert pts and pts[0] >= 2
+            cs = db.execute(
                 "SELECT points FROM challenge_scores WHERE device_id='dev-v'").fetchone()
-            assert pts[0] >= 2
+            assert cs is None or cs[0] < 2  # сюда жила больше не льётся
+            db.close()
             st2 = c.get("/api/week/status", params={"device_id": "dev-v"}).json()
             assert st2["vein"]["my_hits"] == 1
 
