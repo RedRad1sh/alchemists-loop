@@ -2,6 +2,23 @@ extends RefCounted
 class_name SuiteResonanceNet
 # резонанс/маршрутизация сети (оп B1).
 
+const NetBase := preload("res://autoload/net.gd")
+
+# T13: seam Net._try_send всегда возвращает ошибку старта запроса (эмулирует
+# штатный для Android случай, когда HTTPRequest.request() падает в фоне/при
+# смене сети) без живого сервера и без реального HTTP.
+class FailSendNet extends NetBase:
+	var attempts := 0
+	func _try_send(_url: String, _headers: PackedStringArray, _method: int, _body: String) -> int:
+		attempts += 1
+		return ERR_CANT_CONNECT
+
+# подписчик на *_*_result: collects dispatched dicts
+class OfflineSink extends RefCounted:
+	var results: Array[Dictionary] = []
+	func catch(res: Dictionary) -> void:
+		results.append(res)
+
 static func run(g: Game) -> void:
 	# резонанс: вехи, бонусы, claim-математика
 	g._resonance._res_done.clear()
@@ -54,6 +71,29 @@ static func run(g: Game) -> void:
 	Selftest.check("net privacy export route", String(b_export["url"]).ends_with("/api/account/export?device_id=d") and int(b_export["method"]) == HTTPClient.METHOD_GET)
 	var b_delete := Net._build_request({"kind": "account_delete", "path": "/account?device_id=d", "method": HTTPClient.METHOD_DELETE})
 	Selftest.check("net privacy delete route", String(b_delete["url"]).ends_with("/api/account?device_id=d") and int(b_delete["method"]) == HTTPClient.METHOD_DELETE)
+	# T13: если _try_send вернул err != OK, очередь НЕ дедлокавится — каждый
+	# заqueued-запрос получает offline-результат, _inflight пуст, очередь жива
+	var dead_net = FailSendNet.new()
+	var sink_world = OfflineSink.new()
+	var sink_rating = OfflineSink.new()
+	dead_net.world_result.connect(sink_world.catch)
+	dead_net.rating_result.connect(sink_rating.catch)
+	dead_net._enqueue({"kind": "world", "path": "/world?page=1"})
+	dead_net._enqueue({"kind": "rating"})
+	dead_net._enqueue({"kind": "world", "path": "/world?page=2"})
+	Selftest.check("net err no deadlock", dead_net._inflight.is_empty() and dead_net._queue.is_empty() and dead_net.attempts == 3)
+	Selftest.check("net err offline dispatched", sink_world.results.size() == 2 and sink_rating.results.size() == 1
+		and bool(sink_world.results[0].get("offline", false)) and not bool(sink_world.results[0].get("ok", true))
+		and bool(sink_rating.results[0].get("offline", false)))
+	# ping-частный случай: err по-прежнему снимает flag доступности
+	dead_net._available = true
+	dead_net._ping()
+	Selftest.check("net err ping clears available", not bool(dead_net._available) and dead_net.attempts == 4)
+	# последующий enqueue снова реально пытается отправить (очередь разблокирована)
+	var attempts_before := int(dead_net.attempts)
+	dead_net.world(3)
+	Selftest.check("net err queue live after fail", int(dead_net.attempts) == attempts_before + 1 and dead_net._inflight.is_empty())
+	dead_net.free()
 	g._engine.ether = 300
 	var known_b2 := g._engine.known_recipes.size()
 	Selftest.check("lens reveal", g._pages._lens_reveal() and g._engine.known_recipes.size() == known_b2 + 1

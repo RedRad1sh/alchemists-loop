@@ -224,14 +224,26 @@ func _send_next() -> void:
 	var built := _build_request(req)
 	var headers := PackedStringArray(["Content-Type: application/json"])
 	_inflight = req
-	var err := _http.request(String(built["url"]), headers, int(built["method"]), String(built["body"]))
+	var err := _try_send(String(built["url"]), headers, int(built["method"]), String(built["body"]))
 	if err != OK:
-		var kind: String = String(req.get("kind", ""))
-		if kind == "ping":
+		# Запрос не стартовал — _on_completed по нему не придёт никогда.
+		# Общий cleanup для ЛЮБОГО kind (T13): порядок ровно как в известном
+		# рабочем пути _on_completed: сначала гасим _inflight, затем _dispatch,
+		# затем _send_next. ping дополнительно помечает недоступность сервера —
+		# это единственная special-case ветка. Рекурсия хвостовым _send_next()
+		# даёт глубину = длина очереди; очередь штатно маленькая (мир/рейтинги/
+		# эксперименты), поэтому это приемлемо, а не неограниченный стек.
+		if String(req.get("kind", "")) == "ping":
 			_available = false
-			_inflight = {}
-			_dispatch(req, {"ok": false, "offline": true, "message": "не удалось отправить запрос"})
-			_send_next()
+		_inflight = {}
+		_dispatch(req, {"ok": false, "offline": true, "message": "не удалось отправить запрос"})
+		_send_next()
+
+# Единственная точка выхода в HTTP. В прод-поведении идентична прямому вызову
+# _http.request(...); нужна как seam для selftest (см. suite_resonance_net.gd),
+# чтобы эмулировать err != OK на старте запроса без живого сервера.
+func _try_send(url: String, headers: PackedStringArray, method: int, body: String) -> int:
+	return _http.request(url, headers, method, body)
 
 func _on_completed(result: int, response_code: int, _headers: PackedStringArray, data: PackedByteArray) -> void:
 	var req: Dictionary = _inflight
