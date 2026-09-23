@@ -37,7 +37,7 @@ static func run(g: Game) -> void:
 	g._retort._essences.clear()
 	for i in 10:
 		g._retort._essences["e%d" % i] = "Э%d" % i
-	Selftest.check("essence bonus caps at 10", g._retort._essence_cap_bonus() == Game.RETORT_CAP_EACH * Game.RETORT_CAP_FIRST)
+	Selftest.check("essence bonus caps at the configured first-N", g._retort._essence_cap_bonus() == Game.RETORT_CAP_EACH * Game.RETORT_CAP_FIRST)
 	g._retort._essences["extra"] = "Лишняя"
 	Selftest.check("essence bonus stays capped", g._retort._essence_cap_bonus() == Game.RETORT_CAP_EACH * Game.RETORT_CAP_FIRST)
 	g._engine.inventory["earth"] = 2
@@ -97,21 +97,29 @@ static func run(g: Game) -> void:
 	# Текст строится в _build_retort_page; контейнер в дерево не ставим — билдер чистый
 	# (только add_child + _refresh_retort_page по своим нодам). Но билдер ПЕРЕЗАПИСЫВАЕТ
 	# поля вида (_retort_ui/_retort_head/_retort_cards/_retort_ess/_retort_desc) ссылками на
-	# эти ноды, а _refresh_retort_page проверяет только == null, значит после free() любой
-	# поздний refresh (pages.gd:1770, main.gd:532) читал бы freed-объекты. Снимаем все пять
-	# полей и возвращаем обратно.
+	# эти ноды, а поздний refresh (pages.gd:1770, main.gd:532) после free() работал бы по
+	# осиротевшим ссылкам: в Godot 4 freed-объект проходит проверку == null, так что
+	# _refresh_retort_page не упал бы, а молча перестал обновлять страницу (её head/карточки/
+	# эссенции). Снимаем все пять полей и возвращаем обратно.
 	var u16_ui0 := g._retort._retort_ui.duplicate(true)
 	var u16_head0: Label = g._retort._retort_head
 	var u16_cards0: VBoxContainer = g._retort._retort_cards
 	var u16_ess0: Label = g._retort._retort_ess
 	var u16_desc0: Label = g._retort._retort_desc
+	# живой нод из исходного (_retort_ui[0]["title"]) — чтобы проверка возврата была на
+	# идентичность, а не на сравнение массивов (см. «fields restored» ниже)
+	var u16_title0 = null
+	if g._retort._retort_ui.size() > 0:
+		u16_title0 = g._retort._retort_ui[0]["title"]
 	var u16_box := VBoxContainer.new()
 	g._retort._build_retort_page(u16_box)
 	Selftest.check("u16 retort desc is built and non-empty", g._retort._retort_desc != null
 		and g._retort._retort_desc.text.length() > 0)
 	var u16_text := "" if g._retort._retort_desc == null else g._retort._retort_desc.text
-	# невакуумность: старые числа отличались от фактических констант (было «10» и «+2»),
-	# иначе проверка «устаревших цифр нет» ничего не доказывает
+	# Невакуумность: старые числа («10» и «+2») отличались от фактических констант, иначе
+	# проверка «устаревших цифр нет» ничего не доказывает. Цена: кейс завязан на текущие
+	# 8/+1, и законный ребаланс ровно на эти значения покрасит его — тогда менять надо и
+	# этот ассерт (он про «текст ≠ прежней врукописной цифре», а не про вечность 8/+1).
 	Selftest.check("u16 constants differ from the stale claim", Game.RETORT_CAP_FIRST != 10
 		and Game.RETORT_CAP_EACH != 2)
 	Selftest.check("u16 retort text carries the live constant values",
@@ -125,5 +133,16 @@ static func run(g: Game) -> void:
 	g._retort._retort_cards = u16_cards0
 	g._retort._retort_ess = u16_ess0
 	g._retort._retort_desc = u16_desc0
-	Selftest.check("u16 retort view fields restored", g._retort._retort_ui == u16_ui0
-		and g._retort._retort_head == u16_head0 and g._retort._retort_desc == u16_desc0)
+	# Object-поля через == сравниваются ПО ССЫЛКЕ — для них это и есть проверка возврата.
+	# Массив в Godot 4 сравнивается глубоко по содержимому, поэтому «_retort_ui == u16_ui0»
+	# было бы истинно даже без восстановления (в старом массиве лежат те же словари).
+	# Значит массив проверяем идентичностью живой ноды внутри него — а если страница
+	# реторты в этом прогоне ещё не строилась, восстановлению подлежит пустота.
+	var _ui_ok := false
+	if u16_title0 == null:
+		_ui_ok = g._retort._retort_ui.is_empty()
+	else:
+		_ui_ok = g._retort._retort_ui.size() > 0 and (g._retort._retort_ui[0]["title"] as Object).is_same(u16_title0)
+	Selftest.check("u16 retort view fields restored", _ui_ok
+		and g._retort._retort_head == u16_head0 and g._retort._retort_cards == u16_cards0
+		and g._retort._retort_ess == u16_ess0 and g._retort._retort_desc == u16_desc0)
