@@ -14,6 +14,8 @@ var _res_desc_total := 0
 var _res_top: Array = []
 var _res_apprentice: Dictionary = {}
 var _res_done: Dictionary = {}
+# msec отправки «Забрать» в полёте; 0 — окно свободно (_claim_gate)
+var _res_claim_at := 0
 var _res_info: Label = null
 var _res_claim_btn: Button = null
 var _res_miles: Label = null
@@ -153,12 +155,23 @@ func _fetch_echoes() -> void:
 		return
 	Net.echoes(g._online._device_id)
 
+func _claim_gate(now_ms: int) -> bool:
+	# True — запрос разрешён и окно занято до ответа мира; False — прошлый claim ещё в пути.
+	# now_ms параметром, чтобы это было чисто тестируемо.
+	if _res_claim_at != 0 and now_ms - _res_claim_at < Game.RESONANCE_CLAIM_GATE_MSEC:
+		return false
+	_res_claim_at = now_ms
+	return true
+
 func _claim_echoes() -> void:
 	if _res_balance <= 0:
 		return
 	if not g._online._net_enabled or not Net.is_available() or g._online._device_id == "":
 		g._online._set_status("Мир недоступен — эхо подождёт.")
 		Sfx.error()
+		return
+	# окно взводится только когда запрос реально уходит: офлайн-тап не съедает 15 с
+	if not _claim_gate(Time.get_ticks_msec()):
 		return
 	Net.echoes_claim(g._online._device_id)
 
@@ -187,6 +200,8 @@ func _on_net_echoes_result(result: Dictionary) -> void:
 	g._saves._save_game()
 
 func _on_net_echoes_claim_result(result: Dictionary) -> void:
+	# ответ (любой) снимает окно: залипший флаг блокировал бы claim на всё оставшееся время
+	_res_claim_at = 0
 	if result.get("ok", false) != true:
 		g._online._set_status("Мир не отдал эхо — попробуй позже.")
 		return

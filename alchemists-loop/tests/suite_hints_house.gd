@@ -115,3 +115,97 @@ static func run(g: Game) -> void:
 	Selftest.check("server recipe restore", not g._online._find_recipe("__st_a", "__st_b").is_empty())
 	g._online._restore_server_elements({})
 	g._online._restore_server_recipes([])
+
+	# ============ U13 (T17): анти-спам кнопок траты ============
+	# Гейты чистые (часы параметром) — окно проверяется без реального кадра; затем
+	# живой двойной тап по _hint/_lens_reveal: одно списание на два нажатия.
+	var u13_ether := g._engine.ether
+	var u13_overflow := g._engine.ether_overflow
+	var u13_inv := g._engine.inventory.duplicate(true)
+	var u13_known := g._engine.known_recipes.duplicate(true)
+	var u13_brewing := g._engine.brewing
+	var u13_auto := g._engine._auto
+	var u13_status := g._engine.status_text
+	var u13_exp_pair := g._engine._experiment_pending_pair.duplicate()
+	var u13_unlocked := g._spirit._companion_unlocked
+	var u13_idle := g._spirit._companion_idle_clock
+	var u13_filter := g._pages._experiment_filter
+	var u13_hint_ids := g._pages._experiment_hint_ids.duplicate()
+	var u13_exp_a := g._pages._experiment_a
+	var u13_exp_b := g._pages._experiment_b
+	var u13_guard := g._pages._spend_guard_ms.duplicate(true)
+	var u13_claim_at := g._resonance._res_claim_at
+	var u13_n_inv := g._engine.inventory.size()
+	var u13_n_known := g._engine.known_recipes.size()
+	var u13_n_hint_ids := g._pages._experiment_hint_ids.size()
+	g._pages._spend_guard_ms.clear()
+	g._resonance._res_claim_at = 0
+	# свободное окно разрешает трату и взводится, повтор внутри окна отбит, после окна — снова можно
+	Selftest.check("u13 spend gate arms", g._pages._spend_gate("hint", 1000))
+	Selftest.check("u13 spend gate refuses repeat", not g._pages._spend_gate("hint", 1100))
+	Selftest.check("u13 spend gate opens after window", g._pages._spend_gate("hint", 1300))
+	# ключи независимы: линза не наследует занятую подсказкой отметку
+	Selftest.check("u13 spend gate keys independent", g._pages._spend_gate("lens", 1100)
+		and not g._pages._spend_gate("lens", 1200))
+	g._pages._spend_guard_ms.clear()
+	g._spirit._companion_unlocked = true
+	g._engine.brewing = false
+	g._engine._auto = false
+	g._engine._experiment_pending_pair.clear()
+	g._engine.known_recipes.clear()
+	g._engine.ether = 200
+	# невакуумность: кандидатов хватает и на второй тап, значит false даёт только гейт
+	Selftest.check("u13 hint candidates leave room", g._pages._hint_candidates().size() >= 2)
+	var u13_avail0 := g._engine.ether + g._engine.ether_overflow
+	Selftest.check("u13 first hint pays", g._pages._hint()
+		and g._engine.ether + g._engine.ether_overflow == u13_avail0 - Game.HINT_COST)
+	var u13_ids1 := g._pages._experiment_hint_ids.duplicate()
+	var u13_status1 := g._engine.status_text
+	# второй тап в этом же кадре: молча, без списания и без перезаписи подсветки
+	Selftest.check("u13 second hint in same frame spends nothing", not g._pages._hint()
+		and g._engine.ether + g._engine.ether_overflow == u13_avail0 - Game.HINT_COST
+		and g._engine.status_text == u13_status1 and g._pages._experiment_hint_ids == u13_ids1)
+	# то же для линзы (30⚡): состояние подбирается честно, до обоих вызовов
+	Selftest.check("u13 lens candidates leave room", g._pages._lens_candidates().size() >= 2)
+	var u13_avail1 := g._engine.ether + g._engine.ether_overflow
+	var u13_known1 := g._engine.known_recipes.size()
+	Selftest.check("u13 first lens pays", g._pages._lens_reveal()
+		and g._engine.ether + g._engine.ether_overflow == u13_avail1 - Game.LENS_COST
+		and g._engine.known_recipes.size() == u13_known1 + 1)
+	var u13_status2 := g._engine.status_text
+	Selftest.check("u13 second lens in same frame spends nothing", not g._pages._lens_reveal()
+		and g._engine.ether + g._engine.ether_overflow == u13_avail1 - Game.LENS_COST
+		and g._engine.known_recipes.size() == u13_known1 + 1
+		and g._engine.status_text == u13_status2)
+	# restore: мир после блока — ровно как до него; снятые окна не должны отбить
+	# тап позднего сюжета (Time.get_ticks_msec() монотонна)
+	g._engine.ether = u13_ether
+	g._engine.ether_overflow = u13_overflow
+	g._engine.inventory = u13_inv
+	g._engine.known_recipes = u13_known
+	g._engine.brewing = u13_brewing
+	g._engine._auto = u13_auto
+	g._engine.status_text = u13_status
+	g._spirit._companion_unlocked = u13_unlocked
+	g._spirit._companion_idle_clock = u13_idle
+	g._pages._experiment_filter = u13_filter
+	g._pages._experiment_a = u13_exp_a
+	g._pages._experiment_b = u13_exp_b
+	g._pages._spend_guard_ms = u13_guard
+	g._pages._spend_guard_ms.erase("hint")
+	g._pages._spend_guard_ms.erase("lens")
+	g._resonance._res_claim_at = u13_claim_at
+	g._engine._experiment_pending_pair.clear()
+	for u13_raw_p in u13_exp_pair:
+		g._engine._experiment_pending_pair.append(String(u13_raw_p))
+	g._pages._experiment_hint_ids.clear()
+	for u13_raw_h in u13_hint_ids:
+		g._pages._experiment_hint_ids.append(String(u13_raw_h))
+	Selftest.check("u13 state restored", g._engine.ether == u13_ether
+		and g._engine.ether_overflow == u13_overflow and g._engine.brewing == u13_brewing
+		and g._engine._auto == u13_auto and g._spirit._companion_unlocked == u13_unlocked
+		and g._engine.inventory.size() == u13_n_inv and g._engine.known_recipes.size() == u13_n_known
+		and g._pages._experiment_hint_ids.size() == u13_n_hint_ids
+		and g._resonance._res_claim_at == u13_claim_at)
+	Selftest.check("u13 guards released for later suites", not g._pages._spend_guard_ms.has("hint")
+		and not g._pages._spend_guard_ms.has("lens"))

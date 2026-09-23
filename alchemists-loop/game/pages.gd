@@ -21,6 +21,8 @@ var _bench_target := ""
 var _bench_on := false
 var _bench_clock := 0.0
 var _bench_busy := false
+# анти-спам кнопок траты: key → msec последнего разрешённого тапа (_spend_gate)
+var _spend_guard_ms: Dictionary = {}
 var _bench_rows: VBoxContainer
 var _bench_toggle_btn: Button
 var _bench_info: Label
@@ -1382,9 +1384,20 @@ func _build_spring_page(container: VBoxContainer) -> void:
 	_spring_info = g._label("", 14)
 	container.add_child(_spring_info)
 
+func _spend_gate(key: String, now_ms: int) -> bool:
+	# True — трата разрешена (окно свободно) и ключ взведён; False — повторный тап
+	# внутри SPEND_GUARD_MSEC. now_ms параметром, чтобы это было чисто тестируемо.
+	var last := int(_spend_guard_ms.get(key, -Game.SPEND_GUARD_MSEC))
+	if now_ms - last < Game.SPEND_GUARD_MSEC:
+		return false
+	_spend_guard_ms[key] = now_ms
+	return true
+
 func _hint() -> bool:
 	# Единственная подсказка — платный голос Светика. Она показывает направление,
 	# но никогда не раскрывает результат и не создаёт новую валюту.
+	if not _spend_gate("hint", Time.get_ticks_msec()):
+		return false
 	if not g._spirit._companion_unlocked:
 		g._engine.status_text = "Светик ещё не проснулся. Открой первую Искру — и он подскажет путь."
 		Sfx.error()
@@ -1413,6 +1426,8 @@ func _hint() -> bool:
 	_experiment_hint_ids.append(a)
 	_experiment_hint_ids.append(b)
 	_experiment_filter = "hint"
+	# окно траты фиксируется здесь, у самой кассы (входной вызов занял его этим же тиком)
+	_spend_gate("hint", Time.get_ticks_msec())
 	g._engine._spend_ether(Game.HINT_COST)
 	Analytics.track("hint_purchase", {"source": "svetik", "cost": Game.HINT_COST, "left": a, "right": b})
 	g._engine.status_text = "Светик шепчет: попробуй «%s» + «%s». Результат откроешь сам." % [
@@ -1655,6 +1670,8 @@ func _refresh_lens_targets() -> void:
 
 
 func _lens_reveal() -> bool:
+	if not _spend_gate("lens", Time.get_ticks_msec()):
+		return false
 	if g._engine.brewing or g._engine._auto:
 		return false
 	if g._engine._available_ether() < Game.LENS_COST:
@@ -1673,6 +1690,8 @@ func _lens_reveal() -> bool:
 		Sfx.error()
 		g._engine._refresh()
 		return false
+	# окно траты фиксируется здесь, у самой кассы (входной вызов занял его этим же тиком)
+	_spend_gate("lens", Time.get_ticks_msec())
 	g._engine._spend_ether(Game.LENS_COST)
 	var r: Dictionary = cand[randi() % cand.size()]
 	var a := String(r["a"])

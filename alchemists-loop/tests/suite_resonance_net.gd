@@ -295,3 +295,68 @@ static func run(g: Game) -> void:
 		and g._engine.ether == u11_ether and g._engine.ether_overflow == u11_ether_overflow
 		and g._retention._circle_disc == u11_circle_disc
 		and g._retention._circle_disc_day == u11_circle_disc_day)
+
+	# ============ U13 (T17): окно «claim отголосков в пути» ============
+	# Трата асинхронная, поэтому окно — не кадр, а round-trip до ответа мира.
+	# Гейт чистый (часы параметром). Net не задеваем: _claim_echoes вызывается
+	# только при заведомо выключенном мире, где отправка невозможна в принципе.
+	var u13_claim_at := g._resonance._res_claim_at
+	var u13_balance := g._resonance._res_balance
+	var u13_total := g._resonance._res_total
+	var u13_echo := g._resonance._res_echo_ether
+	var u13_cap := g._resonance._res_cap
+	var u13_desc := g._resonance._res_desc.duplicate(true)
+	var u13_desc_total := g._resonance._res_desc_total
+	var u13_top := g._resonance._res_top.duplicate(true)
+	var u13_apprentice := g._resonance._res_apprentice.duplicate(true)
+	var u13_ether := g._engine.ether
+	var u13_overflow := g._engine.ether_overflow
+	var u13_status := g._engine.status_text
+	var u13_net_on := g._online._net_enabled
+	var u13_device := g._online._device_id
+	g._resonance._res_claim_at = 0
+	Selftest.check("u13 claim gate arms", g._resonance._claim_gate(1000))
+	Selftest.check("u13 claim gate refuses while in flight", not g._resonance._claim_gate(1100)
+		and not g._resonance._claim_gate(1000 + Game.RESONANCE_CLAIM_GATE_MSEC - 1))
+	# self-heal: потерянный ответ не должен запирать claim до конца сессии
+	Selftest.check("u13 claim gate opens after round-trip window",
+		g._resonance._claim_gate(1000 + Game.RESONANCE_CLAIM_GATE_MSEC))
+	# ответ мира освобождает окно на обеих ветках
+	g._resonance._res_claim_at = 1234
+	g._resonance._on_net_echoes_claim_result({"ok": false})
+	Selftest.check("u13 claim window releases on failed reply", g._resonance._res_claim_at == 0)
+	g._resonance._res_claim_at = 1234
+	g._resonance._res_balance = 0
+	g._resonance._on_net_echoes_claim_result({"ok": true, "claimed": 0, "ether": 0})
+	Selftest.check("u13 claim window releases on ok reply", g._resonance._res_claim_at == 0
+		and g._engine.ether + g._engine.ether_overflow == u13_ether + u13_overflow)
+	# тап «Забрать» без мира: окно не взведено (гейт стоит после check'ов связи),
+	# очередь Net пуста — офлайн-тап не съедает 15 с и не порождает запрос
+	g._resonance._res_claim_at = 0
+	g._resonance._res_balance = 5
+	g._online._net_enabled = false
+	var u13_queue0 := Net._queue.size()
+	g._resonance._claim_echoes()
+	Selftest.check("u13 offline claim neither arms nor sends", g._resonance._res_claim_at == 0
+		and Net._queue.size() == u13_queue0 and Net._inflight.is_empty()
+		and g._resonance._res_balance == 5)
+	# restore: состояние резонанса и эфира — как до блока
+	g._resonance._res_claim_at = u13_claim_at
+	g._resonance._res_balance = u13_balance
+	g._resonance._res_total = u13_total
+	g._resonance._res_echo_ether = u13_echo
+	g._resonance._res_cap = u13_cap
+	g._resonance._res_desc = u13_desc
+	g._resonance._res_desc_total = u13_desc_total
+	g._resonance._res_top = u13_top
+	g._resonance._res_apprentice = u13_apprentice
+	g._engine.ether = u13_ether
+	g._engine.ether_overflow = u13_overflow
+	g._engine.status_text = u13_status
+	g._online._net_enabled = u13_net_on
+	g._online._device_id = u13_device
+	Selftest.check("u13 resonance state restored", g._resonance._res_balance == u13_balance
+		and g._resonance._res_total == u13_total
+		and g._resonance._res_claim_at == u13_claim_at
+		and g._engine.ether == u13_ether and g._engine.ether_overflow == u13_overflow
+		and g._online._net_enabled == u13_net_on and g._online._device_id == u13_device)
