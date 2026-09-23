@@ -379,6 +379,9 @@ func _load_game() -> void:
 	g._engine._experiment_count = clampi(int(data.get("experiment_count", 0)), 0, Game.EXPERIMENT_DAILY_LIMIT)
 	g._engine._experiment_last_at = maxf(0.0, float(data.get("experiment_last_at", 0.0)))
 	g._engine._experiment_pending_pair.clear()
+	# U11 (T14): загрузка сейва аннулирует pending-записи прежней сессии —
+	# их ответы не должны примениться к загруженному состоянию.
+	g._online._pending_requests.clear()
 	var saved_pending = data.get("experiment_pending_pair", [])
 	if saved_pending is Array and saved_pending.size() == 2:
 		var pending_a := String(saved_pending[0])

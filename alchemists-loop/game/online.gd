@@ -35,8 +35,23 @@ var _server_recipes: Array = []
 var _rating_list: VBoxContainer = null
 var _rating_status: Label = null
 var _rating_me: Label = null
-var _pending_pair: Array[String] = []
-var _pending_experiment := false
+var _pending_requests: Dictionary = {}
+# U11 (T14): корреляция запрос↔ответ. Pending хранится словарём
+# pair_key → {"a": String, "b": String, "experiment": bool, "at": int}
+# («at» — Time.get_ticks_msec на момент вставки). Инварианты:
+# * слот занимает ровно одна пара: пока словарь непуст, новая регистрация
+#   запрещена (_register_pending_pair → false — запрос НЕ отправляется),
+#   поэтому «enqueue-перехват» (ответ X применяется к pending Y) невозможен;
+# * обработчики Net извлекают запись по pair_key из сигнала и молча дропают
+#   ответы без записи (дубликаты, запоздалые, ответы после сброса мира);
+# * записи не живут вечно: PENDING_TTL_MSEC по времени вставки — тот же
+#   минимальный подход к устареванию, что CANDIDATE_COOLDOWN и 8-секундный
+#   дедлайн resume в этом файле (Net-таймаута здесь нет: сериализованная
+#   очередь даёт ровно один ответ на запрос; ответ может застрять только
+#   за поллингом событий/house-upload — TTL покрывает и это). Плюс полный
+#   clear при сбросах мира (main.gd `_init_new_game`, hub.gd `_do_prestige`,
+#   saves.gd `_load_game`).
+const PENDING_TTL_MSEC := 120000
 var _resume_experiment_wait := false
 var _resume_experiment_deadline := 0.0
 var _server_authors: Dictionary = {}
@@ -189,7 +204,10 @@ func _find_recipe(a: String, b: String) -> Dictionary:
 	return {}
 func _run_netbrew(a: String, b: String) -> void:
 	"""Отладка интеграции: прогнать пару через сеть как неизвестную."""
-	_pending_pair = [a, b]
+	# U11: dev-хук (--netbrew=) — запись pending ставится напрямую, в том
+	# числе перезаписью занятого слота: это ручной одиночный прогон запроса.
+	_pending_requests[g._pair_key(a, b)] = {
+		"a": a, "b": b, "experiment": false, "at": Time.get_ticks_msec()}
 	print("NETBREW start ", a, " + ", b)
 	Net.check_pair(a, b, _net_nick, _device_id)
 
@@ -220,6 +238,43 @@ func _set_status(text: String) -> void:
 	if g._pages != null and g._pages._experiment_status != null:
 		g._pages._experiment_status.text = text
 
+func _prune_pending_requests() -> void:
+	# U11 (T14): устаревание записей pending — по времени вставки (см. блок
+	# комментария у _pending_requests). Вызывается на каждой регистрации/изъятии.
+	var now := Time.get_ticks_msec()
+	for key in _pending_requests.keys():
+		if now - int((_pending_requests[key] as Dictionary).get("at", now)) > PENDING_TTL_MSEC:
+			_pending_requests.erase(String(key))
+
+func _register_pending_pair(a: String, b: String, is_experiment: bool) -> bool:
+	# True — слот свободен и занят этой парой; False — pending уже ждёт ответа
+	# (этой или другой пары) либо a/b пусты: запрос отправлять нельзя.
+	if a == "" or b == "":
+		return false
+	_prune_pending_requests()
+	if not _pending_requests.is_empty():
+		return false
+	_pending_requests[g._pair_key(a, b)] = {
+		"a": a, "b": b, "experiment": is_experiment, "at": Time.get_ticks_msec()}
+	return true
+
+func _take_pending_pair(pair_key: String) -> Dictionary:
+	# Изъекает pending-запись по pair_key из сигнала Net; {} — записи нет
+	# (дубликат/запоздалый ответ, ответ после сброса или prune).
+	_prune_pending_requests()
+	if not _pending_requests.has(pair_key):
+		return {}
+	var entry: Dictionary = _pending_requests[pair_key]
+	_pending_requests.erase(pair_key)
+	return entry
+
+func _experiment_pending_matches(a: String, b: String) -> bool:
+	# U11 (T14): закрывает задел U9 — сверка пары ответа с висящим экспериментом
+	# (порядок-insensitive, через ту же нормализацию _pair_key).
+	var pending: Array = g._engine._experiment_pending_pair
+	return pending.size() == 2 \
+		and g._pair_key(String(pending[0]), String(pending[1])) == g._pair_key(a, b)
+
 func _try_net_candidate(a: String, b: String) -> bool:
 	"""Попробовать проверить неизвестную пару на сервере. True — запрос ушёл."""
 	if not _net_enabled or not Net.is_available():
@@ -230,9 +285,13 @@ func _try_net_candidate(a: String, b: String) -> bool:
 		return false
 	if randf() < Game.CANDIDATE_CHANCE:
 		return false
+	# U11 (T14): не перезахватываем занятый слот. Пока другая пара ждёт ответа
+	# мира, запрос не отправляем и cooldown не тратим: игрок видит штатную
+	# реплику неудачной варки («Туман рассеялся… Возвращено N эфира»,
+	# core.gd `_brew`), пара остаётся неизвестной и запросится позже.
+	if not _register_pending_pair(a, b, false):
+		return false
 	g._engine._last_candidate_time[key] = now
-	_pending_pair = [a, b]
-	_pending_experiment = false
 	# The legacy cauldron path also uses the server's Experiment budget now, but
 	# keeps its existing refund/inventory semantics.
 	Net.check_pair(a, b, _net_nick, _device_id, true)
@@ -244,10 +303,19 @@ func _start_experiment(a: String, b: String) -> bool:
 		_set_status("Эксперимент требует связи с миром: новый элемент нельзя создать офлайн.")
 		Sfx.error()
 		return false
+	# U11 (T14): начинаем эксперимент только на свободный pending-слот — иначе
+	# реагенты были бы съедены, а ответ чужой пары применён к эксперименту.
+	_prune_pending_requests()
+	if not _pending_requests.is_empty():
+		_set_status("Мир ещё обрабатывает предыдущий запрос — эксперимент будет доступен через несколько секунд.")
+		Sfx.error()
+		return false
 	if not g._engine._begin_experiment(a, b):
 		return false
-	_pending_pair = [a, b]
-	_pending_experiment = true
+	# Слот пуст и иных потребителей в этом кадре нет — регистрация успешна by construction.
+	if not _register_pending_pair(a, b, true):
+		g._engine._finish_experiment_inputs(a, b, true)
+		return false
 	Net.check_pair(a, b, _net_nick, _device_id, true)
 	g._saves._save_game()
 	return true
@@ -258,8 +326,11 @@ func _resume_pending_experiment() -> void:
 	if Net.is_available():
 		var a := String(g._engine._experiment_pending_pair[0])
 		var b := String(g._engine._experiment_pending_pair[1])
-		_pending_pair = [a, b]
-		_pending_experiment = true
+		# U11: resume — авторитетный путь (запись эксперимента восстановлена
+		# из сейва): осиротевшие записи прошлой сессии сбрасываем, их ответы
+		# будут проигнорированы без pending-записи.
+		_pending_requests.clear()
+		_register_pending_pair(a, b, true)
 		_resume_experiment_wait = false
 		_set_status("Продолжаем незавершённый эксперимент: %s + %s…" % [_item_name(a), _item_name(b)])
 		Net.check_pair(a, b, _net_nick, _device_id, true)
@@ -287,10 +358,16 @@ func _experiment_outcome(out: Dictionary, a: String, b: String, created: bool = 
 	# U9 (T12): поздний ответ эксперимента после сброса мира (престиж/новая игра
 	# чистят _experiment_pending_pair) не должен регистрировать рецепты, дарить
 	# вещества и списывать свежий подарочный запас — дропаем без эффектов.
-	# Корреляция конкретной пары (pair_key) — задел на U11 (T14).
 	if g._engine._experiment_pending_pair.size() != 2:
 		print("NETEXPERIMENT stale pair=", a, " + ", b)
 		_set_status("Поздний ответ эксперимента проигнорирован: лаборатория уже была сброшена.")
+		return
+	# U11 (T14): задел U9 закрыт — поздний ответ СТАРОЙ пары, пока висит новый
+	# эксперимент, тоже дропается (сверка pair_key, defense-in-depth:
+	# обработчики Net проверяют то же до вызова).
+	if not _experiment_pending_matches(a, b):
+		print("NETEXPERIMENT mismatch pair=", a, " + ", b)
+		_set_status("Поздний ответ эксперимента проигнорирован: он не про текущую пару.")
 		return
 	var slug := _apply_server_element(out)
 	if slug == "":
@@ -322,13 +399,19 @@ func _experiment_outcome(out: Dictionary, a: String, b: String, created: bool = 
 
 func _on_net_pair_result(pair_key: String, result: Dictionary) -> void:
 	print("NETPAIR status=", g._clean_str(result.get("status", "")), " found=", result.get("found", false))
-	if _pending_pair.size() != 2:
+	# U11 (T14): ответ привязан к pair_key запроса (net.gd `_dispatch`).
+	# Записи pending нет — дубликат/запоздалый ответ молча дропаем.
+	var entry := _take_pending_pair(pair_key)
+	if entry.is_empty():
+		print("NETPAIR dropped: no pending entry for pair=", pair_key)
 		return
-	var a := _pending_pair[0]
-	var b := _pending_pair[1]
-	var is_experiment := _pending_experiment
-	_pending_pair.clear()
-	_pending_experiment = false
+	var a := String(entry["a"])
+	var b := String(entry["b"])
+	var is_experiment := bool(entry["experiment"])
+	if is_experiment and not _experiment_pending_matches(a, b):
+		print("NETEXPERIMENT stale pair=", a, " + ", b)
+		_set_status("Поздний ответ эксперимента проигнорирован: он не про текущую пару.")
+		return
 	if result.get("ok", false) == true and result.get("found", false) == true:
 		if is_experiment:
 			_experiment_outcome(result.get("out", {}) as Dictionary, a, b)
@@ -338,14 +421,25 @@ func _on_net_pair_result(pair_key: String, result: Dictionary) -> void:
 			_register_server_recipe(a, b, slug)
 			g._engine.known_recipes[g._pair_key(a, b)] = true
 			g._retention._fair_report_brew(a, b)
+			# U11 (T15): первое ЛОКАЛЬНОЕ получение мир-открытого вещества теперь
+			# проходит через _grant_first_open — как обычная локальная first-open
+			# в core.gd `_commit_brew` и как discover-ветка ниже: rarity-пошлина,
+			# tier-учёт гильдии, вехи атласа, сброс _layer_cache. Серверные
+			# награды первооткрытия (_ach_world_first, «ПЕРВООТКРЫТИЕ») здесь
+			# НЕ начисляются — их даёт только created/не-reused путь, так что
+			# двойного счёта достижений нет.
+			var first_open := not g._engine.inventory.has(slug)
 			g._engine.inventory[slug] = int(g._engine.inventory.get(slug, 0)) + 1
+			var first_milestones: Array = []
+			if first_open:
+				first_milestones = g._engine._grant_first_open(slug)
 			var world_author := g._clean_str((result.get("out", {}) as Dictionary).get("author", ""))
 			if world_author != "":
 				_server_authors[slug] = world_author
 			_set_status("Эта пара уже открыта в мире: %s!" % _item_name(slug))
 			_rebuild_world_grid()
 			g._engine._refresh()
-			g._show_discovery_popup(slug, a, b)
+			g._show_discovery_popup(slug, a, b, first_milestones)
 		else:
 			_set_status("Туман рассеялся… (мир не ответил внятно)")
 	elif String(result.get("status", "")) == "not_combinable":
@@ -356,9 +450,11 @@ func _on_net_pair_result(pair_key: String, result: Dictionary) -> void:
 		_set_status("Туман рассеялся… эти вещества не сочетаются.")
 		g._spirit._companion_react("fail", "")
 	elif String(result.get("status", "")) == "candidate" or (result.get("ok", false) == true and result.get("found", false) == false):
-		_pending_pair = [a, b]
-		_pending_experiment = is_experiment
-		Net.discover(a, b, _net_nick, _device_id, is_experiment)
+		# Слот свободен (запись извлечена выше) — занимаем его заново под
+		# discover-фазу той же пары; не занял (гонка/prune) — молча не
+		# отправляем: пара останется кандидатом и повторится по cooldown.
+		if _register_pending_pair(a, b, is_experiment):
+			Net.discover(a, b, _net_nick, _device_id, is_experiment)
 	else:
 		var msg := g._clean_str(result.get("message", ""))
 		if is_experiment:
@@ -369,20 +465,34 @@ func _on_net_pair_result(pair_key: String, result: Dictionary) -> void:
 		_set_status("Мир не ответил: %s" % msg if msg != "" else "Туман рассеялся… (мир недоступен)")
 
 func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
-	var a := ""
-	var b := ""
-	var is_experiment := _pending_experiment
-	if _pending_pair.size() == 2:
-		a = _pending_pair[0]
-		b = _pending_pair[1]
-		_pending_pair.clear()
-	_pending_experiment = false
 	print("NETDISCOVER status=", g._clean_str(result.get("status", "")))
 	var status := String(result.get("status", ""))
 	var disc: Dictionary = {}
 	var disc_raw = result.get("discovery", {})
 	if typeof(disc_raw) == TYPE_DICTIONARY:
 		disc = disc_raw
+	# U11 (T14): корреляция по pair_key из сигнала; записи pending нет —
+	# дропаем. Для created/known сервер эхом кладёт пару в discovery
+	# (server.py: DiscoveryData.a/b/pair_key) — требуем непустых a/b, равных
+	# pending-записи (порядок-insensitive через _pair_key). Раньше пустые a/b
+	# дарили вещество «ни за что».
+	var entry := _take_pending_pair(pair_key)
+	if entry.is_empty():
+		print("NETDISCOVER dropped: no pending entry for pair=", pair_key)
+		return
+	var a := String(entry["a"])
+	var b := String(entry["b"])
+	var is_experiment := bool(entry["experiment"])
+	if status == "created" or status == "known":
+		var da := g._clean_str(disc.get("a", ""))
+		var db := g._clean_str(disc.get("b", ""))
+		if da == "" or db == "" or g._pair_key(da, db) != pair_key:
+			print("NETDISCOVER dropped: discovery pair mismatch for pair=", pair_key)
+			return
+	if is_experiment and not _experiment_pending_matches(a, b):
+		print("NETEXPERIMENT stale pair=", a, " + ", b)
+		_set_status("Поздний ответ эксперимента проигнорирован: он не про текущую пару.")
+		return
 	# U6-fix (I-1): сервер возвращает status="created" и для reused (дедуп
 	# имени: пара привязана к уже существующему веществу) — это НЕ
 	# первооткрытие, серверных наград в таком ответе нет. Клиентские награды
@@ -390,15 +500,14 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 	# reused-флаг из discovery, иначе дубль-имя фармит «первооткрытия».
 	var reused := bool(disc.get("reused", false))
 	if status == "created" or status == "known":
-		if is_experiment and a != "" and b != "":
+		if is_experiment:
 			_experiment_outcome(disc, a, b, status == "created" and not reused)
 			return
 		var slug := _apply_server_element(disc)
 		if slug != "":
-			if a != "" and b != "":
-				_register_server_recipe(a, b, slug)
-				g._engine.known_recipes[g._pair_key(a, b)] = true
-				g._retention._fair_report_brew(a, b)
+			_register_server_recipe(a, b, slug)
+			g._engine.known_recipes[g._pair_key(a, b)] = true
+			g._retention._fair_report_brew(a, b)
 			var first_open := not g._engine.inventory.has(slug)
 			g._engine.inventory[slug] = int(g._engine.inventory.get(slug, 0)) + 1
 			var first_milestones: Array = []
@@ -437,7 +546,7 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 				_set_status("ЕЖЕДНЕВНАЯ ЦЕЛЬ ВЫПОЛНЕНА: +%d эфира!" % Game.CHALLENGE_REWARD)
 				g._hub._log_event("Ежедневная цель «%s» выполнена: +%d эфира" % [ch_target_name, Game.CHALLENGE_REWARD])
 				g._show_challenge_win_popup(slug, ch_target_name, a, b, ch_first)
-			elif a != "" and b != "":
+			else:
 				var rr := g._engine._rarity_of(slug)
 				var sub2 := "%s + %s → %s\nавтор: %s" % [_item_name(a), _item_name(b), _item_name(slug), author]
 				var dsc2 := _item_desc(slug)
@@ -450,7 +559,7 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 			if status == "created" and not reused:
 				g._retention._discover_vein_bonus(result)
 	elif status == "not_combinable":
-		if is_experiment and a != "" and b != "":
+		if is_experiment:
 			g._engine._experiment_failed(a, b)
 			return
 		g._engine._rejected_pairs[pair_key] = true
@@ -458,7 +567,7 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 		g._spirit._companion_react("fail", "")
 	else:
 		var msg := g._clean_str(result.get("message", ""))
-		if is_experiment and a != "" and b != "":
+		if is_experiment:
 			g._engine._finish_experiment_inputs(a, b, true)
 			Analytics.track("experiment_result", {"left": a, "right": b, "result": "unavailable"})
 			_set_status("Эксперимент отложен: %s" % (msg if msg != "" else "мир недоступен"))

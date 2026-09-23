@@ -124,3 +124,130 @@ static func run(g: Game) -> void:
 	g._engine._spring_tick(Game.SPRING_INTERVAL + 0.01)
 	Selftest.check("spring drop", int(g._engine.inventory.get("water", 0)) == a_before + 1)
 	g._engine.spring_on = false
+	# ============ U11 (T14/T15): корреляция запрос↔ответ и grant world-opened ============
+	# Обработчики дёргаются напрямую синтезированными сигналами по pair_key;
+	# pending заполняется вызовами _register_pending_pair — Net не трогаем
+	# (герметично, без сети). Снимок затрагиваемого состояния — в конце restore.
+	var u11_inv := g._engine.inventory.duplicate(true)
+	var u11_known := g._engine.known_recipes.duplicate(true)
+	var u11_rejected := g._engine._rejected_pairs.duplicate(true)
+	var u11_recipes := g.RECIPES.duplicate(true)
+	var u11_srv_recipes := g._online._server_recipes.duplicate(true)
+	var u11_srv_authors := g._online._server_authors.duplicate(true)
+	var u11_srv_els := g._online._server_elements.duplicate(true)
+	var u11_srv_layers := g._online._server_layers.duplicate(true)
+	var u11_items := g.ITEMS.duplicate(true)
+	var u11_colors := g._item_colors.duplicate(true)
+	var u11_layer_cache := g._engine._layer_cache.duplicate(true)
+	var u11_pending := g._online._pending_requests.duplicate(true)
+	var u11_exp_pair := g._engine._experiment_pending_pair.duplicate()
+	var u11_first_opens := g._engine._first_open_calls
+	g._online._pending_requests.clear()
+	# (1) «enqueue-перехват»: пока X ждёт ответа, Y слот не перезахватывает;
+	# поздний ответ X применяет награду строго своей паре.
+	var u11_kx := g._pair_key("fire", "air")
+	var u11_ky := g._pair_key("earth", "air")
+	var u11_ky_before := g._engine.known_recipes.has(u11_ky)
+	Selftest.check("t14 register first pair", g._online._register_pending_pair("fire", "air", false)
+		and g._online._pending_requests.size() == 1)
+	Selftest.check("t14 pending not rehooked", not g._online._register_pending_pair("earth", "air", false)
+		and g._online._pending_requests.size() == 1 and g._online._pending_requests.has(u11_kx))
+	g._online._on_net_pair_result(u11_kx, {"ok": true, "found": true, "status": "known",
+		"out": {"slug": "u11_x_out", "name": "U11-X", "color": "#44aa55", "glyph": "fire", "layer": 1}})
+	Selftest.check("t14 late response grants only its pair", int(g._engine.inventory.get("u11_x_out", 0)) == 1
+		and g._engine.known_recipes.has(u11_kx)
+		and g._engine.known_recipes.has(u11_ky) == u11_ky_before
+		and g._online._pending_requests.is_empty())
+	# (2) «поздний дубликат»: ответ с неизвестным pair_key (и без записи pending)
+	# дропается без начислений — и в pair-, и в discover-фазе.
+	g._online._on_net_pair_result(u11_kx, {"ok": true, "found": true, "status": "known",
+		"out": {"slug": "u11_dup", "name": "U11-дубль", "color": "#aa4455", "glyph": "fire", "layer": 1}})
+	g._online._on_net_discover_result(g._pair_key("bogus1", "bogus2"), {"status": "known",
+		"discovery": {"slug": "u11_dup2", "name": "U11-дубль2", "color": "#5544aa", "glyph": "fire",
+			"layer": 1, "a": "bogus1", "b": "bogus2", "author": "N"}})
+	Selftest.check("t14 late duplicate dropped", not g._engine.inventory.has("u11_dup")
+		and not g._engine.inventory.has("u11_dup2") and not g.ITEMS.has("u11_dup")
+		and not g._engine.known_recipes.has(g._pair_key("bogus1", "bogus2")))
+	# (3) discover с пустыми/чужими a/b дропается (раньше пустые a/b дарили
+	# вещество «ни за что»); согласованные a/b — гран своей паре.
+	Selftest.check("t14 register for discover", g._online._register_pending_pair("fire", "air", false))
+	g._online._on_net_discover_result(u11_kx, {"status": "created",
+		"discovery": {"slug": "u11_bad1", "name": "U11-пусто", "color": "#112233", "glyph": "fire",
+			"layer": 1, "a": "", "b": "", "author": "N"}})
+	Selftest.check("t14 discover empty a/b dropped", not g._engine.inventory.has("u11_bad1")
+		and not g.ITEMS.has("u11_bad1"))
+	Selftest.check("t14 re-register after drop", g._online._register_pending_pair("fire", "air", false))
+	g._online._on_net_discover_result(u11_kx, {"status": "created",
+		"discovery": {"slug": "u11_bad2", "name": "U11-чужая", "color": "#112233", "glyph": "fire",
+			"layer": 1, "a": "water", "b": "steam", "author": "N"}})
+	Selftest.check("t14 discover mismatched a/b dropped", not g._engine.inventory.has("u11_bad2")
+		and not g.ITEMS.has("u11_bad2"))
+	Selftest.check("t14 re-register third", g._online._register_pending_pair("fire", "air", false))
+	g._online._on_net_discover_result(u11_kx, {"status": "known",
+		"discovery": {"slug": "u11_ok", "name": "U11-ок", "color": "#22aa88", "glyph": "fire",
+			"layer": 1, "a": "air", "b": "fire", "author": "N"}})
+	Selftest.check("t14 discover grants its pair", int(g._engine.inventory.get("u11_ok", 0)) == 1
+		and g._engine.known_recipes.has(u11_kx))
+	# (4) T15-контракт: found=true (пара уже открыта в мире) при ПЕРВОМ
+	# локальном получении проходит _grant_first_open ровно один раз; вторая
+	# доставка той же пары — только +1 в стек, без повторного гранта.
+	var u11_fo0 := g._engine._first_open_calls
+	var u11_kz := g._pair_key("water", "earth")
+	Selftest.check("t15 register world-opened pair", g._online._register_pending_pair("water", "earth", false))
+	g._online._on_net_pair_result(u11_kz, {"ok": true, "found": true, "status": "known",
+		"out": {"slug": "u15_world", "name": "U15-мир", "color": "#3388aa", "glyph": "fire", "layer": 1}})
+	Selftest.check("t15 first acquisition grants first-open", int(g._engine.inventory.get("u15_world", 0)) == 1
+		and g._engine._first_open_calls == u11_fo0 + 1)
+	Selftest.check("t15 re-register same pair", g._online._register_pending_pair("water", "earth", false))
+	g._online._on_net_pair_result(u11_kz, {"ok": true, "found": true, "status": "known",
+		"out": {"slug": "u15_world", "name": "U15-мир", "color": "#3388aa", "glyph": "fire", "layer": 1}})
+	Selftest.check("t15 second acquisition no re-grant", int(g._engine.inventory.get("u15_world", 0)) == 2
+		and g._engine._first_open_calls == u11_fo0 + 1)
+	# (5) U9-прикрытый зазор: поздний ответ СТАРОЙ экспериментальной пары, пока
+	# висит новый эксперимент, дропается в обеих фазах (рецепт/вещество/
+	# pending эксперимента не тронуты).
+	g._engine._experiment_pending_pair = ["fire", "water"]
+	var u11_kold := g._pair_key("u14_old_a", "u14_old_b")
+	Selftest.check("t14 register orphan experiment", g._online._register_pending_pair("u14_old_a", "u14_old_b", true))
+	g._online._on_net_pair_result(u11_kold, {"ok": true, "found": true, "status": "known",
+		"out": {"slug": "u14_ghost", "name": "U14-призрак", "color": "#112233", "glyph": "fire", "layer": 1}})
+	Selftest.check("t14 old-pair experiment response dropped", not g.ITEMS.has("u14_ghost")
+		and not g._engine.inventory.has("u14_ghost") and not g._engine.known_recipes.has(u11_kold)
+		and g._engine._experiment_pending_pair == ["fire", "water"]
+		and g._online._pending_requests.is_empty())
+	Selftest.check("t14 re-register orphan experiment", g._online._register_pending_pair("u14_old_a", "u14_old_b", true))
+	g._online._on_net_discover_result(u11_kold, {"status": "created",
+		"discovery": {"slug": "u14_ghost2", "name": "U14-призрак2", "color": "#112233", "glyph": "fire",
+			"layer": 1, "a": "u14_old_a", "b": "u14_old_b", "author": "N"}})
+	Selftest.check("t14 old-pair discover response dropped", not g.ITEMS.has("u14_ghost2")
+		and not g._engine.inventory.has("u14_ghost2")
+		and g._engine._experiment_pending_pair == ["fire", "water"])
+	# TTL- pruning: запись старше PENDING_TTL_MSEC не переживает следующее
+	# обращение (форсим «возраст» прямой записью at).
+	g._online._register_pending_pair("fire", "air", false)
+	var u11_tkey := g._pair_key("fire", "air")
+	var u11_stale: Dictionary = g._online._pending_requests[u11_tkey]
+	u11_stale["at"] = Time.get_ticks_msec() - g._online.PENDING_TTL_MSEC - 1000
+	g._online._on_net_pair_result(u11_tkey, {"ok": true, "found": true, "status": "known",
+		"out": {"slug": "u14_ttl", "name": "U14-TTL", "color": "#112233", "glyph": "fire", "layer": 1}})
+	Selftest.check("t14 stale pending pruned", not g._engine.inventory.has("u14_ttl")
+		and g._online._pending_requests.is_empty())
+	# restore: мир после блока U11 — точно таким же, как до него.
+	g._engine.inventory = u11_inv
+	g._engine.known_recipes = u11_known
+	g._engine._rejected_pairs = u11_rejected
+	g.RECIPES = u11_recipes
+	g._online._server_recipes = u11_srv_recipes
+	g._online._server_authors = u11_srv_authors
+	g._online._server_elements = u11_srv_els
+	g._online._server_layers = u11_srv_layers
+	g.ITEMS = u11_items
+	g._item_colors = u11_colors
+	g._engine._layer_cache = u11_layer_cache
+	g._online._pending_requests = u11_pending
+	g._engine._first_open_calls = u11_first_opens
+	g._engine._experiment_pending_pair.clear()
+	for u11_raw_e in u11_exp_pair:
+		g._engine._experiment_pending_pair.append(String(u11_raw_e))
+	Selftest.check("u11 state restored", g._engine.inventory == u11_inv and g.ITEMS == u11_items
+		and g._online._pending_requests.is_empty())

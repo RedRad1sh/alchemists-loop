@@ -724,6 +724,9 @@ func _init_new_game() -> bool:
 	_engine._experiment_count = 0
 	_engine._experiment_last_at = 0.0
 	_engine._experiment_pending_pair.clear()
+	# U11 (T14): сброс мира аннулирует и мир-запросы в полёте — их ответы
+	# больше не должны применяться к новому миру (иначе записи ждали бы TTL).
+	_online._pending_requests.clear()
 	_engine._craft_job.clear()
 	_engine._blueprints.clear()
 	_engine.attempts = 0

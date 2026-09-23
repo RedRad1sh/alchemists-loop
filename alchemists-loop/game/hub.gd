@@ -564,6 +564,8 @@ func _do_prestige() -> void:
 	# и молча выходят без коммита; bookkeeping эксперимента не переживает сброс.
 	g._engine.brew_epoch += 1
 	g._engine._experiment_pending_pair.clear()
+	# U11 (T14): престиж аннулирует и pending-записи мир-запросов в полёте.
+	g._online._pending_requests.clear()
 	g._engine._source_taps = 0
 	g._engine.spring_on = false
 	g._engine.spring_source = "water"

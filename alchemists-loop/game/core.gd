@@ -61,6 +61,11 @@ var _collect_all_ms := 0  # антиспам кнопки «Все»
 var _collect_last_gain := 1
 var _gift_clock := 0.0
 var _milestones_done: Dictionary = {}
+# U11 (T15): selftest-наблюдаемость `_grant_first_open` — в selftest сам грант
+# no-op (нижний гейт функции сохраняет детерминизм сюит), но счётчик вызовов
+# позволяет контрактным тестам found/discover-веток проверить «гран ровно один
+# раз на первое локальное получение». Не сериализуется, на геймплей не влияет.
+var _first_open_calls := 0
 var sage_gold := 0
 var _last_pair: Array = []
 var _repeat_btn: Button = null
@@ -1098,6 +1103,7 @@ func _check_milestones() -> Array:
 
 func _grant_first_open(slug: String) -> Array:
 	# награда за первое появление вещества в инвентаре; вернёт новые вехи
+	_first_open_calls += 1  # U11 (T15): см. комментарий у поля
 	if g._selftest or not g.ITEMS.has(slug):
 		return []
 	_layer_cache.erase(slug)
