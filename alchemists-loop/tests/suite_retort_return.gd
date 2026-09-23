@@ -93,3 +93,37 @@ static func run(g: Game) -> void:
 	g._saves._load_game()
 	Selftest.check("return persist", g._last_rank == 14 and g._online._world_total_seen == 60)
 	g._saves._return_elapsed = 0.0
+	# ============ U16 (T20): обещание про кап реторты — из констант, а не с потолка ============
+	# Текст строится в _build_retort_page; контейнер в дерево не ставим — билдер чистый
+	# (только add_child + _refresh_retort_page по своим нодам). Но билдер ПЕРЕЗАПИСЫВАЕТ
+	# поля вида (_retort_ui/_retort_head/_retort_cards/_retort_ess/_retort_desc) ссылками на
+	# эти ноды, а _refresh_retort_page проверяет только == null, значит после free() любой
+	# поздний refresh (pages.gd:1770, main.gd:532) читал бы freed-объекты. Снимаем все пять
+	# полей и возвращаем обратно.
+	var u16_ui0 := g._retort._retort_ui.duplicate(true)
+	var u16_head0: Label = g._retort._retort_head
+	var u16_cards0: VBoxContainer = g._retort._retort_cards
+	var u16_ess0: Label = g._retort._retort_ess
+	var u16_desc0: Label = g._retort._retort_desc
+	var u16_box := VBoxContainer.new()
+	g._retort._build_retort_page(u16_box)
+	Selftest.check("u16 retort desc is built and non-empty", g._retort._retort_desc != null
+		and g._retort._retort_desc.text.length() > 0)
+	var u16_text := "" if g._retort._retort_desc == null else g._retort._retort_desc.text
+	# невакуумность: старые числа отличались от фактических констант (было «10» и «+2»),
+	# иначе проверка «устаревших цифр нет» ничего не доказывает
+	Selftest.check("u16 constants differ from the stale claim", Game.RETORT_CAP_FIRST != 10
+		and Game.RETORT_CAP_EACH != 2)
+	Selftest.check("u16 retort text carries the live constant values",
+		u16_text.contains("Первые %d" % Game.RETORT_CAP_FIRST)
+		and u16_text.contains("дают +%d к капу" % Game.RETORT_CAP_EACH))
+	Selftest.check("u16 stale numbers gone from the promise", not u16_text.contains("10 уникальных")
+		and not u16_text.contains("+2 к капу"))
+	u16_box.free()
+	g._retort._retort_ui = u16_ui0
+	g._retort._retort_head = u16_head0
+	g._retort._retort_cards = u16_cards0
+	g._retort._retort_ess = u16_ess0
+	g._retort._retort_desc = u16_desc0
+	Selftest.check("u16 retort view fields restored", g._retort._retort_ui == u16_ui0
+		and g._retort._retort_head == u16_head0 and g._retort._retort_desc == u16_desc0)

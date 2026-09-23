@@ -8,6 +8,7 @@ var g: Game
 var _retort_slots: Array = []
 var _essences: Dictionary = {}
 var _retort_head: Label = null
+var _retort_desc: Label = null
 var _retort_cards: VBoxContainer = null
 var _retort_ess: Label = null
 var _retort_ui: Array = []
@@ -189,9 +190,10 @@ func _build_retort_page(container: VBoxContainer) -> void:
 	col.add_theme_constant_override("separation", 8)
 	pad.add_child(col)
 	col.add_child(g._label("Ночная реторта", 17))
-	var desc := g._label("Положи вещество на ночь — к утру созреет эссенция. Первые 10 уникальных эссенций дают +2 к капу навсегда каждая.", 12)
-	desc.add_theme_color_override("font_color", Color(0.62, 0.74, 0.82))
-	col.add_child(desc)
+	var cap_note := "Первые %d уникальных эссенций дают +%d к капу навсегда каждая." % [Game.RETORT_CAP_FIRST, Game.RETORT_CAP_EACH]
+	_retort_desc = g._label("Положи вещество на ночь — к утру созреет эссенция. " + cap_note, 12)
+	_retort_desc.add_theme_color_override("font_color", Color(0.62, 0.74, 0.82))
+	col.add_child(_retort_desc)
 	_retort_head = g._label("", 13)
 	col.add_child(_retort_head)
 	_retort_cards = VBoxContainer.new()

@@ -103,10 +103,10 @@ func _orders_check(output: String) -> void:
 		g._hub._log_event("Заказ гильдии: «%s» выполнен (+%d ⚡)" % [g._online._item_name(output), b])
 		Sfx.divide()
 		if _order_done.size() == _order_targets_cache.size():
-			g._engine._grant_ether(100, "guild_orders_complete")
+			g._engine._grant_ether(Game.GUILD_ALL_BONUS, "guild_orders_complete")
 			g._spirit._companion_gain(5)
-			g._online._set_status("ВСЕ ЗАКАЗЫ ГИЛЬДИИ ВЫПОЛНЕНЫ: +100 ⚡")
-			g._hub._log_event("Все заказы гильдии выполнены: +100 ⚡")
+			g._online._set_status("ВСЕ ЗАКАЗЫ ГИЛЬДИИ ВЫПОЛНЕНЫ: +%d ⚡" % Game.GUILD_ALL_BONUS)
+			g._hub._log_event("Все заказы гильдии выполнены: +%d ⚡" % Game.GUILD_ALL_BONUS)
 			Sfx.legendary()
 		g._saves._save_game()
 		_refresh_quest_label()

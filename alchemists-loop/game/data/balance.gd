@@ -101,6 +101,7 @@ const CRAFT_PLAN_HARD_LIMIT_OPERATIONS := 200
 # silently overflowing the target stack.
 const CRAFT_INVENTORY_STACK_CAP := 1000000
 const BLUEPRINT_DISCOUNT := 0.90
+const GUILD_ALL_BONUS := 100  # эфир за выполнение всех заказов гильдии подряд
 
 const CANDIDATE_CHANCE := 0.05    # 5%: «туман» без запроса к серверу
 const CANDIDATE_COOLDOWN := 60.0  # сек между проверками одной пары

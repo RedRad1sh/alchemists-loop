@@ -1165,8 +1165,11 @@ func _auto_craft(item_id: String) -> void:
 	g._confirm_l1.text = g._online._item_name(item_id)
 	g._confirm_l2.text = _base_spend_text(plan)
 	var warning_note := "⚠ длинная цепочка · " if int(plan["total"]) >= Game.CRAFT_PLAN_WARNING_OPERATIONS else ""
+	var blueprint_note := ""
+	if _blueprints.has(item_id):
+		blueprint_note = "Чертёж: −%d%% · " % [int(round((1.0 - Game.BLUEPRINT_DISCOUNT) * 100.0))]
 	g._confirm_l3.text = "%s%sВарок: %d · всего эфир: %d · сейчас этап: %d ⚡ · можно продолжить позже" % [
-		warning_note, "Чертёж: −10% · " if _blueprints.has(item_id) else "", int(plan["total"]), ether_need, stage_cost]
+		warning_note, blueprint_note, int(plan["total"]), ether_need, stage_cost]
 	g._confirm_dim.visible = true
 	g._confirm.visible = true
 	Sfx.click()
