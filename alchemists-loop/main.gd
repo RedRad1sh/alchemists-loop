@@ -233,6 +233,11 @@ var _font_bold: Font = null
 var _font_xbold: Font = null
 var _ui_tex: Dictionary = {}   # path -> Texture2D (кэш)
 var _tabs_ref: TabContainer
+# F1 (раунд правки U18): признак достроенного UI. tabs.tab_changed срабатывает
+# синхронно ещё во время _make_page(...), когда попапы не построены, — ветка
+# interstitial в _on_tab_changed допускается только после достройки (true
+# выставляется в конце _build_ui).
+var _ui_ready := false
 var _source_col: HBoxContainer
 var _popup: Control
 var _popup_dim: ColorRect = null
@@ -922,6 +927,9 @@ func _build_ui() -> void:
 	_home._apply_cosmetic()
 	_update_brew_bar_visibility()
 	_spirit._refresh_companion_visible()
+	# Все поверхности построены — граница навигации имеет право показывать
+	# interstitial (см. _ui_ready в _on_tab_changed).
+	_ui_ready = true
 
 func _fit_ui_root_after_layout(host: Control, root: Control) -> void:
 	# Два кадра дают всем динамическим страницам посчитать minimum size;
@@ -1030,6 +1038,17 @@ func _on_tab_changed(index: int) -> void:
 		_online._refresh_rating()
 	elif index == 5:
 		_pages._ensure_modes()
+	# Единственная граница, где interstitial показывается: смена вкладки при
+	# полностью закрытых модалах, достроенном UI и незанятой варке/верстаке.
+	# Варка и церемонии открытия под запретом
+	# (docs/android/PLUGIN_SETUP.md §4, пункт про interstitial), как и показ
+	# поверх открытого окна; частотные guardrails — в Monetization.can_show_interstitial().
+	# _ui_ready — собственный объяснимый гейт против первого синхронного tab_changed
+	# во время построения вкладок: без него от показа спасал бы только побочный
+	# Monetization._ads == null (Monetization._boot ещё не отработал).
+	if not _ui_ready or _modal_open_for_ads():
+		return
+	Monetization.show_interstitial("navigation")
 
 func _refetch_world() -> void:
 	var now := Time.get_ticks_msec()
@@ -1430,6 +1449,62 @@ func _close_top_modal() -> bool:
 		# Палитра и гостевой домик — самые нижние по z и одновременно видны
 		# быть не могут, порядок этих двух веток не важен.
 		_home._close_house_popup()
+		return true
+	return false
+
+# Read-only перечисление ровно тех поверхностей, что закрывает
+# _close_top_modal(): interstitial не должен появляться поверх открытого модала,
+# во время автоварки (_engine._auto — верхняя ветка того же порядка), ручной
+# варки (_engine.brewing: core.gd:14, true в :695, false в :711/:765) и
+# ручного крафта на верстаке (_pages._bench_busy — core.gd трактует её занятой
+# вместе с варкой: :407, :666, :1208, :1371). Церемония открытия идёт внутри
+# _popup и покрыта модальной веткой ниже. Каждая поверхность защищена
+# проверкой на
+# null по образцу уже существующих строк предиката: tab_changed эмитится
+# синхронно во время построения вкладок, когда часть попапов ещё null
+# (сам показ при этом гейтится _ui_ready в _on_tab_changed).
+# Предикат из tests/suite_journal_misc.gd переиспользовать нельзя (он тестовый),
+# поэтому у продакшена свой, проверяемый из selftest напрямую.
+func _modal_open_for_ads() -> bool:
+	if _engine._auto:
+		return true
+	if _engine.brewing:
+		return true
+	if _pages != null and _pages._bench_busy:
+		return true
+	if _shop != null and _shop._consent_popup != null and _shop._consent_popup.visible:
+		return true
+	if _home != null and _home._decor_popup != null and _home._decor_popup.visible:
+		return true
+	if _shop != null and _shop._popup != null and _shop._popup.visible:
+		return true
+	if _popup != null and _popup.visible:
+		return true
+	if _confirm != null and _confirm.visible:
+		return true
+	if _saves._return_popup != null and _saves._return_popup.visible:
+		return true
+	if _hub._settings_popup != null and _hub._settings_popup.visible:
+		return true
+	if _hub._craftable_popup != null and _hub._craftable_popup.visible:
+		return true
+	if _retort._retort_popup != null and _retort._retort_popup.visible:
+		return true
+	if _hub._journal_popup != null and _hub._journal_popup.visible:
+		return true
+	if _hub._prestige_popup != null and _hub._prestige_popup.visible:
+		return true
+	if _progress_ui._prog_popup != null and _progress_ui._prog_popup.visible:
+		return true
+	if _hub._profile_popup != null and _hub._profile_popup.visible:
+		return true
+	if _hub._up_popup != null and _hub._up_popup.visible:
+		return true
+	if _spirit._companion_dlg != null and _spirit._companion_dlg.visible:
+		return true
+	if _home != null and _home._color_picker != null and _home._color_picker.visible:
+		return true
+	if _home != null and _home._house_popup != null and _home._house_popup.visible:
 		return true
 	return false
 

@@ -131,7 +131,7 @@ func _build_consent_popup() -> void:
 	var allow := g._small_button("Разрешить аналитику и персональную рекламу", Vector2(0, 50), 1)
 	allow.pressed.connect(_consent_allow)
 	col.add_child(allow)
-	var contextual := g._small_button("Только необходимое (без персонализации)", Vector2(0, 50))
+	var contextual := g._small_button("Только необходимое (без аналитики и рекламы)", Vector2(0, 50))
 	contextual.pressed.connect(_consent_contextual)
 	col.add_child(contextual)
 	var policy := g._label("Согласие можно изменить позже в Лавке. Реклама не показывается во время варки и церемонии открытия.", 11)

@@ -64,7 +64,10 @@ func _boot() -> void:
 	_ads = AdsAdapterScript.new()
 	_ads.rewarded_completed.connect(_on_rewarded_completed)
 	_ads.ad_failed.connect(_on_ad_failed)
-	_ads.interstitial_closed.connect(func() -> void: pass)
+	# interstitial_closed слушателя больше не имеет: раньше здесь стояла подписка
+	# на пустую лямбду, которая лишь маскировала отсутствие interstitial-вызова.
+	# Частота показа учитывается в show_interstitial() через
+	# UserData.set_last_interstitial_at — на закрытие ролика реагировать нечего.
 	if store_id == App.STORE_GOOGLE_PLAY:
 		_adapter = GooglePlayBillingAdapterScript.new()
 	elif store_id == App.STORE_RUSTORE:
@@ -104,14 +107,29 @@ func configure_consent() -> void:
 	if _ads == null:
 		return
 	var consent := UserData.get_consent("ads_personalized")
-	_ads.initialize(store_id, consent)
+	# Передача согласия адаптеру: он сам решает, быть ли рекламе вообще
+	# (AdsAdapterScript.consent_allows_ads — единственно «granted»), и гасит при
+	# отказе и клиента, и debug-стаб. До бута идём через initialize(): только он
+	# приносит текущий store_id. Позже (смена режима в Лавке) — через
+	# set_consent(): тот же перевызов, но без переподключения SDK, когда значение
+	# не менялось.
+	if _booted:
+		_ads.set_consent(consent)
+	else:
+		_ads.initialize(store_id, consent)
 	ads_available = _ads.is_available()
+	if not AdsAdapterScript.consent_allows_ads(consent):
+		# F4 (раунд правки U18): при отзыве согласия сторона адаптера гасит свой
+		# _placement_pending (initialize, ветка отказа), а фасад раньше оставлял
+		# _pending_placement висеть — и первый же поздний ad_failed разметил бы
+		# уже отменённый показ через rewarded_available(..., false) в _on_ad_failed.
+		# Снимаем здесь же, где гасится реклама.
+		_pending_placement = ""
 	if _booted:
 		initialized.emit(store_id, billing_available, ads_available)
 
 func bind_game(game: Node) -> void:
 	_game = game
-	_apply_pending_entitlements()
 
 func get_products() -> Array:
 	return catalog.values()
@@ -151,7 +169,24 @@ func purchase(product_id: String) -> bool:
 	Analytics.track("purchase_start", {"sku": product_id, "store": store_id, "type": String(product.get("type", ""))})
 	return bool(_adapter.purchase(sku))
 
+# Отказной путь покупки: снять запись из purchases.pending. Pending пишется на
+# старте (purchase) и на успехе снимается в _finish_purchase; без этого хелпера
+# каждая из веток отказа оставляла запись навсегда (мусор, который больше никто
+# не читает). Снятие безопасно: отметка «уже начислено» с U17/I-1 живёт в
+# отдельной секции granted журнала покупок, а не в pending, поэтому вторая
+# выдача им не открывается. Пустой product_id — это ветки _on_purchase_received
+# (purchase_pending / purchase_rejected / unknown_sku), где товар ещё не
+# опознан: чистить там нечего, а выдумывать ключ нельзя.
+func _drop_pending_if_any(product_id: String) -> void:
+	if product_id == "":
+		return
+	UserData.clear_pending_purchase(product_id)
+
 func restore() -> void:
+	# Путь повтора незакрытых покупок — только restore (удалённый до бута
+	# _apply_pending_entitlements ничего не начислял и был ложной точкой входа):
+	# незавершённые покупки не начисляются без подтверждённого callback от стора,
+	# restore приносит чек заново, и он проходит весь цикл с серверной проверкой.
 	if _adapter != null and billing_available:
 		_adapter.restore()
 
@@ -160,7 +195,9 @@ func show_rewarded(placement_id: String) -> bool:
 	if placement.is_empty():
 		rewarded_available.emit(placement_id, false)
 		return false
-	if UserData.get_consent("ads_personalized") == "unknown":
+	# Реклама разрешена только при «granted»: раньше гейт проверял лишь «unknown»
+	# и отказ («denied») считался согласием — ровно то, за что прилетает бан в EEA.
+	if not AdsAdapterScript.consent_allows_ads(UserData.get_consent("ads_personalized")):
 		rewarded_available.emit(placement_id, false)
 		return false
 	var cap := int(ads_config.get("rewarded_daily_cap", 5))
@@ -184,6 +221,11 @@ func show_rewarded(placement_id: String) -> bool:
 	return shown
 
 func can_show_interstitial() -> bool:
+	# Про согласие interstitial раньше не спрашивал вовсе. Межэкранная реклама
+	# показывается без прямого действия игрока, поэтому consent-гейт здесь обязателен
+	# тем более, что guardrails частоты его не касаются.
+	if not AdsAdapterScript.consent_allows_ads(UserData.get_consent("ads_personalized")):
+		return false
 	if UserData.is_product_owned("remove_ads"):
 		return false
 	# Не показываем рекламу в первых сессиях/днях: это guardrail, а не
@@ -203,9 +245,13 @@ func can_show_interstitial() -> bool:
 func show_interstitial(context: String = "navigation") -> bool:
 	if not can_show_interstitial() or _ads == null or not _ads.is_available():
 		return false
-	Analytics.track("interstitial_start", {"context": context, "store": store_id})
 	var shown := bool(_ads.show_interstitial())
 	if shown:
+		# F4 (раунд правки U18): track — внутрь успешной ветки. На реальном клиенте
+		# show_interstitial() может вернуть false по method_missing
+		# (ads_adapter.gd:147-148), и прежний порядок считал бы показ, которого не
+		# было, при неразрешённом кулдауне — спам на каждую смену вкладки.
+		Analytics.track("interstitial_start", {"context": context, "store": store_id})
 		UserData.set_last_interstitial_at(Time.get_unix_time_from_system())
 	return shown
 
@@ -224,6 +270,7 @@ func _on_billing_initialized(available: bool, _message: String) -> void:
 
 func _on_billing_failed(code: String, message: String) -> void:
 	purchase_failed.emit(_pending_product, code, message)
+	_drop_pending_if_any(_pending_product)
 	Analytics.track("purchase_fail", {"sku": _pending_product, "store": store_id, "code": code})
 	_pending_product = ""
 
@@ -259,6 +306,7 @@ func _on_purchase_received(purchase: Dictionary) -> void:
 		return
 	if token == "":
 		purchase_failed.emit(product_id, "missing_token", "У покупки нет идентификатора")
+		_drop_pending_if_any(product_id)
 		return
 	# T22 шаг 0: до начисления чек проверяет сервер (Google Play / RuStore
 	# вердикт), а не только клиент. Ответ приходит асинхронно — очередь Net
@@ -267,6 +315,7 @@ func _on_purchase_received(purchase: Dictionary) -> void:
 		# Не начинаем проверку, которую не сможем завершить: чек никуда не
 		# денется — restore принесёт его повторно при следующем onResume.
 		purchase_failed.emit(product_id, "receipt_queue_full", "Очередь проверки чеков заполнена — повторим при следующем запуске")
+		_drop_pending_if_any(product_id)
 		return
 	if _verify_request_index(provider, sku, token) >= 0:
 		return  # адаптер прислал тот же чек дважды, пока ждём ответ
@@ -312,6 +361,7 @@ func _on_receipt_verify_result(result: Dictionary) -> void:
 		if reason == "":
 			reason = String(result.get("message", "сервер не ответил"))
 		purchase_failed.emit(product_id, "receipt_not_verified", "Сервер не подтвердил покупку: %s" % reason)
+		_drop_pending_if_any(product_id)
 		_pending_product = ""
 		return
 	_finish_purchase(request, not (result.get("verified", false) == true))
@@ -327,6 +377,8 @@ func _finish_purchase(request: Dictionary, unverified: bool) -> void:
 	if not _purchase_already_granted(provider, sku, token, product_id):
 		if not _grant_product(product_id):
 			purchase_failed.emit(product_id, "grant_failed", "Не удалось начислить покупку")
+			# Начисления не было — pending-запись это просто мусор, снимаем.
+			_drop_pending_if_any(product_id)
 			return
 		_mark_purchase_granted(provider, sku, token, product_id)
 	# Шаг 2 — подтверждение магазина с ЧТЕНИЕМ результата.
@@ -458,11 +510,6 @@ func _grant_product(product_id: String) -> bool:
 	_game._engine._refresh()
 	_game._saves._save_game()
 	return true
-
-func _apply_pending_entitlements() -> void:
-	# Неполные покупки остаются видимыми в UserData, но не начисляются без
-	# нового подтверждённого callback от стора. Это исключает повторную выдачу.
-	pass
 
 func _on_rewarded_completed(placement_id: String) -> void:
 	var placement := _find_placement(placement_id)

@@ -693,6 +693,509 @@ static func run(g: Game) -> void:
 	g._engine.ether = _eth0
 	g._engine.ether_overflow = _ovf0
 
+	# ---------- T23: согласие / «закрыто ≠ заработано» / стаб только в debug ----------
+	# Блок живёт именно здесь: только этот monetization-блок переводит пути UserData
+	# на ST-файлы (consent и pending пишутся на диск) и только тут уже есть
+	# коллектор платёжных сигналов. Всё, что блок подкручивает, снимается в конце —
+	# и перекрывается общим восстановлением путей/`_data` ниже.
+	var _t23_env0 := OS.get_environment("ALCHEMY_ADS_STUB")
+	var _t23_consent0 := UserData.get_consent("ads_personalized")
+	var _t23_store0 := Monetization.store_id
+	var _t23_ads_real: RefCounted = Monetization._ads
+	var _t23_avail0 := Monetization.ads_available
+	var _t23_game0: Node = Monetization._game
+	var _t23_pending_placement0 := Monetization._pending_placement
+	var _t23_pending_product0 := Monetization._pending_product
+	var _t23_queue0: Array = Monetization._verify_requests.duplicate(true)
+	var _t23_owned0 := UserData.is_product_owned("remove_ads")
+	var _t23_ads_state0: Dictionary = UserData.get_ads_state()
+	var _t23_app0: Dictionary = (UserData._data.get("app", {}) as Dictionary).duplicate(true)
+	var _t23_eth_base := g._engine.ether + g._engine.ether_overflow
+	var _t23_status0 := g._engine.status_text
+	var _t23_auto0 := g._engine._auto
+
+	# --- T23.1/T23.3: чистые предикаты (наблюдаемы без GUI и без плагина) ---
+	Selftest.check("t23 consent predicate allows only granted",
+		AdsAdapter.consent_allows_ads("granted")
+		and not AdsAdapter.consent_allows_ads("denied")
+		and not AdsAdapter.consent_allows_ads("unknown")
+		and not AdsAdapter.consent_allows_ads(""))
+	# Буквальный кейс «стуб недоступен в release»: те же аргументы, is_debug == false.
+	Selftest.check("t23 ads stub is requested only in a debug build",
+		not AdsAdapter.stub_requested(["--ads-stub"], "1", false)
+		and not AdsAdapter.stub_requested(["--ads-stub"], "", false)
+		and not AdsAdapter.stub_requested([], "", false)
+		and AdsAdapter.stub_requested(["--ads-stub"], "", true)
+		and AdsAdapter.stub_requested([], "1", true))
+
+	# --- T23.1: initialize() и доступность адаптера по согласию ---
+	var _t23_ad := AdsAdapter.new()
+	var _t23_probe := T23AdsProbe.new()
+	_t23_ad.initialized.connect(_t23_probe._on_initialized)
+	_t23_ad.rewarded_completed.connect(_t23_probe._on_rewarded)
+	_t23_ad.ad_failed.connect(_t23_probe._on_failed)
+	Monetization.rewarded_available.connect(_t23_probe._on_rewarded_available)
+	Monetization.rewarded_started.connect(_t23_probe._on_rewarded_started)
+	Monetization.rewarded_finished.connect(_t23_probe._on_rewarded_finished)
+	# Стаб поднимается тем же путём, что и на реальной отладочной сборке: без него
+	# «granted → доступен» в headless проверить нечем (плагина нет).
+	OS.set_environment("ALCHEMY_ADS_STUB", "1")
+	Selftest.check("t23 debug fixture really raises the ads stub",
+		AdsAdapter.stub_requested(OS.get_cmdline_user_args(), OS.get_environment("ALCHEMY_ADS_STUB"), OS.is_debug_build()))
+	_t23_ad.initialize("standalone", "denied")
+	# Счёт по метке, а не по индексу: любое лишнее событие (в том числе из фасада)
+	# красит кейс, а не сдвигает окна молча.
+	Selftest.check("t23 denied consent initializes the adapter as unavailable",
+		_t23_probe.count_since(0, "init:false") == 1
+		and _t23_probe.count_since(0, "init:true") == 0
+		and not _t23_ad.is_available())
+	Selftest.check("t23 adapter refuses both formats without consent",
+		not _t23_ad.show_rewarded("extra_brew") and not _t23_ad.show_interstitial()
+		and _t23_probe.count_since(0, "failed:consent_required") == 2
+		and _t23_probe.count_since(0, "rewarded:") == 0)
+	_t23_probe.events.clear()
+	_t23_ad.initialize("standalone", "granted")
+	Selftest.check("t23 granted consent brings the adapter up",
+		_t23_probe.count_since(0, "init:true") == 1
+		and _t23_probe.count_since(0, "init:false") == 0
+		and _t23_ad.is_available())
+
+	# Смена согласия в Лавке обязана применяться без перезапуска: тот же экземпляр
+	# адаптера, что висит на фасаде, и реальный путь через Monetization.
+	Monetization._ads = _t23_ad
+	_t23_ad.rewarded_completed.connect(Monetization._on_rewarded_completed)
+	_t23_ad.ad_failed.connect(Monetization._on_ad_failed)
+	UserData.set_consent("ads_personalized", "granted")
+	Monetization.configure_consent()
+	Selftest.check("t23 configure_consent keeps ads available on granted",
+		_t23_ad.is_available() and Monetization.ads_available)
+	UserData.set_consent("ads_personalized", "denied")
+	Monetization.configure_consent()
+	# Ловушка T23: _stub выставлялся ДО гейта согласия, а is_available() возвращает
+	# true по одному лишь _stub. Здесь consent == denied и стаб был поднят ранее —
+	# без правки адаптера кейс остался бы зелёным только «по памяти о стабе».
+	Selftest.check("t23 configure_consent tears the stub down on denied",
+		not _t23_ad.is_available() and not Monetization.ads_available)
+
+	# --- T23.1: гейт согласия в фасаде (не только в адаптере) ---
+	# Фиксатура: адаптер СИЛАМИ возвращён в доступное состояние при denied consent
+	# (так выглядит отзыв согласия, когда адаптер уже поднят). Тогда единственная
+	# причина отказа — собственный гейт Monetization; без него сюда долетел бы
+	# failed:consent_required от адаптера и started-событие, и кейс покраснел бы.
+	_t23_ad._stub = true
+	_t23_clear_ad_limits()
+	var _t23_ev0 := _t23_probe.events.size()
+	var _t23_shown_denied := Monetization.show_rewarded("extra_brew")
+	Selftest.check("t23 facade refuses rewarded before touching the adapter",
+		not _t23_shown_denied
+		and _t23_probe.count_since(_t23_ev0, "available:extra_brew:false") == 1
+		and _t23_probe.count_since(_t23_ev0, "started:") == 0
+		and _t23_probe.count_since(_t23_ev0, "failed:") == 0
+		and not Monetization.can_show_interstitial())
+	# Фиксатуру снимаем: дальше адаптер живёт только своими собственными решениями.
+	_t23_ad._stub = false
+
+	# --- T23.2: «закрыто» ≠ «заработано» сквозь реальную проводку сигналов ---
+	# Фейковый клиент — копия наблюдаемого контракта рекламного плагина (те же имена
+	# сигналов, что перечисляет _connect_signals), поэтому проверяется и ПЕРЕПОДКЛЮЧЕНИЕ
+	# rewarded_closed, а не только тело обработчика. Порядок важен: согласие
+	# выставляется ДО подключения клиента — initialize() пересобирает _client через
+	# _find_client() и обнулил бы фиксатуру.
+	UserData.set_consent("ads_personalized", "granted")
+	Monetization.configure_consent()
+	var _t23_client := T23FakeAdsClient.new()
+	_t23_ad._client = _t23_client
+	_t23_ad._connect_signals()
+	_t23_clear_ad_limits()
+	var _t23_ev1 := _t23_probe.events.size()
+	# Показ «в полёте» с обеих сторон контракта: адаптер держит placement ради
+	# эмита награды, фасад — свой _pending_placement, которым он размечает отказ.
+	_t23_ad._placement_pending = "extra_brew"
+	_t23_ad._reward_earned = false
+	Monetization._pending_placement = "extra_brew"
+	_t23_client.rewarded.emit(null)
+	_t23_client.rewarded_closed.emit(null)
+	Selftest.check("t23 rewarded then closed pays exactly once",
+		_t23_probe.count_since(_t23_ev1, "rewarded:extra_brew") == 1
+		and _t23_probe.count_since(_t23_ev1, "finished:extra_brew") == 1
+		and _t23_probe.count_since(_t23_ev1, "failed:") == 0
+		and g._engine.ether + g._engine.ether_overflow == _t23_eth_base + 12
+		and UserData.rewarded_count_for_today() == 1)
+	# Пропуск видео: плагин шлёт только закрытие.
+	_t23_clear_ad_limits()
+	var _t23_ev2 := _t23_probe.events.size()
+	var _t23_eth2 := g._engine.ether + g._engine.ether_overflow
+	_t23_ad._placement_pending = "source_boost_60"
+	Monetization._pending_placement = "source_boost_60"
+	_t23_client.rewarded_closed.emit(null)
+	Selftest.check("t23 closed without a reward emits one not_earned and pays nothing",
+		_t23_probe.count_since(_t23_ev2, "failed:not_earned") == 1
+		and _t23_probe.count_since(_t23_ev2, "available:source_boost_60:false") == 1
+		and _t23_probe.count_since(_t23_ev2, "rewarded:") == 0
+		and _t23_probe.count_since(_t23_ev2, "finished:") == 0
+		and g._engine.ether + g._engine.ether_overflow == _t23_eth2
+		and UserData.rewarded_count_for_today() == 0)
+	# Явный отказ в payload — тоже не награда; payload без earned читается по имени
+	# сигнала (размер награды берётся из каталога, а не из SDK).
+	var _t23_ev3 := _t23_probe.events.size()
+	_t23_ad._placement_pending = "extra_brew"
+	Monetization._pending_placement = "extra_brew"
+	_t23_client.rewarded.emit({"earned": false, "amount": 12})
+	Selftest.check("t23 reward payload with earned false does not pay",
+		_t23_probe.count_since(_t23_ev3, "failed:not_earned") == 1
+		and _t23_probe.count_since(_t23_ev3, "rewarded:") == 0
+		and _t23_probe.count_since(_t23_ev3, "finished:") == 0
+		and g._engine.ether + g._engine.ether_overflow == _t23_eth2
+		and UserData.rewarded_count_for_today() == 0)
+	var _t23_ev4 := _t23_probe.events.size()
+	_t23_client.rewarded.emit({"amount": 12, "type": "item"})
+	Selftest.check("t23 reward payload without earned pays by signal name",
+		_t23_probe.count_since(_t23_ev4, "rewarded:extra_brew") == 1
+		and _t23_probe.count_since(_t23_ev4, "finished:extra_brew") == 1
+		and _t23_probe.count_since(_t23_ev4, "failed:") == 0
+		and g._engine.ether + g._engine.ether_overflow == _t23_eth2 + 12)
+	_t23_ad._client = null
+
+	# Отзыв согласия при НЕзакрытом показе. Подключение живёт на стороне клиента,
+	# поэтому поздний rewarded от плагина доходит до обработчика адаптера и после
+	# отказа. Право на выдачу даёт непустой _placement_pending — ветка отказа
+	# обязана снять его вместе с клиентом, иначе награда пришла бы задним числом.
+	_t23_clear_ad_limits()
+	_t23_ad._placement_pending = "extra_brew"
+	_t23_ad._reward_earned = false
+	Monetization._pending_placement = "extra_brew"
+	UserData.set_consent("ads_personalized", "denied")
+	Monetization.configure_consent()
+	# F4 (раунд правки): отзыв согласия обязан снять и фасадный _pending_placement,
+	# а не только адаптерный _placement_pending — иначе следующий ad_failed выстрелит
+	# rewarded_available("extra_brew", false) за уже отменённый показ. Проверяется
+	# ДО поздних эмитов ниже: именно состояние сразу после configure_consent.
+	Selftest.check("t23 withdrawn consent clears the facade pending placement",
+		Monetization._pending_placement == "")
+	var _t23_ev5 := _t23_probe.events.size()
+	var _t23_eth5 := g._engine.ether + g._engine.ether_overflow
+	_t23_client.rewarded.emit(null)
+	_t23_client.rewarded_closed.emit(null)
+	Selftest.check("t23 withdrawn consent drops the in-flight show",
+		not _t23_ad.is_available()
+		and _t23_probe.count_since(_t23_ev5, "rewarded:extra_brew") == 0
+		and _t23_probe.count_since(_t23_ev5, "finished:extra_brew") == 0
+		and g._engine.ether + g._engine.ether_overflow == _t23_eth5
+		and UserData.rewarded_count_for_today() == 0)
+	# Возврат к «granted» поднимает адаптер заново (тот же экземпляр, без
+	# перезапуска) — дальше идёт сюжет стаба через фасад.
+	UserData.set_consent("ads_personalized", "granted")
+	Monetization.configure_consent()
+
+	# Показ через фасад: награда приходит НЕ из show_rewarded, а из сигнала.
+	_t23_clear_ad_limits()
+	var _t23_ev6 := _t23_probe.events.size()
+	var _t23_shown_ok := Monetization.show_rewarded("extra_brew")
+	Selftest.check("t23 stub rewarded does not pay before the reward signal",
+		_t23_shown_ok and _t23_probe.count_since(_t23_ev6, "started:extra_brew") == 1
+		and _t23_probe.count_since(_t23_ev6, "rewarded:") == 0
+		and _t23_probe.count_since(_t23_ev6, "finished:") == 0
+		and UserData.rewarded_count_for_today() == 0
+		and g._engine.ether + g._engine.ether_overflow == _t23_eth2 + 12)
+	Monetization._pending_placement = ""
+
+	# --- F3 (раунд правки): два полных цикла награды без ручного форса флага ---
+	# Прежний кейс «repeated show» выставлял _reward_earned руками, поэтому строка
+	# сброса в AdsAdapter.show_rewarded (:121) оставалась непроверяемой. Здесь флаг
+	# пишет только код адаптера: show -> rewarded БЕЗ rewarded_closed (остаточный
+	# true) -> сброс лимитов/кулдауна -> show -> rewarded. Без сброса в show
+	# второй награды бы не было: её проглотил дубликат-гейт _on_rewarded_signal
+	# (:190-192). Проводка — фейковый клиент (стаб намеренно опущен, чтобы
+	# call_deferred-награда не прилетела в обход сюжета).
+	# Дневной счётчик здесь не доказательство: сброс лимитов между циклами обнуляет
+	# rewarded_count, поэтому после второго показа он всегда 1. Пару выплат меряют
+	# счётчик событий награды и дельта эфира (12 x 2).
+	_t23_ad._stub = false
+	_t23_ad._client = _t23_client
+	_t23_ad._connect_signals()
+	_t23_clear_ad_limits()
+	var _t23_ev7 := _t23_probe.events.size()
+	var _t23_eth7 := g._engine.ether + g._engine.ether_overflow
+	var _t23_cycle1 := Monetization.show_rewarded("extra_brew")
+	_t23_client.rewarded.emit(null)
+	_t23_clear_ad_limits()
+	var _t23_cycle2 := Monetization.show_rewarded("extra_brew")
+	_t23_client.rewarded.emit(null)
+	Selftest.check("t23 two consecutive rewarded cycles pay exactly twice",
+		_t23_cycle1 and _t23_cycle2
+		and _t23_probe.count_since(_t23_ev7, "started:extra_brew") == 2
+		and _t23_probe.count_since(_t23_ev7, "rewarded:extra_brew") == 2
+		and _t23_probe.count_since(_t23_ev7, "finished:extra_brew") == 2
+		and _t23_probe.count_since(_t23_ev7, "failed:") == 0
+		and g._engine.ether + g._engine.ether_overflow == _t23_eth7 + 24)
+
+	# --- T23.1/T23.4: interstitial — consent-гейт, ход по границе навигации ---
+	# Guardrails частоты не ослабляются, поэтому фиксатура доводит состояние
+	# установки до «проходящего»: install_at/session_count пишутся прямо в _data,
+	# remove_ads снимается явным set_owned_product(…, false). Единственный guardrail,
+	# который фиксатура НЕ затрагивает, — session_started_at: он выставлен так, что
+	# ветка `session_count <= 1 and session_seconds < 600` заведомо не участвует в
+	# решении (сессий 9). Таким образом после «granted → можно» отказ при denied
+	# объясняется ровно одним конъюнктом — consent-гейтом.
+	Monetization.store_id = "google_play"
+	UserData.set_owned_product("remove_ads", false)
+	var _t23_app: Dictionary = (UserData._data.get("app", {}) as Dictionary).duplicate(true)
+	_t23_app["install_at"] = Time.get_unix_time_from_system() - 3.0 * 86400.0
+	_t23_app["session_count"] = 9
+	_t23_app["session_started_at"] = Time.get_unix_time_from_system() - 700.0
+	UserData._data["app"] = _t23_app
+	_t23_clear_ad_limits()
+	Selftest.check("t23 interstitial guardrails pass with granted consent",
+		_t23_ad.is_available() and Monetization.can_show_interstitial())
+	UserData.set_consent("ads_personalized", "denied")
+	Monetization.configure_consent()
+	# Единственная причина отказа здесь — согласие: guardrails выше уже доказаны
+	# пройденными, remove_ads не в праве.
+	Selftest.check("t23 denied consent blocks the interstitial",
+		not Monetization.can_show_interstitial() and not Monetization.show_interstitial("navigation"))
+	UserData.set_consent("ads_personalized", "granted")
+	Monetization.configure_consent()
+	_t23_clear_ad_limits()
+	var _t23_ts0 := UserData.last_interstitial_at()
+	var _t23_inter := Monetization.show_interstitial("navigation")
+	Selftest.check("t23 stubbed interstitial records the show time",
+		_t23_inter and UserData.last_interstitial_at() > _t23_ts0)
+	Selftest.check("t23 second interstitial waits out the cooldown",
+		not Monetization.can_show_interstitial() and not Monetization.show_interstitial("navigation"))
+	# Граница навигации: вызов ровно в _on_tab_changed и ровно при закрытых модалах.
+	# 0-я вкладка берётся намеренно — world/rating-ветки (2/4/5) трогали бы Net.
+	g._engine._auto = false
+	_t23_clear_ad_limits()
+	Selftest.check("t23 navigation fixture is modal-free with a clear cooldown",
+		not g._modal_open_for_ads() and Monetization.can_show_interstitial())
+	var _t23_ts1 := UserData.last_interstitial_at()
+	g._on_tab_changed(0)
+	Selftest.check("t23 tab change shows the interstitial on a clean stack",
+		UserData.last_interstitial_at() > _t23_ts1)
+	_t23_clear_ad_limits()
+	g._hub._settings_popup.visible = true
+	var _t23_settings := g._modal_open_for_ads()
+	var _t23_ts2 := UserData.last_interstitial_at()
+	g._on_tab_changed(0)
+	Selftest.check("t23 tab change does not interrupt an open modal",
+		_t23_settings and UserData.last_interstitial_at() == _t23_ts2)
+	g._hub._settings_popup.visible = false
+	g._home._decor_popup.visible = true
+	var _t23_decor := g._modal_open_for_ads()
+	g._home._decor_popup.visible = false
+	g._shop._popup.visible = true
+	var _t23_shop := g._modal_open_for_ads()
+	g._shop._popup.visible = false
+	g._popup.visible = true
+	var _t23_main_popup := g._modal_open_for_ads()
+	g._popup.visible = false
+	g._engine._auto = true
+	var _t23_auto := g._modal_open_for_ads()
+	g._engine._auto = false
+	# Предикат перечисляет поверхности сам: без любой из строк свой модальный слой
+	# пропускает рекламу поверх себя, и проверяется это именно этой парой имён.
+	Selftest.check("t23 modal predicate covers every closable surface",
+		_t23_settings and _t23_decor and _t23_shop and _t23_main_popup and _t23_auto)
+	g._engine._auto = _t23_auto0
+
+	# --- F2 (раунд правки): ручная варка и занятый верстак блокируют показ ---
+	# _engine._auto покрывает только автоварку; ручная — _engine.brewing
+	# (core.gd:14, true в :695, false в :711/:765), занятость верстака —
+	# _pages._bench_busy (pages.gd:23; core.gd трактует её занятой вместе с
+	# варкой: :407, :666, :1208, :1371). Ни то ни другое модалом не является,
+	# а текст обещает «Реклама не показывается во время варки» (shop.gd) —
+	# значит предикат обязан отказывать по ним, и tab_changed не должен показывать.
+	_t23_clear_ad_limits()
+	var _t23_can_f2 := Monetization.can_show_interstitial()
+	var _t23_brew0 := g._engine.brewing
+	var _t23_busy0 := g._pages._bench_busy
+	g._engine.brewing = true
+	var _t23_brew_block := g._modal_open_for_ads()
+	var _t23_ts_f2 := UserData.last_interstitial_at()
+	g._on_tab_changed(0)
+	var _t23_brew_shown := UserData.last_interstitial_at() > _t23_ts_f2
+	g._engine.brewing = _t23_brew0
+	g._pages._bench_busy = true
+	var _t23_busy_block := g._modal_open_for_ads()
+	g._pages._bench_busy = _t23_busy0
+	Selftest.check("t23 manual brew and busy bench block the interstitial",
+		_t23_can_f2 and _t23_brew_block and not _t23_brew_shown and _t23_busy_block)
+
+	# --- F1 (раунд правки): гейт достроенного UI на границе навигации ---
+	# Первый tab_changed эмитится синхронно во время построения вкладок
+	# (_make_page -> add_child), когда попапов ещё нет. До правки до
+	# Monetization.show_interstitial его спасало только то, что _ads ещё не
+	# поднят (_boot не отработал) — побочный эффект, а не guard.
+	var _t23_ui0 := g._ui_ready
+	_t23_clear_ad_limits()
+	var _t23_can_f1 := Monetization.can_show_interstitial()
+	g._ui_ready = false
+	var _t23_ts_ui := UserData.last_interstitial_at()
+	g._on_tab_changed(0)
+	var _t23_ui_shown := UserData.last_interstitial_at() > _t23_ts_ui
+	g._ui_ready = _t23_ui0
+	Selftest.check("t23 tab change waits for the fully built UI",
+		_t23_ui0 and _t23_can_f1 and not _t23_ui_shown)
+	# Каждая поверхность предиката защищена null-проверкой: на boot-пути
+	# незащищённый .visible падал с «Invalid access ... on a base object of type
+	# 'null'». Проверяется прямым обнулением всех незащищённых прежде полей — их
+	# одиннадцать, и ниже они обнулены одновременно.
+	var _t23_p_popup := g._popup
+	var _t23_p_confirm := g._confirm
+	var _t23_p_return := g._saves._return_popup
+	var _t23_p_settings := g._hub._settings_popup
+	var _t23_p_craftable := g._hub._craftable_popup
+	var _t23_p_retort := g._retort._retort_popup
+	var _t23_p_journal := g._hub._journal_popup
+	var _t23_p_prestige := g._hub._prestige_popup
+	var _t23_p_prog := g._progress_ui._prog_popup
+	var _t23_p_profile := g._hub._profile_popup
+	var _t23_p_up := g._hub._up_popup
+	g._popup = null
+	g._confirm = null
+	g._saves._return_popup = null
+	g._hub._settings_popup = null
+	g._hub._craftable_popup = null
+	g._retort._retort_popup = null
+	g._hub._journal_popup = null
+	g._hub._prestige_popup = null
+	g._progress_ui._prog_popup = null
+	g._hub._profile_popup = null
+	g._hub._up_popup = null
+	var _t23_nulls_closed := not g._modal_open_for_ads()
+	# Положительная половина — вот что делает проверку не пустой: нижняя по порядку
+	# ветка предиката (_home._house_popup) открыта, и «истина» достижима только если
+	# все обнулённые поверхности выше прошли молча. Убираем любой из null-guard'ов —
+	# вызов прерывается на этой ветке, Godot отдаёт null, и предикат уже не «true».
+	# Первая половина при этом не случайна: без неё любая случайно открытая ветка
+	# выше вернула бы true до обнулённых строк, и кейс стал бы зелёным впустую.
+	var _t23_house_vis0 := g._home._house_popup.visible
+	g._home._house_popup.visible = true
+	var _t23_nulls_open := g._modal_open_for_ads()
+	g._home._house_popup.visible = _t23_house_vis0
+	g._popup = _t23_p_popup
+	g._confirm = _t23_p_confirm
+	g._saves._return_popup = _t23_p_return
+	g._hub._settings_popup = _t23_p_settings
+	g._hub._craftable_popup = _t23_p_craftable
+	g._retort._retort_popup = _t23_p_retort
+	g._hub._journal_popup = _t23_p_journal
+	g._hub._prestige_popup = _t23_p_prestige
+	g._progress_ui._prog_popup = _t23_p_prog
+	g._hub._profile_popup = _t23_p_profile
+	g._hub._up_popup = _t23_p_up
+	Selftest.check("t23 modal predicate null-guards every unbuilt surface",
+		_t23_nulls_closed and _t23_nulls_open
+		and _t23_house_vis0 == false and not g._modal_open_for_ads())
+
+	# --- T23.4: снятие pending на каждом отказе ---
+	var _t23_pid := "starter_bundle"
+	var _t23_sku := "al_loop_starter_2026"
+	var _t23_provider := "google_play"
+	var _t23_pay := T22SignalProbe.new()
+	Monetization.purchase_succeeded.connect(_t23_pay._on_purchase_succeeded)
+	Monetization.purchase_failed.connect(_t23_pay._on_purchase_failed)
+	# store_id = "google_play" (выведен выше в interstitial-секции) — иначе SKU
+	# al_loop_starter_2026 не резолвится и ветки отказа вышли бы через unknown_sku,
+	# а не через покрываемый код. Очередь очищается, чтобы «is_empty» ниже значил
+	# «запрос не ушёл», а не «очередь была пуста случайно».
+	Monetization._verify_requests.clear()
+	# (a) _on_billing_failed: product_id известен из _pending_product.
+	var _t23_fix_a := _t23_open_pending(_t23_pid, _t23_provider, _t23_sku)
+	Monetization._pending_product = _t23_pid
+	var _t23_n0 := _t23_pay.events.size()
+	Monetization._on_billing_failed("user_cancelled", "Покупка отменена")
+	Selftest.check("t23 billing failure clears pending",
+		_t23_fix_a and Monetization._pending_product == ""
+		and UserData.get_pending_purchase(_t23_pid).is_empty()
+		and _t23_pay.events.size() == _t23_n0 + 1
+		and String(_t23_pay.events[_t23_n0]) == "failed:user_cancelled:starter_bundle")
+	# (b) missing_token.
+	var _t23_fix_b := _t23_open_pending(_t23_pid, _t23_provider, _t23_sku)
+	var _t23_n1 := _t23_pay.events.size()
+	Monetization._on_purchase_received({"provider": _t23_provider, "sku": _t23_sku, "token": "", "state": "purchased"})
+	Selftest.check("t23 missing token clears pending",
+		_t23_fix_b and UserData.get_pending_purchase(_t23_pid).is_empty()
+		and String(_t23_pay.events[_t23_n1]) == "failed:missing_token:starter_bundle"
+		and Monetization._verify_requests.is_empty())
+	# (c) receipt_queue_full: очередь забивается до потолка, чек не уходит на сервер.
+	Monetization._verify_requests.clear()
+	for _t23_i in range(Monetization.MAX_QUEUED_RECEIPT_CHECKS):
+		Monetization._verify_requests.append({"provider": _t23_provider, "sku": "t23_filler",
+			"token": "t23_filler_%d" % _t23_i, "product_id": "t23_filler"})
+	var _t23_fix_c := _t23_open_pending(_t23_pid, _t23_provider, _t23_sku)
+	var _t23_n2 := _t23_pay.events.size()
+	Monetization._on_purchase_received({"provider": _t23_provider, "sku": _t23_sku, "token": "t23_queue_full_token", "state": "purchased"})
+	Selftest.check("t23 full verify queue clears pending",
+		_t23_fix_c and UserData.get_pending_purchase(_t23_pid).is_empty()
+		and String(_t23_pay.events[_t23_n2]) == "failed:receipt_queue_full:starter_bundle"
+		and Monetization._verify_requests.size() == Monetization.MAX_QUEUED_RECEIPT_CHECKS)
+	# (d) receipt_not_verified: вердикт сервера по уже опознанному товару.
+	Monetization._verify_requests.clear()
+	Monetization._verify_requests.append({"provider": _t23_provider, "sku": _t23_sku,
+		"token": "t23_notverified_token", "product_id": _t23_pid})
+	var _t23_fix_d := _t23_open_pending(_t23_pid, _t23_provider, _t23_sku)
+	var _t23_n3 := _t23_pay.events.size()
+	Monetization._on_receipt_verify_result({"ok": false, "verified": false, "reason": "purchase_not_found"})
+	Selftest.check("t23 unverified receipt clears pending",
+		_t23_fix_d and Monetization._pending_product == ""
+		and UserData.get_pending_purchase(_t23_pid).is_empty()
+		and String(_t23_pay.events[_t23_n3]) == "failed:receipt_not_verified:starter_bundle"
+		and Monetization._verify_requests.is_empty())
+	# (e) grant_failed: начисления не было (game не пристегнут) — pending не мусор.
+	Monetization._game = null
+	var _t23_tok_e := "t23_grant_fail_token"
+	var _t23_key_e := UserData._token_key(_t23_provider, _t23_tok_e, _t23_sku)
+	var _t23_fix_e := _t23_open_pending(_t23_pid, _t23_provider, _t23_sku)
+	var _t23_n4 := _t23_pay.events.size()
+	Monetization._finish_purchase({"provider": _t23_provider, "sku": _t23_sku,
+		"token": _t23_tok_e, "product_id": _t23_pid}, false)
+	Selftest.check("t23 grant failure clears pending and leaves nothing granted",
+		_t23_fix_e and UserData.get_pending_purchase(_t23_pid).is_empty()
+		and String(_t23_pay.events[_t23_n4]) == "failed:grant_failed:starter_bundle"
+		and not Monetization._purchase_already_granted(_t23_provider, _t23_sku, _t23_tok_e, _t23_pid)
+		and not UserData._processed.has(_t23_key_e))
+	Monetization._game = _t23_game0
+
+	# --- восстановление ---
+	OS.set_environment("ALCHEMY_ADS_STUB", _t23_env0)
+	UserData.set_consent("ads_personalized", _t23_consent0)
+	UserData._data["app"] = _t23_app0
+	_t23_restore_ads_state(_t23_ads_state0)
+	UserData.set_owned_product("remove_ads", _t23_owned0)
+	_t23_ad.rewarded_completed.disconnect(Monetization._on_rewarded_completed)
+	_t23_ad.ad_failed.disconnect(Monetization._on_ad_failed)
+	Monetization._ads = _t23_ads_real
+	Monetization.store_id = _t23_store0
+	Monetization._pending_product = _t23_pending_product0
+	Monetization._pending_placement = _t23_pending_placement0
+	Monetization._verify_requests = _t23_queue0
+	Monetization.purchase_succeeded.disconnect(_t23_pay._on_purchase_succeeded)
+	Monetization.purchase_failed.disconnect(_t23_pay._on_purchase_failed)
+	Monetization.rewarded_available.disconnect(_t23_probe._on_rewarded_available)
+	Monetization.rewarded_started.disconnect(_t23_probe._on_rewarded_started)
+	Monetization.rewarded_finished.disconnect(_t23_probe._on_rewarded_finished)
+	Monetization.configure_consent()
+	g._engine.ether = _eth0
+	g._engine.ether_overflow = _ovf0
+	g._engine.status_text = _t23_status0
+	Selftest.check("t23 ads fixture, facade and engine state restored",
+		Monetization._ads == _t23_ads_real and Monetization.store_id == _t23_store0
+		and Monetization._game == _t23_game0 and Monetization._pending_product == _t23_pending_product0
+		and Monetization._pending_placement == _t23_pending_placement0
+		# Очередь проверок сравнивается размером и конкретными ключами: `==` над
+		# массивом Dictionary в Godot 4 — ГЛУБОКОЕ сравнение, оно бы прошло и на
+		# «restore не выполнен, просто совпало содержимое».
+		and Monetization._verify_requests.size() == _t23_queue0.size()
+		and not _t23_has_leftover_request()
+		and Monetization.ads_available == _t23_avail0
+		and Monetization._ads.is_available() == _t23_avail0
+		and OS.get_environment("ALCHEMY_ADS_STUB") == _t23_env0
+		and UserData.get_consent("ads_personalized") == _t23_consent0
+		and UserData.is_product_owned("remove_ads") == _t23_owned0
+		and g._engine.ether + g._engine.ether_overflow == _t23_eth_base
+		and g._engine._auto == _t23_auto0)
+
 	UserData.SAVE_PATH = _us0
 	UserData.TEMP_PATH = _ut0
 	UserData.BACKUP_PATH = _ub0
@@ -777,6 +1280,76 @@ class T22SignalProbe extends RefCounted:
 		events.append("ok:" + product_id)
 	func _on_purchase_failed(product_id: String, code: String, _message: String) -> void:
 		events.append("failed:" + code + ":" + product_id)
+
+
+class T23FakeAdsClient extends RefCounted:
+	# Копия наблюдаемого контракта рекламного плагина: ровно те имена сигналов,
+	# которые перечисляет AdsAdapter._connect_signals, и с той арностью, какую
+	# читают его обработчики (ad_failed_to_show — code + message). Нужен, чтобы
+	# проверить ПЕРЕПОДКЛЮЧЕНИЕ rewarded_closed на свой обработчик, а не только
+	# тело обработчика: эмит по имени сигнала идёт тем же путём, что и в сборке.
+	signal rewarded(value)
+	signal rewarded_closed(value)
+	signal ad_failed_to_show(code, message)
+	signal interstitial_closed
+	# F3 (раунд правки): нуль-аргументный show-метод реального плагина — адаптер
+	# зовёт _call_first(["show_rewarded", ...], []) с пустыми аргументами. С ним
+	# полный цикл награды идёт через не-stub ветку адаптера без method_missing.
+	func show_rewarded() -> bool:
+		return true
+
+
+class T23AdsProbe extends RefCounted:
+	# Коллектор рекламных и фасадных сигналов в один поток: «ни одного
+	# rewarded_completed» и «ровно один not_earned» наблюдаемы так же хорошо, как
+	# наличие. Метки считаются по префиксу (count_since), чтобы лишнее событие
+	# красило кейс, а не сдвигало окна индексов.
+	var events: Array = []
+	func _on_initialized(available: bool, _message: String) -> void:
+		events.append("init:" + str(available))
+	func _on_rewarded(placement_id: String) -> void:
+		events.append("rewarded:" + placement_id)
+	func _on_failed(code: String, _message: String) -> void:
+		events.append("failed:" + code)
+	func _on_rewarded_available(placement_id: String, available: bool) -> void:
+		events.append("available:%s:%s" % [placement_id, str(available)])
+	func _on_rewarded_started(placement_id: String) -> void:
+		events.append("started:" + placement_id)
+	func _on_rewarded_finished(placement_id: String, _reward: Dictionary) -> void:
+		events.append("finished:" + placement_id)
+	func count_since(start_index: int, prefix: String) -> int:
+		var hits := 0
+		for i in range(start_index, events.size()):
+			if String(events[i]).begins_with(prefix):
+				hits += 1
+		return hits
+
+
+static func _t23_clear_ad_limits() -> void:
+	# Фиксатура дневного капа и обоих cooldown-времени: «отказ по согласию» нельзя
+	# объяснить отказом по частоте. day="" — чтобы rewarded_count_for_today()
+	# вернул 0 независимо от того, сколько просмотров записали ранние сюиты.
+	UserData.set_ads_state({"day": "", "rewarded_count": 0, "last_rewarded_at": 0.0, "last_interstitial_at": 0.0})
+
+
+static func _t23_restore_ads_state(state: Dictionary) -> void:
+	UserData.set_ads_state(state)
+
+
+static func _t23_open_pending(product_id: String, provider: String, sku: String) -> bool:
+	# Возвращает НАБЛЮДАЕМОСТЬ фиксатуры: запись действительно легла в pending —
+	# иначе кейс «отказ снял запись» прошёл бы зелёным на пустом месте.
+	UserData.set_pending_purchase(product_id, {"provider": provider, "sku": sku, "started_at": 1.0})
+	return not UserData.get_pending_purchase(product_id).is_empty()
+
+
+static func _t23_has_leftover_request() -> bool:
+	# Признак того, что очередь проверок чеков не вернулась к исходному виду
+	# (все t23-маркеры обязаны быть сняты самим блоком).
+	for item in Monetization._verify_requests:
+		if item is Dictionary and String((item as Dictionary).get("product_id", "")).begins_with("t23_"):
+			return true
+	return false
 
 
 static func _esc_key() -> InputEventKey:
