@@ -17,8 +17,10 @@
 - Окружение подменяется на уровне ИМПОРТА этого файла, до импорта `server`
   где-либо в тестах: gen_llm._load_dotenv НЕ перезаписывает переменные,
   уже присутствующие в os.environ, поэтому реальный .env (ключи OpenRouter,
-  провайдер, смещение дня) в тестах не читается и сеть из тестов не ходит
-  (LLM_PROVIDER=mock — детерминированная заглушка без HTTP).
+  провайдер, смещение дня, таймауты/LOCK_TTL, дневные лимиты и кулдауны,
+  отладочные флаги) в тестах не читается и сеть из тестов не ходит
+  (LLM_PROVIDER=mock — детерминированная заглушка без HTTP). Запинено всё
+  семейство env-ключей, которое реально читает server.py/gen_llm.py.
 - BASE_URL строится ТОЛЬКО из ephemeral-порта фикстуры; прод-порт 8080
   явно запрещён ассертом. Тесты НЕ читают SERVER_URL/TEST_SERVER_URL.
 
@@ -50,6 +52,13 @@ PROD_PORT = 8080
 # 1) Изоляция окружения: ДО любого импорта server/gen_llm в процессе pytest.
 #    _load_dotenv не перезаписывает переменные, уже присутствующие в
 #    os.environ, поэтому эти значения имеют приоритет над реальным .env.
+#    Запинены ВСЕ переменные, которые реально читает server.py/gen_llm.py
+#    (кроме системных APPDATA/XDG_DATA_HOME и адресного SERVER_URL, который
+#    сервер использует только в __main__-print): тайминги, лимиты, кулдауны,
+#    модели и отладочные флаги тоже берутся из тестовых дефолтов, а не из
+#    продного .env (иначе LLM_TIMEOUT/LLM_MAX_ATTEMPTS незаметно меняли бы
+#    LOCK_TTL, а ALCHEMY_*_DAILY_LIMIT/кулдауны — поведение квот).
+#    Значения совпадают с дефолтами кода (README-server.md, таблица env).
 # ---------------------------------------------------------------------------
 _TEST_ENV = {
     # Детерминированная LLM-заглушка вместо сети/ключей (wall|wall → Дом,
@@ -58,8 +67,28 @@ _TEST_ENV = {
     "OPENROUTER_API_KEY": "",
     "LLM_API_KEY": "",
     "LLM_BASE_URL": "",
+    "LLM_MODELS": "",  # mock-провайдер их не использует; продный список не течёт
     # Нулевое смещение дня: тесты не наследуют продный DAY_TZ_OFFSET.
     "DAY_TZ_OFFSET": "",
+    # Тайминги генерации/лока: дефолты кода, LOCK_TTL выводится из них.
+    "LLM_TIMEOUT": "30",
+    "LLM_MAX_ATTEMPTS": "3",
+    "LOCK_TTL_SEC": "",  # пусто → сервер выведет из MAX_ATTEMPTS×LLM_TIMEOUT
+    "DB_BUSY_TIMEOUT_SEC": "10",
+    # Дневные квоты/кулдауны (эксперименты, письма, атлас) — дефолты кода.
+    "ALCHEMY_EXPERIMENT_COOLDOWN_SEC": "5",
+    "ALCHEMY_EXPERIMENT_DAILY_LIMIT": "200",
+    "ALCHEMY_EXPERIMENT_GLOBAL_DAILY_LIMIT": "10000",
+    "ALCHEMY_LETTER_COOLDOWN_SEC": "30",
+    "ALCHEMY_LETTER_DAILY_LIMIT": "3",
+    "ALCHEMY_LETTER_GLOBAL_DAILY_LIMIT": "3000",
+    "ALCHEMY_ATLAS_COOLDOWN_SEC": "60",
+    "ALCHEMY_ATLAS_DAILY_LIMIT": "10",
+    # Отладочные/логируемые переключатели: в тестах — молча (дефолт кода).
+    "ALCHEMY_DEBUG": "",
+    "LLM_DEBUG": "",
+    "ALCHEMY_LOG_RAW": "",
+    "LLM_HTTP_REFERER": "",
 }
 for _k, _v in _TEST_ENV.items():
     os.environ[_k] = _v
@@ -248,7 +277,12 @@ def fresh_unit_db(tmp_path_factory):
         if SERVER_DIR not in sys.path:
             sys.path.insert(0, SERVER_DIR)
         import server as srv
-    except Exception:
+    except (ImportError, TypeError):
+        # ImportError — нет fastapi/httpx/uvicorn в этом окружении.
+        # TypeError — частный случай «не тот python»: на py3.9 аннотации
+        # `dict | None` вычисляются в момент импорта и падают TypeError'ом
+        # (py_compile при этом молчит). В обоих случаях серверный модуль
+        # недоступен — подмена не нужна, честный отказ произойдёт в тесте.
         yield None
         return
     db = make_db_path(tmp_path_factory.mktemp("unitdb"), "unit.db")

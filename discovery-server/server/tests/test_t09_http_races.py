@@ -22,6 +22,7 @@ ENV — это канал, через который тесты уезжали �
 процесса и без ожидания полуночи. Попутно stdlib-харнесс
 harness_time_scale_u7.py доказывает то же на SQL-копиях.
 """
+import os
 import socket
 import sqlite3
 import sys
@@ -150,43 +151,50 @@ class TestParallelDiscoverHttp:
 
         th0 = threading.Thread(target=brew, args=("0", "fire", "gold"))
         th0.start()
-        # победитель вошёл в генерацию ⇒ лок пары точно жив:
-        assert fake.entered.wait(timeout=15), "победитель не дошёл до генерации"
-
-        losers = [threading.Thread(target=brew, args=(str(i), "fire", "gold"))
-                  for i in (1, 2, 3)]
-        for t in losers:
-            t.start()
-        for t in losers:
-            t.join(timeout=30)
-        assert len(losers_out) == 3, "проигравшие не получили ответ (висячий запрос)"
-
-        for tag, r in losers_out.items():
-            if r.status_code == 409:
-                # wire U5/U6: живой лок пары
-                assert "Пара в обработке" in r.json()["detail"], r.text
-            else:
-                assert r.status_code == 200, f"{tag}: {r.status_code} {r.text}"
-                assert r.json()["status"] in ("known", "created"), r.text
-
-        fake.release.set()
-        th0.join(timeout=30)
-        w = winner_out.get("0")
-        assert w is not None and w.status_code == 200, f"победитель: {w}"
-        assert w.json()["status"] == "created"
-        # ровно одна генерация на всю гонку (4 запроса)
-        assert fake.generate_calls == [PK], fake.generate_calls
-
-        conn = sqlite3.connect(str(server.DB_PATH))
         try:
-            n_recipes = conn.execute(
-                "SELECT COUNT(*) FROM recipes WHERE pair_key = ?", (PK,)
-            ).fetchone()[0]
-            n_locks = conn.execute("SELECT COUNT(*) FROM pending_pairs").fetchone()[0]
+            # победитель вошёл в генерацию ⇒ лок пары точно жив:
+            assert fake.entered.wait(timeout=15), "победитель не дошёл до генерации"
+
+            losers = [threading.Thread(target=brew, args=(str(i), "fire", "gold"))
+                      for i in (1, 2, 3)]
+            for t in losers:
+                t.start()
+            for t in losers:
+                t.join(timeout=30)
+            assert len(losers_out) == 3, "проигравшие не получили ответ (висячий запрос)"
+
+            for tag, r in losers_out.items():
+                if r.status_code == 409:
+                    # wire U5/U6: живой лок пары
+                    assert "Пара в обработке" in r.json()["detail"], r.text
+                else:
+                    assert r.status_code == 200, f"{tag}: {r.status_code} {r.text}"
+                    assert r.json()["status"] in ("known", "created"), r.text
+
+            fake.release.set()
+            th0.join(timeout=30)
+            w = winner_out.get("0")
+            assert w is not None and w.status_code == 200, f"победитель: {w}"
+            assert w.json()["status"] == "created"
+            # ровно одна генерация на всю гонку (4 запроса)
+            assert fake.generate_calls == [PK], fake.generate_calls
+
+            conn = sqlite3.connect(str(server.DB_PATH))
+            try:
+                n_recipes = conn.execute(
+                    "SELECT COUNT(*) FROM recipes WHERE pair_key = ?", (PK,)
+                ).fetchone()[0]
+                n_locks = conn.execute("SELECT COUNT(*) FROM pending_pairs").fetchone()[0]
+            finally:
+                conn.close()
+            assert n_recipes == 1
+            assert n_locks == 0, "после гонки очередей лока не остаётся"
         finally:
-            conn.close()
-        assert n_recipes == 1
-        assert n_locks == 0, "после гонки очередей лока не остаётся"
+            # тот же паттерн, что в health-тесте: любой упавший assert между
+            # входом победителя и release не должен оставлять воркер
+            # «припаркованным» на 30 секунд и th0 — неjoinнутым (set идемпотентен)
+            fake.release.set()
+            th0.join(timeout=30)
 
 
 class TestHealthUnderLoad:
