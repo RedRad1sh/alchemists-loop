@@ -135,6 +135,10 @@ static func run(g: Game) -> void:
 	var u13_exp_b := g._pages._experiment_b
 	var u13_guard := g._pages._spend_guard_ms.duplicate(true)
 	var u13_claim_at := g._resonance._res_claim_at
+	# _lens_reveal открывает попап и уводит табу в лабораторию — иначе блок оставил бы
+	# открытый попап на все последующие сюиты.
+	var u13_tab := g._tabs_ref.current_tab
+	var u13_popup := g._popup.visible
 	var u13_n_inv := g._engine.inventory.size()
 	var u13_n_known := g._engine.known_recipes.size()
 	var u13_n_hint_ids := g._pages._experiment_hint_ids.size()
@@ -144,6 +148,15 @@ static func run(g: Game) -> void:
 	Selftest.check("u13 spend gate arms", g._pages._spend_gate("hint", 1000))
 	Selftest.check("u13 spend gate refuses repeat", not g._pages._spend_gate("hint", 1100))
 	Selftest.check("u13 spend gate opens after window", g._pages._spend_gate("hint", 1300))
+	# граница окна ровно SPEND_GUARD_MSEC: 249 мс — занято, 250 мс — свободно.
+	# Ловит подмену `<` на `<=`, которую шаги 1000/1100/1300 не замечают.
+	g._pages._spend_guard_ms.clear()
+	Selftest.check("u13 spend gate boundary", g._pages._spend_gate("hint", 1000)
+		and not g._pages._spend_gate("hint", 1249) and g._pages._spend_gate("hint", 1250)
+		and not g._pages._spend_gate("hint", 1499))
+	# свежий ключ не «съедает» тап в первые 250 мс жизни игры (отметка стартует с
+	# -SPEND_GUARD_MSEC, а не с 0, как _collect_all_ms)
+	Selftest.check("u13 spend gate allows first tap at boot", g._pages._spend_gate("boot", 100))
 	# ключи независимы: линза не наследует занятую подсказкой отметку
 	Selftest.check("u13 spend gate keys independent", g._pages._spend_gate("lens", 1100)
 		and not g._pages._spend_gate("lens", 1200))
@@ -195,6 +208,9 @@ static func run(g: Game) -> void:
 	g._pages._spend_guard_ms.erase("hint")
 	g._pages._spend_guard_ms.erase("lens")
 	g._resonance._res_claim_at = u13_claim_at
+	g._tabs_ref.current_tab = u13_tab
+	if not u13_popup:
+		g._hide_popup()
 	g._engine._experiment_pending_pair.clear()
 	for u13_raw_p in u13_exp_pair:
 		g._engine._experiment_pending_pair.append(String(u13_raw_p))
@@ -206,6 +222,7 @@ static func run(g: Game) -> void:
 		and g._engine._auto == u13_auto and g._spirit._companion_unlocked == u13_unlocked
 		and g._engine.inventory.size() == u13_n_inv and g._engine.known_recipes.size() == u13_n_known
 		and g._pages._experiment_hint_ids.size() == u13_n_hint_ids
-		and g._resonance._res_claim_at == u13_claim_at)
+		and g._resonance._res_claim_at == u13_claim_at
+		and g._tabs_ref.current_tab == u13_tab and g._popup.visible == u13_popup)
 	Selftest.check("u13 guards released for later suites", not g._pages._spend_guard_ms.has("hint")
 		and not g._pages._spend_guard_ms.has("lens"))

@@ -1387,6 +1387,9 @@ func _build_spring_page(container: VBoxContainer) -> void:
 func _spend_gate(key: String, now_ms: int) -> bool:
 	# True — трата разрешена (окно свободно) и ключ взведён; False — повторный тап
 	# внутри SPEND_GUARD_MSEC. now_ms параметром, чтобы это было чисто тестируемо.
+	# Взводится на входе, поэтому отказанного следующим гейтом тапа окно тоже
+	# тратит 250 мс: это анти-спам очереди нажатий (тот же смысл, что
+	# _collect_all_ms в core.gd), а не бухгалтерия списаний.
 	var last := int(_spend_guard_ms.get(key, -Game.SPEND_GUARD_MSEC))
 	if now_ms - last < Game.SPEND_GUARD_MSEC:
 		return false
@@ -1426,8 +1429,6 @@ func _hint() -> bool:
 	_experiment_hint_ids.append(a)
 	_experiment_hint_ids.append(b)
 	_experiment_filter = "hint"
-	# окно траты фиксируется здесь, у самой кассы (входной вызов занял его этим же тиком)
-	_spend_gate("hint", Time.get_ticks_msec())
 	g._engine._spend_ether(Game.HINT_COST)
 	Analytics.track("hint_purchase", {"source": "svetik", "cost": Game.HINT_COST, "left": a, "right": b})
 	g._engine.status_text = "Светик шепчет: попробуй «%s» + «%s». Результат откроешь сам." % [
@@ -1690,8 +1691,6 @@ func _lens_reveal() -> bool:
 		Sfx.error()
 		g._engine._refresh()
 		return false
-	# окно траты фиксируется здесь, у самой кассы (входной вызов занял его этим же тиком)
-	_spend_gate("lens", Time.get_ticks_msec())
 	g._engine._spend_ether(Game.LENS_COST)
 	var r: Dictionary = cand[randi() % cand.size()]
 	var a := String(r["a"])
