@@ -124,7 +124,9 @@ static func run(g: Game) -> void:
 
 	# Слив возможных утечек из предыдущих сюит ДО проверок: иначе утёкшая попап
 	# (а) красит T1 чужим дефектом и (б) крадёт второй вызов в T2, отчего краснеет
-	# и «esc settings closes second». Красным остаётся ровно одна своя проверка.
+	# и «esc settings closes second». Входная проверка называется первой и красится
+	# всегда, когда стек был не пуст (утечка, которую Esc не умеет закрывать, красит
+	# и нижние кейсы — это честно, но именована она вот этой строкой).
 	var _drain := 0
 	while _drain < 25 and not _no_modal_visible(g):
 		if g._engine._auto:
@@ -136,7 +138,9 @@ static func run(g: Game) -> void:
 		_drain += 1
 	Selftest.check("esc stack was clean on entry", _drain == 0 and _no_modal_visible(g))
 
-	# T1: пустой стек -> false: Esc не помечен потреблённым, выход из игры достижим
+	# T1: пустой стек -> false. Наблюдаемо ровно решение «закрывать нечего»; что
+	# именно из-за этого Esc не помечается потреблённым и выход из игры достижим —
+	# следствие в main.gd:1342-1344, оно в headless не проверяется (осознанный зазор).
 	var _mk := InputEventKey.new()
 	_mk.pressed = true
 	_mk.keycode = KEY_A
