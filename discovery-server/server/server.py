@@ -19,7 +19,7 @@ import re
 import sys
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 import sqlite3
@@ -132,6 +132,69 @@ LETTER_GLOBAL_DAILY_LIMIT = int(os.environ.get("ALCHEMY_LETTER_GLOBAL_DAILY_LIMI
 # мировой счётчики здесь совпадают по смыслу).
 ATLAS_COOLDOWN_SEC = float(os.environ.get("ALCHEMY_ATLAS_COOLDOWN_SEC", "60"))
 ATLAS_DAILY_LIMIT = int(os.environ.get("ALCHEMY_ATLAS_DAILY_LIMIT", "10"))
+
+# ---------------------------------------------------------------------------
+# T06: ЕДИНАЯ ВРЕМЕННАЯ ШКАЛА СЕРВЕРА.
+# Граница «суток» обязана быть ОДНОЙ для всех фич: цель дня (_ensure_challenge/
+# _score_challenge), письма (_date_minus/бэклог), атлас, жила/ярмарка
+# (_week_key/_fair_ensure/last_seen), лента today_events, дневные квоты
+# (_reserve_llm_generation). Единственный источник времени — _now_dt():
+# текущий момент UTC, сдвинутый на фиксированный DAY_TZ_OFFSET (например
+# "+03:00" — сутки «пришпилены» к МСК; пусто/0 = UTC). Все дневные ключи
+# (_today/_today_date) и все created_at/first_at, которые пишет сервер
+# (_now_iso), идут только через эти хелперы. Вызовы SQLite date('now')/
+# datetime('now') в Python-SQL больше НЕ используются — дата считается в
+# Python и передаётся параметром, иначе смещение применилось бы не ко всем
+# сравнениям. Дефолты схемы DEFAULT (datetime('now')) остаются UTC: эти
+# колонки (created_at у letters/atlas_pages/players-легаси, first_at у
+# resonance_seen/vein_points) — pure audit: с дневными ключами не
+# сравниваются (аудит — в комментариях schema.sql). Эпоха time.time()
+# (lock_ts, last_at в квотах) от TZ не зависит и НЕ переводится:
+# wall-clock/NTP-скачок на ней ограничен лишь запасом LOCK_TTL (U6 M2).
+# Forward-only: старые строки в смешанных шкалах не бэкфиллятся; с момента
+# деплоя все записи равномерны, а дневные ключи существующих «дней»
+# перевернутся один раз (разовый сдвиг границы — принятый компромисс).
+def _parse_day_tz_offset(raw: str) -> int:
+    """DAY_TZ_OFFSET: '[+-]HH[:MM]' (напр. '+03:00', '-4', '+0530'); ''/0 — UTC.
+    Нераспознанное значение — падение на старте (лучше не стартануть, чем
+    молча жить в неправильной шкале и разъезжать границами дня)."""
+    raw = (raw or "").strip()
+    if raw in ("", "0", "utc", "UTC", "+0", "-0"):
+        return 0
+    m = re.fullmatch(r"([+-])(\d{1,2})(?::?(\d{2}))?", raw)
+    if not m:
+        raise ValueError("DAY_TZ_OFFSET должен быть вида '+03:00' / '-4' / '0', получено %r" % raw)
+    sign = -1 if m.group(1) == "-" else 1
+    hours, minutes = int(m.group(2)), int(m.group(3) or 0)
+    if hours > 14 or minutes > 59:
+        raise ValueError("DAY_TZ_OFFSET вне диапазона ±14:00: %r" % raw)
+    return sign * (hours * 3600 + minutes * 60)
+
+
+DAY_TZ_OFFSET_SEC = _parse_day_tz_offset(os.environ.get("DAY_TZ_OFFSET", ""))
+
+
+def _now_dt() -> datetime:
+    """Серверная «сейчас» (naive): UTC + DAY_TZ_OFFSET. ЕДИНСТВЕННАЯ точка,
+    откуда всё остальное время сервера берёт шкалу (T06)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=DAY_TZ_OFFSET_SEC)
+
+
+def _now_iso() -> str:
+    """Метка времени для записей сервера в единой шкале (isoformat с 'T' —
+    на нём завязана миграция U6, отличать Python-записи от sqlite-дефолтов)."""
+    return _now_dt().isoformat()
+
+
+def _today() -> str:
+    """Ключ дня 'YYYY-MM-DD' в единой серверной шкале (UTC+DAY_TZ_OFFSET)."""
+    return _now_dt().strftime("%Y-%m-%d")
+
+
+def _today_date() -> date:
+    """Сегодняшний datetime.date в единой шкале (недельный слой, fallback'ы)."""
+    return _now_dt().date()
+
 
 # Резонанс первооткрывателя (v24): чужой повтор твоего вещества → отголосок.
 ECHO_ETHER = 5   # эфир за один забранный отголосок
@@ -1014,7 +1077,7 @@ FAIR_CONSOLATION_CAP = 20  # потолок вкладов для утешени
 
 def _week_key(day=None) -> str:
     from datetime import date as _date
-    d = _date.fromisoformat(day) if isinstance(day, str) else (day or _date.today())
+    d = _date.fromisoformat(day) if isinstance(day, str) else (day or _today_date())
     iso = d.isocalendar()
     return f"{iso[0]}-W{iso[1]:02d}"
 
@@ -1037,8 +1100,8 @@ def _week_pick(salt: str, week: str, tags: list) -> str:
 
 
 def _vein_state(conn: sqlite3.Connection, week: str, today=None):
-    """Теги жилы недели + расползся ли туман (0 находок к среде → второй тег)."""
-    from datetime import date as _date
+    """Теги жилы недели + расползся ли туман (0 находок к среде → второй тег).
+    today по умолчанию — сегодня в ЕДИНОЙ серверной шкале (T06)."""
     tags = _week_tags(conn)
     tag1 = _week_pick("vein1_", week, tags)
     tag2 = _week_pick("vein2_", week, tags)
@@ -1050,7 +1113,7 @@ def _vein_state(conn: sqlite3.Connection, week: str, today=None):
         "WHERE e.tag = ? AND date(r.created_at) >= date(?) AND r.discoverer IS NOT NULL",
         (tag1, monday),
     ).fetchone()["c"]
-    day = today or _date.today()
+    day = today or _today_date()
     spread = hits == 0 and day.weekday() >= 2
     return tag1, tag2, spread
 
@@ -1062,6 +1125,8 @@ def _fair_ensure(conn: sqlite3.Connection, week: str) -> dict:
     tags = _week_tags(conn)
     tag = _week_pick("fair_", week, tags)
     since = (_week_monday(week) - timedelta(days=6)).isoformat()
+    # T06: last_seen пишется тем же _today() (единая шкала), поэтому сравнение
+    # с date(since) честно: обе стороны — календарные сутки сервера.
     active7 = conn.execute(
         "SELECT COUNT(*) AS c FROM players WHERE last_seen IS NOT NULL AND last_seen >= date(?)",
         (since,),
@@ -1192,9 +1257,12 @@ def _upsert_player(conn: sqlite3.Connection, nick: str, device_id: str) -> str:
         "SELECT nick FROM players WHERE device_id = ?", (device_id,)
     ).fetchone()
     if existing is not None:
+        # T06: last_seen — параметр Python (единая шкала), а не SQLite date('now'):
+        # иначе на не-UTC хосте окно «7 дней» ярмарки(_fair_ensure) и last_seen
+        # жили бы в разных шкалах.
         conn.execute(
-            "UPDATE players SET last_seen = date('now') WHERE device_id = ?",
-            (device_id,),
+            "UPDATE players SET last_seen = ? WHERE device_id = ?",
+            (_today(), device_id),
         )
         return existing["nick"]
     cleaned = clean_nick(nick)
@@ -1207,8 +1275,8 @@ def _upsert_player(conn: sqlite3.Connection, nick: str, device_id: str) -> str:
     for _ in range(3):
         try:
             conn.execute(
-                "INSERT INTO players (nick, device_id, last_seen, created_at) VALUES (?, ?, date('now'), datetime('now'))",
-                (final_nick, device_id),
+                "INSERT INTO players (nick, device_id, last_seen, created_at) VALUES (?, ?, ?, ?)",
+                (final_nick, device_id, _today(), _now_iso()),
             )
             return final_nick
         except sqlite3.IntegrityError:
@@ -1277,10 +1345,6 @@ def _fallback_glyph(name: str, category: str) -> str:
     return f"{base}{lo + h % (hi - lo + 1)}"
 
 
-def _today() -> str:
-    return datetime.now().strftime("%Y-%m-%d")
-
-
 def _experiment_uses_llm() -> bool:
     """True when a new experiment can spend an external LLM request.
 
@@ -1310,6 +1374,9 @@ def _reserve_llm_generation(
     """
     if not _experiment_uses_llm():
         return True, ""
+    # T06: cooldown окно — эпоха time.time() (от TZ не зависит, как lock_ts);
+    # дневной ключ лимита — _today() (единая шкала). Скачок wall-clock/NTP
+    # искажает только кулдаун, не границу дня.
     now = time.time()
     day = _today()
     row = conn.execute(
@@ -1459,7 +1526,7 @@ def _ensure_challenge(conn: sqlite3.Connection) -> dict:
         conn.execute(
             "INSERT OR IGNORE INTO challenges (day, target, target_name, hint, created_at) "
             "VALUES (?, ?, ?, ?, ?)",
-            (day, target, target_name, hint, datetime.now().isoformat()),
+            (day, target, target_name, hint, _now_iso()),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM challenges WHERE day = ?", (day,)).fetchone()
@@ -1485,7 +1552,7 @@ def _score_challenge(conn: sqlite3.Connection, a: str, b: str, nick: str, device
     ch = _ensure_challenge(conn)
     if not (a == ch["target"] or b == ch["target"]):
         return {"won": False, "first": False, "target_name": ch["target_name"]}
-    now_iso = datetime.now().isoformat()
+    now_iso = _now_iso()
     # I-2: единый атомарный переход вместо SELECT→UPDATE/INSERT. Прежняя
     # схема на параллельных запросах одного устройства либо давала двойной
     # won (оба потока видели completed_at IS NULL), либо роняла запрос на
@@ -1686,8 +1753,8 @@ ATLAS_HISTORY_MAX = 7  # прошлых страниц в ответе (альб
 
 
 def _date_minus(days: int) -> str:
-    from datetime import date, timedelta
-    return (date.today() - timedelta(days=days)).isoformat()
+    """Дата N дней назад в ЕДИНОЙ серверной шкале (T06): ключи писем/ревилов."""
+    return (_today_date() - timedelta(days=days)).isoformat()
 
 
 def _letter_candidates(conn: sqlite3.Connection, nick: str, device_id: str):
@@ -1931,7 +1998,7 @@ def _link_existing(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, row, de
     игрок получает его же. DiscoveryData возвращается с reused=True — клиент
     не засчитывает это как «первооткрытие» и не создаёт дубль в своей БД.
     """
-    created_at = datetime.now().isoformat()
+    created_at = _now_iso()
     conn.execute(
         """INSERT INTO recipes (pair_key, a, b, a_id, b_id, out_id, discoverer, discoverer_device, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -1971,7 +2038,7 @@ def _materialize(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, name, cat
         a_info["layer"], b_info["layer"], pair_key, existing_colors,
     )
 
-    created_at = datetime.now().isoformat()
+    created_at = _now_iso()
     element_cursor = conn.execute(
         """INSERT INTO elements (slug, name, name_norm, color, layer, category, glyph, d, author, author_device, tag, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -2319,7 +2386,7 @@ def discover(req: DiscoverRequest):
                 "INSERT INTO world_events (pair_key, a, b, out, out_name, discoverer, created_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (pair_key, req.a, req.b, discovery.slug, discovery.name, nick,
-                 datetime.now().isoformat()),
+                 _now_iso()),
             )
             # ежедневная цель-гонка
             challenge_info = _score_challenge(conn, req.a, req.b, nick, req.device_id)
@@ -2471,12 +2538,15 @@ async def events(limit: int = Query(20, ge=1, le=100)):
             "ORDER BY e.id DESC LIMIT ?",
             (limit,),
         ).fetchall()
-        now = time.time()
+        now_dt = _now_dt()
         evs = []
         for r in rows:
             ago = 0
             try:
-                ago = max(0, int(now - datetime.fromisoformat(r["created_at"]).timestamp()))
+                # T06: created_at пишется в единой шкале (_now_iso) — разница
+                # тоже в единой шкале, без .timestamp() (тот трактовал naive
+                # как LOCAL-время хоста и врал на не-UTC сервере).
+                ago = max(0, int((now_dt - datetime.fromisoformat(r["created_at"])).total_seconds()))
             except (ValueError, TypeError):
                 ago = 0
             evs.append({
@@ -2504,8 +2574,12 @@ async def challenge(device_id: str = Query("", max_length=128)):
     conn = get_db()
     try:
         ch = _ensure_challenge(conn)
+        # T06: «сегодня» для ленты — Python-ключ дня единой шкалы (UTC+смещение),
+        # а не SQLite date('now') (чистый UTC): goal дня и today_events теперь
+        # переворачиваются в ОДИН момент.
         today_count = conn.execute(
-            "SELECT COUNT(*) AS c FROM world_events WHERE date(created_at) = date('now')"
+            "SELECT COUNT(*) AS c FROM world_events WHERE date(created_at) = ?",
+            (_today(),),
         ).fetchone()["c"]
         first = ch["first_nick"]
         completions = conn.execute(
@@ -2601,9 +2675,9 @@ async def set_me(req: ProfileRequest):
         ).fetchone()
         try:
             conn.execute(
-                """INSERT INTO players (nick, device_id, created_at) VALUES (?, ?, datetime('now'))
+                """INSERT INTO players (nick, device_id, created_at) VALUES (?, ?, ?)
                    ON CONFLICT(device_id) DO UPDATE SET nick = excluded.nick""",
-                (nick, req.device_id),
+                (nick, req.device_id, _now_iso()),
             )
         except sqlite3.IntegrityError:
             # гонка: ник заняли между проверкой и записью
@@ -2751,7 +2825,7 @@ async def save_house(req: HouseRequest):
             raise HTTPException(status_code=400, detail="Домик слишком большой")
         conn.execute(
             "UPDATE players SET house = ?, house_updated_at = ? WHERE device_id = ?",
-            (house_json, datetime.now().isoformat(), req.device_id),
+            (house_json, _now_iso(), req.device_id),
         )
         conn.commit()
         return HouseResponse(ok=True, nick=nick, avatar=avatar_for(nick), house=req.house)
@@ -3082,10 +3156,9 @@ async def atlas_solve(req: AtlasSolveRequest):
 @app.get("/api/week/status", response_model=WeekStatusResponse)
 async def week_status(device_id: str = Query("", max_length=128)):
     """Недельный слой: жила (теги, мои находки/прожилки) + котёл ярмарки."""
-    from datetime import date as _date
     conn = get_db()
     try:
-        today = _date.today()
+        today = _today_date()  # T06: единая серверная шкала (не локальная дата хоста)
         week = _week_key(today)
         tag1, tag2, spread = _vein_state(conn, week, today)
         my_hits = 0
@@ -3140,11 +3213,10 @@ async def fair_brew(req: FairBrewRequest):
 
     Выход сверяется с recipes (античит надуманного out); одна пара считается
     раз в неделю с устройства (антифлуд повторных варок)."""
-    from datetime import date as _date
     from gen_llm import canonical_pair_key
     conn = get_db()
     try:
-        today = _date.today()
+        today = _today_date()  # T06: единая серверная шкала
         week = _week_key(today)
         fair = _fair_ensure(conn, week)
         pair_key = canonical_pair_key(req.a, req.b)
@@ -3187,10 +3259,9 @@ async def fair_claim(req: FairClaimRequest):
 
     Закрытый котёл + вклад ≥3 → вечный реген (клиент капает +1.0 суммарно);
     иначе — утешение эфиром 30×вклад (кап 20). Повторный забор запрещён."""
-    from datetime import date as _date
     conn = get_db()
     try:
-        today = _date.today()
+        today = _today_date()  # T06: единая серверная шкала
         week = _week_key(today)
         prev_week = _week_key(_week_monday(week) - timedelta(days=7))
         grants = []

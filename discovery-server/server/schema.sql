@@ -1,6 +1,16 @@
 -- Схема БД сервера первооткрытий
 -- SQLite, запускается через PRAGMA journal_mode=WAL
 -- Стартовые данные (54 вещества / 50 рецептов) загружаются из seed.py.
+--
+-- ВРЕМЕННАЯ ШКАЛА (T06): сервер пишет все дневные ключи и created_at/first_at
+-- через Python-хелперы единой шкалы (server.py: _today/_today_date/_now_iso =
+-- UTC + DAY_TZ_OFFSET). Дефолты ниже DEFAULT (datetime('now')) — это UTC SQLite:
+-- они допустимы ТОЛЬКО как audit-колонки, ни с какими дневными ключами в коде
+-- не сравниваются (created_at у letters/atlas_pages/resonance_seen/
+-- vein_points.first_at, легаси-строки seed.py). Серверные пути, где дата
+-- участвует в решениях (цель дня, last_seen ярмарки, today_events ленты,
+-- created_at элементов/рецептов/событий), передают явный параметр — SQLite
+-- date('now')/datetime('now') в SQL из Python больше не встречается.
 
 PRAGMA journal_mode=WAL;
 
