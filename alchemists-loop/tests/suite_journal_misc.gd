@@ -397,7 +397,7 @@ static func run(g: Game) -> void:
 
 	# ---------- M-2: миграция журнала не затирает legacy при неудачной записи ----
 	# Если запись нового файла журнала падёт, legacy-копию в стираемом сейве
-	# затираать нельзя: перенесённые записи потерялись бы и там, и тут. Пишем
+	# затирать нельзя: перенесённые записи потерялись бы и там, и тут. Пишем
 	# свежий legacy-файл, ломаем запись журнала (временный путь в несуществующей
 	# папке → FileAccess.open возвращает null) и наблюдаем, что стираемый файл
 	# СОХРАНИЛ legacy-ключ.
@@ -461,7 +461,8 @@ static func run(g: Game) -> void:
 	Monetization._finish_purchase(_creq, false)
 	# Шаг 4 брифа: магазин не подтвердил — начисление уже сделано, значит игрок видит
 	# результат (purchase_succeeded эмитится), но журнал «полностью завершено» не
-	# тронут, а pending остался с отметкой начисления — это работа для restore.
+	# тронут; pending остаётся (работа для restore), а отметка «уже начислено» —
+	# в секции granted того же журнала (I-1).
 	Selftest.check("t22 denied store still announces the granted purchase",
 		_probe.events.size() == 1 and String(_probe.events[0]) == "ok:ether_pack_small"
 		and g._engine.ether + g._engine.ether_overflow == _eth0 + 500)

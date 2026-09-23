@@ -340,15 +340,19 @@ func _finish_purchase(request: Dictionary, unverified: bool) -> void:
 	# granted-отметка не снимается (mark_processed_purchase стирает её только при
 	# успешной записи). Порядок один: сначала успешная запись журнала, только затем
 	# снятие pending.
+	var closed := false
 	if confirmed:
-		if UserData.mark_processed_purchase(provider, token, sku):
+		closed = UserData.mark_processed_purchase(provider, token, sku)
+		if closed:
 			UserData.clear_pending_purchase(product_id)
 		else:
 			push_warning("Monetization: журнал покупок не записан — покупку не считаем закрытой, повторим при следующем запуске.")
 	# Товар игрок уже получил (или получит при ретрае), поэтому успех
 	# показываем в обеих ветках; различает их только журнал.
 	purchase_succeeded.emit(product_id, provider)
-	Analytics.track("purchase_unconfirmed" if not confirmed else "purchase_success", {
+	# «purchase_success» — только действительно закрытая покупка (журнал записан);
+	# и неподтверждённый магазин, и упавшая запись журнала — это unconfirmed.
+	Analytics.track("purchase_unconfirmed" if not closed else "purchase_success", {
 		"sku": product_id, "store": provider, "type": product_type,
 	})
 	_pending_product = ""
