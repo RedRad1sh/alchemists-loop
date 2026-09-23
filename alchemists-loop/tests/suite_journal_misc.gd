@@ -127,23 +127,22 @@ static func run(g: Game) -> void:
 	# и «esc settings closes second». Красным остаётся ровно одна своя проверка.
 	var _drain := 0
 	while _drain < 25 and not _no_modal_visible(g):
+		if g._engine._auto:
+			# Esc автоварку не закрывает, слив тут бессилен: выходим и честно
+			# красим входную проверку ниже, а не 25 холостых итераций
+			break
 		if not g._close_top_modal():
 			break
 		_drain += 1
-	Selftest.check("esc stack was clean on entry", _drain == 0)
+	Selftest.check("esc stack was clean on entry", _drain == 0 and _no_modal_visible(g))
 
-	# T1: предикат ESC и решение «потреблять» наблюдаются через _handle_esc — иначе
-	# регрессия (безусловный set_input_as_handled, потерянный ke.pressed/keycode)
-	# проходит зелёной: булев шов _close_top_modal её не видит.
+	# T1: пустой стек -> false: Esc не помечен потреблённым, выход из игры достижим
 	var _mk := InputEventKey.new()
 	_mk.pressed = true
 	_mk.keycode = KEY_A
 	var _unpressed := _esc_key()
 	_unpressed.pressed = false
 	var _not_key := InputEventMouseButton.new()
-	Selftest.check("esc wiring ignores non-key events", g._handle_esc(_not_key) == false)
-	Selftest.check("esc wiring ignores other keys", g._handle_esc(_mk) == false)
-	Selftest.check("esc wiring ignores key release", g._handle_esc(_unpressed) == false)
 	Selftest.check("esc nothing open returns false", g._handle_esc(_esc_key()) == false)
 	Selftest.check("esc false branch hid nothing", _no_modal_visible(g)
 		and g._engine._auto_cancel == _acancel0 and g._engine.status_text == _status0)
@@ -161,6 +160,15 @@ static func run(g: Game) -> void:
 	g._home._decor_popup.visible = true
 	g._hub._settings_dim.visible = true
 	g._hub._settings_popup.visible = true
+	# Предикат ESC проверяется ПРИ ОТКРЫТОЙ модалке. На пустом стеке это бессмысленно:
+	# там _close_top_modal() вернёт false в любом случае, поэтому и потеря `ke.pressed`,
+	# и потеря проверки keycode прошли бы зелёными.
+	Selftest.check("esc wiring ignores non-key events", g._handle_esc(_not_key) == false
+		and g._home._decor_popup.visible and g._hub._settings_popup.visible)
+	Selftest.check("esc wiring ignores other keys", g._handle_esc(_mk) == false
+		and g._home._decor_popup.visible and g._hub._settings_popup.visible)
+	Selftest.check("esc wiring ignores key release", g._handle_esc(_unpressed) == false
+		and g._home._decor_popup.visible and g._hub._settings_popup.visible)
 	var _t2a := g._handle_esc(_esc_key())
 	Selftest.check("esc decor closes above settings", _t2a
 		and not g._home._decor_popup.visible
