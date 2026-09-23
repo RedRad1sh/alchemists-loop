@@ -2,9 +2,13 @@
 Регрессии T02+T07: угон идентичности через ник и нормализация ников.
 
 Сценарии (запускаются в T09; на машине разработки нет fastapi — не исполняются):
-- второй device НЕ может присвоить занятый ник через brew-check/house/register;
+- второй device НЕ переименовывает себя в чужой ник через brew-check/house/register
+  (ник известного устройства меняется только через POST /api/me);
+- новый device с валидным, но занятым ником регистрируется с унифицированным
+  ником (200, ник+sha256(device)[:4]), 400 — только не-нормализованный ник;
 - ник меняется только через POST /api/me, с проверкой занятости;
 - вне правил ник -> 400 и ничего не записано (T07); a/b без slug-валидации -> 422;
+- слаг длинного кириллического имени <= 64 и проходит контракт a/b;
 - отголоски резонанса кредитуются по device_id автора, а не по нику;
 - delete_account чистит авторство только своего устройства;
 - миграция players.nick UNIQUE идемпотентна и переименовывает дубли.
@@ -57,7 +61,10 @@ class TestNickHijack:
             assert client.get("/api/me", params={"device_id": "dev-attacker"}).json()["nick"] == "Злодей"
             assert client.get("/api/me", params={"device_id": "dev-victim"}).json()["nick"] == "Варда"
 
-    def test_new_device_cannot_take_occupied_nick(self, tmp_path, monkeypatch):
+    def test_new_device_with_occupied_valid_nick_gets_suffix_not_400(self, tmp_path, monkeypatch):
+        """Решение контроллера: валидный, но занятый ник НЕ 400 (иначе свежий
+        дефолт «Алхимик» блокирует каждую новую установку) — устройство
+        регистрируется с детерминированным унифицированным ником."""
         srv = _srv(tmp_path, monkeypatch)
         client = TestClient(srv.app)
         with client:
@@ -65,9 +72,33 @@ class TestNickHijack:
             r = client.post("/api/brew-check", json={
                 "a": "fire", "b": "water", "nick": "Варда", "device_id": "dev-new",
             })
-            assert r.status_code == 400
-            # новая система не зарегистрирована (ничего не записано)
-            assert client.get("/api/me", params={"device_id": "dev-new"}).json()["nick"] == ""
+            assert r.status_code == 200, r.text
+            suffix = hashlib.sha256(b"dev-new").hexdigest()[:4]
+            # канонический ник — в ответе
+            assert r.json()["nick"] == f"Варда-{suffix}"
+            assert client.get("/api/me", params={"device_id": "dev-new"}).json()["nick"] == f"Варда-{suffix}"
+            # жертва не тронута
+            assert client.get("/api/me", params={"device_id": "dev-victim"}).json()["nick"] == "Варда"
+
+    def test_two_devices_default_nick_both_200_second_gets_suffix(self, tmp_path, monkeypatch):
+        """Дефолт клиента «Алхимик» (balance.gd): первый забирает ник,
+        вторая система — 200 с суффиксом, а не 400."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = TestClient(srv.app)
+        body = {"a": "fire", "b": "water", "nick": "Алхимик"}
+        with client:
+            r1 = client.post("/api/player/register", json={**body, "device_id": "dev-1"})
+            assert r1.status_code == 200
+            assert r1.json()["nick"] == "Алхимик"
+            r2 = client.post("/api/player/register", json={**body, "device_id": "dev-2"})
+            assert r2.status_code == 200
+            suffix = hashlib.sha256(b"dev-2").hexdigest()[:4]
+            assert r2.json()["nick"] == f"Алхимик-{suffix}"
+            # ник первого не перетёрт; второй ник стабилен при повторных запросах
+            assert client.get("/api/me", params={"device_id": "dev-1"}).json()["nick"] == "Алхимик"
+            r3 = client.post("/api/brew-check", json={**body, "device_id": "dev-2"})
+            assert r3.status_code == 200
+            assert r3.json()["nick"] == f"Алхимик-{suffix}"
 
     def test_register_and_house_do_not_rename(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
@@ -98,6 +129,18 @@ class TestNickHijack:
             # освободившийся ник можно взять
             assert client.post("/api/me", json={"device_id": "dev-1", "nick": "Кассандра"}).status_code == 200
             assert client.post("/api/me", json={"device_id": "dev-2", "nick": "Варда"}).status_code == 200
+
+
+class FakeLongName:
+    """LLM-заглушка: длинное кириллическое имя, слаг которого в транслитерации
+    заведомо длиннее 64 символов (T07: результат обязан влезать в контракт a/b)."""
+
+    def available(self):
+        return True
+
+    def generate(self, a, b, a_name, b_name, pair_key):
+        return {"combinable": True,
+                "name": "Хрустальная эссенция вечерних сумраков расплавленного света " * 2}
 
 
 class TestNickNormalization:
@@ -132,6 +175,47 @@ class TestNickNormalization:
                     "a": bad, "b": "water", "nick": "Варда", "device_id": "dev-1",
                 })
                 assert r.status_code == 422, (bad, r.text)
+
+    def test_long_cyrillic_name_slug_fits_contract(self, tmp_path, monkeypatch):
+        """T07/slug-cap: длинное кириллическое имя -> слаг <= 64 и проходит
+        валидацию a/b (brew-check принимает его как ингредиент)."""
+        import re
+
+        srv = _srv(tmp_path, monkeypatch, FakeLongName())
+        client = TestClient(srv.app)
+        with client:
+            _me(client, "dev-1", "Варда")
+            r = client.post("/api/discover", json={
+                "a": "stone", "b": "plant", "nick": "Варда", "device_id": "dev-1",
+            })
+            assert r.status_code == 200, r.text
+            slug = r.json()["discovery"]["slug"]
+            assert len(slug) <= 64, slug
+            assert re.match(r"^[a-z0-9][a-z0-9\-]{0,63}$", slug), slug
+            # слаг проходит контракт a/b и принимается эндпоинтом
+            r2 = client.post("/api/brew-check", json={
+                "a": slug, "b": "fire", "nick": "Варда", "device_id": "dev-1",
+            })
+            assert r2.status_code == 200, r2.text
+
+    def test_slugify_and_collision_suffix_stay_within_cap(self):
+        """Юнит: slugify усекает до 64; суффиксные коллизии generate_slug
+        не выходят за лимит и остаются валидным слагом."""
+        import re
+
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+        import server as srv
+
+        long_name = "хрустальная эссенция вечерних сумраков расплавленного света " * 3
+        slug = srv.slugify(long_name)
+        assert len(slug) <= 64
+        assert re.match(r"^[a-z0-9][a-z0-9\-]{0,63}$", slug)
+        existing = {slug}
+        for i in range(12):
+            gen = srv.generate_slug(long_name, f"pair-{i}", existing)
+            assert len(gen) <= 64, gen
+            assert re.match(r"^[a-z0-9][a-z0-9\-]{0,63}$", gen), gen
+            existing.add(gen)
 
 
 class TestEchoesByDevice:

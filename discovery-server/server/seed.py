@@ -193,7 +193,10 @@ def seed_db(conn):
 # открытия у настоящих игроков (UPDATE только по discoverer IS NULL).
 # ---------------------------------------------------------------------------
 import json as _json
+import logging as _logging
 import random as _random
+
+_bot_log = _logging.getLogger("alchemists.seed")
 
 BOT_NICKS = ["Боровик", "Кремень", "Луна", "Шёпот"]
 BOT_CATS = ["window", "rug", "chair", "plant", "lamp", "table", "shelf", "bed", "fireplace"]
@@ -218,12 +221,31 @@ def _bot_house(rng: _random.Random) -> str:
 
 
 def seed_bots(conn) -> None:
-    """Вставить ботов рейтинга (идемпотентно). Вызывать после seed_db."""
+    """Вставить ботов рейтинга (идемпотентно). Вызывать после seed_db.
+
+    С players.nick UNIQUE (T02) «INSERT OR IGNORE» молча пропускал бы бота,
+    чей ник уже занят живым игроком, — пропуск стал явным и логируется.
+    Поведение остального кода не меняется.
+    """
     rng = _random.Random(20260912)
     for i, nick in enumerate(BOT_NICKS):
+        device_id = f"bot-{i}"
+        holder = conn.execute(
+            "SELECT device_id FROM players WHERE nick = ?", (nick,)
+        ).fetchone()
+        holder_dev = None
+        if holder is not None:
+            holder_dev = holder["device_id"] if hasattr(holder, "keys") else holder[0]
+        if holder is not None and holder_dev != device_id:
+            _bot_log.warning(
+                "seed_bots: бот '%s' (%s) пропущен: ник уже занят устройством '%s' "
+                "(players.nick UNIQUE — INSERT OR IGNORE молча не вставил бы строку)",
+                nick, device_id, holder_dev,
+            )
+            continue
         conn.execute(
             "INSERT OR IGNORE INTO players (nick, device_id, house) VALUES (?, ?, ?)",
-            (nick, f"bot-{i}", _bot_house(rng)),
+            (nick, device_id, _bot_house(rng)),
         )
     # по 1 открытию каждому: первые рецепты по pair_key, только если ничьи
     rows = conn.execute(

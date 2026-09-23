@@ -159,6 +159,9 @@ class BrewCheckResponse(BaseModel):
     discoverer: Optional[dict] = None
     pending: bool = False
     message: str
+    # T02: канонический «витринный» ник устройства (для новой системы с занятым
+    # ником — унифицированный, напр. «Алхимик-a1b2»). Клиент сверяет его с /api/me.
+    nick: str = ""
 
 class DiscoverRequest(BrewCheckRequest):
     pass
@@ -665,14 +668,8 @@ def _migrate_nick_identity(conn: sqlite3.Connection) -> None:
             (nick,),
         ).fetchall()
         for r in rivals[1:]:
-            suffix = hashlib.sha256(r["device_id"].encode("utf-8")).hexdigest()[:4]
-            candidate = f"{nick}-{suffix}"
-            bump = 1
-            while conn.execute(
-                "SELECT 1 FROM players WHERE nick = ?", (candidate,)
-            ).fetchone():
-                candidate = f"{nick}-{suffix}{bump}"
-                bump += 1
+            # тот же механизм суффикса, что и при регистрации нового устройства
+            candidate = _uniquify_nick(conn, nick, r["device_id"])
             conn.execute(
                 "UPDATE players SET nick = ? WHERE id = ?", (candidate, r["id"])
             )
@@ -816,29 +813,51 @@ def slugify(name: str) -> str:
     # Убираем повторяющиеся дефисы и обрезаем
     slug = re.sub(r"-+", "-", slug).strip("-")
     slug = re.sub(r"[^a-z0-9-]", "", slug)
+    slug = re.sub(r"-+", "-", slug).strip("-")
+    if not slug:
+        return "element"
+    # T07: канонизация под _SLUG_PATTERN (server.py: BrewCheckRequest.a/b):
+    # не длиннее 64 символов, начинается с [a-z0-9].
+    slug = slug[:_SLUG_MAX_LEN].rstrip("-")
+    if not slug or not re.match(r"^[a-z0-9]", slug):
+        slug = slug[1:] if slug else ""
     return slug or "element"
 
+# Предельная длина слага: совпадает с max_length/pattern a/b (BrewCheckRequest).
+_SLUG_MAX_LEN = 64
+
+def _slug_with_suffix(base: str, suffix: str) -> str:
+    """base+suffix с гарантией вписывания в _SLUG_MAX_LEN (основа усекается
+    по границе дефиса, чтобы результат остался валидным слагом)."""
+    cand = base + suffix
+    if len(cand) <= _SLUG_MAX_LEN:
+        return cand
+    trimmed = base[: _SLUG_MAX_LEN - len(suffix)].rstrip("-") or "el"
+    return trimmed + suffix
+
 def generate_slug(name: str, pair_key: str, existing_slugs: set[str]) -> str:
-    """Генерация уникального слага."""
+    """Генерация уникального слага (результат всегда <= 64 символов и
+    соответствует _SLUG_PATTERN — T07)."""
     base_slug = slugify(name)
-    
+
     if base_slug not in existing_slugs:
         return base_slug
-    
-    # При коллизии добавляем суффикс по hash(pair_key)
+
+    # При коллизии добавляем суффикс по hash(pair_key) — с усечением основы,
+    # чтобы итог не вылез за лимит модели запроса.
     hash_int = _hash_to_int(pair_key, 997)
     counter = 1
     while True:
-        candidate = f"{base_slug}-{counter}"
+        candidate = _slug_with_suffix(base_slug, f"-{counter}")
         if candidate not in existing_slugs:
             return candidate
-        candidate = f"{base_slug}{hash_int}"
+        candidate = _slug_with_suffix(base_slug, str(hash_int))
         if candidate not in existing_slugs:
             return candidate
         counter += 1
         if counter > 10:
             # Фантастический случай — добавляем UUID-суффикс
-            return f"{base_slug}-{uuid.uuid4().hex[:6]}"
+            return _slug_with_suffix(base_slug, f"-{uuid.uuid4().hex[:6]}")
 
 def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     """Преобразование #RRGGBB в (R, G, B)."""
@@ -1038,14 +1057,38 @@ async def health():
     """Проверка доступности сервера."""
     return {"ok": True, "version": "1.0.0"}
 
+def _nick_taken(conn: sqlite3.Connection, nick: str, device_id: str) -> bool:
+    """Занят ли ник другим устройством."""
+    return conn.execute(
+        "SELECT 1 FROM players WHERE nick = ? AND device_id <> ?", (nick, device_id)
+    ).fetchone() is not None
+
+
+def _uniquify_nick(conn: sqlite3.Connection, nick: str, device_id: str) -> str:
+    """Ник свободен — он и есть; занят — детерминированный суффикс по
+    sha256(device_id) (тот же механизм, что в _migrate_nick_identity),
+    со счётчиком при повторной коллизии."""
+    if not _nick_taken(conn, nick, device_id):
+        return nick
+    suffix = hashlib.sha256(device_id.encode("utf-8")).hexdigest()[:4]
+    candidate = f"{nick}-{suffix}"
+    bump = 1
+    while _nick_taken(conn, candidate, device_id):
+        candidate = f"{nick}-{suffix}{bump}"
+        bump += 1
+    return candidate
+
+
 def _upsert_player(conn: sqlite3.Connection, nick: str, device_id: str) -> str:
     """Зарегистрировать игрока и вернуть его «витринный» ник.
 
-    T02: идентичность — device_id; nick для существующего устройства здесь
+    T02: идентичность — device_id; nick для известного устройства здесь
     НЕ меняется (раньше любой brew-check мог присвоить чужой ник). Переименование
-    — только через POST /api/me с проверкой занятости.
-    T07: новая регистрация принимает только нормализованный ник (clean_nick),
-    иначе 400 и ничего не записывается.
+    — только через POST /api/me с проверкой занятости («Ник уже занят»).
+    T07: 400 на этом пути — только для НЕ нормализованного ника (clean_nick).
+    Валидный, но занятый ник у нового устройства (дефолт клиента «Алхимик»)
+    регистрацию НЕ блокирует: устройство заводится с детерминированным
+    унифицированным ником, который и возвращается как канонический.
     """
     existing = conn.execute(
         "SELECT nick FROM players WHERE device_id = ?", (device_id,)
@@ -1062,16 +1105,26 @@ def _upsert_player(conn: sqlite3.Connection, nick: str, device_id: str) -> str:
             status_code=400,
             detail="Ник должен быть 2–24 символа: буквы, цифры, пробел, дефис или подчёркивание",
         )
-    try:
-        conn.execute(
-            "INSERT INTO players (nick, device_id, last_seen, created_at) VALUES (?, ?, date('now'), datetime('now'))",
-            (nick, device_id),
-        )
-    except sqlite3.IntegrityError:
-        # занятый ник (idx_players_nick) или гонка по device_id — не угоняем чужое
-        raise HTTPException(status_code=400, detail="Ник уже занят")
-    return nick
-
+    final_nick = nick
+    for _ in range(3):
+        try:
+            conn.execute(
+                "INSERT INTO players (nick, device_id, last_seen, created_at) VALUES (?, ?, date('now'), datetime('now'))",
+                (final_nick, device_id),
+            )
+            return final_nick
+        except sqlite3.IntegrityError:
+            # гонка по device_id: система создана параллельным запросом —
+            # возвращаем сохранённый ник, а не ошибку «занят»
+            row = conn.execute(
+                "SELECT nick FROM players WHERE device_id = ?", (device_id,)
+            ).fetchone()
+            if row is not None:
+                return row["nick"]
+            # гонка по нику (idx_players_nick): пересчитать унифицированный
+            # ник и повторить попытку
+            final_nick = _uniquify_nick(conn, nick, device_id)
+    raise HTTPException(status_code=503, detail="Не удалось зарегистрировать игрока — повторите попытку")
 
 _LLM_GEN = None
 
@@ -1883,6 +1936,7 @@ async def brew_check(req: BrewCheckRequest):
                     },
                     discoverer={"nick": discoverer, "seq": seq} if discoverer else None,
                     pending=False,
+                    nick=nick,
                     message=(
                         f"Рецепт {req.a}+{req.b} уже открыт {discoverer}"
                         if discoverer
@@ -1894,7 +1948,7 @@ async def brew_check(req: BrewCheckRequest):
         if conn.execute("SELECT 1 FROM rejected_pairs WHERE pair_key = ?", (pair_key,)).fetchone():
             return BrewCheckResponse(
                 ok=True, pair_key=pair_key, found=False, status="not_combinable",
-                out=None, discoverer=None, pending=False,
+                out=None, discoverer=None, pending=False, nick=nick,
                 message=f"«{req.a}» и «{req.b}» не сочетаются",
             )
 
@@ -1906,13 +1960,13 @@ async def brew_check(req: BrewCheckRequest):
         if pending_row and pending_row["state"] == "locked" and time.time() - pending_row["lock_ts"] < LOCK_TTL:
             return BrewCheckResponse(
                 ok=True, pair_key=pair_key, found=False, status="processing",
-                out=None, discoverer=None, pending=True,
+                out=None, discoverer=None, pending=True, nick=nick,
                 message="Пара в обработке — подождите",
             )
 
         return BrewCheckResponse(
             ok=True, pair_key=pair_key, found=False, status="candidate",
-            out=None, discoverer=None, pending=False,
+            out=None, discoverer=None, pending=False, nick=nick,
             message="Пара — кандидат на открытие",
         )
 
