@@ -143,6 +143,40 @@ ATLAS_COOLDOWN_SEC = float(os.environ.get("ALCHEMY_ATLAS_COOLDOWN_SEC", "60"))
 ATLAS_DAILY_LIMIT = int(os.environ.get("ALCHEMY_ATLAS_DAILY_LIMIT", "10"))
 
 # ---------------------------------------------------------------------------
+# T22: ВАЛИДАЦИЯ ПЛАТЁЖНЫХ ЧЕКОВ (состояние на сегодня — честно: гейт выключен)
+#
+# Реального вызова Google Play Developer API / RuStore API здесь НЕТ: в этом
+# проекте нет ни сервисных ключей, ни сети. Поэтому конфигурация по умолчанию
+# обязана «отказывать в проверке», а не «пропускать чек»: при пустом
+# ALCHEMY_RECEIPT_VALIDATION_URL или пустом ALCHEMY_RECEIPT_SERVICE_KEY
+# _validate_receipt_with_vendor() возвращает только verified=False (см. её
+# докстринг), а /api/receipt/verify отвечает 503 vendor_validation_disabled.
+# Сервер с включённым гейтом, но без реального вызова магазина, тоже честно
+# отказывает.
+# Единственный путь к verified=True — ответ ворендора (см. TODO(release)).
+# ---------------------------------------------------------------------------
+RECEIPT_VALIDATION_URL = os.environ.get("ALCHEMY_RECEIPT_VALIDATION_URL", "")
+RECEIPT_SERVICE_KEY = os.environ.get("ALCHEMY_RECEIPT_SERVICE_KEY", "")
+# Причины, означающие «валидатор не смог ответить» (не «чек плохой»): клиент
+# трактует их как unavailable — в отладочной сборке локальное начисление
+# допускается, в релизной — нет.
+RECEIPT_UNAVAILABLE_REASONS = ("vendor_validation_disabled", "vendor_validation_not_implemented")
+# Белый список провайдеров = клиентские store_id (alchemists-loop/autoload/app.gd).
+RECEIPT_PROVIDERS = ("google_play", "rustore")
+# ВНИМАНИЕ (расхождение каталогов): это ДУБЛЬ alchemists-loop/data/monetization.json
+# (products[].store_sku), продублирован сознательно — сервер не читает клиентский
+# каталог. Добавишь SKU в игру и не обновишь этот кортеж → валидатор честно
+# откажет с unknown_sku (в релизе = товар не будет выдан). Синхронизация списков
+# — ручной шаг релиза.
+RECEIPT_SKUS = (
+    "al_loop_ether_500",
+    "al_loop_ether_1500",
+    "al_loop_sage_gold_1",
+    "al_loop_starter_2026",
+    "al_loop_remove_ads",
+)
+
+# ---------------------------------------------------------------------------
 # T06: ЕДИНАЯ ВРЕМЕННАЯ ШКАЛА СЕРВЕРА.
 # Граница «суток» обязана быть ОДНОЙ для всех фич: цель дня (_ensure_challenge/
 # _score_challenge), письма (_date_minus/бэклог), атлас, жила/ярмарка
@@ -549,6 +583,25 @@ class FairClaimResponse(BaseModel):
     ok: bool
     grants: list = []  # [{week, kind: regen|ether, amount}]
 
+
+# T22: проверка платёжного чека. Сырой receipt_token в БД НЕ сохраняется —
+# сервер хранит только его SHA-256 (см. _receipt_hash и таблицу receipts).
+class ReceiptVerifyRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    provider: str = Field(..., min_length=1, max_length=32)
+    sku: str = Field(..., min_length=1, max_length=128)
+    receipt_token: str = Field(..., min_length=1, max_length=4096)
+
+
+class ReceiptVerifyResponse(BaseModel):
+    ok: bool
+    verified: bool = False
+    status: str = ""        # '' | pending | processed
+    reason: str = ""        # verified | vendor_validation_* | vendor_rejected |
+                            # receipt_device_mismatch | unknown_* | empty_*
+    receipt_hash: str = ""  # SHA-256 токена: клиент сверяет ответ со своим запросом
+
+
 # ---------------------------------------------------------------------------
 # Работа с БД
 # ---------------------------------------------------------------------------
@@ -781,6 +834,25 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_recipes_a_id ON recipes(a_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_recipes_b_id ON recipes(b_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_elements_author ON elements(author)")
+        # T22: журнал чеков (см. /api/receipt/verify). Сырой токен не храним —
+        # только SHA-256 (receipt_hash). status: pending — чек увидели, но
+        # магазин его не подтвердил; processed — магазин подтвердил, повторный
+        # запрос отдаёт тот же ответ без нового обращения в магазин.
+        # time.time()-эпохи (T06): от TZ не зависят, с дневными ключами не
+        # сравниваются — audit.
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS receipts (
+                   receipt_hash TEXT PRIMARY KEY,
+                   device_id TEXT NOT NULL,
+                   provider TEXT NOT NULL,
+                   sku TEXT NOT NULL,
+                   status TEXT NOT NULL DEFAULT 'pending',
+                   first_seen_at REAL NOT NULL,
+                   processed_at REAL,
+                   last_seen_at REAL NOT NULL
+               )"""
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_receipts_device ON receipts(device_id)")
         # T02: авторство по device_id + players.nick UNIQUE (миграция старых БД,
         # идемпотентна: PRAGMA-проверки колонок/индексов, дедуп по суффиксу).
         _migrate_nick_identity(conn)
@@ -1207,6 +1279,14 @@ async def startup():
         conn.execute("DELETE FROM pending_pairs WHERE state != 'locked'")
         conn.execute(
             "DELETE FROM pending_pairs WHERE lock_ts <= ?", (time.time() - LOCK_TTL,)
+        )
+        # T22: журнал чеков пополняется каждым запросом; о pending-строках,
+        # которые не обновлялись 30 суток, клиент уже не вспоминал — это мусор
+        # перебора/удалённых установок. processed НЕ чистим: они и есть
+        # серверный ответ «этот чек уже подтверждался».
+        conn.execute(
+            "DELETE FROM receipts WHERE status != 'processed' AND last_seen_at < ?",
+            (time.time() - 30 * 86400,),
         )
         conn.commit()
     finally:
@@ -3304,6 +3384,148 @@ async def fair_claim(req: FairClaimRequest):
                              (w, req.device_id))
         conn.commit()
         return FairClaimResponse(ok=True, grants=grants)
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# T22: серверная валидация платёжных чеков
+# ---------------------------------------------------------------------------
+
+def _receipt_hash(token: str) -> str:
+    """Отпечаток чека: SHA-256 от UTF-8 токена, hex.
+
+    Это тот же отпечаток, что клиент держит в ключе своего локального журнала
+    (UserData._token_key), и тот, что возвращается в ответе: клиент сверяет
+    ответ валидатора со своим чеком и не применяет чужой результат."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _receipt_validation_enabled() -> bool:
+    """Гейт ворендорной проверки: выключен, пока заданы НЕ И URL, И сервисный
+    ключ. Выключенный гейт означает «проверки нет», а не «чек прошёл проверку»."""
+    return bool(RECEIPT_VALIDATION_URL.strip()) and bool(RECEIPT_SERVICE_KEY.strip())
+
+
+def _receipt_error(reason: str) -> dict:
+    """Тело отказа /api/receipt/verify: ok=False и verified=False идут в паре с
+    причиной всегда — чтобы клиент читал reason даже из 4xx/5xx-ответа."""
+    return {"ok": False, "verified": False, "reason": reason}
+
+
+def _validate_receipt_with_vendor(provider: str, sku: str, receipt_token: str) -> dict:
+    """Единственная точка, из которой вообще может прийти verified=True.
+
+    Честно о состоянии репозитория: реального вызова Google Play Developer API /
+    RuStore API здесь нет (нет сервисных ключей и сети), поэтому функция умеет
+    отвечать только «не проверено»:
+    * гейт выключен → vendor_validation_disabled;
+    * гейт включён, но вызова магазина ещё нет → vendor_validation_not_implemented.
+    Ни одна ветка не возвращает verified=True без подтверждения магазина.
+    """
+    if not _receipt_validation_enabled():
+        return {"verified": False, "reason": "vendor_validation_disabled"}
+    # TODO(release): реальный вызов магазина вместо этой заглушки —
+    #   requests.post(RECEIPT_VALIDATION_URL,
+    #                 json={"provider": provider, "sku": sku, "token": receipt_token},
+    #                 headers={"Authorization": "Bearer " + RECEIPT_SERVICE_KEY},
+    #                 timeout=...)
+    #   и разбор ответа в {"verified": bool, "reason": str} (плюс refund/revoke
+    #   статусы). Проверялось бы sandbox-покупкой; здесь проверить нечем.
+    return {"verified": False, "reason": "vendor_validation_not_implemented"}
+
+
+@app.post("/api/receipt/verify", response_model=ReceiptVerifyResponse)
+def receipt_verify(req: ReceiptVerifyRequest):
+    """Проверить чек покупки перед начислением товара (T22).
+
+    Порядок: нормализация → гейт → журнал → вердикт магазина.
+    * verified=True приходит либо из вердикта магазина
+      (_validate_receipt_with_vendor), либо как эхо уже подтверждённой им же
+      записи в журнале; третьего источника нет. При выключенном гейте ответ —
+      503 vendor_validation_disabled: отказ, а не «чек валиден». Отказ отдаётся
+      и для уже processed-чеков: выключенный валидатор не должен разрешать
+      выдачу ни в каком виде (консервативно по правилам задачи);
+    * идемпотентность: первый запрос записывает чек как pending, подтверждённый
+      становится processed; повтор processed-чека тем же устройством отдаёт
+      РОВНО тот же ответ и повторно магазин не дёргает;
+    * тот же чек с другим device_id → 409 (чек уже привязан к устройству);
+    * сырой токен в БД не сохраняется, только его SHA-256.
+
+    T04: sync `def` — будущий блокирующий вызов магазина (requests) уходит в
+    threadpool Starlette и не замораживает event loop.
+    """
+    provider = req.provider.strip().lower()
+    sku = req.sku.strip()
+    token = req.receipt_token.strip()
+    device_id = req.device_id.strip()
+    if device_id == "":
+        raise HTTPException(status_code=400, detail=_receipt_error("empty_device_id"))
+    if provider not in RECEIPT_PROVIDERS:
+        raise HTTPException(status_code=400, detail=_receipt_error("unknown_provider"))
+    if sku not in RECEIPT_SKUS:
+        raise HTTPException(status_code=400, detail=_receipt_error("unknown_sku"))
+    if token == "":
+        raise HTTPException(status_code=400, detail=_receipt_error("empty_receipt_token"))
+    if not _receipt_validation_enabled():
+        raise HTTPException(status_code=503, detail=_receipt_error("vendor_validation_disabled"))
+
+    receipt_hash = _receipt_hash(token)
+    now = time.time()  # T06: epoch-аудит (от TZ не зависит, с днями не сверяется)
+    conn = get_db()
+    try:
+        # INSERT OR IGNORE, а не «прочитал → вставил»: два параллельных запроса
+        # одного чека с разных устройств не должны ни пасть на PRIMARY KEY,
+        # ни дать проигравшему «ок» — он увидит тот же отказ, что и победитель
+        # (тот же принцип атомарного check-and-mark, что в T03/T08).
+        conn.execute(
+            "INSERT OR IGNORE INTO receipts"
+            " (receipt_hash, device_id, provider, sku, status, first_seen_at, last_seen_at)"
+            " VALUES (?, ?, ?, ?, 'pending', ?, ?)",
+            (receipt_hash, device_id, provider, sku, now, now),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM receipts WHERE receipt_hash = ?", (receipt_hash,)
+        ).fetchone()
+        if row["device_id"] != device_id:
+            raise HTTPException(
+                status_code=409,
+                detail={**_receipt_error("receipt_device_mismatch"), "receipt_hash": receipt_hash},
+            )
+        if row["status"] == "processed":
+            return ReceiptVerifyResponse(
+                ok=True, verified=True, status="processed",
+                reason="verified", receipt_hash=receipt_hash,
+            )
+        verdict = _validate_receipt_with_vendor(provider, sku, token)
+        reason = str(verdict.get("reason") or "vendor_rejected")
+        if verdict.get("verified") is True:
+            conn.execute(
+                "UPDATE receipts SET status = 'processed', processed_at = ?, last_seen_at = ?"
+                " WHERE receipt_hash = ?",
+                (now, now, receipt_hash),
+            )
+            conn.commit()
+            return ReceiptVerifyResponse(
+                ok=True, verified=True, status="processed",
+                reason="verified", receipt_hash=receipt_hash,
+            )
+        conn.execute(
+            "UPDATE receipts SET last_seen_at = ? WHERE receipt_hash = ?", (now, receipt_hash)
+        )
+        conn.commit()
+        if reason in RECEIPT_UNAVAILABLE_REASONS:
+            # «валидатор не смог ответить» — отдельный статус от «магазин чек
+            # не подтвердил»: клиент не обязан угадывать конфигурацию сервера.
+            raise HTTPException(
+                status_code=503,
+                detail={**_receipt_error(reason), "receipt_hash": receipt_hash},
+            )
+        return ReceiptVerifyResponse(
+            ok=False, verified=False, status=str(row["status"]),
+            reason=reason, receipt_hash=receipt_hash,
+        )
     finally:
         conn.close()
 

@@ -4,9 +4,25 @@ const GooglePlayBillingAdapterScript = preload("res://platform/google_play_billi
 const RuStorePayAdapterScript = preload("res://platform/rustore_pay.gd")
 const AdsAdapterScript = preload("res://platform/ads_adapter.gd")
 
+# Причины «валидатор не смог ответить» — зеркало серверного
+# RECEIPT_UNAVAILABLE_REASONS (discovery-server/server/server.py). Это НЕ отказ
+# по конкретному чеку, и решение «начислять или нет» здесь другое.
+const RECEIPT_UNAVAILABLE_REASONS := ["vendor_validation_disabled", "vendor_validation_not_implemented"]
+# Потолок очереди проверок чеков: restore теоретически может принести сколько
+# угодно непотреблённых чеков, а каждый — это HTTP-запрос. Сверх потолка чек
+# просто не уходит на проверку и будет повторен на следующем restore.
+const MAX_QUEUED_RECEIPT_CHECKS := 16
+
 # Monetization — фасад магазина и рекламы. Игровой код знает только SKU из
 # data/monetization.json и сигналы этого файла. Начисление идемпотентно:
 # повторный onResume/restore по тому же purchase token ничего не выдаёт.
+#
+# Порядок обработки покупки (T22):
+#   0) сервер проверяет чек (Net.receipt_verify → receipt_verify_result);
+#   1) _grant_product; 2) consume/acknowledge с ЧТЕНИЕМ результата;
+#   3) только после подтверждённого магазина — журнал UserData.mark_processed +
+#   снятие pending. Если магазин не подтвердил — журнал не пишем, pending
+#   остаётся с отметкой «уже начислено», restore повторит только шаг 2.
 
 signal initialized(store_id: String, billing_available: bool, ads_available: bool)
 signal purchase_started(product_id: String)
@@ -28,6 +44,10 @@ var _game: Node = null
 var _booted := false
 var _pending_product := ""
 var _pending_placement := ""
+# T22: очереди покупок, для которых ждём ответ /api/receipt/verify. Порядок
+# совпадает с порядком запросов (очередь Net сериальная), поэтому ответ без
+# receipt_hash корректно снимает голову очереди, а ответ с hash — свой чек.
+var _verify_requests: Array = []
 
 func _ready() -> void:
 	_load_catalog()
@@ -36,6 +56,10 @@ func _ready() -> void:
 func _boot() -> void:
 	store_id = App.store_id
 	provider_label = App.provider_label()
+	# Net — autoload, идущий после Monetization в project.godot: в _ready() его
+	# ещё нет, а call_deferred("_boot") уже есть. Подключаемся именно здесь.
+	if Net != null and not Net.receipt_verify_result.is_connected(_on_receipt_verify_result):
+		Net.receipt_verify_result.connect(_on_receipt_verify_result)
 	_ads = AdsAdapterScript.new()
 	_ads.rewarded_completed.connect(_on_rewarded_completed)
 	_ads.ad_failed.connect(_on_ad_failed)
@@ -210,7 +234,10 @@ func _on_purchases_restored(items: Array) -> void:
 func _on_purchase_received(purchase: Dictionary) -> void:
 	var provider := String(purchase.get("provider", store_id))
 	var sku := String(purchase.get("sku", ""))
-	var token := String(purchase.get("token", ""))
+	# Токен нормализуем на входе: ключ локального журнала и отпечаток, который
+	# сверяет сервер, должны считаться от одного ряда байтов (сервер тоже
+	# strip'ует токен перед SHA-256).
+	var token := String(purchase.get("token", "")).strip_edges()
 	# Единый контракт адаптеров: state — нормализованная строка
 	# "purchased" / "pending" / "rejected". Начисляем только "purchased";
 	# отсутствующее или незнакомое значение всегда трактуем как отказ,
@@ -232,23 +259,166 @@ func _on_purchase_received(purchase: Dictionary) -> void:
 	if token == "":
 		purchase_failed.emit(product_id, "missing_token", "У покупки нет идентификатора")
 		return
-	# В production receipt должен быть проверен сервером Google/RuStore до этой
-	# точки. Фасад принимает нормализованный callback SDK; серверную валидацию
-	# подключаем через backend-плагин/ALCHEMY_RECEIPT_VALIDATION_URL на этапе
-	# релиза, не храним секреты стор в клиенте.
-	if not _grant_product(product_id):
-		purchase_failed.emit(product_id, "grant_failed", "Не удалось начислить покупку")
+	# T22 шаг 0: до начисления чек проверяет сервер (Google Play / RuStore
+	# вердикт), а не только клиент. Ответ приходит асинхронно — очередь Net
+	# сериальная, продолжение в _on_receipt_verify_result.
+	if _verify_requests.size() >= MAX_QUEUED_RECEIPT_CHECKS:
+		# Не начинаем проверку, которую не сможем завершить: чек никуда не
+		# денется — restore принесёт его повторно при следующем onResume.
+		purchase_failed.emit(product_id, "receipt_queue_full", "Очередь проверки чеков заполнена — повторим при следующем запуске")
 		return
-	UserData.mark_processed_purchase(provider, token, sku)
-	UserData.clear_pending_purchase(product_id)
+	if _verify_request_index(provider, sku, token) >= 0:
+		return  # адаптер прислал тот же чек дважды, пока ждём ответ
+	_verify_requests.append({
+		"provider": provider, "sku": sku, "token": token, "product_id": product_id,
+	})
+	Net.receipt_verify(UserData.get_or_create_device_id(), provider, sku, token)
+
+func _verify_request_index(provider: String, sku: String, token: String) -> int:
+	for i in range(_verify_requests.size()):
+		var item: Dictionary = _verify_requests[i]
+		if (String(item.get("provider", "")) == provider
+				and String(item.get("sku", "")) == sku
+				and String(item.get("token", "")) == token):
+			return i
+	return -1
+
+func _take_verify_request(echo_hash: String) -> Dictionary:
+	# Ответ с receipt_hash коррелируется по отпечатку (его считает и сервер); без
+	# него (offline/4xx/5xx net.gd тело не отдаёт) — снимается голова очереди:
+	# запросы уходят и возвращаются строго по одному, порядок сохранён.
+	if echo_hash != "":
+		for i in range(_verify_requests.size()):
+			var item: Dictionary = _verify_requests[i]
+			if String(item.get("token", "")).sha256_text() == echo_hash:
+				_verify_requests.remove_at(i)
+				return item
+		return {}
+	if _verify_requests.is_empty():
+		return {}
+	return _verify_requests.pop_front()
+
+func _on_receipt_verify_result(result: Dictionary) -> void:
+	var request := _take_verify_request(String(result.get("receipt_hash", "")))
+	if request.is_empty():
+		# Ответ без запроса (дубликат, ответ после отмены) или отпечаток не из
+		# нашей очереди: начислять по нему не за что.
+		return
+	var product_id := String(request["product_id"])
+	var is_debug := OS.is_debug_build()
+	if not receipt_grant_allowed(result, is_debug):
+		var reason := String(result.get("reason", ""))
+		if reason == "":
+			reason = String(result.get("message", "сервер не ответил"))
+		purchase_failed.emit(product_id, "receipt_not_verified", "Сервер не подтвердил покупку: %s" % reason)
+		_pending_product = ""
+		return
+	_finish_purchase(request, not (result.get("verified", false) == true))
+
+func _finish_purchase(request: Dictionary, unverified: bool) -> void:
+	var provider := String(request["provider"])
+	var sku := String(request["sku"])
+	var token := String(request["token"])
+	var product_id := String(request["product_id"])
 	var product := get_product(product_id)
-	if String(product.get("type", "")) == "consumable":
-		_adapter.consume(token, sku)
-	else:
-		_adapter.acknowledge(token) if _adapter.has_method("acknowledge") else _adapter.consume(token, sku)
+	var product_type := String(product.get("type", ""))
+	# Шаг 1 — начисление.
+	if not _purchase_already_granted(provider, sku, token, product_id):
+		if not _grant_product(product_id):
+			purchase_failed.emit(product_id, "grant_failed", "Не удалось начислить покупку")
+			return
+		_mark_purchase_granted(provider, sku, token, product_id)
+	# Шаг 2 — подтверждение магазина с ЧТЕНИЕМ результата.
+	var confirmed := _confirm_purchase_with_store(token, sku, product_type == "consumable")
+	_report_purchase(product_id, unverified, confirmed)
+	# Шаг 3 — журнал «полностью завершено» и снятие pending только после
+	# подтверждённого потребления. Иначе consumable зависал: локально чек
+	# «закрыт», restore его больше не отдаст, а в магазине он не потреблён.
+	if confirmed:
+		UserData.mark_processed_purchase(provider, token, sku)
+		UserData.clear_pending_purchase(product_id)
+	# Товар игрок уже получил (или получит при ретрае), поэтому успех
+	# показываем в обеих ветках; различает их только журнал.
 	purchase_succeeded.emit(product_id, provider)
-	Analytics.track("purchase_success", {"sku": product_id, "store": provider, "type": String(product.get("type", ""))})
+	Analytics.track("purchase_unconfirmed" if not confirmed else "purchase_success", {
+		"sku": product_id, "store": provider, "type": product_type,
+	})
 	_pending_product = ""
+
+func _receipt_validator_unavailable(result: Dictionary) -> bool:
+	if result.get("offline", false) == true:
+		return true
+	if String(result.get("reason", "")) in RECEIPT_UNAVAILABLE_REASONS:
+		return true
+	# net.gd тело 4xx/5xx не разбирает — остаётся только «HTTP <код>». 5xx:
+	# валидатор не смог ответить; 4xx: отказ по существу запроса (неизвестный
+	# SKU, чек с другого устройства) — это не «недоступность».
+	return String(result.get("error", "")).begins_with("HTTP 5")
+
+func receipt_grant_allowed(result: Dictionary, is_debug: bool) -> bool:
+	# Решение «можно ли начислять» по ответу валидатора — без побочных эффектов
+	# и без обращения к состоянию, чтобы покрыть её selftest'ом в чистом виде.
+	#
+	# Сервер недоступен / гейт выключен ≠ «разрешить выдачу»: иначе вся проверка
+	# обходится молчанием бэкенда. Но и отбирать у игрока покупку без работающего
+	# бэкенда нельзя, поэтому: в отладочной сборке (OS.is_debug_build) чек
+	# начисляем с честным предупреждением в статусе, в релизной — только
+	# verified: true. Настоящий отказ магазина (ok:false без недоступности)
+	# запрещает выдачу в любой сборке.
+	if result.get("ok", false) == true and result.get("verified", false) == true:
+		return true
+	return is_debug and _receipt_validator_unavailable(result)
+
+func _purchase_already_granted(provider: String, sku: String, token: String, product_id: String) -> bool:
+	# Отметка о начислении живёт в pending, а НЕ в журнале processed: журнал
+	# означает «полностью завершено», а здесь как раз хвост не закрыт.
+	var pending := UserData.get_pending_purchase(product_id)
+	if pending.get("granted", false) != true:
+		return false
+	# Сверяем все три поля: другой токен под той же отметкой — это другая
+	# покупка того же товара, и её начислять надо.
+	return (String(pending.get("provider", "")) == provider
+		and String(pending.get("sku", "")) == sku
+		and String(pending.get("token_hash", "")) == token.sha256_text())
+
+func _mark_purchase_granted(provider: String, sku: String, token: String, product_id: String) -> void:
+	var pending := UserData.get_pending_purchase(product_id)
+	pending["provider"] = provider
+	pending["sku"] = sku
+	pending["granted"] = true
+	pending["token_hash"] = token.sha256_text()
+	if not pending.has("started_at"):
+		pending["started_at"] = Time.get_unix_time_from_system()
+	UserData.set_pending_purchase(product_id, pending)
+
+func _confirm_purchase_with_store(token: String, sku: String, consumable: bool) -> bool:
+	# Честно о сигнале: bool у адаптеров означает «метод плагина нашёлся и был
+	# вызван» (_call_first в google_play_billing.gd / rustore_pay.gd), а не
+	# «магазин подтвердил списание» — код ответа плагина теряется в адаптере.
+	# Порядок это чинит ровно в тех границах, что даёт текущий контракт;
+	# проброс кода магазина — следующий шаг (меняет контракт адаптеров).
+	if _adapter == null:
+		return false
+	if consumable:
+		return _adapter.consume(token, sku) == true
+	if _adapter.has_method("acknowledge"):
+		# non-consumable Google Play без acknowledge рефаундится через 3 дня.
+		return _adapter.acknowledge(token) == true
+	# У RuStore-адаптера acknowledge нет: там consume = confirm_two_step_purchase.
+	return _adapter.consume(token, sku) == true
+
+func _report_purchase(product_id: String, unverified: bool, confirmed: bool) -> void:
+	if _game == null:
+		return
+	var product := get_product(product_id)
+	var text := "Покупка применена: %s." % String(product.get("title", product_id))
+	if unverified:
+		text += " Сервер проверки чеков не ответил: выдача только в отладочной сборке."
+	if not confirmed:
+		text += " Магазин не подтвердил списание — повторим при следующем запуске."
+	_game._engine.status_text = text
+	_game._engine._refresh()
+
 
 func _product_id_for_sku(sku: String) -> String:
 	for product_id in catalog:

@@ -11,6 +11,8 @@
 #   letter_solve(device_id, a, b)     -> сигнал letter_solve_result(result)
 #   atlas_today(device_id)            -> сигнал atlas_result(result)
 #   atlas_solve(device_id, a, b)      -> сигнал atlas_solve_result(result)
+#   receipt_verify(device_id, provider, sku, receipt_token)
+#                                     -> сигнал receipt_verify_result(result)
 #
 # Запросы ходят строго по одному (очередь), каждый помечен kind/pair_key, так
 # что ответы коррелируются с запросами. При недоступном сервере результат
@@ -45,6 +47,7 @@ signal atlas_solve_result(result: Dictionary)
 signal week_result(result: Dictionary)
 signal fair_brew_result(result: Dictionary)
 signal fair_claim_result(result: Dictionary)
+signal receipt_verify_result(result: Dictionary)
 signal account_export_result(result: Dictionary)
 signal account_delete_result(result: Dictionary)
 signal error(message: String)
@@ -194,6 +197,19 @@ func fair_claim(device_id: String) -> void:
 		"body": {"device_id": device_id},
 	})
 
+# T22: серверная проверка платёжного чека (POST /api/receipt/verify). Ответ —
+# сигнал receipt_verify_result: {"ok", "verified", "status", "reason",
+# "receipt_hash"} либо офлайн-форма {"ok": false, "offline": true}. Сырой токен
+# уходит на сервер один раз по запросу; в ответе сервера его нет (только SHA-256).
+func receipt_verify(device_id: String, provider: String, sku: String, receipt_token: String) -> void:
+	_enqueue({
+		"kind": "receipt_verify", "path": "/receipt/verify",
+		"body": {
+			"device_id": device_id, "provider": provider,
+			"sku": sku, "receipt_token": receipt_token,
+		},
+	})
+
 func _pair_key(a: String, b: String) -> String:
 	var p := PackedStringArray([a, b])
 	p.sort()
@@ -323,3 +339,5 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 			fair_brew_result.emit(parsed)
 		"fair_claim":
 			fair_claim_result.emit(parsed)
+		"receipt_verify":
+			receipt_verify_result.emit(parsed)

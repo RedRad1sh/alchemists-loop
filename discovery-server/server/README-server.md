@@ -123,6 +123,34 @@ uvicorn server:app --host 0.0.0.0 --port 8080 --reload
 }
 ```
 
+### POST /api/receipt/verify
+
+Проверка платёжного чека перед выдачей товара (T22). Клиент шлёт токен, который
+вернул магазин; в БД попадает только его SHA-256.
+
+**Тело:**
+```json
+{"device_id": "device-123", "provider": "google_play", "sku": "al_loop_ether_500",
+ "receipt_token": "<purchase token из магазина>"}
+```
+
+**Ответы:**
+
+| Код | Когда | Тело |
+|-----|-------|------|
+| 200 `verified: true, status: "processed"` | магазин подтвердил чек (и эхо уже подтверждённого) | `{"ok":true,"verified":true,"status":"processed","reason":"verified","receipt_hash":"<sha256>"}` |
+| 200 `ok: false, verified: false` | магазин ответил «чека нет» / чек отозван | `reason` — от магазина, `status: "pending"` |
+| 400 | `unknown_provider` / `unknown_sku` / `empty_device_id` / `empty_receipt_token` | `{"detail": {"ok": false, "verified": false, "reason": ...}}` |
+| 409 | тот же чек с другим `device_id` | `{"detail": {"ok": false, "verified": false, "reason": "receipt_device_mismatch", ...}}` |
+| 503 | валидатор не может ответить: `vendor_validation_disabled` (гейт выключен — состояние по умолчанию) или `vendor_validation_not_implemented` (URL+ключ заданы, но вызова магазина в коде ещё нет) | `{"detail": {"ok": false, "verified": false, "reason": ...}}` |
+
+**Важно про честность:** при выключенном гейте эндпоинт НЕ выдаёт `verified: true`
+ни для какого чека, включая уже подтверждённые ранее, — отказ вместо пропуска.
+Клиент различает «валидатор недоступен» (503/offline) и «магазин отказал» (200
+`ok:false`): в отладочной сборке первое пропускает локальную выдачу, в релизной
+без `verified: true` товар не выдаётся. Реальные вызовы Google Play Developer API
+/ RuStore API помечены `TODO(release)` в `_validate_receipt_with_vendor`.
+
 ## Живой мир (лента + гонка)
 
 - **`GET /api/events?limit=12`** — лента последних первооткрытий мира: кто, что,
@@ -246,6 +274,8 @@ cooldown 60 секунд; при `LLMError` или пустой загадке �
 | `ALCHEMY_EXPERIMENT_COOLDOWN_SEC` | `5` | cooldown внешнего Experiment на device |
 | `ALCHEMY_EXPERIMENT_DAILY_LIMIT` | `200` | внешний LLM budget на device/day |
 | `ALCHEMY_EXPERIMENT_GLOBAL_DAILY_LIMIT` | `10000` | общий внешний LLM budget/day |
+| `ALCHEMY_RECEIPT_VALIDATION_URL` | — | T22: эндпоинт валидатора чеков (см. `/api/receipt/verify`). Пусто → проверки нет, сервер отвечает 503 `vendor_validation_disabled` |
+| `ALCHEMY_RECEIPT_SERVICE_KEY` | — | T22: сервисный ключ валидатора; гейт включён только когда заданы ОБЕ переменные |
 | `ALCHEMY_DEBUG` | — | `1` — подробные логи LLM-слоя |
 | `ALCHEMY_LOG_RAW` | — | `1` — писать сырые ответы моделей в лог |
 | — | — | пулов имён больше нет: имя даёт только LLM |
@@ -456,6 +486,11 @@ MIT
   (`echoes`, письма, очки целей, атлас, недельные вклады). Опубликованные в
   общем мире элементы не удаляются: их авторство и записи ленты становятся
   «Анонимный алхимик», чтобы не сломать рецепты остальных игроков.
+- Таблица `receipts` (журнал чеков, T22) из `DELETE /api/account` **не**
+  вычищается и в `GET /api/account/export` не входит: это платёжная защита, а не
+  поведенческие данные — вместе с привязкой «чек → устройство» (отказ 409) её
+  удаление открыло бы путь повторно предъявить уже выданный чек. Хранится только
+  SHA-256 от токена, провайдер, SKU и метки времени.
 
 Клиентская кнопка удаления сначала удаляет локальный прогресс и отправляет этот
 запрос, если сервер доступен. Ссылка на политику конфиденциальности и контакт

@@ -8,16 +8,30 @@ extends Node
 # идентификатор установки, который можно удалить кнопкой «Удалить данные».
 
 const DATA_VERSION := 2
-const SAVE_PATH := "user://alchemists_loop_user.json"
-const TEMP_PATH := "user://alchemists_loop_user.tmp"
-const BACKUP_PATH := "user://alchemists_loop_user.bak"
+# Пути — переменные (как SAVE_PATH у сейвов в main.gd): headless-самопроверка
+# переводит их на ST-префикс, чтобы не стирать реальные данные установки.
+var SAVE_PATH := "user://alchemists_loop_user.json"
+var TEMP_PATH := "user://alchemists_loop_user.tmp"
+var BACKUP_PATH := "user://alchemists_loop_user.bak"
+# T22: журнал завершённых покупок живёт в ОТДЕЛЬНОМ файле и переживает
+# «Удалить локальные данные»: его стирание означало бы, что локальный клиент
+# снова готов выдать уже выданный consumable (restore после удаления). Ключи
+# журнала — provider:sku:sha256(token), то есть к device_id они не привязаны и
+# смысл не теряются, когда идентификатор установки удаляют вместе с остальными
+# данными. Это платёжная защита, а не поведенческие данные.
+var PURCHASES_PATH := "user://alchemists_loop_purchases.json"
+var PURCHASES_TEMP_PATH := "user://alchemists_loop_purchases.tmp"
+const PURCHASES_VERSION := 1
+const PROCESSED_CAP := 200
 
 signal changed
 
 var _data: Dictionary = {}
+var _processed: Dictionary = {}
 
 func _ready() -> void:
 	_load()
+	_load_purchase_journal()
 
 func _defaults() -> Dictionary:
 	return {
@@ -30,6 +44,10 @@ func _defaults() -> Dictionary:
 			"privacy_version": 1,
 		},
 		"purchases": {
+			# Ключ оставлен пустым намеренно: журнал завершённых покупок с T22
+			# живёт в PURCHASES_PATH и в стираемый файл не пишется. Пустой ключ
+			# держим, чтобы _merge_defaults не плодил расхождений у старых файлов
+			# и чтобы форма export_data не менялась.
 			"processed": {},
 			"owned": {},
 			"pending": {},
@@ -83,6 +101,66 @@ func _read_json(path: String) -> Dictionary:
 	if parsed is Dictionary:
 		return parsed as Dictionary
 	return {}
+
+# --- Журнал завершённых покупок (T22): отдельный файл, переживает wipe --------
+
+func _load_purchase_journal() -> void:
+	# Читается независимо от основного файла: «Удалить локальные данные» трогает
+	# основной файл, а журнал уже выданных чеков остаётся.
+	var stored := _read_json(PURCHASES_PATH)
+	_processed = {}
+	var entries: Variant = stored.get("processed", null)
+	if entries is Dictionary:
+		_processed = (entries as Dictionary).duplicate(true)
+	# Миграция (аддитивная, без bump'а DATA_VERSION): до T22 журнал лежал в
+	# стираемом purchases.processed основного файла. Если своего файла ещё нет,
+	# а записи в основном файле есть — переносим их сюда; иначе обновление
+	# тихо «подарило» бы существующим установкам повторную выдачу после удаления
+	# данных, то есть ровно тот дефект, который T22 чинит.
+	var purchases: Dictionary = _data.get("purchases", {})
+	var legacy: Variant = purchases.get("processed", {})
+	if not (legacy is Dictionary) or (legacy as Dictionary).is_empty():
+		return
+	for key in (legacy as Dictionary):
+		var entry: Variant = (legacy as Dictionary)[key]
+		if entry is Dictionary and not _processed.has(String(key)):
+			_processed[String(key)] = (entry as Dictionary).duplicate(true)
+	purchases["processed"] = {}
+	_data["purchases"] = purchases
+	_trim_processed()
+	_save_purchases()
+	_save()
+
+func _save_purchases() -> bool:
+	# Замена одним rename: файл журнала либо старый, либо новый — промежуточного
+	# состояния нет. Backup как у основного файла не ведём: журнал дополняемый, а
+	# потеря одной строки означает лишь повторную проверку чека, но не порчу
+	# пользовательских данных.
+	var file := FileAccess.open(PURCHASES_TEMP_PATH, FileAccess.WRITE)
+	if file == null:
+		push_warning("UserData: не удалось открыть временный файл журнала покупок.")
+		return false
+	file.store_string(JSON.stringify({"version": PURCHASES_VERSION, "processed": _processed}, "\t"))
+	file.flush()
+	file.close()
+	var journal_abs := ProjectSettings.globalize_path(PURCHASES_PATH)
+	var temp_abs := ProjectSettings.globalize_path(PURCHASES_TEMP_PATH)
+	if DirAccess.rename_absolute(temp_abs, journal_abs) != OK:
+		push_warning("UserData: не удалось заменить файл журнала покупок.")
+		DirAccess.remove_absolute(temp_abs)
+		return false
+	changed.emit()
+	return true
+
+func _trim_processed() -> void:
+	# Не даём служебному журналу расти бесконечно: режем самые старые по
+	# processed_at (тот же порядок, что был до переноса в отдельный файл).
+	if _processed.size() <= PROCESSED_CAP:
+		return
+	var keys: Array = _processed.keys()
+	keys.sort_custom(func(a, b): return float(_processed[a].get("processed_at", 0.0)) < float(_processed[b].get("processed_at", 0.0)))
+	for i in range(0, keys.size() - PROCESSED_CAP):
+		_processed.erase(keys[i])
 
 func _save() -> bool:
 	var file := FileAccess.open(TEMP_PATH, FileAccess.WRITE)
@@ -215,30 +293,18 @@ func _token_key(provider: String, token: String, sku: String) -> String:
 func has_processed_purchase(provider: String, token: String, sku: String) -> bool:
 	if token == "":
 		return false
-	var purchases: Dictionary = _data.get("purchases", {})
-	var processed: Dictionary = purchases.get("processed", {})
-	return processed.has(_token_key(provider, token, sku))
+	return _processed.has(_token_key(provider, token, sku))
 
 func mark_processed_purchase(provider: String, token: String, sku: String) -> bool:
 	if token == "" or has_processed_purchase(provider, token, sku):
 		return false
-	var purchases: Dictionary = _data.get("purchases", {})
-	var processed: Dictionary = purchases.get("processed", {})
-	processed[_token_key(provider, token, sku)] = {
+	_processed[_token_key(provider, token, sku)] = {
 		"provider": provider,
 		"sku": sku,
 		"processed_at": Time.get_unix_time_from_system(),
 	}
-	# Не даём служебному журналу расти бесконечно.
-	if processed.size() > 200:
-		var keys: Array = processed.keys()
-		keys.sort_custom(func(a, b): return float(processed[a].get("processed_at", 0.0)) < float(processed[b].get("processed_at", 0.0)))
-		for i in range(0, keys.size() - 200):
-			processed.erase(keys[i])
-		purchases["processed"] = processed
-	_data["purchases"] = purchases
-	_save()
-	return true
+	_trim_processed()
+	return _save_purchases()
 
 func set_owned_product(sku: String, owned: bool = true) -> void:
 	var purchases: Dictionary = _data.get("purchases", {})
@@ -261,6 +327,16 @@ func set_pending_purchase(key: String, value: Dictionary) -> void:
 	_data["purchases"] = purchases
 	_save()
 
+# T22: чтение pending-записи (Monetization помечает её отметкой «уже начислено»,
+# когда магазин не подтвердил consume — см. autoload/monetization.gd).
+func get_pending_purchase(key: String) -> Dictionary:
+	var purchases: Dictionary = _data.get("purchases", {})
+	var pending: Dictionary = purchases.get("pending", {})
+	var value: Variant = pending.get(key, {})
+	if value is Dictionary:
+		return (value as Dictionary).duplicate(true)
+	return {}
+
 func clear_pending_purchase(key: String) -> void:
 	var purchases: Dictionary = _data.get("purchases", {})
 	var pending: Dictionary = purchases.get("pending", {})
@@ -271,15 +347,23 @@ func clear_pending_purchase(key: String) -> void:
 
 func export_data() -> Dictionary:
 	var out := _data.duplicate(true)
+	# Журнал завершённых покупок живёт вне _data (см. PURCHASES_PATH), но в экспорт
+	# обязан попадать: это данные пользователя, а не внутренняя примета файла.
+	var purchases: Dictionary = out.get("purchases", {})
+	purchases["processed"] = _processed.duplicate(true)
+	out["purchases"] = purchases
 	# Экспорт нужен пользователю, но не должен раскрывать чек-токены. Их в
 	# _data и так нет; оставляем явный маркер для потребителя экспорта.
 	out["purchase_tokens"] = "not_stored_raw"
 	return out
 
 func delete_all_local_data() -> void:
+	# Журнал завершённых покупок (_processed / PURCHASES_PATH) здесь СОХРАНЯЕТСЯ:
+	# он защищает от повторной выдачи уже потреблённых чеков и не является
+	# поведенческими данными. Временный файл журнала — мусор, его удаляем.
 	_data = _defaults()
 	_save()
-	for path in [SAVE_PATH, TEMP_PATH, BACKUP_PATH]:
+	for path in [SAVE_PATH, TEMP_PATH, BACKUP_PATH, PURCHASES_TEMP_PATH]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	changed.emit()

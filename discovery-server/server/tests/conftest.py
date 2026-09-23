@@ -84,6 +84,11 @@ _TEST_ENV = {
     "ALCHEMY_LETTER_GLOBAL_DAILY_LIMIT": "3000",
     "ALCHEMY_ATLAS_COOLDOWN_SEC": "60",
     "ALCHEMY_ATLAS_DAILY_LIMIT": "10",
+    # Валидация чеков (T22): в тестах гейт всегда выключен — продные ключи
+    # проверок платежей в тесты течь не должны (тесты с включённым гейтом
+    # подменяют константы srv.RECEIPT_* сами).
+    "ALCHEMY_RECEIPT_VALIDATION_URL": "",
+    "ALCHEMY_RECEIPT_SERVICE_KEY": "",
     # Отладочные/логируемые переключатели: в тестах — молча (дефолт кода).
     "ALCHEMY_DEBUG": "",
     "LLM_DEBUG": "",

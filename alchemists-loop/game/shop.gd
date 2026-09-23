@@ -5,6 +5,10 @@ class_name Shop
 # начислений или SDK: экран только показывает каталог, добровольные rewarded и
 # приватность/экспорт данных.
 
+# T22: журнал уже выданных покупок переживает удаление локальных данных (он в
+# отдельном файле, см. autoload/user_data.gd), поэтому кнопка это обещает.
+const DELETE_BUTTON_LABEL := "Удалить данные: журнал покупок останется"
+
 var g: Game
 var _dim: ColorRect
 var _popup: CenterContainer
@@ -90,7 +94,7 @@ func _build_shop_popup() -> void:
 	var privacy := g._small_button("Политика конфиденциальности", Vector2(0, 40))
 	privacy.pressed.connect(_open_privacy_policy)
 	col.add_child(privacy)
-	_delete_button = g._small_button("Удалить локальные данные", Vector2(0, 40))
+	_delete_button = g._small_button(DELETE_BUTTON_LABEL, Vector2(0, 40))
 	_delete_button.pressed.connect(_delete_data)
 	col.add_child(_delete_button)
 	var close_btn := g._small_button("Закрыть", Vector2(150, 44))
@@ -295,8 +299,8 @@ func _on_account_delete_result(result: Dictionary) -> void:
 func _delete_data() -> void:
 	if not _delete_armed:
 		_delete_armed = true
-		_delete_button.text = "Нажми ещё раз для удаления"
-		_status.text = "Будут удалены локальный прогресс, согласия и ID установки. Мировые вещества останутся, авторство будет анонимизировано сервером."
+		_delete_button.text = "Нажми ещё раз — покупки останутся в журнале"
+		_status.text = "Будут удалены локальный прогресс, согласия и ID установки. Мировые вещества останутся, авторство будет анонимизировано сервером. На устройстве сохранится журнал уже выданных покупок (отпечаток чека, SKU и время) — это платёжная защита от повторной выдачи, а не прогресс."
 		return
 	var device_id := g._online._device_id
 	if g._online._net_enabled and device_id != "":
@@ -304,6 +308,6 @@ func _delete_data() -> void:
 	g._saves._delete_local_save()
 	UserData.delete_all_local_data()
 	Analytics.clear_local_queue()
-	_status.text = "Локальные данные удалены. Перезапусти игру для новой установки."
+	_status.text = "Локальные данные удалены, журнал покупок сохранён. Перезапусти игру для новой установки."
 	_delete_armed = false
-	_delete_button.text = "Удалить локальные данные"
+	_delete_button.text = DELETE_BUTTON_LABEL

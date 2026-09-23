@@ -247,3 +247,23 @@ CREATE TABLE IF NOT EXISTS vein_hits (
     streaks INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (week, device_id)
 );
+
+-- Журнал платёжных чеков (T22, /api/receipt/verify). Сырой токен магазина здесь
+-- НЕ хранится: receipt_hash = SHA-256 от токена (тот же отпечаток, что у ключа
+-- клиентского журнала идемпотентности). device_id фиксирует, какому устройству
+-- чек уже показан: повтор с другого устройства — отказ 409.
+-- status: pending — чек увидели, магазин не подтвердил; processed — подтверждён,
+-- дальше отдаётся идемпотентный повтор без нового обращения в магазин.
+-- first_seen_at/processed_at/last_seen_at — time.time()-эпохи (T06): от TZ не
+-- зависят, с дневными ключами не сверяются, чистый audit + анти-спам чистка.
+CREATE TABLE IF NOT EXISTS receipts (
+    receipt_hash TEXT PRIMARY KEY,
+    device_id TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    sku TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    first_seen_at REAL NOT NULL,
+    processed_at REAL,
+    last_seen_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_receipts_device ON receipts(device_id);
