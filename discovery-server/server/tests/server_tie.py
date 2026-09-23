@@ -118,11 +118,29 @@ def score_upsert_where() -> str:
     return _norm(m.group(1))
 
 
-def verify(acquire_sql: str, release_sql: str, ttl: float, score_sql: str = None) -> None:
+def score_topup_sql() -> str:
+    """T09/U8 (d): TOPUP-копия — UPDATE проигравшего переход дедупа в
+    _score_challenge (цель уже выполнена → очок без награды). Возвращает
+    нормализованную полную строку SQL из исходника server.py."""
+    sec = _section(_read(SERVER_PY), "_score_challenge")
+    m = re.search(
+        r'"(UPDATE challenge_scores SET points = points \+ 1[^"]*)"', sec)
+    if not m:
+        raise AssertionError(
+            "server.py: в _score_challenge больше нет TOPUP-UPDATE "
+            "(`UPDATE challenge_scores SET points = points + 1 ...`) — "
+            "копия харнесса осиротела; обнови харнесс вместе с сервером")
+    return _norm(m.group(1))
+
+
+def verify(acquire_sql: str, release_sql: str, ttl: float, score_sql: str = None,
+           topup_sql: str = None) -> None:
     """Сверить копии харнесса с исходником server.py; расхождение — падение.
 
     acquire_sql/release_sql/score_sql — полные строки харнесса; сравнивается их
     WHERE-хвост (whitespace-нормализованный) с эталонным хвостом из server.py.
+    topup_sql (T09/U8 (d)) — полная TOPUP-строка харнесса: сравнивается
+    целиком (в ней нет guarded-условия, важен и SET-хвост, и WHERE по ключу).
     """
     exp_ttl = lock_ttl()
     if abs(ttl - exp_ttl) > 1e-9:
@@ -135,6 +153,8 @@ def verify(acquire_sql: str, release_sql: str, ttl: float, score_sql: str = None
     )
     if score_sql is not None:
         pairs += (("SCORE WHERE", _where_tail(score_sql), score_upsert_where()),)
+    if topup_sql is not None:
+        pairs += (("TOPUP SQL", _norm(topup_sql), score_topup_sql()),)
     for label, mine, server_copy in pairs:
         if mine != server_copy:
             raise AssertionError(

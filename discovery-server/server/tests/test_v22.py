@@ -101,49 +101,46 @@ class TestNameDedup:
 
 
 class TestRejectedEndpoint:
-    def test_rejected_lists_pairs(self, server):
+    def test_rejected_lists_pairs(self, base_url):
         import requests
-        base = os.environ.get("TEST_SERVER_URL", "http://localhost:8080/api")
         # person|gold — детерминированно несочетаемая пара в заглушке mock
         r = requests.post(
-            f"{base}/discover",
+            f"{base_url}/discover",
             json={"a": "person", "b": "gold", "nick": "Т", "device_id": "rej-1"},
             timeout=5,
         )
         assert r.status_code == 200
-        rr = requests.get(f"{base}/rejected", timeout=5).json()
+        rr = requests.get(f"{base_url}/rejected", timeout=5).json()
         assert rr["ok"] is True
         assert "gold|person" in rr["rejected"]
 
 
 class TestHouseEndpoint:
-    def test_house_save_and_get(self, server):
+    def test_house_save_and_get(self, base_url):
         import requests
-        base = os.environ.get("TEST_SERVER_URL", "http://localhost:8080/api")
         house = {
             "v": 1, "built": True, "theme": "cobalt", "aura": "amber",
             "wall": "#5a4d40", "floor": "#5d452f",
             "furniture": {"window": "window_3", "rug": "rug_1"},
         }
         r = requests.post(
-            f"{base}/house",
+            f"{base_url}/house",
             json={"device_id": "house-dev-1", "nick": "Домовладелец", "house": house},
             timeout=5,
         )
         assert r.status_code == 200 and r.json()["ok"] is True
-        g = requests.get(f"{base}/house", params={"nick": "Домовладелец"}, timeout=5).json()
+        g = requests.get(f"{base_url}/house", params={"nick": "Домовладелец"}, timeout=5).json()
         assert g["ok"] is True and g["found"] is True
         assert g["house"] == house
-        missing = requests.get(f"{base}/house", params={"nick": "НиктоНет"}, timeout=5).json()
+        missing = requests.get(f"{base_url}/house", params={"nick": "НиктоНет"}, timeout=5).json()
         assert missing["found"] is False
 
 
 class TestRatingEndpoint:
-    def test_rating_has_rows_and_me(self, server):
+    def test_rating_has_rows_and_me(self, base_url):
         import requests
-        base = os.environ.get("TEST_SERVER_URL", "http://localhost:8080/api")
         # игрок с открытием уже существует после discover в других тестах
-        r = requests.get(f"{base}/rating", params={"device_id": "rej-1"}, timeout=5).json()
+        r = requests.get(f"{base_url}/rating", params={"device_id": "rej-1"}, timeout=5).json()
         assert r["ok"] is True
         assert isinstance(r["rows"], list)
         for row in r["rows"]:

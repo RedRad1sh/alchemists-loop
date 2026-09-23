@@ -54,7 +54,9 @@ SCORE_UPSERT = (
 SCORE_TOPUP = ("UPDATE challenge_scores SET points = points + 1, nick = ?"
                " WHERE day = ? AND device_id = ?")
 
-server_tie.verify(UPSERT, RELEASE_SQL, LOCK_TTL, SCORE_UPSERT)
+# T09/U8 (d): TOPUP-копия тоже привязана к исходнику — её расхождение с
+# server.py роняет харнесс, а не оставляет сценарий 4 с устаревшим UPDATE.
+server_tie.verify(UPSERT, RELEASE_SQL, LOCK_TTL, SCORE_UPSERT, topup_sql=SCORE_TOPUP)
 
 
 def _db_conn(db):

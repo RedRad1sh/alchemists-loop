@@ -190,7 +190,14 @@ def _scenario(nsc, ch_target, conn, sql, offset_sec, i_before, i_after, say):
         "после границы серверный день ровно +1 (одна инвертированная дата)"
     # 2) ONE-FLIP: лента, цель и last_seen перевернулись на ОДНОМ инстанте:
     assert feed_today_b == 0, "вчера-событие больше не 'today' — лента перевернулась"
-    assert target_b != target_a or day_b != day_a, "цель дня привязана к тому же ключу"
+    # T09/U8 (a): раньше здесь было `target_b != target_a or day_b != day_a` —
+    # ТАВТОЛОГИЯ (day_b != day_a гарантировано выше), проверка ничего не
+    # ассертила. Явно: цель — чистая функция серверного дня-ключа, и на
+    # переходе границы она перевернулась вместе со всеми (23-е: ice → 24-е: boat).
+    assert target_a == ch_target(day_a) and target_b == ch_target(day_b), \
+        "цель дня считается ровно из того же серверного дня-ключа"
+    assert target_b != target_a, \
+        "смена серверного дня переворачивает и цель (one-flip, без дрейфа)"
     assert seen_day_b == day_b != seen_day_a, "окно ярмарки (last_seen) перешло день вместе со всеми"
     assert week_a == week_b or datetime.fromisoformat(day_b).weekday() == 0, \
         "недельный ключ из той же даты"

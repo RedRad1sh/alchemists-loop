@@ -190,11 +190,13 @@ class TestLetterHttp:
 
     def test_reveal_after_two_days(self, tmp_path, monkeypatch):
         import sqlite3
-        from datetime import date, timedelta
         c, db = _client_for(tmp_path, monkeypatch, _FakeHint())
         with c:
             c.post("/api/me", json={"device_id": "dev-r", "nick": "Р"})
-            old = (date.today() - timedelta(days=3)).isoformat()
+            # T09/U8 (c): дата в единой серверной шкале (server._date_minus),
+            # НЕ хост-локальная date.today() — иначе тест разъезжается с
+            # серверным _today() на хостах вне нулевого смещения.
+            old = server._date_minus(3)
             conn = sqlite3.connect(db)
             conn.execute(
                 "INSERT INTO letters (device_id, day, a, b, a_name, b_name, hint) "
@@ -214,11 +216,11 @@ class TestLetterHttp:
 
     def test_no_answer_leak(self, tmp_path, monkeypatch):
         import sqlite3
-        from datetime import date, timedelta
         c, db = _client_for(tmp_path, monkeypatch, _FakeHint())
         with c:
             c.post("/api/me", json={"device_id": "dev-l", "nick": "Л"})
-            yest = (date.today() - timedelta(days=1)).isoformat()
+            # T09/U8 (c): серверная шкала вместо хост-локальной даты
+            yest = server._date_minus(1)
             conn = sqlite3.connect(db)
             conn.execute(
                 "INSERT INTO letters (device_id, day, a, b, a_name, b_name, hint) "

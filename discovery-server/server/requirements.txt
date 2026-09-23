@@ -1,3 +1,7 @@
+# T09/U8: сервер использует синтаксис Python 3.10+ (`dict | None` в аннотациях
+# server.py / gen_llm.py). На Python 3.9 импорт падает TypeError'ом — это не
+# совместимость, а жёсткое требование интерпретатора.
+# python>=3.10
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.0

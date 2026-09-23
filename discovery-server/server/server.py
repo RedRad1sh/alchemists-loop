@@ -111,7 +111,16 @@ def _lock_ttl_seconds() -> float:
 LOCK_TTL = _lock_ttl_seconds()  # секунд: сколько пара считается «в обработке» (защита от гонок)
 # T04: после перевода генерирующих эндпоинтов в threadpool писатели — потоки;
 # ожидаем блокировку WAL-писателя не дольше этого, дальше — ошибка.
-DB_BUSY_TIMEOUT_SEC = float(os.environ.get("DB_BUSY_TIMEOUT_SEC", "10"))
+# T09/U8 (e): нечисловое значение окружения должно падать с внятной ошибкой,
+# а не с голым ValueError('could not convert...') без имени переменной.
+_raw_db_busy_timeout = os.environ.get("DB_BUSY_TIMEOUT_SEC", "10")
+try:
+    DB_BUSY_TIMEOUT_SEC = float(_raw_db_busy_timeout)
+except ValueError:
+    raise ValueError(
+        "DB_BUSY_TIMEOUT_SEC должен быть числом секунд, получено %r"
+        % _raw_db_busy_timeout
+    )
 # Эксперименты — это явные LLM-backed запросы из Experiment Bench. Значения
 # намеренно конфигурируются окружением: расходы на LLM не должны быть спрятаны
 # в клиентской экономике. Кэшированные/curated ответы лимит не расходуют.

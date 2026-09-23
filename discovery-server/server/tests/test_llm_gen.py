@@ -1,9 +1,12 @@
 """
 Тесты гибридной генерации: LLM-путь, отказ («туман») и недоступность модели.
 
-Сервер в тестах запускается с LLM_PROVIDER=mock (см. conftest), поэтому
+Сервер в тестах работает с LLM_PROVIDER=mock (см. conftest), поэтому
 «модель» детерминирована и не требует сети: для неизвестной пары она создаёт
 вещество, а пара person|gold моделирует несочетаемую пару.
+
+Live-HTTP-классы ниже — интеграционный слой: адрес только из фикстуры
+`base_url` (uvicorn-подпроцесс на ephemeral-порту, T09/U8).
 """
 
 import os
@@ -11,20 +14,18 @@ import sys
 
 import requests
 
-BASE_URL = "http://localhost:8080/api"
 
-
-def _discover(a, b, nick="Игрок", device_id="device-1"):
+def _discover(base, a, b, nick="Игрок", device_id="device-1"):
     return requests.post(
-        f"{BASE_URL}/discover",
+        f"{base}/discover",
         json={"a": a, "b": b, "nick": nick, "device_id": device_id},
         timeout=30,
     )
 
 
-def _brew_check(a, b, nick="Игрок", device_id="device-1"):
+def _brew_check(base, a, b, nick="Игрок", device_id="device-1"):
     return requests.post(
-        f"{BASE_URL}/brew-check",
+        f"{base}/brew-check",
         json={"a": a, "b": b, "nick": nick, "device_id": device_id},
         timeout=30,
     )
@@ -33,8 +34,8 @@ def _brew_check(a, b, nick="Игрок", device_id="device-1"):
 class TestLlmGeneration:
     """LLM-путь создания нового вещества."""
 
-    def test_unknown_pair_created_with_llm(self, server):
-        resp = _discover("dust", "glass", nick="ЛЛМ", device_id="device-llm")
+    def test_unknown_pair_created_with_llm(self, base_url):
+        resp = _discover(base_url, "dust", "glass", nick="ЛЛМ", device_id="device-llm")
         assert resp.status_code in (200, 201)
         data = resp.json()
         assert data["ok"] is True
@@ -45,9 +46,9 @@ class TestLlmGeneration:
         assert data["discovery"]["category"] in ("огонь", "вода", "земля", "воздух")
         assert data["discovery"]["color"].startswith("#")
 
-    def test_repeat_discovery_is_deterministic_and_shared(self, server):
-        r1 = _discover("stone", "mist", nick="А", device_id="d-a")
-        r2 = _discover("stone", "mist", nick="Б", device_id="d-b")
+    def test_repeat_discovery_is_deterministic_and_shared(self, base_url):
+        r1 = _discover(base_url, "stone", "mist", nick="А", device_id="d-a")
+        r2 = _discover(base_url, "stone", "mist", nick="Б", device_id="d-b")
         assert r1.json()["discovery"]["slug"] == r2.json()["discovery"]["slug"]
         assert r2.json()["discovery"]["author"] == "А"
 
@@ -55,22 +56,22 @@ class TestLlmGeneration:
 class TestNotCombinable:
     """Пары, которые модель считает бессмысленными («туман»)."""
 
-    def test_not_combinable_pair_returns_tuman(self, server):
-        resp = _discover("person", "gold", nick="Туман", device_id="device-fog")
+    def test_not_combinable_pair_returns_tuman(self, base_url):
+        resp = _discover(base_url, "person", "gold", nick="Туман", device_id="device-fog")
         assert resp.status_code in (200, 201)
         data = resp.json()
         assert data["status"] == "not_combinable"
         assert data["discovery"] is None
         assert "Туман" in data["message"]
 
-    def test_not_combinable_is_cached_across_players(self, server):
-        r1 = _discover("person", "gold", nick="А", device_id="d-a")
-        r2 = _discover("person", "gold", nick="Б", device_id="d-b")
+    def test_not_combinable_is_cached_across_players(self, base_url):
+        r1 = _discover(base_url, "person", "gold", nick="А", device_id="d-a")
+        r2 = _discover(base_url, "person", "gold", nick="Б", device_id="d-b")
         assert r1.json()["status"] == "not_combinable"
         assert r2.json()["status"] == "not_combinable"
 
-    def test_brew_check_reports_not_combinable(self, server):
-        bc = _brew_check("gold", "person", nick="В", device_id="d-c")
+    def test_brew_check_reports_not_combinable(self, base_url):
+        bc = _brew_check(base_url, "gold", "person", nick="В", device_id="d-c")
         assert bc.status_code == 200
         data = bc.json()
         assert data["found"] is False

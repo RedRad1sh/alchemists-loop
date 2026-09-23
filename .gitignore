@@ -6,3 +6,8 @@ __pycache__/
 node_modules/
 .superpowers/
 superpowers/
+# T09/U8: тестовые SQLite-артефакты не должны оседать в репозитории
+discovery-server/server/tests/*.db
+discovery-server/server/tests/*.db-wal
+discovery-server/server/tests/*.db-shm
+discovery-server/server/tests/*.sqlite
