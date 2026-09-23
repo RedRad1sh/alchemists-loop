@@ -400,9 +400,10 @@ static func run(g: Game) -> void:
 	# затирать нельзя: перенесённые записи потерялись бы и там, и тут. Пишем
 	# свежий legacy-файл, ломаем запись журнала (временный путь в несуществующей
 	# папке → FileAccess.open возвращает null) и наблюдаем, что стираемый файл
-	# СОХРАНИЛ legacy-ключ.
+	# СОХРАНИЛ legacy-ключ. R-5: там же утверждаем, что перенос в RAM состоялся,
+	# иначе кейс остался бы зелёным и на «миграция вообще не выполнилась».
 	var _m2_tmp0 := UserData.PURCHASES_TEMP_PATH
-	var _m2_key := "google_play:sku_m2:" + "m2_token_value".sha256_text()
+	var _m2_key := UserData._token_key("google_play", "m2_token_value", "sku_m2")
 	var _m2_save := FileAccess.open(UserData.SAVE_PATH, FileAccess.WRITE)
 	if _m2_save != null:
 		_m2_save.store_string(JSON.stringify({
@@ -420,7 +421,8 @@ static func run(g: Game) -> void:
 	UserData.PURCHASES_TEMP_PATH = _m2_tmp0
 	Selftest.check("m2 migration keeps legacy when journal write fails",
 		((_t22_json(UserData.SAVE_PATH).get("purchases", {}) as Dictionary).get("processed", {}) as Dictionary).has(_m2_key)
-		and not (_t22_json(UserData.PURCHASES_PATH).get("processed", {}) as Dictionary).has(_m2_key))
+		and not (_t22_json(UserData.PURCHASES_PATH).get("processed", {}) as Dictionary).has(_m2_key)
+		and UserData._processed.has(_m2_key))
 
 	# ---------- T22: порядок finish grant -> consume -> mark, ретрай и acknowledge ----------
 	# Фейковый адаптер — копия реального контракта: T22FakeBilling как rustore_pay.gd

@@ -141,7 +141,7 @@ uvicorn server:app --host 0.0.0.0 --port 8080 --reload
 | 200 `verified: true, status: "processed"` | магазин подтвердил чек (и эхо уже подтверждённого) | `{"ok":true,"verified":true,"status":"processed","reason":"verified","receipt_hash":"<sha256>"}` |
 | 200 `ok: false, verified: false` | магазин ответил «чека нет» / чек отозван | `reason` — от магазина, `status: "pending"` |
 | 400 | `unknown_provider` / `unknown_sku` / `empty_device_id` / `empty_receipt_token` | `{"detail": {"ok": false, "verified": false, "reason": ...}}` |
-| 409 | тот же чек с другим `device_id` | `{"detail": {"ok": false, "verified": false, "reason": "receipt_device_mismatch", ...}}` |
+| 409 | тот же чек с другим `device_id` / тот же токен с другим `sku` / тот же токен с другим `provider` | `{"detail": {"ok": false, "verified": false, "reason": "receipt_device_mismatch" / "receipt_sku_mismatch" / "receipt_provider_mismatch", "receipt_hash": "<sha256>", ...}}` |
 | 503 | валидатор не может ответить: `vendor_validation_disabled` (гейт выключен — состояние по умолчанию) или `vendor_validation_not_implemented` (URL+ключ заданы, но вызова магазина в коде ещё нет) | `{"detail": {"ok": false, "verified": false, "reason": ...}}` |
 
 **Важно про честность:** при выключенном гейте эндпоинт НЕ выдаёт `verified: true`

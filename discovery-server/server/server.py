@@ -599,7 +599,7 @@ class ReceiptVerifyResponse(BaseModel):
     status: str = ""        # '' | pending | processed
     reason: str = ""        # verified | vendor_validation_* | vendor_rejected |
                             # receipt_device_mismatch | receipt_sku_mismatch |
-                            # unknown_* | empty_*
+                            # receipt_provider_mismatch | unknown_* | empty_*
     receipt_hash: str = ""  # SHA-256 токена: клиент сверяет ответ со своим запросом
 
 
@@ -3457,6 +3457,8 @@ def receipt_verify(req: ReceiptVerifyRequest):
     * тот же чек с другим device_id → 409 (чек уже привязан к устройству);
     * тот же токен с другим sku → 409 (receipt_hash — единственный PK, поэтому
       чек нельзя предъявлять за другой товар);
+    * тот же токен с другим provider → 409 (по той же причине: чек нельзя
+      предъявлять за другой магазин, reason — receipt_provider_mismatch);
     * сырой токен в БД не сохраняется, только его SHA-256.
 
     T04: sync `def` — будущий блокирующий вызов магазина (requests) уходит в
@@ -3499,6 +3501,15 @@ def receipt_verify(req: ReceiptVerifyRequest):
             raise HTTPException(
                 status_code=409,
                 detail={**_receipt_error("receipt_device_mismatch"), "receipt_hash": receipt_hash},
+            )
+        # R-3: симметрично sku-сверке ниже — receipt_hash единственный PK, поэтому
+        # тот же токен, предъявленный с ДРУГИМ provider, иначе получил бы вердикт
+        # или echo по чужому провайдеру. Чек привязан к провайдеру, под которым его
+        # впервые увидели: несовпадение — отказ (отдельный reason для аудита).
+        if row["provider"] != provider:
+            raise HTTPException(
+                status_code=409,
+                detail={**_receipt_error("receipt_provider_mismatch"), "receipt_hash": receipt_hash},
             )
         # M-3: PRIMARY KEY — только receipt_hash, поэтому один и тот же токен,
         # предъявленный с ДРУГИМ sku, находит строку уже другого товара. Без сверки

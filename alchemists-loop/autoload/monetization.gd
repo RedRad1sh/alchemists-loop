@@ -391,7 +391,12 @@ func _purchase_already_granted(provider: String, sku: String, token: String, _pr
 func _mark_purchase_granted(provider: String, sku: String, token: String, _product_id: String) -> void:
 	# Пишем отметку в журнал; pending остаётся только с provider/sku/started_at
 	# (как было до U17) — granted/token_hash из него убраны вместе с переносом.
-	UserData.mark_purchase_granted(provider, token, sku)
+	# R-1: результат записи читаем ради наблюдаемости (тот же принцип, что в M-1).
+	# Порядок не меняем: перенос метки ДО начисления перевёл бы риск из «двойная
+	# выдача» в «потерянная оплата». Отказ записи не откатывает начисление, но
+	# сбой обязан быть различим по месту, а не только общим warning'ом UserData.
+	if not UserData.mark_purchase_granted(provider, token, sku):
+		push_warning("Monetization: отметка о начислении не записана на диск; при гибели процесса покупка может начислиться повторно.")
 
 func _confirm_purchase_with_store(token: String, sku: String, consumable: bool) -> bool:
 	# Честно о сигнале: bool у адаптеров означает «метод плагина нашёлся и был
