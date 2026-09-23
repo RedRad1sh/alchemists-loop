@@ -690,6 +690,22 @@ func _close_color_picker() -> void:
 	Sfx.click()
 
 
+# Отмена палитры по Esc: кнопки Cancel у пикера нет, а слайдер применяет цвет
+# живьём (_on_cp_slider) — просто скрыть означало бы оставить применённый, но
+# не купленный кастом. Откатываем ровно как в ветке «не хватило эфира».
+func _cancel_color_picker() -> void:
+	var t := _color_target
+	_set_custom_color(t, _cp_old, false)
+	if t == "theme":
+		_theme_custom_on = _cp_old_on
+	elif t == "aura":
+		_aura_custom_on = _cp_old_on
+	_apply_cosmetic()
+	_refresh_house_page()
+	g._engine._refresh()
+	_close_color_picker()
+
+
 func _on_cp_slider(_v: float) -> void:
 	_cp_update()
 	# живой предпросмотр: применяем сразу, сохраняем при закрытии

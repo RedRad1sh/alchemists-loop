@@ -1340,59 +1340,91 @@ func _unhandled_input(event: InputEvent) -> void:
 	var ke := event as InputEventKey
 	if not ke.pressed or ke.keycode != KEY_ESCAPE:
 		return
+	if _close_top_modal():
+		get_viewport().set_input_as_handled()
+
+# Порядок elif-веток = порядок наложения (z): сначала модальные окна поверх
+# всего (autovark/consent, магазин декора z=100), затем попапы по убыванию z.
+# Возвращает true, если что-то закрыто/потреблено — только тогда Esc считается
+# обработанным; иначе событие уходит дальше (обычный выход из игры).
+func _close_top_modal() -> bool:
 	if _engine._auto:
 		_engine._auto_cancel = true
 		_engine.status_text = "Автоварка: остановлю после текущего шага…"
-		get_viewport().set_input_as_handled()
-		return
+		return true
 	if _shop != null and _shop._consent_popup != null and _shop._consent_popup.visible:
 		# Не даём обойти первый consent через Esc: один из двух режимов
 		# должен быть выбран явно.
-		get_viewport().set_input_as_handled()
-		return
+		return true
+	elif _home != null and _home._decor_popup != null and _home._decor_popup.visible:
+		# Магазин декора — modal surface с z=100 (home.gd), выше shop/hub/discovery.
+		_home._close_decor_popup()
+		return true
 	elif _shop != null and _shop._popup != null and _shop._popup.visible:
 		_shop.close()
+		return true
 	elif _popup.visible:
 		_hide_popup()
+		return true
 	elif _confirm.visible:
 		_hide_confirm()
+		return true
 	elif _saves._return_popup.visible:
 		_saves._close_return_popup()
+		return true
 	elif _hub._settings_popup.visible:
 		_hub._settings_dim.visible = false
 		_hub._settings_popup.visible = false
 		Sfx.click()
+		return true
 	elif _hub._craftable_popup.visible:
 		_hub._craftable_dim.visible = false
 		_hub._craftable_popup.visible = false
 		Sfx.click()
+		return true
 	elif _retort._retort_popup.visible:
 		_retort._retort_dim.visible = false
 		_retort._retort_popup.visible = false
 		Sfx.click()
+		return true
 	elif _hub._journal_popup.visible:
 		_hub._journal_dim.visible = false
 		_hub._journal_popup.visible = false
 		Sfx.click()
+		return true
 	elif _hub._prestige_popup.visible:
 		_hub._prestige_dim.visible = false
 		_hub._prestige_popup.visible = false
 		Sfx.click()
+		return true
 	elif _progress_ui._prog_popup.visible:
 		_progress_ui._prog_dim.visible = false
 		_progress_ui._prog_popup.visible = false
 		Sfx.click()
+		return true
 	elif _hub._profile_popup.visible:
 		_hub._profile_dim.visible = false
 		_hub._profile_popup.visible = false
 		Sfx.click()
+		return true
 	elif _hub._up_popup.visible:
 		_hub._up_dim.visible = false
 		_hub._up_popup.visible = false
 		Sfx.click()
+		return true
 	elif _spirit._companion_dlg != null and _spirit._companion_dlg.visible:
 		_spirit._companion_close_dialog()
-	get_viewport().set_input_as_handled()
+		return true
+	elif _home != null and _home._color_picker != null and _home._color_picker.visible:
+		# Отмена палитры с откатом живого предпросмотра (кнопки Cancel у пикера нет).
+		_home._cancel_color_picker()
+		return true
+	elif _home != null and _home._house_popup != null and _home._house_popup.visible:
+		# Палитра и гостевой домик — самые нижние по z и одновременно видны
+		# быть не могут, порядок этих двух веток не важен.
+		_home._close_house_popup()
+		return true
+	return false
 
 # ---------- подтверждение автоварки ----------
 
