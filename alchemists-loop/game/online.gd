@@ -284,6 +284,14 @@ func _tick_pending_experiment() -> void:
 	g._saves._save_game()
 
 func _experiment_outcome(out: Dictionary, a: String, b: String, created: bool = false) -> void:
+	# U9 (T12): поздний ответ эксперимента после сброса мира (престиж/новая игра
+	# чистят _experiment_pending_pair) не должен регистрировать рецепты, дарить
+	# вещества и списывать свежий подарочный запас — дропаем без эффектов.
+	# Корреляция конкретной пары (pair_key) — задел на U11 (T14).
+	if g._engine._experiment_pending_pair.size() != 2:
+		print("NETEXPERIMENT stale pair=", a, " + ", b)
+		_set_status("Поздний ответ эксперимента проигнорирован: лаборатория уже была сброшена.")
+		return
 	var slug := _apply_server_element(out)
 	if slug == "":
 		g._engine._finish_experiment_inputs(a, b, true)

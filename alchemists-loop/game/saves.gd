@@ -144,6 +144,9 @@ func _load_game() -> void:
 		data = _read_save(g.BACKUP_PATH)
 	if data.is_empty():
 		return
+	# U9 (T12): загрузка заменяет мир под возможными сонными корутинами —
+	# то же поколение сбросов, что у престижа и новой игры.
+	g._engine.brew_epoch += 1
 	g._engine.upgrades.clear()
 	if data.get("upgrades") is Dictionary:
 		for raw_id in data["upgrades"]:
@@ -488,7 +491,10 @@ func _advance_craft_job_offline(elapsed: float) -> Dictionary:
 				break
 			var result := g._engine._commit_brew(a, b)
 			if bool(result.get("failed", true)):
-				pause_reason = "recipe"
+				# U9 (T11): честная причина паузы — _commit_brew теперь умеет
+				# fail-closed отказ по ингредиентам/эфиру, а не только по рецепту.
+				var commit_reason := String(result.get("reason", ""))
+				pause_reason = commit_reason if commit_reason in ["ingredients", "ether"] else "recipe"
 				break
 			completed += 1
 			_return_craft_steps += 1

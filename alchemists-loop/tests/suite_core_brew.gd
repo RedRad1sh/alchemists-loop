@@ -181,7 +181,16 @@ static func run(g: Game) -> void:
 	g._saves._save_game()
 	var s_before := int(g._engine.inventory.get("steam", 0))
 	var k_before := g._engine.known_recipes.size()
-	g._init_new_game()
+	# U9 (T12): новый старт с висящим экспериментом теперь отказывается —
+	# это и проверяем, затем очищаем bookkeeping вручную и гоняем round-trip.
+	var wiped := g._init_new_game()
+	Selftest.check("new game refuses with pending experiment", not wiped
+		and g._engine._experiment_pending_pair == ["fire", "water"])
+	g._engine._experiment_pending_pair.clear()
+	g._engine._craft_job.clear()
+	g._engine._blueprints.clear()
+	g._engine.inventory.clear()
+	g._engine.known_recipes.clear()
 	g._saves._load_game()
 	Selftest.check("save roundtrip", int(g._engine.inventory.get("steam", 0)) == s_before
 		and g._engine.known_recipes.size() >= k_before)
@@ -211,3 +220,178 @@ static func run(g: Game) -> void:
 	Selftest.check("server persist recipe", not g._online._find_recipe("sv_a", "sv_b").is_empty())
 	g._online._restore_server_elements({})
 	g._online._restore_server_recipes([])
+
+	# ================= U9 (T11): мьютекс потребляющих трасс + fail-closed списание ====
+	# Снимок мира: блоки U9 меняют инвентарь/квесты (в т.ч. форс-престиж), а
+	# последующим сюитам нужно богатое состояние этого места (разблокировки
+	# режимов, покупка улучшений). В конце — точный restore.
+	var u9_snap := {
+		"inventory": g._engine.inventory.duplicate(true),
+		"known": g._engine.known_recipes.duplicate(true),
+		"upgrades": g._engine.upgrades.duplicate(true),
+		"blueprints": g._engine._blueprints.duplicate(true),
+		"rejected": g._engine._rejected_pairs.duplicate(true),
+		"milestones": g._engine._milestones_done.duplicate(true),
+		"quests_done": g._guild._quests_done.duplicate(true),
+		"quest_brew": g._guild._quest_brew.duplicate(true),
+		"quest_tier": g._guild._quest_tier.duplicate(true),
+		"order_done": g._guild._order_done.duplicate(true),
+		"log_events": g._hub._log_events.duplicate(true),
+	}
+	var u9_ether := g._engine.ether
+	var u9_overflow := g._engine.ether_overflow
+	var u9_mastery := g._engine.mastery_rank
+	var u9_sage := g._engine.sage_gold
+	var u9_att0 := g._engine.attempts
+	var u9_suc0 := g._engine.successes
+	var u9_taps0 := g._engine._source_taps
+	var u9_last := g._engine._last_pair.duplicate(true)
+	var u9_qch0 := g._guild._quest_challenge
+	g._init_new_game()
+	g.BREW_SECONDS = 0.05
+	g._engine.ether = 1000
+	var u9_plan := g._guild._plan_craft("steam")
+	# (a) верстак + ручная варка на последний юнит: стек не в минус, выход один
+	g._engine.inventory["fire"] = 1
+	g._engine.inventory["water"] = 1
+	g._engine.inventory.erase("steam")
+	g._engine.selected = ["fire", "water"]
+	g._engine._run_bench_plan("steam", u9_plan)
+	Selftest.check("bench takes the consume mutex", g._pages._bench_busy and not g._engine._can_brew())
+	var manual_vs_bench: Dictionary = await g._engine._brew()
+	Selftest.check("manual brew refused while bench runs", bool(manual_vs_bench.get("failed", false))
+		and String(manual_vs_bench.get("reason", "")) == "gate")
+	await g.get_tree().create_timer(1.0).timeout
+	Selftest.check("bench consumed the last units exactly once", int(g._engine.inventory.get("fire", 0)) == 0
+		and int(g._engine.inventory.get("water", 0)) == 0 and int(g._engine.inventory.get("steam", 0)) == 1
+		and not g._pages._bench_busy and not g._engine.brewing)
+	var u9_attempts := g._engine.attempts
+	var commit_empty := g._engine._commit_brew("fire", "water")
+	Selftest.check("commit fails closed without ingredients", bool(commit_empty.get("failed", false))
+		and String(commit_empty.get("reason", "")) == "ingredients"
+		and int(g._engine.inventory.get("fire", 0)) == 0 and int(g._engine.inventory.get("steam", 0)) == 1
+		and g._engine.attempts == u9_attempts)
+	# (б) эксперимент/верстак/автоплан отвергаются посреди ручной варки
+	g._engine.inventory["fire"] = 4
+	g._engine.inventory["water"] = 4
+	g._engine.selected = ["fire", "water"]
+	g._engine._brew()
+	Selftest.check("brew sets busy before await", g._engine.brewing)
+	var u9_exp := g._engine._experiment_status("fire", "water")
+	Selftest.check("experiment refused during brew", not bool(u9_exp.get("ok", false))
+		and g._engine._experiment_pending_pair.is_empty())
+	Selftest.check("bench refused during brew", not g._engine._run_bench_plan("steam", u9_plan)
+		and not g._pages._bench_busy)
+	var u9_auto_refused: bool = await g._engine._run_auto_plan("steam", u9_plan)
+	Selftest.check("auto plan refused during brew", not u9_auto_refused and not g._engine._auto)
+	await g.get_tree().create_timer(1.0).timeout
+	Selftest.check("manual brew survived the mutex window", not g._engine.brewing
+		and int(g._engine.inventory.get("steam", 0)) == 2 and int(g._engine.inventory.get("fire", 0)) == 3)
+	# (в) упавший шаг автоплана не двигает completed: ингредиенты перехвачены во время await
+	g._engine._craft_job.clear()
+	g._engine.inventory["fire"] = 2
+	g._engine.inventory["water"] = 2
+	g._engine.inventory.erase("steam")
+	g._engine.selected = []
+	g.BREW_SECONDS = 1.0
+	g._engine._run_auto_plan("steam", u9_plan)
+	g._engine.inventory["fire"] = 0
+	await g.get_tree().create_timer(2.0).timeout
+	Selftest.check("failed auto step keeps completed at zero", int(g._engine._craft_job.get("completed", -1)) == 0
+		and String(g._engine._craft_job.get("status", "")) == "paused_ingredients"
+		and int(g._engine.inventory.get("steam", 0)) == 0 and int(g._engine.inventory.get("fire", 0)) == 0
+		and not g._engine._auto)
+	g.BREW_SECONDS = 0.05
+
+	# ================= U9 (T12): гейты сброса посреди варки + brew_epoch =================
+	g._init_new_game()
+	for i in 35:
+		g._engine.inventory["st_ep_%d" % i] = 1
+	g._engine.inventory["fire"] = 5
+	g._engine.inventory["water"] = 5
+	g._engine.ether = 500
+	g._engine._experiment_pending_pair = ["fire", "water"]
+	g._engine._source_taps = 7
+	g._engine.selected = ["fire", "water"]
+	var u9_epoch := g._engine.brew_epoch
+	g._engine._brew()
+	g._hub._open_prestige_confirm()
+	Selftest.check("prestige confirm refuses during brew", not g._hub._prestige_popup.visible
+		and not g._hub._prestige_dim.visible)
+	Selftest.check("new game refuses during brew", not g._init_new_game()
+		and g._engine.brew_epoch == u9_epoch and g._engine.inventory.size() == 39)
+	g._hub._do_prestige()
+	Selftest.check("prestige bumps epoch and clears experiment bookkeeping", g._engine.brew_epoch > u9_epoch
+		and g._engine._experiment_pending_pair.is_empty() and g._engine._source_taps == 0)
+	await g.get_tree().create_timer(1.0).timeout
+	Selftest.check("aborted mid-brew prestige: no debit no reward", int(g._engine.inventory.get("fire", 0)) == 3
+		and int(g._engine.inventory.get("steam", 0)) == 0 and g._engine.attempts == 0
+		and g._engine.successes == 0 and not g._engine.brewing)
+	# (e) смена поколения mid-await: все три корутины выходят, не трогая новый мир
+	g._engine.inventory["fire"] = 4
+	g._engine.inventory["water"] = 4
+	g._engine.ether = 1000
+	g._engine.selected = ["fire", "water"]
+	g._engine._brew()
+	g._engine.brew_epoch += 1
+	await g.get_tree().create_timer(1.0).timeout
+	Selftest.check("epoch bump aborts manual brew silently", int(g._engine.inventory.get("fire", 0)) == 4
+		and g._engine.attempts == 0 and not g._engine.brewing)
+	g._engine.selected = []
+	g._engine._run_bench_plan("steam", u9_plan)
+	g._engine.brew_epoch += 1
+	await g.get_tree().create_timer(1.0).timeout
+	Selftest.check("epoch bump releases bench without commit", not g._pages._bench_busy
+		and int(g._engine.inventory.get("fire", 0)) == 4 and int(g._engine.inventory.get("steam", 0)) == 0)
+	g._engine._craft_job.clear()
+	g._engine._run_auto_plan("steam", u9_plan)
+	g._engine.brew_epoch += 1
+	await g.get_tree().create_timer(1.0).timeout
+	Selftest.check("epoch bump releases auto plan", not g._engine._auto and not g._engine.brewing
+		and int(g._engine.inventory.get("fire", 0)) == 4 and int(g._engine.inventory.get("steam", 0)) == 0
+		and float(g._engine._production_discount) == 1.0)
+	# поздние ответы эксперимента после сброса: дропаются без начислений/возвратов
+	var u9_inv_snapshot := g._engine.inventory.duplicate(true)
+	var u9_avail0 := g._engine._available_ether()
+	var u9_rejected := g._engine._rejected_pairs.size()
+	g._online._experiment_outcome({"slug": "st_ghost", "name": "Призрак", "color": "#112233", "glyph": "fire"},
+		"fire", "water")
+	g._engine._finish_experiment_inputs("fire", "water", true)
+	g._engine._experiment_failed("fire", "water")
+	Selftest.check("stale experiment responses dropped after reset", g._engine.inventory == u9_inv_snapshot
+		and g._engine._available_ether() == u9_avail0 and not g.ITEMS.has("st_ghost")
+		and g._engine._rejected_pairs.size() == u9_rejected
+		and g._engine._experiment_pending_pair.is_empty())
+	# restore: возвращаем мир в состояние перед блоком U9 (для последующих сюит)
+	g._engine.inventory = u9_snap["inventory"]
+	g._engine.known_recipes = u9_snap["known"]
+	g._engine.upgrades = u9_snap["upgrades"]
+	g._engine._blueprints = u9_snap["blueprints"]
+	g._engine._rejected_pairs = u9_snap["rejected"]
+	g._engine._milestones_done = u9_snap["milestones"]
+	g._guild._quests_done = u9_snap["quests_done"]
+	g._guild._quest_brew = u9_snap["quest_brew"]
+	g._guild._quest_tier = u9_snap["quest_tier"]
+	g._guild._order_done = u9_snap["order_done"]
+	g._hub._log_events = u9_snap["log_events"]
+	g._engine.ether = u9_ether
+	g._engine.ether_overflow = u9_overflow
+	g._engine.mastery_rank = u9_mastery
+	g._engine.sage_gold = u9_sage
+	g._engine.attempts = u9_att0
+	g._engine.successes = u9_suc0
+	g._engine._source_taps = u9_taps0
+	g._engine._last_pair = u9_last
+	g._guild._quest_challenge = u9_qch0
+	g._engine.selected.clear()
+	g._engine.brewing = false
+	g._engine._auto = false
+	g._engine._auto_cancel = false
+	g._engine._auto_new.clear()
+	g._engine._craft_job.clear()
+	g._engine._experiment_pending_pair.clear()
+	g._engine._production_discount = 1.0
+	g._engine._layer_cache.clear()
+	g._engine._cost_cache.clear()
+	g._pages._bench_busy = false
+	g.BREW_SECONDS = 0.05

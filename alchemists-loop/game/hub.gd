@@ -527,6 +527,12 @@ func _refresh_prestige_ui() -> void:
 	_prestige_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.42))
 
 func _open_prestige_confirm() -> void:
+	# U9 (T12): под престижем спит корутина варки/производства и может висеть
+	# эксперимент — сброс до их завершения недопустим, показываем причину отказа.
+	if g._engine.brewing or g._engine._auto or g._engine._experiment_pending_pair.size() == 2:
+		g._online._set_status("Перегонка недоступна: идёт варка, производство или ждёт ответа эксперимент. Дождись завершения.")
+		Sfx.error()
+		return
 	var gain := _prestige_gain()
 	if gain <= 0:
 		return
@@ -554,6 +560,11 @@ func _do_prestige() -> void:
 	g._engine.successes = 0
 	g._engine.selected.clear()
 	g._engine.brewing = false
+	# U9 (T12): сонные корутины варки/верстака/автоплана видят смену поколения
+	# и молча выходят без коммита; bookkeeping эксперимента не переживает сброс.
+	g._engine.brew_epoch += 1
+	g._engine._experiment_pending_pair.clear()
+	g._engine._source_taps = 0
 	g._engine.spring_on = false
 	g._engine.spring_source = "water"
 	g._pages._bench_target = ""

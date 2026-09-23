@@ -12,6 +12,10 @@ var ether: int = Game.START_ETHER
 var attempts: int = 0
 var successes: int = 0
 var brewing: bool = false
+# U9 (T12): поколенческий счётчик сбросов мира (престиж / новая игра / загрузка
+# сейва). Каждая потребляющая корутина захватывает его перед await и сверяет после:
+# изменение означает, что мир под корутиной заменили, — выход без коммита.
+var brew_epoch := 0
 var brew_elapsed: float = 0.0
 var regen_clock: float = 0.0
 var autosave_clock: float = 0.0
@@ -393,6 +397,10 @@ func _experiment_cooldown_remaining() -> float:
 
 func _experiment_status(a: String, b: String) -> Dictionary:
 	_experiment_sync_day()
+	# U9 (T11): единый мьютекс потребляющих трасс — эксперимент нельзя начать
+	# посреди ручной варки, автоплана или шага верстака.
+	if brewing or _auto or g._pages._bench_busy:
+		return {"ok": false, "reason": "Котёл занят варкой или производством — дождись завершения."}
 	if a == "" or b == "" or not g.ITEMS.has(a) or not g.ITEMS.has(b):
 		return {"ok": false, "reason": "Выбери два известных вещества."}
 	var need_a := 2 if a == b else 1
@@ -436,6 +444,11 @@ func _begin_experiment(a: String, b: String) -> bool:
 	return true
 
 func _finish_experiment_inputs(a: String, b: String, full_refund: bool) -> void:
+	# U9 (T12): поздний ответ после сброса мира — pending очищен престижем/новой
+	# игрой, возвращать/списывать поверх свежего подарочного запаса нельзя.
+	# (Корреляция конкретной пары — задел на U11/T14; здесь факт наличия pending.)
+	if _experiment_pending_pair.size() != 2:
+		return
 	inventory[a] = int(inventory.get(a, 0)) + 1
 	inventory[b] = int(inventory.get(b, 0)) + 1
 	_grant_ether(Game.EXPERIMENT_COST if full_refund else Game.EXPERIMENT_FAILURE_REFUND, "experiment_refund")
@@ -443,6 +456,9 @@ func _finish_experiment_inputs(a: String, b: String, full_refund: bool) -> void:
 	_refresh()
 
 func _experiment_succeeded(slug: String, a: String, b: String) -> void:
+	# U9 (T12): зеркальный guard — успех без висящего эксперимента начислять нельзя.
+	if _experiment_pending_pair.size() != 2:
+		return
 	known_recipes[g._pair_key(a, b)] = true
 	inventory[slug] = int(inventory.get(slug, 0)) + 1
 	successes += 1
@@ -453,6 +469,10 @@ func _experiment_succeeded(slug: String, a: String, b: String) -> void:
 	g._saves._save_game()
 
 func _experiment_failed(a: String, b: String, reason: String = "") -> void:
+	# U9 (T12): поздний «not_combinable» после сброса мира — не помечаем пару
+	# отклонённой и не трогаем новый инвентарь (зеркальный guard в _finish_experiment_inputs).
+	if _experiment_pending_pair.size() != 2:
+		return
 	_rejected_pairs[g._pair_key(a, b)] = true
 	_finish_experiment_inputs(a, b, false)
 	status_text = "Эксперимент не дал результата: %s" % (reason if reason != "" else "эти вещества не сочетаются")
@@ -637,27 +657,35 @@ func _collect(item_id: String, silent := false) -> void:
 	g._saves._save_game()
 
 func _can_brew() -> bool:
-	if brewing or selected.size() != 2:
+	# U9 (T11): верстак — тоже потребляющая трасса, ручная варка с ним не совмещается.
+	if brewing or g._pages._bench_busy or selected.size() != 2:
 		return false
 	return _available_ether() >= _pair_cost(selected[0], selected[1], _production_discount)
 
-func _brew() -> void:
+func _brew(from_auto: bool = false) -> Dictionary:
 	var pair_cost := Game.BREW_COST
 	if selected.size() == 2:
 		pair_cost = _pair_cost(selected[0], selected[1], _production_discount)
+	# U9 (T11): единый мьютекс — ручная варка не стартует, пока идёт автоплан.
+	if _auto and not from_auto:
+		status_text = "Котёл занят производством — дождись завершения этапа."
+		Sfx.error()
+		return {"failed": true, "reason": "gate"}
 	if not _can_brew():
 		if selected.size() != 2:
 			status_text = "Положи в лунки два ингредиента."
 		elif _available_ether() < pair_cost:
 			status_text = "Не хватает эфира: открытие этой глубины стоит %d ⚡." % pair_cost
-		return
+		else:
+			status_text = "Котёл занят: дождись завершения текущей варки или производства."
+		return {"failed": true, "reason": "gate"}
 	var a := selected[0]
 	var b := selected[1]
 	Analytics.track("combine_start", {"left": a, "right": b, "source": "manual"})
 	if not g._online._has_ingredients(a, b):
 		status_text = "Не хватает ингредиентов для этой пары."
 		_refresh()
-		return
+		return {"failed": true, "reason": "ingredients"}
 	_last_pair = [a, b]
 	brewing = true
 	brew_elapsed = 0.0
@@ -669,11 +697,25 @@ func _brew() -> void:
 	status_text = "Котёл светится. Туман собирается над водой…"
 	Sfx.draft_open()
 	_refresh()
+	var epoch_before := brew_epoch
 	await g.get_tree().create_timer(_brew_time()).timeout
+	if brew_epoch != epoch_before:
+		# U9 (T12): мир был сброшен во время сна корутины (престиж/новая игра/
+		# загрузка). Молча выходим: без коммита, списания и наград — реагенты
+		# уже принадлежат новому миру.
+		brewing = false
+		if g._spirit._companion != null:
+			g._spirit._companion.set_shake(false)
+		_refresh()
+		return {"failed": true, "reason": "epoch"}
 
 	var res := _commit_brew(a, b)
 	if bool(res.get("failed", true)):
-		if g._online._try_net_candidate(a, b):
+		if String(res.get("reason", "")) == "ingredients":
+			# U9 (T11): fail-closed списание — ингредиенты перехвачены другой
+			# трассой пока котёл «спал»; ничего не тратим, в сеть не идём.
+			status_text = "Ингредиенты не дожили до котла: варка отменена без списания."
+		elif g._online._try_net_candidate(a, b):
 			status_text = "Туман рассеялся… Мир проверяет пару…"
 		else:
 			status_text = "Туман рассеялся… Возвращено %d эфира." % Game.FAILURE_REFUND
@@ -720,6 +762,7 @@ func _brew() -> void:
 		_progress.value = 100.0
 	_refresh()
 	g._saves._save_game()
+	return res
 
 func _repeat_last() -> void:
 	if brewing or _last_pair.size() != 2:
@@ -1152,7 +1195,11 @@ func _on_confirm_brew() -> void:
 		_run_auto_plan(item, plan)
 
 func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
-	if brewing or _auto:
+	# U9 (T11): автоплан — часть единого мьютекса потребляющих трасс.
+	if brewing or _auto or g._pages._bench_busy:
+		status_text = "Котёл занят: дождись завершения текущей варки или производства."
+		Sfx.error()
+		_refresh()
 		return false
 	var total := int(plan.get("total", 0))
 	if total <= 0:
@@ -1240,7 +1287,22 @@ func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
 				g._online._item_name(item_id), ceili(float(done + 1) / float(stage_budget)), done + 1,
 				total_estimate, g._online._item_name(a), g._online._item_name(b), eta]
 			_refresh()
-			await _brew()
+			var epoch_before := brew_epoch
+			var brew_res: Dictionary = await _brew(true)
+			if brew_epoch != epoch_before:
+				# U9 (T12): мир сброшен под производством — молча выходим,
+				# освобождая мьютекс, и не трогаем новый инвентарь.
+				_auto = false
+				_production_discount = 1.0
+				if _auto_stop_btn != null:
+					_auto_stop_btn.visible = false
+				return false
+			if bool(brew_res.get("failed", true)):
+				# U9 (T11): упавший шаг не двигает completed; производство
+				# встаёт на паузу с причиной отказа, маршрут сохраняется.
+				var fail_reason := String(brew_res.get("reason", "recipe"))
+				paused_reason = fail_reason if fail_reason in ["ingredients", "ether"] else "recipe"
+				break
 			_craft_job["completed"] = done + 1
 			_craft_job["status"] = "running"
 			# Сохраняем после каждой операции, а не только после всего этапа:
@@ -1332,8 +1394,27 @@ func _run_bench_plan(item_id: String, plan: Dictionary) -> bool:
 			status_text = "Верстак варит «%s»: шаг %d/%d — %s + %s…" % [
 				g._online._item_name(item_id), st, total, g._online._item_name(a), g._online._item_name(b)]
 			_refresh()
+			var epoch_before := brew_epoch
 			await g.get_tree().create_timer(0.3).timeout
+			if brew_epoch != epoch_before:
+				# U9 (T12): мир сброшен посреди шага верстака — молча выходим
+				# без коммита/списания, освобождая мьютекс.
+				g._pages._bench_busy = false
+				_production_discount = 1.0
+				return false
 			var res := _commit_brew(a, b)
+			if bool(res.get("failed", true)):
+				# U9 (T11): fail-closed списание — верстак останавливается,
+				# маршрут продолжит с этого места позже.
+				g._pages._bench_busy = false
+				_production_discount = 1.0
+				var commit_reason := String(res.get("reason", ""))
+				var stop_label := "ингредиенты" if commit_reason == "ingredients" \
+					else ("эфир" if commit_reason == "ether" else "рецепт")
+				status_text = "Верстак остановился: %s; продолжит с этого места." % stop_label
+				_refresh()
+				g._saves._save_game()
+				return false
 			g._saves._save_game()
 			if bool(res.get("newly_learned", false)):
 				_auto_new.append(String(res["output"]))
@@ -1358,6 +1439,12 @@ func _commit_brew(a: String, b: String) -> Dictionary:
 	if first_time:
 		brew_cost += _discovery_fee_for_layer(_content_layer(output))
 	brew_cost = maxi(1, int(round(float(brew_cost) * _production_discount)))
+	# U9 (T11): повторная проверка прямо перед списанием (fail-closed): между
+	# гейтом трассы и этим моментом лежат await, за которые ингредиенты мог
+	# съесть другой потребитель. Не хватает — выходим без списания реагентов
+	# И без траты эфира (коммит атомарен с этой проверки).
+	if not g._online._has_ingredients(a, b):
+		return {"failed": true, "output": "", "newly_learned": false, "reason": "ingredients"}
 	if not _spend_ether(brew_cost):
 		return {"failed": true, "output": "", "newly_learned": false, "reason": "ether"}
 	inventory[a] = int(inventory[a]) - 1

@@ -693,7 +693,15 @@ func _notification(what: int) -> void:
 
 # ================= состояние =================
 
-func _init_new_game() -> void:
+func _init_new_game() -> bool:
+	# U9 (T12): новый старт во время активной потребляющей трассы/эксперимента
+	# бросает сонные корутины на свежий подарочный запас — отказываемся с хинтом.
+	if _engine.brewing or _engine._auto or _engine._experiment_pending_pair.size() == 2:
+		_engine.status_text = "Начать заново нельзя: идёт варка, производство или ждёт ответа эксперимент. Дождись завершения."
+		Sfx.error()
+		return false
+	# U9 (T12): смена поколения — любая проснувшаяся корутина старого мира выходит молча.
+	_engine.brew_epoch += 1
 	_engine.inventory.clear()
 	_engine.known_recipes.clear()
 	_engine.selected.clear()
@@ -720,6 +728,7 @@ func _init_new_game() -> void:
 	_engine._blueprints.clear()
 	_engine.attempts = 0
 	_engine.successes = 0
+	return true
 
 # ---------- R14: см. game/demo.gd (829-852) ----------
 
