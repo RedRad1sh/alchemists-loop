@@ -451,7 +451,7 @@ func _begin_experiment(a: String, b: String) -> bool:
 func _finish_experiment_inputs(a: String, b: String, full_refund: bool) -> void:
 	# U9 (T12): поздний ответ после сброса мира — pending очищен престижем/новой
 	# игрой, возвращать/списывать поверх свежего подарочного запаса нельзя.
-	# (Корреляция конкретной пары — задел на U11/T14; здесь факт наличия pending.)
+	# (Корреляция конкретной пары — в Online, задел U11/T14 закрыт; здесь — факт наличия pending.)
 	if _experiment_pending_pair.size() != 2:
 		return
 	inventory[a] = int(inventory.get(a, 0)) + 1

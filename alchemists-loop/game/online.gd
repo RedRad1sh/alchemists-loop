@@ -51,6 +51,9 @@ var _pending_requests: Dictionary = {}
 #   за поллингом событий/house-upload — TTL покрывает и это). Плюс полный
 #   clear при сбросах мира (main.gd `_init_new_game`, hub.gd `_do_prestige`,
 #   saves.gd `_load_game`).
+# * prune — не только удаление: просроченная запись ЭКСПЕРИМЕНТА при прунинге
+#   возвращает реагенты и эфир (_prune_pending_requests), иначе осиротевший
+#   _experiment_pending_pair намертво блокировал бы варку/престиж/новую игру.
 const PENDING_TTL_MSEC := 120000
 var _resume_experiment_wait := false
 var _resume_experiment_deadline := 0.0
@@ -241,10 +244,23 @@ func _set_status(text: String) -> void:
 func _prune_pending_requests() -> void:
 	# U11 (T14): устаревание записей pending — по времени вставки (см. блок
 	# комментария у _pending_requests). Вызывается на каждой регистрации/изъятии.
+	# Не только удаляет: просроченный живой эксперимент разрешаем так же, как
+	# offline-refund в _tick_pending_experiment (возврат реагентов и полного
+	# эфира), иначе осиротевший _experiment_pending_pair заблокирует три системы.
 	var now := Time.get_ticks_msec()
 	for key in _pending_requests.keys():
-		if now - int((_pending_requests[key] as Dictionary).get("at", now)) > PENDING_TTL_MSEC:
-			_pending_requests.erase(String(key))
+		var entry: Dictionary = _pending_requests[key]
+		if now - int(entry.get("at", now)) <= PENDING_TTL_MSEC:
+			continue
+		_pending_requests.erase(String(key))
+		var ea := String(entry.get("a", ""))
+		var eb := String(entry.get("b", ""))
+		# не трогаем чужой/свежий эксперимент и уже сброшенный мир (U9-контракт):
+		# возврат только когда висящий pending совпадает с этой записью.
+		if bool(entry.get("experiment", false)) and _experiment_pending_matches(ea, eb):
+			g._engine._finish_experiment_inputs(ea, eb, true)
+			_set_status("Мир не ответил вовремя: реагенты и эфир возвращены.")
+			g._saves._save_game()
 
 func _register_pending_pair(a: String, b: String, is_experiment: bool) -> bool:
 	# True — слот свободен и занят этой парой; False — pending уже ждёт ответа
@@ -274,6 +290,16 @@ func _experiment_pending_matches(a: String, b: String) -> bool:
 	var pending: Array = g._engine._experiment_pending_pair
 	return pending.size() == 2 \
 		and g._pair_key(String(pending[0]), String(pending[1])) == g._pair_key(a, b)
+
+func _grant_local_acquisition(slug: String) -> Array:
+	# единая точка «первое локальное получение вещества из мира»: +1 в инвентарь,
+	# circular-эффект Круга и грант первооткрытия; возвращает новые вехи
+	var first_open := not g._engine.inventory.has(slug)
+	g._engine.inventory[slug] = int(g._engine.inventory.get(slug, 0)) + 1
+	g._retention._circle_on_discovery(first_open)
+	if first_open:
+		return g._engine._grant_first_open(slug)
+	return []
 
 func _try_net_candidate(a: String, b: String) -> bool:
 	"""Попробовать проверить неизвестную пару на сервере. True — запрос ушёл."""
@@ -323,21 +349,23 @@ func _start_experiment(a: String, b: String) -> bool:
 func _resume_pending_experiment() -> void:
 	if g._engine._experiment_pending_pair.size() != 2 or not _net_enabled:
 		return
-	if Net.is_available():
-		var a := String(g._engine._experiment_pending_pair[0])
-		var b := String(g._engine._experiment_pending_pair[1])
-		# U11: resume — авторитетный путь (запись эксперимента восстановлена
-		# из сейва): осиротевшие записи прошлой сессии сбрасываем, их ответы
-		# будут проигнорированы без pending-записи.
-		_pending_requests.clear()
-		_register_pending_pair(a, b, true)
-		_resume_experiment_wait = false
-		_set_status("Продолжаем незавершённый эксперимент: %s + %s…" % [_item_name(a), _item_name(b)])
-		Net.check_pair(a, b, _net_nick, _device_id, true)
-	else:
+	var a := String(g._engine._experiment_pending_pair[0])
+	var b := String(g._engine._experiment_pending_pair[1])
+	# U11 (T14): resume — авторитетный путь (запись эксперимента восстановлена
+	# из сейва): осиротевшие записи прошлой сессии сбрасываем, их ответы
+	# будут проигнорированы без pending-записи.
+	_pending_requests.clear()
+	if not Net.is_available() or not _register_pending_pair(a, b, true):
+		# нет связи ИЛИ регистрация не удалась (пустой slug из сейва): запрос
+		# не отправляем — без записи pending он некоррелируем (дефект T14).
+		# Сохранённая пара ждёт; 8-секундный дедлайн вернёт реагенты штатно.
 		_resume_experiment_wait = true
 		_resume_experiment_deadline = Time.get_ticks_msec() / 1000.0 + 8.0
 		_set_status("Эксперимент сохранён; ждём связь с миром для продолжения.")
+		return
+	_resume_experiment_wait = false
+	_set_status("Продолжаем незавершённый эксперимент: %s + %s…" % [_item_name(a), _item_name(b)])
+	Net.check_pair(a, b, _net_nick, _device_id, true)
 
 func _tick_pending_experiment() -> void:
 	if not _resume_experiment_wait or g._engine._experiment_pending_pair.size() != 2:
@@ -378,10 +406,15 @@ func _experiment_outcome(out: Dictionary, a: String, b: String, created: bool = 
 	_register_server_recipe(a, b, slug)
 	var key := g._pair_key(a, b)
 	g._engine.known_recipes[key] = true
+	# first_open — до инкремента; грант и круг — ПОСЛЕ _experiment_succeeded (она
+	# делает inventory[slug]+=1): иначе _check_milestones не учтёт это вещество и
+	# веха на N веществ сработает на одно открытие позже.
 	var first_open := not g._engine.inventory.has(slug)
-	if first_open:
-		g._engine._grant_first_open(slug)
 	g._engine._experiment_succeeded(slug, a, b)
+	g._retention._circle_on_discovery(first_open)
+	var first_milestones: Array = []
+	if first_open:
+		first_milestones = g._engine._grant_first_open(slug)
 	g._retention._fair_report_brew(a, b)
 	if created:
 		_set_status("ПЕРВОЭКСПЕРИМЕНТ: %s — мир записал тебя первым!" % _item_name(slug))
@@ -394,7 +427,7 @@ func _experiment_outcome(out: Dictionary, a: String, b: String, created: bool = 
 		g._spirit._companion_react_discovery(slug)
 	_server_authors[slug] = g._clean_str(out.get("author", _net_nick))
 	_rebuild_world_grid()
-	g._show_discovery_popup(slug, a, b)
+	g._show_discovery_popup(slug, a, b, first_milestones)
 	g._saves._save_game()
 
 func _on_net_pair_result(pair_key: String, result: Dictionary) -> void:
@@ -421,18 +454,14 @@ func _on_net_pair_result(pair_key: String, result: Dictionary) -> void:
 			_register_server_recipe(a, b, slug)
 			g._engine.known_recipes[g._pair_key(a, b)] = true
 			g._retention._fair_report_brew(a, b)
-			# U11 (T15): первое ЛОКАЛЬНОЕ получение мир-открытого вещества теперь
-			# проходит через _grant_first_open — как обычная локальная first-open
-			# в core.gd `_commit_brew` и как discover-ветка ниже: rarity-пошлина,
-			# tier-учёт гильдии, вехи атласа, сброс _layer_cache. Серверные
+			# U11 (T15): первое ЛОКАЛЬНОЕ получение мир-открытого вещества — через
+			# _grant_local_acquisition (+1 в инвентарь, circular-эффект Круга,
+			# _grant_first_open: rarity-пошлина, tier-учёт гильдии, вехи атласа,
+			# сброс _layer_cache) — как _commit_brew и discover-ветка. Серверные
 			# награды первооткрытия (_ach_world_first, «ПЕРВООТКРЫТИЕ») здесь
 			# НЕ начисляются — их даёт только created/не-reused путь, так что
 			# двойного счёта достижений нет.
-			var first_open := not g._engine.inventory.has(slug)
-			g._engine.inventory[slug] = int(g._engine.inventory.get(slug, 0)) + 1
-			var first_milestones: Array = []
-			if first_open:
-				first_milestones = g._engine._grant_first_open(slug)
+			var first_milestones: Array = _grant_local_acquisition(slug)
 			var world_author := g._clean_str((result.get("out", {}) as Dictionary).get("author", ""))
 			if world_author != "":
 				_server_authors[slug] = world_author
@@ -508,11 +537,10 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 			_register_server_recipe(a, b, slug)
 			g._engine.known_recipes[g._pair_key(a, b)] = true
 			g._retention._fair_report_brew(a, b)
+			# first_open нужен ниже (статус/реакция спутника); хелпер считает его сам
+			# перед тем же инкрементом — значения совпадают.
 			var first_open := not g._engine.inventory.has(slug)
-			g._engine.inventory[slug] = int(g._engine.inventory.get(slug, 0)) + 1
-			var first_milestones: Array = []
-			if first_open:
-				first_milestones = g._engine._grant_first_open(slug)
+			var first_milestones: Array = _grant_local_acquisition(slug)
 			var author := g._clean_str(disc.get("author", _net_nick))
 			_server_authors[slug] = author
 			if status == "created" and not reused:

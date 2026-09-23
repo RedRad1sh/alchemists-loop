@@ -142,11 +142,19 @@ static func run(g: Game) -> void:
 	var u11_pending := g._online._pending_requests.duplicate(true)
 	var u11_exp_pair := g._engine._experiment_pending_pair.duplicate()
 	var u11_first_opens := g._engine._first_open_calls
+	# F3 добавляет _circle_on_discovery в мир-ветки (он НЕ гейтится selftest → мутирует
+	# _circle_disc/_circle_disc_day); возврат при prune (F1) идёт через негейтимый
+	# _grant_ether (полный EXPERIMENT_COST в ether+overflow) — оба восстанавливаем.
+	var u11_ether := g._engine.ether
+	var u11_ether_overflow := g._engine.ether_overflow
+	var u11_circle_disc := g._retention._circle_disc
+	var u11_circle_disc_day := g._retention._circle_disc_day
 	g._online._pending_requests.clear()
 	# (1) «enqueue-перехват»: пока X ждёт ответа, Y слот не перезахватывает;
 	# поздний ответ X применяет награду строго своей паре.
 	var u11_kx := g._pair_key("fire", "air")
 	var u11_ky := g._pair_key("earth", "air")
+	var u11_kx_before := g._engine.known_recipes.has(u11_kx)
 	var u11_ky_before := g._engine.known_recipes.has(u11_ky)
 	Selftest.check("t14 register first pair", g._online._register_pending_pair("fire", "air", false)
 		and g._online._pending_requests.size() == 1)
@@ -193,6 +201,7 @@ static func run(g: Game) -> void:
 	# доставка той же пары — только +1 в стек, без повторного гранта.
 	var u11_fo0 := g._engine._first_open_calls
 	var u11_kz := g._pair_key("water", "earth")
+	var u11_kz_before := g._engine.known_recipes.has(u11_kz)
 	Selftest.check("t15 register world-opened pair", g._online._register_pending_pair("water", "earth", false))
 	g._online._on_net_pair_result(u11_kz, {"ok": true, "found": true, "status": "known",
 		"out": {"slug": "u15_world", "name": "U15-мир", "color": "#3388aa", "glyph": "fire", "layer": 1}})
@@ -232,6 +241,22 @@ static func run(g: Game) -> void:
 		"out": {"slug": "u14_ttl", "name": "U14-TTL", "color": "#112233", "glyph": "fire", "layer": 1}})
 	Selftest.check("t14 stale pending pruned", not g._engine.inventory.has("u14_ttl")
 		and g._online._pending_requests.is_empty())
+	# F1: TTL-prune ЖИВОГО эксперимента не осирочивает его — возвращает реагенты
+	# и полный эфир (иначе _experiment_pending_pair size 2 блокировал бы варку,
+	# «Начать заново» и престиж до перезапуска). Прунинг — обычным входом: поздний
+	# ответ той же пары (запись изымается уже после prune → ответ дропается).
+	g._engine._experiment_pending_pair = ["u14_exp_a", "u14_exp_b"]
+	Selftest.check("u11 prune-exp register", g._online._register_pending_pair("u14_exp_a", "u14_exp_b", true))
+	var u11_expkey := g._pair_key("u14_exp_a", "u14_exp_b")
+	var u11_expiring: Dictionary = g._online._pending_requests[u11_expkey]
+	u11_expiring["at"] = Time.get_ticks_msec() - g._online.PENDING_TTL_MSEC - 1000
+	var u11_avail0 := g._engine.ether + g._engine.ether_overflow
+	g._online._on_net_pair_result(u11_expkey, {"ok": true, "found": true, "status": "known"})
+	Selftest.check("u11 prune-exp refunds reagents", g._engine._experiment_pending_pair.is_empty()
+		and int(g._engine.inventory.get("u14_exp_a", 0)) == 1
+		and int(g._engine.inventory.get("u14_exp_b", 0)) == 1)
+	Selftest.check("u11 prune-exp refunds ether", g._online._pending_requests.is_empty()
+		and g._engine.ether + g._engine.ether_overflow == u11_avail0 + Game.EXPERIMENT_COST)
 	# restore: мир после блока U11 — точно таким же, как до него.
 	g._engine.inventory = u11_inv
 	g._engine.known_recipes = u11_known
@@ -246,8 +271,27 @@ static func run(g: Game) -> void:
 	g._engine._layer_cache = u11_layer_cache
 	g._online._pending_requests = u11_pending
 	g._engine._first_open_calls = u11_first_opens
+	g._engine.ether = u11_ether
+	g._engine.ether_overflow = u11_ether_overflow
+	g._retention._circle_disc = u11_circle_disc
+	g._retention._circle_disc_day = u11_circle_disc_day
 	g._engine._experiment_pending_pair.clear()
 	for u11_raw_e in u11_exp_pair:
 		g._engine._experiment_pending_pair.append(String(u11_raw_e))
-	Selftest.check("u11 state restored", g._engine.inventory == u11_inv and g.ITEMS == u11_items
-		and g._online._pending_requests.is_empty())
+	# ассерт чувствителен к откату: посаженные slug'ы исчезли из ITEMS/inventory,
+	# known_recipes по использованным парам вернулись к досюжетным значениям, а
+	# ether/overflow/круг восстановлены (сравнение объекта с самим собой ничего бы
+	# не проверяло — сравниваем независимые снимки).
+	var u11_clean := true
+	for u11_p in ["u11_x_out", "u11_ok", "u15_world", "u14_ghost", "u14_ghost2",
+		"u11_dup", "u11_dup2", "u11_bad1", "u11_bad2", "u14_ttl", "u14_exp_a", "u14_exp_b"]:
+		if g.ITEMS.has(String(u11_p)) or g._engine.inventory.has(String(u11_p)):
+			u11_clean = false
+	Selftest.check("u11 state restored", u11_clean
+		and g._engine.known_recipes.has(u11_kx) == u11_kx_before
+		and g._engine.known_recipes.has(u11_ky) == u11_ky_before
+		and g._engine.known_recipes.has(u11_kz) == u11_kz_before
+		and g._online._pending_requests.is_empty()
+		and g._engine.ether == u11_ether and g._engine.ether_overflow == u11_ether_overflow
+		and g._retention._circle_disc == u11_circle_disc
+		and g._retention._circle_disc_day == u11_circle_disc_day)
