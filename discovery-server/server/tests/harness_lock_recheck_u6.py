@@ -24,8 +24,14 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA = os.path.join(HERE, "..", "schema.sql")
-# Число должно совпадать с server.LOCK_TTL (U5-fix: >= 3 attempts x 30s).
-LOCK_TTL = 120.0
+sys.path.insert(0, HERE)
+import server_tie
+
+# I-5: LOCK_TTL и SQL-копии НИЖЕ проверяются на сверку с исходником server.py
+# (import server на голом python невозможен — нет fastapi; разбор исходника).
+# Откат сервера к неатомарному захвату/иному TTL роняет харнесс, а не делает
+# его «самим себе доказательством».
+LOCK_TTL = server_tie.lock_ttl()
 
 ACQUIRE_SQL = (
     "INSERT INTO pending_pairs (pair_key, state, lock_ts, owner, attempted_by)"
@@ -37,6 +43,8 @@ ACQUIRE_SQL = (
 )
 RELEASE_SQL = ("DELETE FROM pending_pairs"
                " WHERE pair_key = ? AND state = 'locked' AND owner = ?")
+
+server_tie.verify(ACQUIRE_SQL, RELEASE_SQL, LOCK_TTL)
 
 
 def _db_conn(db):

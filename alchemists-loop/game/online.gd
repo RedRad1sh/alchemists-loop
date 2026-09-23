@@ -375,9 +375,15 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 	var disc_raw = result.get("discovery", {})
 	if typeof(disc_raw) == TYPE_DICTIONARY:
 		disc = disc_raw
+	# U6-fix (I-1): сервер возвращает status="created" и для reused (дедуп
+	# имени: пара привязана к уже существующему веществу) — это НЕ
+	# первооткрытие, серверных наград в таком ответе нет. Клиентские награды
+	# (ПЕРВООТКРЫТИЕ, спутник, ачивка, vein-бонус) обязан включать только
+	# reused-флаг из discovery, иначе дубль-имя фармит «первооткрытия».
+	var reused := bool(disc.get("reused", false))
 	if status == "created" or status == "known":
 		if is_experiment and a != "" and b != "":
-			_experiment_outcome(disc, a, b, status == "created")
+			_experiment_outcome(disc, a, b, status == "created" and not reused)
 			return
 		var slug := _apply_server_element(disc)
 		if slug != "":
@@ -392,7 +398,7 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 				first_milestones = g._engine._grant_first_open(slug)
 			var author := g._clean_str(disc.get("author", _net_nick))
 			_server_authors[slug] = author
-			if status == "created":
+			if status == "created" and not reused:
 				_set_status("ПЕРВООТКРЫТИЕ: %s (автор: %s)!" % [_item_name(slug), author])
 				g._spirit._companion_react("world_first", _item_name(slug))
 				g._hub._log_event("Первооткрытие: «%s» — ты первый!" % _item_name(slug))
@@ -433,7 +439,7 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 				for m in first_milestones:
 					sub2 += "\n%s" % g._engine._milestone_text(int(m))
 				g._present_popup(slug, sub2, "НОВЫЙ РЕЦЕПТ!", rr["color"])
-			if status == "created":
+			if status == "created" and not reused:
 				g._retention._discover_vein_bonus(result)
 	elif status == "not_combinable":
 		if is_experiment and a != "" and b != "":

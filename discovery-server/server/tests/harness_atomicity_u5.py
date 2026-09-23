@@ -4,8 +4,9 @@
 (`python tests/harness_atomicity_u5.py`), так и из-под pytest (функция
 `test_atomicity_harness`). Повторяет ровно те SQL-операторы и порядок
 транзакций, что использует server.py (_try_acquire_pair_lock /
-_release_pair_lock / _ensure_challenge), под реальную гонку потоков на
-файловой WAL-базе.
+_release_pair_lock / _ensure_challenge / guarded-переход _score_challenge),
+под реальную гонку потоков на файловой WAL-базе. Копии SQL сверяются с
+исходником server.py через server_tie.verify (I-5): рассинхрон — падение.
 
 Ключевой инвариант, который доказывается: НИКОГДА одновременно держателем
 лока не может быть больше одного потока (в т.ч. на Windows, где time.time()
@@ -21,7 +22,14 @@ import traceback
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA = os.path.join(HERE, "..", "schema.sql")
-LOCK_TTL = 120.0  # секунд; то же значение, что в server.py (U5-fix: >= худшего окна генерации)
+sys.path.insert(0, HERE)
+import server_tie
+
+# I-5: LOCK_TTL и SQL-копии НИЖЕ сверяются с исходником server.py через
+# server_tie.verify (import server на голом python невозможен — нет fastapi;
+# идёт разбор исходника). Откат/правка сервера роняет харнесс, а не оставляет
+# его «сам себе доказательством».
+LOCK_TTL = server_tie.lock_ttl()
 
 UPSERT = (
     "INSERT INTO pending_pairs (pair_key, state, lock_ts, owner, attempted_by)"
@@ -31,6 +39,22 @@ UPSERT = (
     "   owner=excluded.owner, attempted_by=excluded.attempted_by"
     " WHERE pending_pairs.state != 'locked' OR pending_pairs.lock_ts <= ?"
 )
+RELEASE_SQL = ("DELETE FROM pending_pairs"
+               " WHERE pair_key = ? AND state = 'locked' AND owner = ?")
+
+# I-2: переход _score_challenge (гард completed_at IS NULL) — та же форма,
+# что в server.py; сценарий 4 доказывает «won не больше одного раза».
+SCORE_UPSERT = (
+    "INSERT INTO challenge_scores (day, device_id, nick, points, first_at, completed_at)"
+    " VALUES (?, ?, ?, 1, ?, ?)"
+    " ON CONFLICT(day, device_id) DO UPDATE SET"
+    "   points = points + 1, nick = excluded.nick, completed_at = excluded.completed_at"
+    " WHERE challenge_scores.completed_at IS NULL"
+)
+SCORE_TOPUP = ("UPDATE challenge_scores SET points = points + 1, nick = ?"
+               " WHERE day = ? AND device_id = ?")
+
+server_tie.verify(UPSERT, RELEASE_SQL, LOCK_TTL, SCORE_UPSERT)
 
 
 def _db_conn(db):
@@ -59,12 +83,21 @@ def acquire(conn, pair_key, owner, attempted_by, now):
 def release(conn, pair_key, owner):
     """Копия server._release_pair_lock: DELETE, привязанный к токену СВОЕГО
     захвата (U5-fix): чужой лок не смахнёт, даже если lock_ts совпали."""
-    cur = conn.execute(
-        "DELETE FROM pending_pairs WHERE pair_key = ? AND state = 'locked' AND owner = ?",
-        (pair_key, owner),
-    )
+    cur = conn.execute(RELEASE_SQL, (pair_key, owner))
     conn.commit()
     return cur.rowcount
+
+
+def score_challenge(conn, day, device_id, nick, now_iso):
+    """Копия scoring-перехода server._score_challenge (I-2): guarded UPSERT
+    закрывает completed_at ровно у одного победителя перехода; уже выполненная
+    строка → rowcount 0 → только очок. Возвращает won."""
+    cur = conn.execute(SCORE_UPSERT, (day, device_id, nick, now_iso, now_iso))
+    won = cur.rowcount == 1
+    if not won:
+        conn.execute(SCORE_TOPUP, (nick, day, device_id))
+    conn.commit()
+    return won
 
 
 def _run_harness(verbose=True):
@@ -104,7 +137,9 @@ def _run_harness(verbose=True):
     def racer(tag, stats, hold):
         """Каждый поток: захватить; если удалось — подержать «генерацию» и
         освободить. stats считает ПИК одновременных держателей — это и есть
-        доказываемый инвариант (последовательные перезахваты допустимы)."""
+        доказываемый инвариант (последовательные перезахваты допустимы).
+        I-5: окно держателя покрывает и commit релиза — счётчик убирается
+        ПОСЛЕ release(), т.е. реальный DB-visible интервал владения лока."""
         try:
             cc = _db_conn(db)
             now = time.time()
@@ -115,10 +150,10 @@ def _run_harness(verbose=True):
                     stats["wins"].append(tag)
                 if hold:
                     time.sleep(0.3)  # имитация LLM-генерации под локастом
+                rel = release(cc, pk, tag)
                 with jlock:
                     stats["holders"] -= 1
-                    stats["declines"] += 0
-                assert release(cc, pk, tag) == 1, "освобождение своего лока по токену"
+                assert rel == 1, "освобождение своего лока по токену"
             else:
                 with jlock:
                     stats["declines"] += 1
@@ -174,6 +209,49 @@ def _run_harness(verbose=True):
     say("round3 (_ensure_challenge x12): строк за день =", n, "| ошибок =", len(errors))
     say("pending_pairs после всех раундов:", left, "(resolved-«могилы» не копятся)")
     assert n == 1 and left == 0 and not errors
+
+    # 4) I-2: гонка scoring'а цели дня одним устройством — won не больше одного
+    #    раза и без IntegrityError. 4a) легаси-строка completed_at IS NULL
+    #    (наследие vein-канала до разнесения), 4b) строки вовсе нет.
+    def tap(day, device, out_list):
+        try:
+            cc = _db_conn(db)
+            w = score_challenge(cc, day, device, "Алик", "now")
+            with jlock:
+                out_list.append(w)
+            cc.close()
+        except Exception:
+            with jlock:
+                errors.append(traceback.format_exc())
+
+    conn = _db_conn(db)
+    conn.execute("INSERT INTO challenge_scores (day, device_id, nick, points, first_at, completed_at)"
+                 " VALUES ('2031-01-01','dev-1','Алик',3,'earlier',NULL)")
+    conn.commit()
+    conn.close()
+    wins_legacy = []
+    ths = [threading.Thread(target=tap, args=("2031-01-01", "dev-1", wins_legacy)) for _ in range(8)]
+    [t.start() for t in ths]
+    [t.join() for t in ths]
+    conn = _db_conn(db)
+    r = conn.execute("SELECT points, completed_at FROM challenge_scores"
+                     " WHERE day='2031-01-01' AND device_id='dev-1'").fetchone()
+    assert sum(wins_legacy) == 1, "на легаси-строке won ровно одному переходу"
+    assert r["points"] == 3 + 8 and r["completed_at"] == "now", \
+        "очки посчитаны всеми, completed_at закрыт победителем"
+
+    wins_new = []
+    ths = [threading.Thread(target=tap, args=("2031-01-02", "dev-2", wins_new)) for _ in range(8)]
+    [t.start() for t in ths]
+    [t.join() for t in ths]
+    r2 = conn.execute("SELECT points, completed_at FROM challenge_scores"
+                      " WHERE day='2031-01-02' AND device_id='dev-2'").fetchone()
+    conn.close()
+    assert sum(wins_new) == 1, "создание строки с won — ровно один раз (нет двойного won/500)"
+    assert r2["points"] == 8 and r2["completed_at"] == "now"
+    say("round4 (_score_challenge гонка x8): won на легаси =", sum(wins_legacy),
+        "| won на новой =", sum(wins_new), "| ошибок =", len(errors))
+    assert not errors
     say("HARNESS OK")
 
 

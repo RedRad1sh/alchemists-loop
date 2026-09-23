@@ -27,6 +27,7 @@ import sqlite3
 # seed.py лежит рядом с server.py и содержит стартовый граф веществ.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import seed
+import gen_llm
 from gen_llm import GLYPH_PARAM, GLYPHS, LLMGenerator, LLMError, TAGS, is_glyph
 
 # Логирование: «alchemy.llm» (gen_llm.py) и «alchemy» (этот модуль).
@@ -87,11 +88,27 @@ def _resolve_db_path() -> str:
 
 DB_PATH = _resolve_db_path()
 SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:8080")
-# U5-fix (review): TTL обязан переживать худшее окно генерации, иначе живой
-# держатель лока теряет его посреди LLM-вызова и второй запрос лезет генерировать
-# ту же пару (двойная трата бюджета). Худшее окно: MAX_ATTEMPTS(3) ×
-# LLM_TIMEOUT(30с) = 90с; берём 120с с запасом на валидацию/запись.
-LOCK_TTL = 120.0  # секунд: сколько пара считается «в обработке» (защита от гонок)
+# U5-fix (review) / I-3: TTL обязан переживать ХУДШЕЕ окно генерации, иначе
+# живой держатель лока теряет его посреди LLM-вызова и второй запрос лезет
+# генерировать ту же пару (двойная трата бюджета). Окно env-управляемое
+# (README советует поднимать LLM_TIMEOUT), поэтому НЕ хардкод: выводим из
+# фактических MAX_ATTEMPTS (gen_llm, учитывает LLM_MAX_ATTEMPTS и .env —
+# gen_llm импортирован выше) × LLM_TIMEOUT с запасом на валидацию/запись;
+# прямой override — LOCK_TTL_SEC; нижняя граница — LOCK_TTL_FLOOR.
+LOCK_TTL_FLOOR = 120.0   # сек: минимум, даже если конфигурация генерации мельче
+LOCK_TTL_MARGIN = 1.25    # запас поверх худшего окна генерации
+
+
+def _lock_ttl_seconds() -> float:
+    override = os.environ.get("LOCK_TTL_SEC")
+    if override:
+        return float(override)
+    attempts = int(getattr(gen_llm, "MAX_ATTEMPTS", 3))
+    timeout = float(os.environ.get("LLM_TIMEOUT", "30"))
+    return max(LOCK_TTL_FLOOR, attempts * timeout * LOCK_TTL_MARGIN)
+
+
+LOCK_TTL = _lock_ttl_seconds()  # секунд: сколько пара считается «в обработке» (защита от гонок)
 # T04: после перевода генерирующих эндпоинтов в threadpool писатели — потоки;
 # ожидаем блокировку WAL-писателя не дольше этого, дальше — ошибка.
 DB_BUSY_TIMEOUT_SEC = float(os.environ.get("DB_BUSY_TIMEOUT_SEC", "10"))
@@ -1469,31 +1486,31 @@ def _score_challenge(conn: sqlite3.Connection, a: str, b: str, nick: str, device
     if not (a == ch["target"] or b == ch["target"]):
         return {"won": False, "first": False, "target_name": ch["target_name"]}
     now_iso = datetime.now().isoformat()
-    row = conn.execute(
-        "SELECT points, completed_at FROM challenge_scores WHERE day = ? AND device_id = ?",
-        (ch["day"], device_id),
-    ).fetchone()
-    if row and row["completed_at"]:
+    # I-2: единый атомарный переход вместо SELECT→UPDATE/INSERT. Прежняя
+    # схема на параллельных запросах одного устройства либо давала двойной
+    # won (оба потока видели completed_at IS NULL), либо роняла запрос на
+    # IntegrityError отсутствующей строки. Здесь: guarded UPSERT закрывает
+    # completed_at ровно один раз — rowcount==1 только у победителя перехода;
+    # уже выполненная строка не матчит WHERE → rowcount==0 → просто очок.
+    # Доказательство под потоками: tests/harness_atomicity_u5.py (сценарий 4).
+    cur = conn.execute(
+        "INSERT INTO challenge_scores (day, device_id, nick, points, first_at, completed_at) "
+        "VALUES (?, ?, ?, 1, ?, ?) "
+        "ON CONFLICT(day, device_id) DO UPDATE SET "
+        "  points = points + 1, nick = excluded.nick, completed_at = excluded.completed_at "
+        "WHERE challenge_scores.completed_at IS NULL",
+        (ch["day"], device_id, nick, now_iso, now_iso),
+    )
+    won = cur.rowcount == 1
+    if not won:
+        # Цель уже выполнена этим устройством (или успела закрыться в
+        # параллельном запросе секунду назад): очередной очок без награды.
         conn.execute(
             "UPDATE challenge_scores SET points = points + 1, nick = ? WHERE day = ? AND device_id = ?",
             (nick, ch["day"], device_id),
         )
         conn.commit()
         return {"won": False, "first": False, "target_name": ch["target_name"]}
-    if row:
-        # легаси vein/смешанная строка до разнесения каналов: реального
-        # won это устройство ещё не получало — выдаём сейчас
-        conn.execute(
-            "UPDATE challenge_scores SET points = points + 1, nick = ?, completed_at = ? "
-            "WHERE day = ? AND device_id = ?",
-            (nick, now_iso, ch["day"], device_id),
-        )
-    else:
-        conn.execute(
-            "INSERT INTO challenge_scores (day, device_id, nick, points, first_at, completed_at) "
-            "VALUES (?, ?, ?, 1, ?, ?)",
-            (ch["day"], device_id, nick, now_iso, now_iso),
-        )
     n = conn.execute(
         "SELECT COUNT(*) AS c FROM challenge_scores WHERE day = ? AND completed_at IS NOT NULL",
         (ch["day"],),
@@ -2259,6 +2276,12 @@ def discover(req: DiscoverRequest):
             if existing is not None:
                 return existing
 
+            # I-4 (M-4): гарантируем цель дня ДО любых записей генерации:
+            # её 503 больше не приземляется в середину незакрытой транзакции
+            # materialize/scoring. _ensure_challenge не читает пару и дни цели
+            # не меняет — семантика скоринга та же (нужны только target/day).
+            _ensure_challenge(conn)
+
             kind, discovery = _generate_for_pair(
                 conn, req.a, req.b, pair_key, nick, req.device_id)
 
@@ -2326,6 +2349,16 @@ def discover(req: DiscoverRequest):
             existing = _existing_pair_response(conn, pair_key, req.a, req.b, nick, req.device_id)
             if existing is not None:
                 return existing
+            raise
+
+        except Exception:
+            # I-4: нештатная ошибка (SQLITE_BUSY вне логики лока, 503, баг
+            # генератора) — бизнес-записи этой транзакции (elements/recipes/
+            # world_events/скоринг) НЕ должны быть частично закоммичены:
+            # иначе элемент создан, а награда/цель не досчитались — навсегда.
+            # Откатываем до освобождения лока, чтобы release шёл по чистому
+            # соединению и его commit покрывал только DELETE.
+            conn.rollback()
             raise
 
         finally:
