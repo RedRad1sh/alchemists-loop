@@ -237,12 +237,13 @@ class TestEchoesByDevice:
             assert client.post("/api/me", json={"device_id": "dev-author", "nick": "Кассандра"}).status_code == 200
             # хиджер занимает старый ник ЛЕГАЛЬНО (ник свободен)
             assert client.post("/api/me", json={"device_id": "dev-hijacker", "nick": "Варда"}).status_code == 200
-            # чужая повторная варка -> отголосок автору по device_id, не хиджеру
+            # чужая повторная ВАРКА (discover) -> отголосок автору по device_id,
+            # не хиджеру. T03: brew-check — читающий, экономику не пишет.
             self._discover(client, "clay", "fire", "Плавильщик", "dev-brewer")  # своя пара
-            r = client.post("/api/brew-check", json={
+            r = client.post("/api/discover", json={
                 "a": "plant", "b": "stone", "nick": "Плавильщик", "device_id": "dev-brewer",
             })
-            assert r.status_code == 200
+            assert r.status_code == 200 and r.json()["status"] == "known"
             conn = srv.get_db()
             try:
                 author_echo = conn.execute(
@@ -264,10 +265,11 @@ class TestEchoesByDevice:
             self._discover(client, "stone", "plant", "Варда", "dev-1")
             client.post("/api/me", json={"device_id": "dev-1", "nick": "Кассандра"})
             # повтор СВОЕЙ пары тем же устройством — без отголоска себе
-            r = client.post("/api/brew-check", json={
+            # (T03: тот же путь discover, т.к. brew-check больше не кредитует)
+            r = client.post("/api/discover", json={
                 "a": "stone", "b": "plant", "nick": "Кассандра", "device_id": "dev-1",
             })
-            assert r.status_code == 200
+            assert r.status_code == 200 and r.json()["status"] == "known"
             conn = srv.get_db()
             try:
                 row = conn.execute("SELECT total FROM echoes WHERE device_id = 'dev-1'").fetchone()

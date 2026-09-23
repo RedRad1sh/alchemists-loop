@@ -66,7 +66,8 @@ class TestCreditResonance:
         conn = _fresh_conn()
         disc = _mk(conn, "stone", "plant", "Перво", "Звенигород")
         _players(conn, ("Перво", "dev-a"), ("Второй", "dev-b"))
-        assert server._credit_resonance(conn, disc.id, "Перво", "Второй") is True
+        assert server._credit_resonance(conn, disc.id, "Перво", "Второй",
+                                        pair_key="plant|stone") is True
         conn.commit()
         row = conn.execute(
             "SELECT balance, total FROM echoes WHERE device_id = 'dev-a'"
@@ -86,7 +87,8 @@ class TestCreditResonance:
         conn = _fresh_conn()
         disc = _mk(conn, "stone", "plant", "Перво", "Звенигород")
         _players(conn, ("Перво", "dev-a"))
-        assert server._credit_resonance(conn, disc.id, "Перво", "Перво") is False
+        assert server._credit_resonance(conn, disc.id, "Перво", "Перво",
+                                        pair_key="plant|stone") is False
         cnt = conn.execute(
             "SELECT resonance_count FROM elements WHERE id = ?", (disc.id,)
         ).fetchone()["resonance_count"]
@@ -97,15 +99,19 @@ class TestCreditResonance:
     def test_no_author_no_credit(self):
         conn = _fresh_conn()
         fire_id = conn.execute("SELECT id FROM elements WHERE slug='fire'").fetchone()["id"]
-        assert server._credit_resonance(conn, fire_id, None, "Кто-то") is False
+        assert server._credit_resonance(conn, fire_id, None, "Кто-то",
+                                        pair_key="plant|stone") is False
         conn.close()
 
     def test_balance_capped_total_uncapped(self):
         conn = _fresh_conn()
         disc = _mk(conn, "stone", "plant", "Перво", "Звенигород")
         _players(conn, ("Перво", "dev-a"))
-        for _ in range(25):
-            server._credit_resonance(conn, disc.id, "Перво", "Второй")
+        # T03: дедуп «раз в жизнь» на (pair_key, brewer) — кап проверяем на
+        # РАЗНЫХ парах, иначе второй кредит той же пары просто не проходит.
+        for i in range(25):
+            server._credit_resonance(conn, disc.id, "Перво", "Второй",
+                                     pair_key=f"p{i}|x")
         conn.commit()
         row = conn.execute(
             "SELECT balance, total FROM echoes WHERE device_id = 'dev-a'"
@@ -141,8 +147,9 @@ class TestClaim:
         conn = _fresh_conn()
         disc = _mk(conn, "stone", "plant", "Перво", "Звенигород")
         _players(conn, ("Перво", "dev-a"))
-        for _ in range(3):
-            server._credit_resonance(conn, disc.id, "Перво", "Второй")
+        for i in range(3):
+            server._credit_resonance(conn, disc.id, "Перво", "Второй",
+                                     pair_key=f"p{i}|x")
         claimed, ether, total = server._claim_echoes(conn, "dev-a")
         assert (claimed, ether, total) == (3, 15, 3)
         row = conn.execute(
@@ -241,13 +248,18 @@ class TestEchoesHttp:
             r1 = c.post("/api/discover", json={
                 "a": "stone", "b": "plant", "nick": "РезА", "device_id": "res-a"})
             assert r1.status_code == 200 and r1.json()["status"] == "created"
-            # чужой повтор через brew-check (именно так клиент узнаёт известное)
+            # brew-check — читающий путь (T03): статусknown даёт, но экономику
+            # НЕ пишет (ни одного кредита)
             rb = c.post("/api/brew-check", json={
                 "a": "stone", "b": "plant", "nick": "РезБ", "device_id": "res-b"})
             assert rb.json()["status"] == "known"
+            # осмысленное «повторил чужое открытие» — варка через discover
+            rd = c.post("/api/discover", json={
+                "a": "stone", "b": "plant", "nick": "РезБ", "device_id": "res-b"})
+            assert rd.json()["status"] == "known"
             g = c.get("/api/echoes", params={"device_id": "res-a"}).json()
             assert g["ok"] is True and g["nick"] == "РезА"
-            # 1 повтор + 1 подмастерье (первый запрос дня)
+            # 1 повтор (через discover; brew-check — 0) + 1 подмастерье (первый запрос дня)
             assert g["balance"] == 2 and g["total"] == 2
             assert g["cap"] == 20 and g["echo_ether"] == 5
             assert g["apprentice"] and g["apprentice"]["name"] == "Резонит"

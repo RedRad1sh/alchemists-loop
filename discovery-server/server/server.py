@@ -540,6 +540,16 @@ def init_db():
                    last_apprentice_day TEXT
                )"""
         )
+        # T03: дедуп резонанса — одна строка на (pair_key, brewer_key) на всё
+        # время. Идемпотентно для старых БД (создаётся при первом init_db()).
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS resonance_seen (
+                   pair_key TEXT NOT NULL,
+                   brewer_key TEXT NOT NULL,
+                   first_at TEXT DEFAULT (datetime('now')),
+                   PRIMARY KEY (pair_key, brewer_key)
+               )"""
+        )
         # Experiment Bench: durable per-device and global LLM budgets. Existing
         # world/discovery tables remain untouched, so old servers migrate safely.
         conn.execute(
@@ -1414,7 +1424,8 @@ def _echo_row(conn: sqlite3.Connection, device_id: str):
 
 
 def _credit_resonance(conn: sqlite3.Connection, out_id: int, author_nick, brewer_nick: str,
-                      author_device: str = "", brewer_device: str = "") -> bool:
+                      author_device: str = "", brewer_device: str = "",
+                      pair_key: str = "") -> bool:
     """Чужой повтор вещества: +1 к счётчику вещества и отголосок
     первооткрывателю. Свои повторы и вещества без автора не засчитываются.
     Коммит — на вызывающем.
@@ -1424,6 +1435,19 @@ def _credit_resonance(conn: sqlite3.Connection, out_id: int, author_nick, brewer
     только для легаси-строк, чей автор не резолвится по нику (например, аккаунт
     удалён): для них сохранён fallback по нику, а коллизии ников устранены
     миграцией players.nick UNIQUE.
+
+    T03 (антифарм): кредит проходит дедуп по (pair_key, brewer) — «повторил
+    чужое открытие» переживается РОВНО ОДИН РАЗ НА ВСЁ ВРЕМЯ для одной пары
+    одним устройством. Выбор периода — per-life, а не per-day: смысл эха —
+    первое переживание чужого открытия, а per-day оставил бы вечный конвейер
+    (365 эхо в год на пару с устройства) и обесценил бы вехи 10/50/100.
+    Естественного суточного join-point в этом пути нет (день используется
+    только «подмастерьями»). pair_key обязателен: без него
+    дедуп невозможен и кредит НЕ начисляется (fail-closed — новый вызывающий
+    путь не может молча обойти защиту). brewer без device_id (легаси-запросы)
+    ключуется по нику с префиксом «nick:», чтобы не смешивать с устройствами.
+    Атомарность: INSERT OR IGNORE по PRIMARY KEY — «check-and-mark» одним
+    оператором; конкурентная гонка на одном PK пропускает ровно один кредит.
     """
     if not author_nick and not author_device:
         return False
@@ -1431,6 +1455,15 @@ def _credit_resonance(conn: sqlite3.Connection, out_id: int, author_nick, brewer
         return False  # своё вещество (даже после переименования автора)
     if not author_device and author_nick and author_nick == brewer_nick:
         return False
+    if not pair_key:
+        return False  # T03: дедуп обязателен — нет ключа, нет кредита
+    brewer_key = brewer_device or ("nick:" + (brewer_nick or ""))
+    cur = conn.execute(
+        "INSERT OR IGNORE INTO resonance_seen (pair_key, brewer_key) VALUES (?, ?)",
+        (pair_key, brewer_key),
+    )
+    if cur.rowcount == 0:
+        return False  # это устройство уже «повторяло» эту пару
     conn.execute(
         "UPDATE elements SET resonance_count = resonance_count + 1 WHERE id = ?",
         (out_id,),
@@ -1741,9 +1774,10 @@ def _link_existing(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, row, de
         (pair_key, a_slug, b_slug, a_info["id"], b_info["id"], row["id"], nick, device_id, created_at),
     )
     # новая пара дала чужое вещество — автору тоже капает резонанс
+    # (T03: с дедупом по pair_key — переживает только первое «повторение»)
     _credit_resonance(conn, row["id"], row["author"], nick,
                       author_device=row["author_device"] if "author_device" in row.keys() else "",
-                      brewer_device=device_id)
+                      brewer_device=device_id, pair_key=pair_key)
     seq_row = conn.execute(
         "SELECT COUNT(*) + 1 FROM recipes WHERE created_at < ?", (created_at,)
     ).fetchone()
@@ -1897,11 +1931,12 @@ async def brew_check(req: BrewCheckRequest):
         ).fetchone()
 
         if recipe_row:
-            # повтор чужого вещества — резонанс первооткрывателю (по device_id)
-            _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], nick,
-                              author_device=recipe_row["discoverer_device"],
-                              brewer_device=req.device_id)
-            conn.commit()
+            # T03: brew-check — читающий путь, экономику НЕ пишет. Ранее
+            # «повторил чужое открытие» засчитывался здесь на каждом чтении
+            # (фарм +20 эхо → claim эфира). Осмысленное «переживание» повтора
+            # — варка /api/discover (клиент реально варит пару); только её
+            # known-путь и кредитует резонанс, с дедупом (pair_key, brewer)
+            # раз в жизнь.
             out_row = conn.execute(
                 "SELECT id, slug, name, color, layer, category, glyph, d, author, created_at FROM elements WHERE id = ?",
                 (recipe_row["out_id"],),
@@ -2002,7 +2037,7 @@ async def discover(req: DiscoverRequest):
             if known is not None:
                 _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], nick,
                                   author_device=recipe_row["discoverer_device"],
-                                  brewer_device=req.device_id)
+                                  brewer_device=req.device_id, pair_key=pair_key)
                 conn.commit()
                 return known
 
@@ -2099,7 +2134,7 @@ async def discover(req: DiscoverRequest):
                 if known is not None:
                     _credit_resonance(conn, recipe_row["out_id"], recipe_row["discoverer"], nick,
                                       author_device=recipe_row["discoverer_device"],
-                                      brewer_device=req.device_id)
+                                      brewer_device=req.device_id, pair_key=pair_key)
                     conn.commit()
                     return known
             raise

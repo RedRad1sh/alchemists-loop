@@ -64,6 +64,17 @@ CREATE TABLE IF NOT EXISTS echoes (
     last_apprentice_day TEXT
 );
 
+-- Т03 (дедуп резонанса): «повторил чужую пару» даёт кредит один раз на жизнь
+-- для (pair_key, brewer). brewer_key = device_id, либо 'nick:<ник>' для
+-- легаси-запросов без device_id. PRIMARY KEY — атомарный check-and-mark
+-- (INSERT OR IGNORE в _credit_resonance).
+CREATE TABLE IF NOT EXISTS resonance_seen (
+    pair_key TEXT NOT NULL,
+    brewer_key TEXT NOT NULL,
+    first_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (pair_key, brewer_key)
+);
+
 -- Письма Светика (v27): ежедневная загадка-пара. Конверты-недоделки хранятся
 -- (до 7 шт.), решённые копят вечный счётчик (каждое 5-е → +кап на клиенте).
 CREATE TABLE IF NOT EXISTS letters (
