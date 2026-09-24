@@ -277,9 +277,12 @@ var _last_rank := 0
 # dev
 var _selftest := false
 # U22 (T26): снимки ТЕКСТА настоящих файлов (очередь аналитики и user.json), снятые
-# в самом верху _ready — ДО перевода путей на ST-двойники. Читает их Selftest.run,
-# чтобы поймать запись онбординг-аналитики «до изоляции»: снимок U20 берётся уже
-# внутри run, то есть post-фактум, и этой записи не видит (см. tests/selftest.gd).
+# в самом верху _ready. U23 (T27): читаются КОНСТАНТНЫМИ настоящими именами
+# (Analytics.REAL_QUEUE_PATH / UserData.REAL_SAVE_PATH), а не живыми
+# QUEUE_PATH/SAVE_PATH: автозагрузки переводят живые пути на ST-двойники в своих
+# _ready — съём по живому пути сравнивал бы ST-двойник сам с собой, и кейс u22
+# стал бы вакуумно-зелёным. Читает снимки Selftest.run в конце прогона
+# (см. tests/selftest.gd).
 var _analytics_text_at_boot := ""
 var _user_data_text_at_boot := ""
 var _me_avatar: Avatar = null
@@ -301,29 +304,29 @@ var _spirit: Spirit  # Светик (R9)
 var _inv_grid: GridContainer = null
 
 func _boot_snapshot_text(path: String) -> String:
-	# Только для U22: снимок текста файла до перевода путей на ST-двойники.
-	# Отсутствующий файл даёт пустую строку — так же, как и пустой файл, поэтому
-	# «нет файла» и «файл пуст» сравниваются корректно (см. tests/selftest.gd).
+	# Только для U22/U23: снимок текста НАСТОЯЩЕГО файла — вызывается константными
+	# реальными именами, а не живыми QUEUE_PATH/SAVE_PATH (те к этому моменту уже
+	# переведены на ST-двойники в _ready автозагрузок). Отсутствующий файл даёт
+	# пустую строку — так же, как и пустой файл, поэтому «нет файла» и «файл пуст»
+	# сравниваются корректно (см. tests/selftest.gd).
 	if not FileAccess.file_exists(path):
 		return ""
 	return FileAccess.get_file_as_string(path)
 
 func _ready() -> void:
-	# U22 (T26): разбор аргументов и снимки настоящих файлов подняты в самый верх
-	# _ready — до первого обращения к Analytics. Точка съёма осознанная: до неё
-	# автозагрузки успевают перезаписать реальный user.json (UserData._ready ->
-	# _load/_save, App._ready -> ensure_install_metadata при первом запуске), и
-	# этот first-run fingerprint в окно кейса не входит. В окне «снимок -> перевод
-	# путей на ST-двойники» реальными файлами владеет только гейтимый ниже блок,
-	# поэтому снимок здесь — честная точка отсчёта для сверки в конце прогона.
-	# Оговорка: гибрид `--selftest --demo --action=hint` без `--shot=` вызывает
-	# Analytics.track из демо-обхода (ниже в этом же _ready) и при выданном
-	# согласии пишет реальную очередь; канонический прогон (--selftest, без
-	# демо-флагов) таких вызовов не делает.
+	# U22 (T26) / U23 (T27): разбор аргументов и снимки настоящих файлов — в самом
+	# верху _ready. С U23 пути переведены на ST-двойники ещё в _ready автозагрузок
+	# (он раньше этого вызова), поэтому настоящие файлы в самопрогоне только
+	# читаются: first-run fingerprint (UserData._ready -> _load/_save, App._ready ->
+	# ensure_install_metadata) больше в них не пишется, и снимок здесь — честная
+	# точка отсчёта для сверки в конце прогона. Снимок читается константными
+	# настоящими именами: живые QUEUE_PATH/SAVE_PATH к этому моменту уже ST-двойники.
+	# Оговорка U22 про гибрид `--selftest --demo --action=hint` без `--shot=`
+	# снята: вызываемый демо-обходом Analytics.track пишет в ST-двойник очереди.
 	var args := OS.get_cmdline_user_args()
-	_selftest = args.has("--selftest")
-	_analytics_text_at_boot = _boot_snapshot_text(Analytics.QUEUE_PATH)
-	_user_data_text_at_boot = _boot_snapshot_text(UserData.SAVE_PATH)
+	_selftest = SelftestMode.enabled()
+	_analytics_text_at_boot = _boot_snapshot_text(Analytics.REAL_QUEUE_PATH)
+	_user_data_text_at_boot = _boot_snapshot_text(UserData.REAL_SAVE_PATH)
 	_riddles = Riddles.new(self)
 	_retention = Retention.new(self)
 	_guild = Guild.new(self)
@@ -337,10 +340,11 @@ func _ready() -> void:
 	_saves = Saves.new(self)
 	Monetization.bind_game(self)
 	# Прогон selftest не эмитит онбординг-аналитику: это не сессия реального
-	# пользователя. Эти два вызова до перевода путей пишут в настоящие файлы
-	# установки — session_start поднимает session_count в реальном user.json, а
-	# track при выданном согласии кладёт события в реальную очередь аналитики.
-	# Потери данных нет: тестовый прогон не должен оставлять след в профиле.
+	# пользователя. С U23 (T27) пути уже переведены в _ready автозагрузок, и эти
+	# вызовы писали бы в ST-двойники, но гейт остаётся: session_start безусловно
+	# поднимает session_count в контейнере прогона (а при выданном согласии — ещё
+	# и события в память), а стартовое состояние кейсов должно быть чистым.
+	# Снятие гейта красит кейс u23 в начале Selftest.run (session_count == 0).
 	if not _selftest:
 		Analytics.session_start("icon")
 		Analytics.track("app_open", {"store": App.store_id, "consent": App.analytics_consent()})

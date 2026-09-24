@@ -8,21 +8,36 @@ extends Node
 # идентификатор установки, который можно удалить кнопкой «Удалить данные».
 
 const DATA_VERSION := 2
-# Пути — переменные (как SAVE_PATH у сейвов в main.gd): headless-самопроверка
-# переводит их на ST-префикс, чтобы не стирать реальные данные установки.
-var SAVE_PATH := "user://alchemists_loop_user.json"
-var TEMP_PATH := "user://alchemists_loop_user.tmp"
-var BACKUP_PATH := "user://alchemists_loop_user.bak"
+# Пути — переменные (как SAVE_PATH у сейвов в main.gd): самотест переводит их на
+# ST-префикс, чтобы не трогать реальные данные установки. Настоящие имена и
+# ST-двойники — константы. U23 (T27): перевод случается в _ready этой же
+# автозагрузки ВЫШЕ _load(): автозагрузки готовятся до главной сцены, и без
+# раннего перевода _load/_save и ensure_install_metadata перезаписали бы настоящие
+# файлы до всякой изоляции (см. _isolate_selftest_paths).
+const REAL_SAVE_PATH := "user://alchemists_loop_user.json"
+const REAL_TEMP_PATH := "user://alchemists_loop_user.tmp"
+const REAL_BACKUP_PATH := "user://alchemists_loop_user.bak"
+const ST_SAVE_PATH := "user://alchemy_st_user.json"
+const ST_TEMP_PATH := "user://alchemy_st_user.tmp"
+const ST_BACKUP_PATH := "user://alchemy_st_user.bak"
 # T22: журнал завершённых покупок живёт в ОТДЕЛЬНОМ файле и переживает
 # «Удалить локальные данные»: его стирание означало бы, что локальный клиент
 # снова готов выдать уже выданный consumable (restore после удаления). Ключи
 # журнала — provider:sku:sha256(token), то есть к device_id они не привязаны и
 # смысл не теряются, когда идентификатор установки удаляют вместе с остальными
 # данными. Это платёжная защита, а не поведенческие данные.
-var PURCHASES_PATH := "user://alchemists_loop_purchases.json"
-var PURCHASES_TEMP_PATH := "user://alchemists_loop_purchases.tmp"
+const REAL_PURCHASES_PATH := "user://alchemists_loop_purchases.json"
+const REAL_PURCHASES_TEMP_PATH := "user://alchemists_loop_purchases.tmp"
+const ST_PURCHASES_PATH := "user://alchemy_st_purchases.json"
+const ST_PURCHASES_TEMP_PATH := "user://alchemy_st_purchases.tmp"
 const PURCHASES_VERSION := 1
 const PROCESSED_CAP := 200
+
+var SAVE_PATH := REAL_SAVE_PATH
+var TEMP_PATH := REAL_TEMP_PATH
+var BACKUP_PATH := REAL_BACKUP_PATH
+var PURCHASES_PATH := REAL_PURCHASES_PATH
+var PURCHASES_TEMP_PATH := REAL_PURCHASES_TEMP_PATH
 
 signal changed
 
@@ -32,10 +47,36 @@ var _processed: Dictionary = {}
 # том же неуязвимом файле журнала отдельной секцией, а НЕ в затираемом
 # purchases.pending — иначе вайп стирал бы её и restore лил бы награду повторно.
 var _granted: Dictionary = {}
+# U23 (T27): факт, что загрузочный _load() отработал уже при переведённых на
+# ST-двойники путях. Ставится первой строкой _load() и сверяется в начале
+# Selftest.run: снятие ST-ветки из _ready или перенос _load() выше перевода
+# красят кейс u23 (первый доступ к файлам должен быть изолирован).
+var _boot_load_used_st_path := false
 
 func _ready() -> void:
+	_isolate_selftest_paths()
 	_load()
 	_load_purchase_journal()
+
+func _isolate_selftest_paths() -> void:
+	# U23 (T27): перевод обязан стоять перед первым обращением к файлам. Флаг
+	# читается из общего источника (SelftestMode), потому что разбор в Main._ready
+	# происходит позже: App._ready зовёт ensure_install_metadata() сразу после
+	# этого _ready, и к тому моменту пути уже должны быть ST.
+	# ST-двойники стираются здесь же, до первого чтения: остаток прошлого
+	# прерванного прогона (pending-метки, session_count) не должен попадать в
+	# _load() вместо пустого контейнера — проверки сюиты зависят от её записей,
+	# а не от мусора на диске.
+	if not SelftestMode.enabled():
+		return
+	SAVE_PATH = ST_SAVE_PATH
+	TEMP_PATH = ST_TEMP_PATH
+	BACKUP_PATH = ST_BACKUP_PATH
+	PURCHASES_PATH = ST_PURCHASES_PATH
+	PURCHASES_TEMP_PATH = ST_PURCHASES_TEMP_PATH
+	for p in [SAVE_PATH, TEMP_PATH, BACKUP_PATH, PURCHASES_PATH, PURCHASES_TEMP_PATH]:
+		if FileAccess.file_exists(p):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 
 func _defaults() -> Dictionary:
 	return {
@@ -78,6 +119,8 @@ func _merge_defaults(value: Dictionary, defaults: Dictionary) -> Dictionary:
 	return value
 
 func _load() -> void:
+	# U23: фиксируется путь в момент первого чтения (см. _boot_load_used_st_path).
+	_boot_load_used_st_path = SAVE_PATH == ST_SAVE_PATH
 	var parsed := _read_json(SAVE_PATH)
 	if parsed.is_empty():
 		parsed = _read_json(BACKUP_PATH)

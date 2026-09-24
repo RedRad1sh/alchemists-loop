@@ -73,7 +73,7 @@ func _ready() -> void:
 	_http.request_completed.connect(_on_completed)
 	# в selftest сеть не трогаем (герметичный прогон); пустой base_url = «сервера
 	# нет» (F1: релиз без https-настройки) — пинг не шлём совсем
-	if base_url != "" and not OS.get_cmdline_user_args().has("--selftest"):
+	if base_url != "" and not SelftestMode.enabled():
 		_ping()
 
 # Чистый шов разрешения базового URL: env → ProjectSettings → DEFAULT_BASE.

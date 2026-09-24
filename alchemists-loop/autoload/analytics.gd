@@ -6,8 +6,12 @@ extends Node
 # просмотрены в debug-логе.
 
 # var, а не const: автотест переводит очередь на свой файл, иначе selftest пишет
-# события в реальный файл аналитики установки (см. tests/selftest.gd).
-var QUEUE_PATH := "user://alchemists_loop_analytics.json"
+# события в реальный файл аналитики установки (см. tests/selftest.gd). U23 (T27):
+# настоящее имя и ST-двойник — константы, перевод случается в _ready этой же
+# автозагрузки — до Main._ready и до первой записи (см. _isolate_selftest_paths).
+const REAL_QUEUE_PATH := "user://alchemists_loop_analytics.json"
+const ST_QUEUE_PATH := "user://alchemy_st_analytics.json"
+var QUEUE_PATH := REAL_QUEUE_PATH
 const MAX_QUEUE := 300
 
 var _consent := "unknown"
@@ -17,7 +21,21 @@ var _events: Array = []
 var _provider := "none"
 
 func _ready() -> void:
+	_isolate_selftest_paths()
 	configure_consent()
+
+func _isolate_selftest_paths() -> void:
+	# U23 (T27): перевод пути до любой записи в очередь. Покрытие шире канонического
+	# прогона: демо-гибрид `--selftest --demo --action=hint` без `--shot=` зовёт
+	# Analytics.track из демо-обхода Main._ready — это после данного _ready, но до
+	# перевода в Selftest.run, и без этой ветки очередь легла бы в настоящий файл.
+	# Двойник стирается сразу: остаток прошлого прерванного прогона не должен
+	# попасть в сверки очереди внутри сюит.
+	if not SelftestMode.enabled():
+		return
+	QUEUE_PATH = ST_QUEUE_PATH
+	if FileAccess.file_exists(QUEUE_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(QUEUE_PATH))
 
 func configure_consent() -> void:
 	_consent = UserData.get_consent("analytics")

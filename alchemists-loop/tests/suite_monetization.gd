@@ -14,8 +14,9 @@ const RuStorePayAdapterScript := preload("res://platform/rustore_pay.gd")
 #
 # Адаптеры создаются .new() напрямую (extends RefCounted, плагин не нужен), их
 # _normalize_state — единственное место, где «нет поля» могло превратиться в
-# «куплено». Сюита герметична: пишет только в ST-файлы (пути переводит
-# Selftest.run), а состояние autoload'ов снимает на входе и возвращает на выходе.
+# «куплено». Сюита герметична: пишет только в ST-файлы (пути переводят сами
+# autoload'ы в _ready, U23; страховка — в Selftest.run), а состояние autoload'ов
+# снимает на входе и возвращает на выходе.
 # Внутри сюиты нет ни одного await, поэтому очередь Net за неё не «дренируется» и
 # её размер — корректное доказательство «ни одного запроса не ушло».
 
@@ -46,10 +47,11 @@ static func run(g: Game) -> void:
 	var _u20_thon0 := g._home._theme_custom_on
 	var _u20_netq0 := Net._queue.size()
 	# «Настоящие» имена файлов установки берутся из того же массива
-	# Selftest.U20_REAL_FILES, которым Selftest.run переводит пути на ST-двойники
-	# (индексы 0/3/5 = user.json / purchases.json / analytics.json): локальный
-	# литерал здесь расходился бы молча, а сверка «путь отведён от настоящего имени»
-	# с общего источника краснеет ровно на снятии перевода.
+	# Selftest.U20_REAL_FILES, чьи ST-пара и литералы сверяются с REAL_*/ST_*
+	# константами autoload'ов кейсом u23 в начале Selftest.run (индексы 0/3/5 =
+	# user.json / purchases.json / analytics.json): локальный литерал здесь
+	# расходился бы молча, а сверка «путь отведён от настоящего имени» с общего
+	# источника краснеет ровно на снятии перевода.
 	var _u20_real_user := String(Selftest.U20_REAL_FILES[0])
 	var _u20_real_journal := String(Selftest.U20_REAL_FILES[3])
 	var _u20_real_analytics := String(Selftest.U20_REAL_FILES[5])
@@ -724,8 +726,10 @@ static func run(g: Game) -> void:
 
 	# ---------- 9. герметичность selftest ----------
 	# Main-файл UserData: метка в pending уходит в изолированный файл. Убрать перевод
-	# UserData.SAVE_PATH в Selftest.run — метка попадёт в реальный файл установки, и
-	# «u20 selftest left the real user data file untouched» покраснеет.
+	# путей ЦЕЛИКОМ (ST-ветку из UserData._ready и страховку в Selftest.run) — метка
+	# попадёт в реальный файл установки, и «u20 selftest left the real user data file
+	# untouched» покраснеет; снятие только ST-ветки из _ready краснит кейсы u23 в
+	# начале run.
 	# Дополнительно каждый кейс сверяет имя полученного пути с назначением свойства
 	# (подстрока + расширение). Это единственная защита от рассинхрона двух массивов:
 	# Selftest.U20_REAL_FILES и U20_ST_FILES сопоставлены только парной индексацией
@@ -747,7 +751,7 @@ static func run(g: Game) -> void:
 		and not _u20_user_real.contains("u20_sentinel_product"))
 	UserData.clear_pending_purchase("u20_sentinel_product")
 	# Журнал покупок (отдельный файл, переживает wipe): та же схема с меткой.
-	# Убрать перевод PURCHASES_PATH — метка ляжет в реальный журнал.
+	# Убрать перевод PURCHASES_PATH обоими слоями — метка ляжет в реальный журнал.
 	var _u20_marked := UserData.mark_purchase_granted("u20", "u20_hermetic_token", "u20_hermetic_sku")
 	var _u20_journal_st := _u20_read(UserData.PURCHASES_PATH)
 	var _u20_journal_real := _u20_read(_u20_real_journal)
@@ -759,7 +763,8 @@ static func run(g: Game) -> void:
 		and not _u20_journal_real.contains("u20_hermetic_sku"))
 	UserData.clear_purchase_granted("u20", "u20_hermetic_token", "u20_hermetic_sku")
 	# Очередь аналитики: при согласии «granted» каждый track пишется на диск. Убрать
-	# перевод Analytics.QUEUE_PATH — событие-проба окажется в реальном файле:
+	# перевод Analytics.QUEUE_PATH (ST-ветка в Analytics._ready + страховка в
+	# Selftest.run) — событие-проба окажется в реальном файле:
 	# краснеют первый и третий конъюнкты; второй ловит перестановку ST-имени.
 	var _u20_an_consent0 := UserData.get_consent("analytics")
 	var _u20_an_events0: Array = Analytics._events.duplicate(true)
@@ -776,7 +781,7 @@ static func run(g: Game) -> void:
 	# Парность tmp/backup — четвёртый кейс закрывает ровно то, что три предыдущих
 	# не видели: имена этих двух путей больше нигде не сверяются. Мутации:
 	# перестановка ST[1] с ST[2] (TEMP_PATH станет .bak, BACKUP_PATH станет .tmp)
-	# краснит первый конъюнкт; снятие перевода в Selftest.run (пути вернутся к
+	# краснит первый конъюнкт; снятие перевода обоими слоями (пути вернутся к
 	# «alchemists_loop_…») краснит второй, потому что в реальном имени нет «st_».
 	Selftest.check("u20 temp and backup twins stay paired",
 		UserData.TEMP_PATH.ends_with(".tmp") and UserData.BACKUP_PATH.ends_with(".bak")

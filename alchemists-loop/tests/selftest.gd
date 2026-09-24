@@ -5,11 +5,12 @@ class_name Selftest
 static var _total := 0
 static var _fails := 0
 
-# U20 (T25): файлы приватного контейнера, очереди аналитики и их ST-двойники.
-# Порядок индексов совпадает с порядком перевода путей в run(): user.json /
-# user.tmp / user.bak / purchases.json / purchases.tmp / analytics.json. Имена
-# двойников те же, что уже использует tests/suite_journal_misc.gd, — иначе две
-# слоя изоляции разошлись бы и чек «no trace» стал бы самообманом.
+# U20 (T25) / U23 (T27): файлы приватного контейнера, очереди аналитики и их
+# ST-двойники. С U23 перевод путей делают сами UserData/Analytics в своём _ready
+# (см. REAL_*/ST_* константы autoload'ов); эти массивы — снимок настоящих файлов,
+# сверка в конце прогона и вайп. Литералы обязаны совпадать с константами
+# autoload'ов: проверяется кейсом u23 в начале run (рассинхрон красит его).
+# Имена двойников те же, что использует tests/suite_journal_misc.gd.
 const U20_REAL_FILES: Array = [
 	"user://alchemists_loop_user.json",
 	"user://alchemists_loop_user.tmp",
@@ -47,20 +48,66 @@ static func run(g: Game) -> void:
 		if FileAccess.file_exists(p):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 
-	# U20 (T25): UserData и Analytics до этого перевода писали в настоящие файлы
-	# установки (сейв с pending-метками, журнал покупок, очередь событий). Снимок
-	# «что лежало в настоящих файлах до прогона» берётся ДО перевода путей, а
-	# проверяется в конце по тексту каждого файла: без перевода путей эти чеки
-	# краснеют (см. комментарии у них).
+	# U20 (T25): снимок «что лежало в настоящих файлах до прогона» и проверка в
+	# конце по тексту каждого файла. С U23 (T27) автозагрузки переводят пути на
+	# ST-двойники в своём _ready — раньше Main._ready, — поэтому настоящие файлы
+	# в самопрогоне только читаются и снимок фиксирует ровно то, что было у
+	# пользователя.
 	var real_before := {}
 	for rp in U20_REAL_FILES:
 		real_before[String(rp)] = _u20_read_text(String(rp))
-	UserData.SAVE_PATH = String(U20_ST_FILES[0])
-	UserData.TEMP_PATH = String(U20_ST_FILES[1])
-	UserData.BACKUP_PATH = String(U20_ST_FILES[2])
-	UserData.PURCHASES_PATH = String(U20_ST_FILES[3])
-	UserData.PURCHASES_TEMP_PATH = String(U20_ST_FILES[4])
-	Analytics.QUEUE_PATH = String(U20_ST_FILES[5])
+	# U23 (T27): слой перевода путей в автозагрузках. Кейсы идут ДО страховочного
+	# перевода ниже — иначе страховка скрывала бы снятие ST-ветки из _ready.
+	# Мутация первого кейса: убрать ветку `if not SelftestMode.enabled(): return`
+	# и перевод в UserData._ready или Analytics._ready (путь к началу run останется
+	# настоящим; страховочный блок ниже, через все четыре кейса, — уже после сверки).
+	# Мутация второго: рассинхрон любого литерала U20_*_FILES с любой REAL_*/ST_*
+	# константой autoload'а — молча меняются и снимок, и вайп.
+	# Мутация третьего: перенести _load() в UserData._ready выше
+	# _isolate_selftest_paths() (флаг ставится первой строкой _load(); снятие
+	# ST-ветки красит и этот кейс).
+	# Мутация четвёртого: убрать гейт `if not _selftest:` в main.gd —
+	# session_start поднимет session_count в загруженном контейнере прогона.
+	# Честная оговорка: сам факт «_ready отработал раньше первого обращения к
+	# файлам» и boot-перезапись с идентичным нормализованным текстом (один только
+	# mtime) изнутри сюиты ненаблюдаемы — guarded, untested, проверяются пунктом 1
+	# приёмки (mtime/текст настоящих файлов) externally; всё перечисляемое выше
+	# краснеет из сюиты.
+	Selftest.check("u23 autoload paths already redirected before suite start",
+		UserData.SAVE_PATH == UserData.ST_SAVE_PATH
+		and UserData.TEMP_PATH == UserData.ST_TEMP_PATH
+		and UserData.BACKUP_PATH == UserData.ST_BACKUP_PATH
+		and UserData.PURCHASES_PATH == UserData.ST_PURCHASES_PATH
+		and UserData.PURCHASES_TEMP_PATH == UserData.ST_PURCHASES_TEMP_PATH
+		and Analytics.QUEUE_PATH == Analytics.ST_QUEUE_PATH)
+	Selftest.check("u23 selftest path literals match the autoload constants",
+		String(U20_REAL_FILES[0]) == UserData.REAL_SAVE_PATH
+		and String(U20_REAL_FILES[1]) == UserData.REAL_TEMP_PATH
+		and String(U20_REAL_FILES[2]) == UserData.REAL_BACKUP_PATH
+		and String(U20_REAL_FILES[3]) == UserData.REAL_PURCHASES_PATH
+		and String(U20_REAL_FILES[4]) == UserData.REAL_PURCHASES_TEMP_PATH
+		and String(U20_REAL_FILES[5]) == Analytics.REAL_QUEUE_PATH
+		and String(U20_ST_FILES[0]) == UserData.ST_SAVE_PATH
+		and String(U20_ST_FILES[1]) == UserData.ST_TEMP_PATH
+		and String(U20_ST_FILES[2]) == UserData.ST_BACKUP_PATH
+		and String(U20_ST_FILES[3]) == UserData.ST_PURCHASES_PATH
+		and String(U20_ST_FILES[4]) == UserData.ST_PURCHASES_TEMP_PATH
+		and String(U20_ST_FILES[5]) == Analytics.ST_QUEUE_PATH)
+	Selftest.check("u23 UserData boot load already read from the ST twin",
+		UserData._boot_load_used_st_path)
+	Selftest.check("u23 selftest boot started no analytics session before the suite",
+		UserData.session_count() == 0)
+	# U23 (T27): страховочный второй слой. В здоровом дереве — no-op (пути уже ST,
+	# сверено кейсом выше) и нужен только на случай, кто-то позже снимает ветку из
+	# _ready: метки сюиты по-прежнему не дойдут до настоящих файлов. Кейсы u20/
+	# u22 ниже краснеют на снятии ОБЕИХ строк перевода (ветка в _ready + этот блок);
+	# снятие одной красит кейсы u23 выше.
+	UserData.SAVE_PATH = UserData.ST_SAVE_PATH
+	UserData.TEMP_PATH = UserData.ST_TEMP_PATH
+	UserData.BACKUP_PATH = UserData.ST_BACKUP_PATH
+	UserData.PURCHASES_PATH = UserData.ST_PURCHASES_PATH
+	UserData.PURCHASES_TEMP_PATH = UserData.ST_PURCHASES_TEMP_PATH
+	Analytics.QUEUE_PATH = Analytics.ST_QUEUE_PATH
 	_u20_wipe(U20_ST_FILES)
 
 	Selftest.check("colors parse", g._item_colors.size() == g.ITEMS.size())
@@ -101,44 +148,42 @@ static func run(g: Game) -> void:
 	g.SAVE_PATH = "user://alchemy_save.json"
 	g.TEMP_PATH = "user://alchemy_save.tmp"
 	g.BACKUP_PATH = "user://alchemy_save.bak"
-	UserData.SAVE_PATH = String(U20_REAL_FILES[0])
-	UserData.TEMP_PATH = String(U20_REAL_FILES[1])
-	UserData.BACKUP_PATH = String(U20_REAL_FILES[2])
-	UserData.PURCHASES_PATH = String(U20_REAL_FILES[3])
-	UserData.PURCHASES_TEMP_PATH = String(U20_REAL_FILES[4])
-	Analytics.QUEUE_PATH = String(U20_REAL_FILES[5])
-	# Каждый из трёх чеков краснеет ровно удалением своего перевода пути на входе:
-	# tests/suite_monetization.gd пишет метки («u20_sentinel_product» в сейв,
-	# «u20_hermetic_sku» в журнал, «u20_probe_event» в очередь аналитики) и тут же
-	# сверяет изолированный файл с настоящим; этот чек — второй слой: он сравнивает
-	# текст настоящего файла с снимком «до прогона». Убрать перевод
-	# UserData.SAVE_PATH — в реальном user.json появится pending-метка; убрать
-	# PURCHASES_PATH — в реальном журнале появится granted-запись; убрать
-	# Analytics.QUEUE_PATH — в реальном файле аналитики появится событие-проба.
-	# Сравнение идёт по тексту каждого файла, а не словарём через == (глубокое
-	# сравнение в Godot 4 пропустило бы «просто совпало»).
+	# U23 (T27): пути UserData/Analytics обратно на настоящие имена НЕ
+	# возвращаются (раньше это делалось здесь). Пока перевод жил только в run,
+	# возврат был безвреден: дальше процесс умирал. Теперь ST-двойники стоят с
+	# _ready автозагрузок весь прогон, и ранний возврат открыл бы окно (отложенные
+	# changed/_save, задержка quit()), в котором живой процесс пишет настоящие
+	# файлы — ровно тот дефект, который юнит чинит. Сверки ниже читают настоящие
+	# файлы литералами U20_REAL_FILES, живые настоящие пути в конце прогона не
+	# нужны ничему.
+	# Каждый из трёх u20-чеков краснеет на снятии перевода путей ЦЕЛИКОМ: ST-ветки
+	# из UserData._ready/Analytics._ready И страховочного блока в начале run (по
+	# отдельности каждый слой ловят кейсы u23 выше). Тогда метки, которые пишет
+	# tests/suite_monetization.gd («u20_sentinel_product» в сейв, «u20_hermetic_sku»
+	# в журнал, «u20_probe_event» в очередь аналитики), ложатся в настоящие файлы,
+	# и их текст перестаёт совпадать с real_before. Сравнение идёт по тексту каждого
+	# файла, а не словарём через == (глубокое сравнение в Godot 4 пропустило бы
+	# «просто совпало»). Остаточный blind spot честно отмечаем: boot-перезапись с
+	# идентичным нормализованным текстом (один только mtime) из сюиты ненаблюдаема —
+	# она закрыта пунктом 1 приёмки externally.
 	Selftest.check("u20 selftest left the real user data file untouched",
 		_u20_untouched(real_before, [String(U20_REAL_FILES[0]), String(U20_REAL_FILES[1]), String(U20_REAL_FILES[2])]))
 	Selftest.check("u20 selftest left the real purchase journal untouched",
 		_u20_untouched(real_before, [String(U20_REAL_FILES[3]), String(U20_REAL_FILES[4])]))
 	Selftest.check("u20 selftest left the real analytics queue untouched",
 		_u20_untouched(real_before, [String(U20_REAL_FILES[5])]))
-	# U22 (T26): снимок выше (real_before) берётся уже внутри run — post-фактум, и
-	# записи онбординг-аналитики ДО изоляции путей не видит: к моменту real_before
-	# main.gd уже успел их дописать. Здесь точка отсчёта — boot-снимки g, снятые в
-	# самом верху Main._ready до первого обращения к Analytics. Мутация, краснящая
-	# ровно этот кейс: убрать `if not _selftest:` вокруг Analytics.session_start /
-	# Analytics.track в main.gd. Тогда session_start доходит до изоляции и
-	# record_session_start безусловно поднимает session_count в НАСТОЯЩЕМ user.json
-	# (согласие не нужен) — сравнение по user.json даёт детерминизм пары; при
-	# выданном согласии ещё и два события лягут в реальную очередь аналитики, и
-	# сравнение по ней их ловит, но сама по себе краснела бы лишь при granted.
-	# Граница окна: реальный user.json перезаписывается и ДО снимка (UserData._ready
-	# -> _load/_save при каждом старте, App._ready -> ensure_install_metadata при
-	# первом запуске) — это не тестовые данные, и кейс их сознательно не сверяет.
-	# Кейс рассчитан на канонический прогон (--selftest без демо-флагов); в гибриде
-	# --selftest --demo --action=hint без --shot= демо-обход вызывает
-	# Analytics.track вне гейта, и при выданном согласии он краснит эту пару.
+	# U22 (T26): точка отсчёта — boot-снимки g, снятые в самом верху Main._ready
+	# константными настоящими именами. С U23 (T27) окно «boot-снимок -> перевод
+	# путей» схлопнулось: перевод уже случился в _ready автозагрузок, и записи
+	# гейтимого блока main.gd падали бы в ST-двойники — снятие гейта
+	# `if not _selftest:` этот кейс больше не красит, его ловит кейс u23
+	# «...started no analytics session...» (session_count в памяти прогона).
+	# Собственная красная пара этого кейса — снятие перевода путей ЦЕЛИКОМ
+	# (ST-ветки из _ready автозагрузок + страховка в начале run): в настоящие
+	# user.json/очередь ложатся метки сюиты, и их текст в конце прогона расходится
+	# со снимком. Граница окна: до boot-снимка при intact-переводе настоящие файлы
+	# не пишутся вообще, поэтому first-run fingerprint в снимке отсутствует, и
+	# сверка честна для каждого из двух файлов.
 	Selftest.check("u22 selftest wrote no onboarding analytics or session data before path isolation",
 		_u20_read_text(String(U20_REAL_FILES[5])) == g._analytics_text_at_boot
 		and _u20_read_text(String(U20_REAL_FILES[0])) == g._user_data_text_at_boot)
