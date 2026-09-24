@@ -294,8 +294,12 @@ class TestVerifiedFlow:
             _verify(client, token="fresh-token-2")
         conn = srv.get_db()
         try:
+            # Порядок параметров — (last_seen_at, receipt_hash): SQL выше читает
+            # `SET last_seen_at = ? WHERE receipt_hash = ?`. На обратном порядке
+            # ни одна строка не матчится, «протухший» pending остаётся свежим, и
+            # кейс краснеет не из-за регресса, а из-за опечатки в бинде.
             conn.execute("UPDATE receipts SET last_seen_at = ? WHERE receipt_hash = ?",
-                         (_sha(TOKEN), month_ago))
+                         (month_ago, _sha(TOKEN)))
             conn.execute(
                 "INSERT INTO receipts (receipt_hash, device_id, provider, sku, status,"
                 " first_seen_at, processed_at, last_seen_at) VALUES (?, ?, ?, ?, 'processed', ?, ?, ?)",

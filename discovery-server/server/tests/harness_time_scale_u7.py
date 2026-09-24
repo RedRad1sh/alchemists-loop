@@ -122,6 +122,11 @@ def _audit_source(src):
         raise AssertionError("T06 DRIFT: last_seen в _upsert_player пишется не через _today()")
     if "def _today() -> str" not in src or "_now_dt()" not in _section(src, "_today"):
         raise AssertionError("T06 DRIFT: _today() больше не выводится из _now_dt() — общего источника нет")
+    # Недельный ключ харнесс считает сам (см. keys_at): exec-вырезка блока
+    # времени не дотягивает до _week_key, поэтому связываем формат исходником.
+    if 'f"{iso[0]}-W{iso[1]:02d}"' not in _section(src, "_week_key"):
+        raise AssertionError(
+            "T06 DRIFT: формат _week_key изменён — keys_at в харнессе зеркалит старый")
 
 
 # --- SQL-копии, вырезанные из server.py ------------------------------------

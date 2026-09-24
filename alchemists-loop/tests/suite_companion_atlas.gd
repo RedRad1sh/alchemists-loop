@@ -32,6 +32,54 @@ static func run(g: Game) -> void:
 		and g._hub._clean_player_nick("Х") == ""
 		and g._hub._clean_player_nick("Алхимик") == "Алхимик")
 	Selftest.check("me avatar node", g._me_avatar != null and g._hub._profile_avatar != null)
+	# ============ I-1 (T28): честный цикл смены ника ============
+	# Раньше отказ сервера (400 «Ник уже занят») был невидим: _save_profile
+	# печатал успех до ответа. Прогон герметичен: Net.base_url пуст (F1-ветка
+	# _send_next не делает HTTP-попыток, очередь сливается offline-результатом
+	# в несвязанный в selftest me_result), _on_net_me_result вызывается напрямую
+	# (Net.me_result коннектится только при _net_enabled, main.gd).
+	var t28_nick0 := g._online._net_nick
+	var t28_status0 := g._engine.status_text
+	var t28_base0 := Net.base_url
+	var t28_line0 := g._hub._profile_nick.text
+	var t28_prev0 := g._hub._profile_prev_nick
+	var t28_dim0 := g._hub._profile_dim.visible
+	var t28_popup0 := g._hub._profile_popup.visible
+	Net.base_url = ""
+	g._online._net_nick = "Т28Старый"
+	g._hub._profile_nick.text = "Т28Новый"
+	g._hub._save_profile()
+	# Мутация «вернуть печать успеха в _save_profile» (или не перенести её в
+	# ok-ветку) — краснеет здесь же, до всякого ответа сервера.
+	Selftest.check("t28 nick save prints no premature success",
+		not g._engine.status_text.contains("Имя сохранено")
+		and g._online._net_nick == "Т28Новый")
+	g._hub._on_net_me_result({"ok": false, "error": "HTTP 400",
+		"message": "HTTP 400", "detail": "Ник уже занят"})
+	# Мутация «удалить ветку отказа (оставить только if ok)» — краснеет здесь:
+	# успех при этом возвращается в _save_profile (первый конъюнкт ловит и это,
+	# и «не перенесён» вариант), ник не откатывается (второй конъюнкт), отказа
+	# в статусе нет (третий).
+	Selftest.check("t28 rejected nick rolls back",
+		not g._engine.status_text.contains("Имя сохранено")
+		and g._online._net_nick == "Т28Старый"
+		and g._engine.status_text.contains("Имя не принято: Ник уже занят"))
+	# Успех объявляется именно в ok-ветке и именно своей заявке: второй цикл
+	# save→ответ. Мутация «убрать печать успеха в ok-ветке» краснит этот кейс.
+	g._hub._profile_nick.text = "Т28Новый2"
+	g._hub._save_profile()
+	g._hub._on_net_me_result({"ok": true, "nick": "Т28Новый2"})
+	Selftest.check("t28 success announced in ok branch",
+		g._online._net_nick == "Т28Новый2"
+		and g._engine.status_text.contains("Имя сохранено: Т28Новый2"))
+	# restore: ничего из профиля/статуса/сети не оставляем изменённым.
+	g._online._net_nick = t28_nick0
+	g._engine.status_text = t28_status0
+	Net.base_url = t28_base0
+	g._hub._profile_nick.text = t28_line0
+	g._hub._profile_prev_nick = t28_prev0
+	g._hub._profile_dim.visible = t28_dim0
+	g._hub._profile_popup.visible = t28_popup0
 
 	# редкость веществ и «Атлас алхимика»
 	Selftest.check("rarity base", g._engine._rarity_of("fire")["name"] == "первостихия"

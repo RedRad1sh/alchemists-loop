@@ -684,7 +684,6 @@ func _process(delta: float) -> void:
 			_spirit._companion_react("idle", "")
 	if _demo_harness._tick_demo():
 		return
-		return
 	_engine.autosave_clock += delta
 	_engine.regen_clock += delta * _engine._ether_rate()
 	if _engine.regen_clock >= 1.0:

@@ -19,6 +19,9 @@ var _prestige_dim: Control = null
 var _prestige_popup: Control = null
 var _prestige_confirm_label: Label = null
 var _profile_stats: Label = null
+# I-1 (T28): предыдущий ник до отправки me() — нужен, чтобы откатить локальное
+# состояние при серверном отказе ('' = ни одна смена не ждёт ответа).
+var _profile_prev_nick := ""
 var _log_events: Array = []
 var _journal_dim: ColorRect = null
 var _journal_popup: CenterContainer = null
@@ -122,16 +125,27 @@ func _save_profile() -> void:
 	if filtered == "":
 		g._online._set_status("Имя должно быть 2–24 символа (буквы, цифры, пробел, дефис).")
 		return
+	# I-1 (T28): «Имя сохранено» печатается только в ok-ветке _on_net_me_result —
+	# сервер принимает ник не всегда (400 «Ник уже занят»), и прежний мгновенный
+	# успех врал игроку при отказе. Здесь — только нейтральная метка отправки;
+	# кейс-мутант «t28 nick save prints no premature success» (краснеет, если
+	# вернуть успех в этот метод).
+	_profile_prev_nick = g._online._net_nick
 	g._online._net_nick = filtered
 	g._saves._save_game()
 	g._me_avatar.setup(g._online._net_nick, 24)
 	_profile_avatar.setup(g._online._net_nick, 96)
+	# метка отправки — ДО Net.me: при пустом base_url очередь сливается
+	# offline-результатом синхронно внутри этого вызова, и статус отказа,
+	# выставленный обработчиком, не затирается меткой «Отправляю имя…»
+	g._online._set_status("Отправляю имя…")
 	Net.me(g._online._net_nick, g._online._device_id)
-	g._online._set_status("Имя сохранено: %s. Его видят все алхимики!" % g._online._net_nick)
 	_close_profile()
 	g._online._rebuild_world_grid()
 
 func _on_net_me_result(result: Dictionary) -> void:
+	var prev := _profile_prev_nick
+	_profile_prev_nick = ""
 	if result.get("ok", false) == true:
 		var nick := g._clean_str(result.get("nick", ""))
 		if nick != "" and nick != g._online._net_nick:
@@ -139,6 +153,32 @@ func _on_net_me_result(result: Dictionary) -> void:
 			if g._me_avatar != null:
 				g._me_avatar.setup(g._online._net_nick, 24)
 			g._saves._save_game()
+		# успех объявляем только своей смене (prev != ""): стартовый sync me()
+		# (main.gd) и онбординг-ник (spirit.gd) тоже приходят сюда без заявки
+		if prev != "":
+			g._online._set_status("Имя сохранено: %s. Его видят все алхимики!" % g._online._net_nick)
+		return
+	# Отказ/офлайн пришедший НЕ в ответ на заявку игрока — молча игнорируем
+	# (поведение до T28): откатывать на пустой prev нечего.
+	if prev == "":
+		return
+	# I-1 (T28): ветка отказа. Мутация «удалить ветку отказа (оставить только
+	# if ok, успех — как в BASE — печатать в _save_profile)» красит кейс
+	# «t28 rejected nick rolls back»: статус остаётся успехным и ник не откатан.
+	if result.get("offline", false) == true:
+		g._online._set_status("Сервер не ответил, имя не принято.")
+	else:
+		var detail := String(result.get("detail", ""))
+		if detail != "":
+			g._online._set_status("Имя не принято: " + detail)
+		else:
+			g._online._set_status("Имя не принято.")
+	g._online._net_nick = prev
+	if g._me_avatar != null:
+		g._me_avatar.setup(g._online._net_nick, 24)
+	if _profile_avatar != null:
+		_profile_avatar.setup(g._online._net_nick, 96)
+	g._saves._save_game()
 
 
 # ---------- что варить сейчас ----------

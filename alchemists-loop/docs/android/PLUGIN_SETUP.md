@@ -22,9 +22,16 @@
   CI прописывает значения в `project.godot` секции `[application]`
   (`config/alchemy_server`, `config/alchemy_store`,
   `config/rustore_application_id`, `config/rustore_deeplink_scheme`,
-  `config/privacy_policy_url`) — репозиторий хранит их пустыми, пустая строка =
-  «не задано». env (`ALCHEMY_SERVER`, `ALCHEMY_STORE`, `ALCHEMY_PRIVACY_URL`,
-  `RUSTORE_APPLICATION_ID`, `RUSTORE_DEEPLINK_SCHEME`) остаётся приоритетным для
+  `config/privacy_policy_url`). Как выглядит в дереве на самом деле:
+  `config/alchemy_server` хранится пустым; ключей `config/alchemy_store`,
+  `config/rustore_application_id` и `config/rustore_deeplink_scheme` в файле
+  нет вовсе — для читателя отсутствующий ключ и пустая строка одно и то же
+  (дефолт `""` = «не задано»); `config/privacy_policy_url` — непустой
+  example.com-плейсхолдер, и это безопасно: `App.privacy_url_is_real`
+  считает placeholder «не настроено» (см. ниже в этом разделе), так что
+  поведение совпадает с пустым значением. env (`ALCHEMY_SERVER`,
+  `ALCHEMY_STORE`, `ALCHEMY_PRIVACY_URL`, `RUSTORE_APPLICATION_ID`,
+  `RUSTORE_DEEPLINK_SCHEME`) остаётся приоритетным для
   staging/локального запуска.
 - Точный вызов релизного CI (keystore живёт в Editor Settings/CI-секретах, его
   путей и паролей в репозитории нет — Godot подхватывает их сам при наличии):
@@ -100,6 +107,14 @@
 
 - [ ] GP: pending, cancel, successful purchase, restore, consume, refund.
 - [ ] RuStore: PAID → confirm, cancel, restore, deeplink после внешней оплаты.
+- [ ] Сервер собран с `ALCHEMY_RECEIPT_VALIDATION_URL` + `ALCHEMY_RECEIPT_SERVICE_KEY`
+  (оба, иначе гейт выключен), валидатор отвечает, и песочная покупка в релизной
+  сборке реально выдаёт валюту. Без этой пары `/api/receipt/verify` отвечает 503,
+  клиент показывает «Сервер не подтвердил покупку» и **ни одна покупка в релизе
+  не выдаётся** — это не деградация, а fail-closed контракт (T22). Отдельно:
+  `_validate_receipt_with_vendor` в `server.py` помечен `TODO(release)` и пока
+  возвращает `vendor_validation_not_implemented`; выложить сборку раньше, чем там
+  появится реальный вызов магазина, = выложить сборку без IAP вовсе.
 - [ ] Процесс убит между callback и save: повторный restore не даёт двойную награду.
 - [ ] Плагин отсутствует: игра остаётся играбельной, магазин показывает статус.
 - [ ] Consent `unknown/denied`: реклама не стартует, события аналитики не уходят.

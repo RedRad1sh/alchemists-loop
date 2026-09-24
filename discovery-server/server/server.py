@@ -275,7 +275,7 @@ class BrewCheckRequest(BaseModel):
     b: str = Field(..., min_length=1, max_length=64, pattern=_SLUG_PATTERN,
                    description="ID второго ингредиента (слаг)")
     nick: str = Field(..., min_length=1, max_length=64, description="Ник игрока")
-    device_id: str = Field(..., min_length=1, max_length=128, description="Уникальный ID устройства/保存")
+    device_id: str = Field(..., min_length=1, max_length=128, description="Уникальный ID устройства")
     # Явная метка Experiment Bench. В первой версии arity=2; поле позволяет
     # отличить оплаченный LLM-запрос от обычного чтения известной пары.
     # Только UX/аналитика: квота LLM решается на сервере по факту генерации.
@@ -875,6 +875,7 @@ def _migrate_nick_identity(conn: sqlite3.Connection) -> None:
     3. Backfill author_device/discoverer_device для легаси-строк по нику
        (первый владелец ника = минимальный id). Строки, где автор уже удалён,
        остаются с NULL — для них в коде сохранён fallback по nick.
+    4. recipes.linked (T28/I-2): флаг «дедупа имени» для публичных счётчиков.
     """
     ecols = {r["name"] for r in conn.execute("PRAGMA table_info(elements)").fetchall()}
     if "author_device" not in ecols:
@@ -882,6 +883,15 @@ def _migrate_nick_identity(conn: sqlite3.Connection) -> None:
     rcols = {r["name"] for r in conn.execute("PRAGMA table_info(recipes)").fetchall()}
     if "discoverer_device" not in rcols:
         conn.execute("ALTER TABLE recipes ADD COLUMN discoverer_device TEXT")
+    # T28 (I-2): «reused ≠ первооткрытие» должно распространяться и на славу:
+    # _link_existing вписывает рецепт с discoverer=ник, и hall-of-fame/rating
+    # считали такие строки наравне с настоящими первооткрытиями. linked=1 —
+    # только у ветки дедупа; обычный create остаётся на дефолте 0. Честно о
+    # пределах миграции: строки, на_linked'анные до этого деплоя, останутся с
+    # linked=0 — различить created/linked задним числом нечем (gen_method в
+    # таблицы не пишется), то есть история до миграции размывается в «созданные».
+    if "linked" not in rcols:
+        conn.execute("ALTER TABLE recipes ADD COLUMN linked INTEGER NOT NULL DEFAULT 0")
 
     # (2) переименовать дубли: ник сохраняет «оригинал» — живой игрок важнее
     # бота, среди равных — минимальный id; остальные получают nick-<hash4>.
@@ -2090,9 +2100,13 @@ def _link_existing(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, row, de
     не засчитывает это как «первооткрытие» и не создаёт дубль в своей БД.
     """
     created_at = _now_iso()
+    # T28 (I-2): linked=1 — это не первооткрытие, а «дедуп имени»: строка нужна,
+    # чтобы пара (a,b) была у мира, но публичные счётчики (hall-of-fame, rating)
+    # такие строки считают только с AND r.linked = 0 — мутация «подставить 0/
+    # убрать колонку из INSERT» красит test_linked_not_counted_in_public_counters.
     conn.execute(
-        """INSERT INTO recipes (pair_key, a, b, a_id, b_id, out_id, discoverer, discoverer_device, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        """INSERT INTO recipes (pair_key, a, b, a_id, b_id, out_id, discoverer, discoverer_device, created_at, linked)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
         (pair_key, a_slug, b_slug, a_info["id"], b_info["id"], row["id"], nick, device_id, created_at),
     )
     # новая пара дала чужое вещество — автору тоже капает резонанс
@@ -2318,8 +2332,13 @@ async def brew_check(req: BrewCheckRequest):
             discoverer = recipe_row["discoverer"]
             seq = 0
             if discoverer:
+                # T28 (I-2, продолжение): ordinal «первооткрыватель №N» — тоже
+                # публичный счётчик, и без linked = 0 дедуп-варки наращивали его
+                # точно так же, как зал славы (тот же фарм, только показанный
+                # варящему). Различник — tests/test_v31_channels.py
+                # ::test_linked_not_counted_in_public_counters (brew-check).
                 seq_row = conn.execute(
-                    "SELECT COUNT(*) + 1 as seq FROM recipes WHERE discoverer = ? AND created_at < (SELECT created_at FROM recipes WHERE pair_key = ?)",
+                    "SELECT COUNT(*) + 1 as seq FROM recipes WHERE discoverer = ? AND linked = 0 AND created_at < (SELECT created_at FROM recipes WHERE pair_key = ?)",
                     (discoverer, pair_key),
                 ).fetchone()
                 seq = seq_row["seq"] if seq_row and seq_row["seq"] else 0
@@ -2585,6 +2604,9 @@ async def hall_of_fame():
     """
     conn = get_db()
     try:
+        # T28 (I-2): r.linked = 0 — «дедуп-имена» (_link_existing) славу не
+        # двигают; кейс-мутант — tests/test_v31_channels.py
+        # ::test_linked_not_counted_in_public_counters.
         hall_cursor = conn.execute(
             """SELECT 
                 p.nick,
@@ -2592,7 +2614,7 @@ async def hall_of_fame():
                 MAX(r.created_at) as updated_at
             FROM recipes r
             JOIN players p ON r.discoverer = p.nick
-            WHERE p.device_id NOT LIKE 'bot-%'
+            WHERE p.device_id NOT LIKE 'bot-%' AND r.linked = 0
             GROUP BY p.nick
             ORDER BY count DESC, updated_at DESC
             LIMIT 10""",
@@ -2949,9 +2971,11 @@ async def rating(device_id: str = Query("", max_length=128)):
     """Рейтинг игроков: открытия, вещества, очки целей, наличие домика."""
     conn = get_db()
     try:
+        # T28 (I-2): discoveries — только настоящие первооткрытия (r.linked = 0),
+        # linked-строки дедупа имени здесь не считаются (см. _link_existing).
         rows = conn.execute(
             """SELECT p.nick, p.house, p.created_at,
-                   (SELECT COUNT(*) FROM recipes r WHERE r.discoverer = p.nick) AS discoveries,
+                   (SELECT COUNT(*) FROM recipes r WHERE r.discoverer = p.nick AND r.linked = 0) AS discoveries,
                    (SELECT COUNT(*) FROM elements e WHERE e.author = p.nick) AS elements,
                    (SELECT COALESCE(SUM(c.points), 0) FROM challenge_scores c WHERE c.nick = p.nick)
                  + (SELECT COALESCE(SUM(v.points), 0) FROM vein_points v WHERE v.nick = p.nick) AS points
@@ -3411,10 +3435,14 @@ def _receipt_validation_enabled() -> bool:
 def _receipt_error(reason: str) -> dict:
     """Тело отказа /api/receipt/verify: ok=False и verified=False идут в паре с
     причиной всегда. reason — серверное audit-поле (в теле ответа и в БД/логе);
-    сам клиент его из 4xx/5xx не читает: net.gd тело non-2xx не разбирает и
-    отдаёт вверх только «HTTP <код>» (net.gd:273-282). Поэтому решение о выдаче
-    клиент принимает по коду ответа: 4xx — отказ по существу, 5xx — fail-safe
-    «валидатор не смог ответить» (в отладочной сборке допускается начисление)."""
+    сам клиент его из 4xx/5xx не читает: net.gd (_on_completed, non-2xx-ветка)
+    разбирает тело non-2xx ровно на один строковый ключ "detail" (T28/I-1 —
+    для human-readable отказа /api/me), а наш detail — словарь, и он наверх не
+    уходит: вверх идёт только «HTTP <код>». Ссылка именем, не строками: чужие
+    файлы в номерах строк не фиксируются (конвенция ветки). Поэтому решение о
+    выдаче клиент принимает по коду ответа: 4xx — отказ по существу, 5xx —
+    fail-safe «валидатор не смог ответить» (в отладочной сборке допускается
+    начисление)."""
     return {"ok": False, "verified": False, "reason": reason}
 
 
@@ -3459,6 +3487,9 @@ def receipt_verify(req: ReceiptVerifyRequest):
       чек нельзя предъявлять за другой товар);
     * тот же токен с другим provider → 409 (по той же причине: чек нельзя
       предъявлять за другой магазин, reason — receipt_provider_mismatch);
+    * гонка с anti-spam-зачисткой журнала (startup/_cleanup удаляет старые
+      pending-строки) между INSERT и SELECT: прочитанной строки нет → 503
+      receipt_journal_read_failed — «валидатор не смог ответить», а не 500;
     * сырой токен в БД не сохраняется, только его SHA-256.
 
     T04: sync `def` — будущий блокирующий вызов магазина (requests) уходит в
@@ -3497,6 +3528,20 @@ def receipt_verify(req: ReceiptVerifyRequest):
         row = conn.execute(
             "SELECT * FROM receipts WHERE receipt_hash = ?", (receipt_hash,)
         ).fetchone()
+        if row is None:
+            # T28 (Minor): гонка с anti-spam-зачисткой (см. _cleanup-ветку:
+            # DELETE протухших pending) между коммитом INSERT и этим SELECT —
+            # иначе row["..."] давал бы TypeError → 500. Без строки вердикт
+            # вынести нельзя, а это ровно «валидатор не смог ответить» —
+            # та же конвенция 503, что у выключенного гейта выше.
+            # guarded, untested: кейс не пишется — гонка между двумя execute
+            # недетерминирована, а подмена conn-заглушкой проверяла бы только
+            # саму заглушку; внешнее прикрытие — статический разбор (TypeError
+            # на None в HEAD) и первый реальный прогон pytest на коробке с 3.10.
+            raise HTTPException(
+                status_code=503,
+                detail=_receipt_error("receipt_journal_read_failed"),
+            )
         if row["device_id"] != device_id:
             raise HTTPException(
                 status_code=409,

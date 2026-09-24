@@ -208,6 +208,62 @@ class TestChannels:
             body = c.get("/api/challenge", params={"device_id": "dev-f"}).json()
             assert body["my_points"] == 0 and body["completions"] == 0
 
+    def test_linked_not_counted_in_public_counters(self, tmp_path, monkeypatch):
+        """T28 (I-2): linked-строки не двигают ни зал славы, ни рейтинг, ни
+        ordinal «первооткрыватель №N» в brew-check.
+
+        test_reused_no_rewards закрыл экономику (очки/события), но _link_existing
+        пишет recipes.discoverer=ник, и публичные счётчики считали дедуп-варки
+        как первооткрытия — фарм места оставался. Мутации, красящие кейс:
+        убрать `AND r.linked = 0` в hall-of-fame (count станет 4 вместо 1) или
+        в rating.discoveries (то же), либо писать linked=0 в _link_existing
+        (тогда краснеет разметка created/linked); убрать `linked = 0` из seq-
+        запроса brew-check — discoverer.seq станет 4 вместо 2.
+        """
+        existing_name = "Огонь"  # сидовое вещество — цель для ветки дедупа
+        gen = _PlainGen()
+        c = _client_for(tmp_path, monkeypatch, gen)
+        db = str(tmp_path / "channels.db")
+        with c:
+            used = set()
+            a, b = _unknown_pair(db, avoid=set(), used=used)
+            used.add((a, b))
+            r1 = c.post("/api/discover", json={
+                "a": a, "b": b, "nick": "Славик", "device_id": "dev-s"}).json()
+            assert r1["status"] == "created" and r1["discovery"]["reused"] is False
+            # дальше — всегда занятое имя: все три варки уходят в linked
+            monkeypatch.setattr(srv, "get_llm", lambda: _NamedGen(existing_name))
+            last_linked = None
+            for _ in range(3):
+                a, b = _unknown_pair(db, avoid=set(), used=used)
+                used.add((a, b))
+                last_linked = (a, b)
+                r = c.post("/api/discover", json={
+                    "a": a, "b": b, "nick": "Славик", "device_id": "dev-s"}).json()
+                assert r["discovery"]["reused"] is True
+            conn = sqlite3.connect(db)
+            try:
+                rows = conn.execute(
+                    "SELECT linked, COUNT(*) FROM recipes WHERE discoverer = 'Славик'"
+                    " GROUP BY linked").fetchall()
+                assert sorted(rows) == [(0, 1), (1, 3)], "разметка created/linked на месте"
+            finally:
+                conn.close()
+            body = c.get("/api/rating", params={"device_id": "dev-s"}).json()
+            assert body["me"]["discoveries"] == 1, \
+                "rating считает только created-варки (1), а не все 4 строки ника"
+            hall = c.get("/api/hall-of-fame").json()
+            entry = next(e for e in hall["hall"] if e["nick"] == "Славик")
+            assert entry["count"] == 1, "зал славы — тоже только первооткрытия"
+            # brew-check известной linked-пары: тот же ник, но порядковый номер
+            # считается по created-варкам → 2 (одна была раньше), а не 4.
+            bc = c.post("/api/brew-check", json={
+                "a": last_linked[0], "b": last_linked[1],
+                "nick": "Славик", "device_id": "dev-s"}).json()
+            assert bc["found"] is True and bc["discoverer"]["nick"] == "Славик"
+            assert bc["discoverer"]["seq"] == 2, \
+                "ordinal первооткрывателя не растёт от дедуп-варок"
+
 
 class TestLegacyMigration:
     """Прогрев prod-БД: колонки нет, в строках смешаны vein-очки и выполнения.
@@ -254,19 +310,32 @@ class TestLegacyMigration:
             conn.close()
 
     def test_legacy_vein_row_gets_won_once_then_quiet(self, tmp_path, monkeypatch):
+        """Прогрев на сегодняшнем дне: владелец vein-строки получает won ровно
+        один раз, дальше — только очки.
+
+        БД собирается вручную в прежнем формате (колонки completed_at нет) и
+        только потом прогоняется init_db() — ровно то, что происходит на проде
+        при деплое ветки. Вариант «DROP COLUMN и сразу _score_challenge» падал
+        OperationalError (INSERT/WHERE в server._score_challenge называют
+        completed_at по имени) и не мог пройти ни при каком коде.
+        """
         db = str(tmp_path / "legacy2.db")
-        monkeypatch.setattr(srv, "DB_PATH", db)
-        srv.init_db()
         conn = sqlite3.connect(db)
-        conn.row_factory = sqlite3.Row
-        conn.execute("ALTER TABLE challenge_scores DROP COLUMN completed_at")
-        conn.commit()
+        conn.execute(
+            "CREATE TABLE challenge_scores (day TEXT NOT NULL, device_id TEXT NOT NULL,"
+            " nick TEXT NOT NULL, points INTEGER NOT NULL DEFAULT 0,"
+            " first_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (day, device_id))")
         day = srv._today()
-        ch = srv._ensure_challenge(conn)
         conn.execute(
             "INSERT INTO challenge_scores (day, device_id, nick, points, first_at)"
             " VALUES (?, 'dev-vein', 'Жила', 2, ?)", (day, "2025-01-01 09:00:00"))
         conn.commit()
+        conn.close()
+        monkeypatch.setattr(srv, "DB_PATH", db)
+        srv.init_db()  # ALTER + scoped backfill: vein-строка остаётся с NULL
+        conn = sqlite3.connect(db)
+        conn.row_factory = sqlite3.Row
+        ch = srv._ensure_challenge(conn)
 
         # легаси vein-владелец впервые реально выполняет цель → won ровно один раз
         w = srv._score_challenge(conn, ch["target"], "mud", "Жила", "dev-vein")

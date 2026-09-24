@@ -469,3 +469,36 @@ static func run(g: Game) -> void:
 		and g._resonance._res_claim_at == u13_claim_at
 		and g._engine.ether == u13_ether and g._engine.ether_overflow == u13_overflow
 		and g._online._net_enabled == u13_net_on and g._online._device_id == u13_device)
+
+	# ============ I-1 (T28): detail non-2xx-тела в Net._on_completed ============
+	# Синтетический non-2xx прогоняется через единственную точку выхода HTTP:
+	# _on_completed вызывается напрямую (result=RESULT_SUCCESS — «запрос дошёл»,
+	# ответ — серверный код), живой сети нет; _inflight подставляется вручную,
+	# ведь разбор идёт по уже снятому запросу. Мутация «удалить извлечение
+	# detail из non-2xx-ветки» красит первый кейс; мутация «писать detail без
+	# проверки тела/типа» (или снять typeof-гейт) красит второй: dict-detail
+	# (/api/receipt/verify) и не-JSON-тело не должны уходить вверх — иначе hub
+	# показал бы «Имя не принято: {…}», а монетизация прочитала мусор.
+	var t28_net := NetBase.new()
+	var t28_me := OfflineSink.new()
+	t28_net.me_result.connect(t28_me.catch)
+	t28_net._inflight = {"kind": "me"}
+	t28_net._on_completed(HTTPRequest.RESULT_SUCCESS, 400, PackedStringArray(),
+		JSON.stringify({"detail": "Ник уже занят"}).to_utf8_buffer())
+	Selftest.check("t28 net extracts string detail", t28_me.results.size() == 1
+		and String(t28_me.results[0].get("detail", "")) == "Ник уже занят"
+		and String(t28_me.results[0].get("error", "")) == "HTTP 400"
+		and String(t28_me.results[0].get("message", "")) == "HTTP 400"
+		and not bool(t28_me.results[0].get("ok", true)))
+	t28_net._inflight = {"kind": "me"}
+	t28_net._on_completed(HTTPRequest.RESULT_SUCCESS, 400, PackedStringArray(),
+		JSON.stringify({"ok": false, "detail": {"reason": "unknown_sku"}}).to_utf8_buffer())
+	t28_net._inflight = {"kind": "me"}
+	t28_net._on_completed(HTTPRequest.RESULT_SUCCESS, 502, PackedStringArray(),
+		"не json".to_utf8_buffer())
+	Selftest.check("t28 net ignores non string detail", t28_me.results.size() == 3
+		and not t28_me.results[1].has("detail")
+		and String(t28_me.results[1].get("error", "")) == "HTTP 400"
+		and not t28_me.results[2].has("detail")
+		and String(t28_me.results[2].get("error", "")) == "HTTP 502")
+	t28_net.free()

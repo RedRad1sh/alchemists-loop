@@ -142,7 +142,7 @@ w = 1 + layer/10          # более глубокий элемент силь�
 
 ### A.5. Авторство
 
-- `players` таблица: `nick TEXT, device_id TEXT UNIQUE`. Уникальность по device_id гарантирует, что один клиент = один玩家记录.
+- `players` таблица: `nick TEXT, device_id TEXT UNIQUE`. Уникальность по device_id гарантирует, что один клиент = одна запись игрока.
 - `elements.author → players.nick` (подписка, не внешний ключ — для гибкости).
 - `recipes.discoverer → players.nick`.
 - `created_at` = `CURRENT_TIMESTAMP`.
@@ -292,6 +292,13 @@ curl -s http://localhost:8080/api/world?page=1
 ### GET /api/hall-of-fame
 
 **Назначение:** топ открытий по количеству.
+
+> T28 (I-2): в `count` идут только настоящие первооткрытия (`recipes.linked = 0`);
+> `rating.discoveries` и порядковый номер первооткрывателя в `/api/brew-check`
+> считают то же условие. Строки, записанные веткой дедупа имени (`_link_existing`,
+> reused), славу не двигают. Ограничение честно: linked-строки до миграции
+> остаются с `linked = 0` — различить created/linked задним числом нечем,
+> историческое завышение счётчиков не ретушируется.
 
 **Успех 200:**
 ```json

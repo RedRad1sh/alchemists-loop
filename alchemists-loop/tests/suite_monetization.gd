@@ -287,7 +287,9 @@ static func run(g: Game) -> void:
 	# удаление `if state == "pending"` в фасаде (monetization.gd:297-299) краснит
 	# второй конъюнкт (код станет purchase_rejected). К.3 («ok» нет), к.6 (эфир) —
 	# страховка: не краснеют ни от какой мутации этих гейтов — успех и начисление
-	# живут в асинхронном _finish_purchase, которого в прогоне сюиты нет; к.4-к.5
+	# живут в асинхронном _finish_purchase, которого в рамках этого файла сюиты
+	# нет (сам асинхронный путь напрямую прогоняется в suite_journal_misc: там
+	# _finish_purchase вызывается и purchase_succeeded наблюдается); к.4-к.5
 	# (верификация не ушла) краснеют только при удалении обоих state-гейтов сразу.
 	Selftest.check("u20 facade refuses a pending google receipt",
 		String(_u20_pending_receipt.get("state", "")) == "pending"
@@ -299,8 +301,9 @@ static func run(g: Game) -> void:
 	# Убрать `if state != "purchased"` (monetization.gd:300-302) — краснеют второй,
 	# четвёртый и пятый конъюнкты: declined ушёл бы на верификацию (заявка в
 	# _verify_requests, запрос в очередь Net). К.3 («ok» нет) — страховка: он
-	# краснеет только эмитом purchase_succeeded, а он асинхронный и в прогоне
-	# сюиты недостижим.
+	# краснеет только эмитом purchase_succeeded, а он асинхронный и в рамках этого
+	# файла сюиты недостижим (сам асинхронный путь напрямую прогоняется в
+	# suite_journal_misc).
 	var _u20_rejected_receipt: Dictionary = _u20_gp._normalize_purchase(
 		{"sku": "al_loop_ether_500", "purchase_token": "u20_facade_rejected", "purchase_state": 2})
 	var _u20_ev1 := _u20_ev.events.size()
@@ -328,7 +331,8 @@ static func run(g: Game) -> void:
 	# нормализованного «purchased»): фасад знает ровно три строки и обязан
 	# отказать. Разрешить unknown-строку (ослабить гейт до `== "rejected"`) —
 	# краснеют к.1, к.3, к.4; к.2 («ok» нет) — страховка: purchase_succeeded
-	# эмитится только из асинхронного _finish_purchase, недостижимого в сюите.
+	# эмитится только из асинхронного _finish_purchase, недостижимого в рамках
+	# этого файла сюиты (асинхронный путь покрыт suite_journal_misc).
 	var _u20_ev3 := _u20_ev.events.size()
 	Monetization._on_purchase_received({"provider": "google_play", "sku": "al_loop_ether_500",
 		"token": "u20_facade_raw", "state": "PAID"})
@@ -339,7 +343,8 @@ static func run(g: Game) -> void:
 		and Net._queue.size() == _u20_netq0)
 	# Тот же отказ с другой стороны контракта (RuStore pending): удалить
 	# `if state == "pending"` — краснеет к.2 (код станет purchase_rejected).
-	# К.3 («ok» нет) — страховка (асинхронный успех в сюите недостижим); к.4
+	# К.3 («ok» нет) — страховка: асинхронный успех в рамках этого файла сюиты
+	# недостижим (он покрыт напрямую в suite_journal_misc); к.4
 	# (верификация не ушла) краснеет только при удалении обоих state-гейтов.
 	var _u20_rs_pending_receipt: Dictionary = _u20_rs._normalize_purchase(
 		{"product_id": "al_loop_ether_500", "purchase_id": "u20_facade_rs_pending", "purchase_state": "PENDING"})

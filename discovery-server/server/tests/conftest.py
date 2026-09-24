@@ -48,6 +48,11 @@ SERVER_DIR = os.path.abspath(os.path.join(_here, ".."))
 # на нём может работать реальный сервер с реальной БД.
 PROD_PORT = 8080
 
+# Внешние модули, без которых server.py не импортируется (см. requirements.txt
+# и импорты самого server.py/gen_llm.py). Только их отсутствие имеет право на
+# тихий отказ фикстуры fresh_unit_db — см. там же.
+_SERVER_RUNTIME_DEPS = {"fastapi", "pydantic", "starlette", "requests", "httpx", "uvicorn"}
+
 # ---------------------------------------------------------------------------
 # 1) Изоляция окружения: ДО любого импорта server/gen_llm в процессе pytest.
 #    _load_dotenv не перезаписывает переменные, уже присутствующие в
@@ -272,22 +277,31 @@ def server(process_server):
 
 # ---------------------------------------------------------------------------
 # 3) Юнит-слой: autouse-фикстура даёт каждому модулю свежий srv.DB_PATH в
-#    tmp_path (in-process TestClient без uvicorn). На машинах, где server не
-#    импортируется (нет deps / py<3.10), фикстура молча пропускает подмену —
-#    честный отказ всё равно произойдёт на импорте в самом тесте.
+#    tmp_path (in-process TestClient без uvicorn). Подмена пропускается только
+#    когда серверный модуль недоступен по известной причине (нет внешних deps
+#    либо py<3.10); прочие отказы импорта — см. комментарий в фикстуре.
 # ---------------------------------------------------------------------------
 @pytest.fixture(scope="module", autouse=True)
 def fresh_unit_db(tmp_path_factory):
+    # Тишина допустима ровно в двух предсказуемых состояниях окружения: нет
+    # серверных зависимостей (py<3.10 косвенно тоже). Всё прочее — «сломанный
+    # server»: ImportError по внутреннему модулю (server/seed/gen_llm — их тут
+    # нет в списке) или TypeError на 3.10+ обязан упасть, а не оставить юнит-
+    # тесты без подмены DB_PATH (то есть пишет в bootstrap-файл).
     try:
         if SERVER_DIR not in sys.path:
             sys.path.insert(0, SERVER_DIR)
         import server as srv
-    except (ImportError, TypeError):
-        # ImportError — нет fastapi/httpx/uvicorn в этом окружении.
-        # TypeError — частный случай «не тот python»: на py3.9 аннотации
-        # `dict | None` вычисляются в момент импорта и падают TypeError'ом
-        # (py_compile при этом молчит). В обоих случаях серверный модуль
-        # недоступен — подмена не нужна, честный отказ произойдёт в тесте.
+    except ImportError as e:
+        if (e.name or "").split(".")[0] not in _SERVER_RUNTIME_DEPS:
+            raise
+        yield None
+        return
+    except TypeError:
+        if sys.version_info >= (3, 10):
+            raise
+        # py3.9: аннотации `dict | None` вычисляются на импорте (py_compile
+        # при этом молчит). На 3.10+ такой TypeError — уже регресс кода.
         yield None
         return
     db = make_db_path(tmp_path_factory.mktemp("unitdb"), "unit.db")

@@ -48,7 +48,7 @@ def _where_tail(sql: str) -> str:
 def acquire_where() -> str:
     """WHERE-хвост guarded UPSERT из server._try_acquire_pair_lock (нормализованный).
 
-    Срез до закрывающих \"\"\" отсекает и хвост строки, и аргумент ? — 
+    Срез до закрывающих \"\"\" отсекает и хвост строки, и аргумент ? —
     сравниваем только предикат перехода.
     """
     sec = _section(_read(SERVER_PY), "_try_acquire_pair_lock")

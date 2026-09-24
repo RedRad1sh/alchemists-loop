@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS recipes (
     discoverer TEXT,
     -- первооткрыватель по device_id (T02) — см. elements.author_device
     discoverer_device TEXT,
+    -- 1 = строка «дедупа имени» (_link_existing), не первооткрытие; публичные
+    -- счётчики (hall-of-fame/rating) считают только linked = 0 (T28/I-2)
+    linked INTEGER NOT NULL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
 );
 

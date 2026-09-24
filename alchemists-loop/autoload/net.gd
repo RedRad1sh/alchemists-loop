@@ -325,6 +325,16 @@ func _on_completed(result: int, response_code: int, _headers: PackedStringArray,
 		_available = false
 	else:
 		parsed = {"ok": false, "error": "HTTP %d" % response_code, "message": "HTTP %d" % response_code}
+		# I-1 (T28): человекочитаемая причина отказа живёт в теле non-2xx по ключу
+		# "detail" (сервер: /api/me → «Ник уже занят»). Аддитивно: error/message
+		# не трогаем — их читают по точным строкам tests/suite_journal_misc и
+		# tests/suite_resonance_net, а monetization.gd — по префиксу «HTTP 5».
+		# Кейсы-мутанты: «t28 net extracts string detail» (удаление этого блока)
+		# и «t28 net ignores non string detail» (снятие typeof-гейта или записи
+		# detail без проверки — словарь/мусорное тело ушло бы вверх вместо отказа).
+		var body := _parse(data)
+		if typeof(body.get("detail", null)) == TYPE_STRING:
+			parsed["detail"] = String(body["detail"])
 	_dispatch(req, parsed)
 	_send_next()
 
