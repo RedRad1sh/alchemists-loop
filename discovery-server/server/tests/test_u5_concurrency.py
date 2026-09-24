@@ -312,7 +312,8 @@ def test_startup_purge_removes_legacy_tombstones(app_db):
     db, _ = app_db
     conn = server.get_db()
     now = time.time()
-    conn.execute("INSERT INTO pending_pairs (pair_key, state, lock_ts, owner) VALUES ('a|b','resolved',?,'ни'", (now,))
+    conn.execute("INSERT INTO pending_pairs (pair_key, state, lock_ts, owner) "
+                 "VALUES ('a|b','resolved',?,'никто')", (now,))
     conn.execute("INSERT INTO pending_pairs (pair_key, state, lock_ts, owner) VALUES ('c|d','locked',?,'сбой')",
                  (now - server.LOCK_TTL - 1,))
     conn.execute("INSERT INTO pending_pairs (pair_key, state, lock_ts, owner) VALUES ('e|f','locked',?,'живой')",

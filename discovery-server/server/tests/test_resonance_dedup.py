@@ -232,6 +232,7 @@ class TestInitDbMigration:
         srv.init_db()
         srv.init_db()  # двойной вызов — идемпотентность
         conn = sqlite3.connect(db)
+        conn.row_factory = sqlite3.Row  # как в _fresh_conn/остальных чтениях файла
         try:
             tabs = {r["name"] for r in conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table'")}

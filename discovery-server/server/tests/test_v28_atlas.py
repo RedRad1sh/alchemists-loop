@@ -113,7 +113,7 @@ class TestAtlasHttp:
         import sqlite3
         c, db = _client_for(tmp_path, monkeypatch, _FakeHint())
         with c:
-            c.post("/api/me", json={"device_id": "dev-m", "nick": "М"})
+            c.post("/api/me", json={"device_id": "dev-m", "nick": "Марк"})
             conn = sqlite3.connect(db)
             for i in range(1, 10):
                 conn.execute(

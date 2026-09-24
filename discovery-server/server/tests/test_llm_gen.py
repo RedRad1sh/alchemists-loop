@@ -47,10 +47,10 @@ class TestLlmGeneration:
         assert data["discovery"]["color"].startswith("#")
 
     def test_repeat_discovery_is_deterministic_and_shared(self, base_url):
-        r1 = _discover(base_url, "stone", "mist", nick="А", device_id="d-a")
-        r2 = _discover(base_url, "stone", "mist", nick="Б", device_id="d-b")
+        r1 = _discover(base_url, "stone", "mist", nick="Аня", device_id="d-a")
+        r2 = _discover(base_url, "stone", "mist", nick="Боря", device_id="d-b")
         assert r1.json()["discovery"]["slug"] == r2.json()["discovery"]["slug"]
-        assert r2.json()["discovery"]["author"] == "А"
+        assert r2.json()["discovery"]["author"] == "Аня"
 
 
 class TestNotCombinable:
@@ -65,13 +65,13 @@ class TestNotCombinable:
         assert "Туман" in data["message"]
 
     def test_not_combinable_is_cached_across_players(self, base_url):
-        r1 = _discover(base_url, "person", "gold", nick="А", device_id="d-a")
-        r2 = _discover(base_url, "person", "gold", nick="Б", device_id="d-b")
+        r1 = _discover(base_url, "person", "gold", nick="Аня", device_id="d-a")
+        r2 = _discover(base_url, "person", "gold", nick="Боря", device_id="d-b")
         assert r1.json()["status"] == "not_combinable"
         assert r2.json()["status"] == "not_combinable"
 
     def test_brew_check_reports_not_combinable(self, base_url):
-        bc = _brew_check(base_url, "gold", "person", nick="В", device_id="d-c")
+        bc = _brew_check(base_url, "gold", "person", nick="Вера", device_id="d-c")
         assert bc.status_code == 200
         data = bc.json()
         assert data["found"] is False
@@ -133,16 +133,20 @@ class TestFallback:
 
         monkeypatch.setattr(srv, "DB_PATH", str(tmp_path / "flaky.db"))
         monkeypatch.setattr(srv, "get_llm", lambda: Flaky())
+        # Возврат резерва при «unavailable» снимает БЮДЖЕТ, но не троттл:
+        # cooldown после отказа намеренно остаётся (не долбить лежавшую модель).
+        # Здесь проверяется «решение не зафиксировано», поэтому пауза снята.
+        monkeypatch.setattr(srv, "EXPERIMENT_COOLDOWN_SEC", 0.0)
         client = TestClient(srv.app)
         with client:
-            r1 = client.post("/api/discover", json={"a": "fire", "b": "glass", "nick": "А", "device_id": "d1"})
+            r1 = client.post("/api/discover", json={"a": "fire", "b": "glass", "nick": "Аня", "device_id": "d1"})
             assert r1.json()["status"] == "unavailable"
             # пара не сохранена как rejected → повторно кандидат
-            bc = client.post("/api/brew-check", json={"a": "fire", "b": "glass", "nick": "А", "device_id": "d1"})
+            bc = client.post("/api/brew-check", json={"a": "fire", "b": "glass", "nick": "Аня", "device_id": "d1"})
             assert bc.json()["status"] == "candidate"
             # модель вернулась → создаётся
             state["down"] = False
-            r2 = client.post("/api/discover", json={"a": "fire", "b": "glass", "nick": "А", "device_id": "d1"})
+            r2 = client.post("/api/discover", json={"a": "fire", "b": "glass", "nick": "Аня", "device_id": "d1"})
             assert r2.json()["status"] == "created"
             assert r2.json()["discovery"]["name"] == "Горнило"
 
@@ -214,9 +218,9 @@ class TestDbIsSourceOfTruth:
 
         client = self._client(tmp_path, monkeypatch, FakeLLM())
         with client:
-            r1 = client.post("/api/discover", json={"a": "dust", "b": "sky", "nick": "А", "device_id": "d1"})
+            r1 = client.post("/api/discover", json={"a": "dust", "b": "sky", "nick": "Аня", "device_id": "d1"})
             assert r1.status_code == 200 and r1.json()["status"] == "created"
-            r2 = client.post("/api/discover", json={"a": "dust", "b": "sky", "nick": "Б", "device_id": "d2"})
+            r2 = client.post("/api/discover", json={"a": "dust", "b": "sky", "nick": "Боря", "device_id": "d2"})
             assert r2.status_code == 200 and r2.json()["status"] == "known"
             # LLM вызвана ровно один раз
             assert calls["n"] == 1
@@ -234,11 +238,11 @@ class TestDbIsSourceOfTruth:
 
         client = self._client(tmp_path, monkeypatch, FakeLLM())
         with client:
-            r1 = client.post("/api/discover", json={"a": "sand", "b": "smoke", "nick": "А", "device_id": "d1"})
+            r1 = client.post("/api/discover", json={"a": "sand", "b": "smoke", "nick": "Аня", "device_id": "d1"})
             assert r1.status_code == 200 and r1.json()["status"] == "not_combinable"
-            r2 = client.post("/api/discover", json={"a": "sand", "b": "smoke", "nick": "Б", "device_id": "d2"})
+            r2 = client.post("/api/discover", json={"a": "sand", "b": "smoke", "nick": "Боря", "device_id": "d2"})
             assert r2.status_code == 200 and r2.json()["status"] == "not_combinable"
-            bc = client.post("/api/brew-check", json={"a": "sand", "b": "smoke", "nick": "В", "device_id": "d3"})
+            bc = client.post("/api/brew-check", json={"a": "sand", "b": "smoke", "nick": "Вера", "device_id": "d3"})
             assert bc.json()["status"] == "not_combinable"
             # отказ сохранён в БД, модель вызвана ровно один раз
             assert calls["n"] == 1

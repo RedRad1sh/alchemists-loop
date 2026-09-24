@@ -103,6 +103,16 @@ _TEST_ENV = {
 for _k, _v in _TEST_ENV.items():
     os.environ[_k] = _v
 
+# Loopback всегда обходит системный прокси. Без этого на машине с прокси в
+# реестре (Windows: urllib/requests берут его даже при пустом окружении) запрос
+# к 127.0.0.1:<ephemeral> уходит в прокси и отвечает 502 — интеграционный слой
+# падает не на сервере, а на транспорте. no_proxy читается и urllib, и
+# requests, и подпроцессом uvicorn (наследует os.environ ниже).
+_LOOPBACK_BYPASS = "127.0.0.1,localhost,::1"
+for _k in ("NO_PROXY", "no_proxy"):
+    _cur = os.environ.get(_k, "")
+    os.environ[_k] = _LOOPBACK_BYPASS if _cur == "" else _cur + "," + _LOOPBACK_BYPASS
+
 # Страховка: если какой-то тест импортирует server и триггерит startup без
 # собственного monkeypatch srv.DB_PATH — пишет в ephemeral-каталог, а не в
 # %APPDATA%/AlchemistsLoop (дефолт _resolve_db_path на машине разработчика).

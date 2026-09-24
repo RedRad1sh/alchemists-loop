@@ -105,12 +105,12 @@ class TestQuotaKeysOnGenerationFact:
         _experiment_tuned(srv, monkeypatch, daily=1)
         with client:
             first = client.post("/api/discover", json={
-                "a": "dust", "b": "sky", "nick": "A", "device_id": "device-1",
+                "a": "dust", "b": "sky", "nick": "Anna", "device_id": "device-1",
                 "experiment": False,
             })
             assert first.json()["status"] == "created"
             second = client.post("/api/discover", json={
-                "a": "sand", "b": "smoke", "nick": "A", "device_id": "device-1",
+                "a": "sand", "b": "smoke", "nick": "Anna", "device_id": "device-1",
                 "experiment": False,
             })
             assert second.json()["status"] == "rate_limited"
@@ -124,10 +124,10 @@ class TestQuotaKeysOnGenerationFact:
         _experiment_tuned(srv, monkeypatch, daily=1)
         with client:
             client.post("/api/discover", json={
-                "a": "dust", "b": "sky", "nick": "A", "device_id": "device-1",
+                "a": "dust", "b": "sky", "nick": "Anna", "device_id": "device-1",
             })
             limited = client.post("/api/discover", json={
-                "a": "sand", "b": "smoke", "nick": "A", "device_id": "device-1",
+                "a": "sand", "b": "smoke", "nick": "Anna", "device_id": "device-1",
             })
         body = limited.json()
         assert limited.status_code == 200
@@ -144,11 +144,11 @@ class TestQuotaKeysOnGenerationFact:
         _experiment_tuned(srv, monkeypatch, daily=1)
         with client:
             first = client.post("/api/discover", json={
-                "a": "dust", "b": "sky", "nick": "A", "device_id": "device-1",
+                "a": "dust", "b": "sky", "nick": "Anna", "device_id": "device-1",
             })
             assert first.json()["status"] == "created"
             known = client.post("/api/discover", json={
-                "a": "dust", "b": "sky", "nick": "B", "device_id": "device-2",
+                "a": "dust", "b": "sky", "nick": "Boris", "device_id": "device-2",
                 "experiment": False,
             })
             assert known.json()["status"] == "known"
@@ -166,7 +166,7 @@ class TestQuotaKeysOnGenerationFact:
         _experiment_tuned(srv, monkeypatch, daily=1)
         with client:
             failed = client.post("/api/discover", json={
-                "a": "dust", "b": "sky", "nick": "A", "device_id": "device-1",
+                "a": "dust", "b": "sky", "nick": "Anna", "device_id": "device-1",
             })
             assert failed.json()["status"] == "unavailable"
             row = srv.get_db().execute(
@@ -177,7 +177,7 @@ class TestQuotaKeysOnGenerationFact:
             good = _ExternalLLM()
             monkeypatch.setattr(srv, "get_llm", lambda: good)
             retried = client.post("/api/discover", json={
-                "a": "dust", "b": "sky", "nick": "A", "device_id": "device-1",
+                "a": "dust", "b": "sky", "nick": "Anna", "device_id": "device-1",
             })
             assert retried.json()["status"] == "created"
             row = srv.get_db().execute(
@@ -248,10 +248,10 @@ class TestLetterQuota:
         _letter_tuned(srv, monkeypatch, daily=3, global_daily=100)
         with client:
             client.post("/api/discover", json={
-                "a": "dust", "b": "sky", "nick": "A", "device_id": "dev-1",
+                "a": "dust", "b": "sky", "nick": "Anna", "device_id": "dev-1",
             })
             limited = client.post("/api/discover", json={
-                "a": "sand", "b": "smoke", "nick": "A", "device_id": "dev-1",
+                "a": "sand", "b": "smoke", "nick": "Anna", "device_id": "dev-1",
             })
             assert limited.json()["status"] == "rate_limited"
             letter = client.get("/api/letter/today", params={"device_id": "dev-1"})

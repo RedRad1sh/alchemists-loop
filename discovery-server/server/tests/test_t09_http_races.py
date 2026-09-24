@@ -146,7 +146,7 @@ class TestParallelDiscoverHttp:
         losers_out = {}
 
         def brew(tag, a, b):
-            r = _post_discover(base, a, b, nick=f"Гонщик{tag}", device_id=f"race-{tag}")
+            r = _post_discover(base, a, b, nick=f"Гонщик{tag}", device=f"race-{tag}")
             (winner_out if tag == "0" else losers_out)[tag] = r
 
         th0 = threading.Thread(target=brew, args=("0", "fire", "gold"))

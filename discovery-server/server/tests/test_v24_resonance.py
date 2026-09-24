@@ -43,10 +43,18 @@ class _FakeLLM:
         }
 
 
-def _mk(conn, a, b, nick, name):
-    """Первооткрытие через _generate_for_pair; вернуть DiscoveryData."""
+def _mk(conn, a, b, nick, name, device_id=""):
+    """Первооткрытие через _generate_for_pair; вернуть DiscoveryData.
+
+    device_id обязателен там, где тест проверяет авторство по устройству:
+    T02 пишет elements.author_device как есть, а «легаси»-ветка запросов
+    (`author_device IS NULL AND author = ?`) срабатывает только на NULL —
+    строка с '' не найдёт ни грант, ни резонанс по нику. В проде это
+    недостижимо: DiscoverRequest/BrewCheckRequest требуют min_length=1.
+    """
     kind, disc = server._generate_for_pair(
-        conn, a, b, server.canonical_pair_key(a, b), nick, _FakeLLM(name)
+        conn, a, b, server.canonical_pair_key(a, b), nick,
+        device_id=device_id, llm=_FakeLLM(name)
     )
     assert kind == "created"
     conn.commit()
@@ -127,7 +135,7 @@ class TestCreditResonance:
         _players(conn, ("Перво", "dev-a"))
         kind, linked = server._generate_for_pair(
             conn, "sand", "mist", server.canonical_pair_key("sand", "mist"),
-            "Второй", _FakeLLM("Звенигород"),
+            "Второй", llm=_FakeLLM("Звенигород"),
         )
         assert kind == "created" and linked.reused is True
         conn.commit()
@@ -181,7 +189,7 @@ class TestDescendants:
 class TestApprentice:
     def test_grant_once_per_day(self):
         conn = _fresh_conn()
-        _mk(conn, "stone", "plant", "Перво", "Звенигород")
+        _mk(conn, "stone", "plant", "Перво", "Звенигород", "dev-a")
         _players(conn, ("Перво", "dev-a"))
         grant = server._apprentice_grant(conn, "dev-a", "Перво")
         assert grant == {"name": "Звенигород", "slug": grant["slug"]}
@@ -207,8 +215,8 @@ class TestApprentice:
 
     def test_pick_is_deterministic(self):
         conn = _fresh_conn()
-        _mk(conn, "stone", "plant", "Перво", "Звенигород")
-        _mk(conn, "sand", "mist", "Перво", "Гудрон")
+        _mk(conn, "stone", "plant", "Перво", "Звенигород", "dev-a")
+        _mk(conn, "sand", "mist", "Перво", "Гудрон", "dev-a")
         _players(conn, ("Перво", "dev-a"))
         mine = conn.execute(
             "SELECT name FROM elements WHERE author='Перво' ORDER BY id"

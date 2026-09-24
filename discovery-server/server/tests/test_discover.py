@@ -191,10 +191,10 @@ class TestGenerationQuality:
             assert all(ord(c) > 1039 for c in name), name
 
     def test_names_are_deterministic_and_order_independent(self, base_url):
-        r1 = _discover(base_url, "stone", "mist", nick="А", device_id="d-a")
-        r2 = _discover(base_url, "mist", "stone", nick="Б", device_id="d-b")
+        r1 = _discover(base_url, "stone", "mist", nick="Аня", device_id="d-a")
+        r2 = _discover(base_url, "mist", "stone", nick="Боря", device_id="d-b")
         assert r1.json()["discovery"]["name"] == r2.json()["discovery"]["name"]
-        assert r2.json()["discovery"]["author"] == "А"
+        assert r2.json()["discovery"]["author"] == "Аня"
 
     def test_known_game_pair_resolves_without_generation(self, base_url):
         resp = _discover(base_url, "fire", "sand", nick="Кто-то", device_id="d-sand")

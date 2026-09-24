@@ -76,7 +76,7 @@ class TestLetterPick:
         # своё первооткрытие — не кандидат
         server._generate_for_pair(
             conn, "stone", "plant", server.canonical_pair_key("stone", "plant"),
-            "Перво", _FakeLLM("Звенигород"))
+            "Перво", llm=_FakeLLM("Звенигород"))
         conn.commit()
         keys = {r["pair_key"] for r in server._letter_candidates(conn, "Перво", "dev-a")}
         assert "plant|stone" not in keys
@@ -163,7 +163,7 @@ class TestLetterHttp:
         import sqlite3
         c, db = _client_for(tmp_path, monkeypatch, _FakeHint())
         with c:
-            c.post("/api/me", json={"device_id": "dev-m", "nick": "М"})
+            c.post("/api/me", json={"device_id": "dev-m", "nick": "Марк"})
             # 4 старых недоделки c разными парами + сегодняшнее = 5
             conn = sqlite3.connect(db)
             pairs = [("fire", "water"), ("fire", "earth"), ("fire", "air"), ("water", "earth")]
@@ -192,7 +192,7 @@ class TestLetterHttp:
         import sqlite3
         c, db = _client_for(tmp_path, monkeypatch, _FakeHint())
         with c:
-            c.post("/api/me", json={"device_id": "dev-r", "nick": "Р"})
+            c.post("/api/me", json={"device_id": "dev-r", "nick": "Рита"})
             # T09/U8 (c): дата в единой серверной шкале (server._date_minus),
             # НЕ хост-локальная date.today() — иначе тест разъезжается с
             # серверным _today() на хостах вне нулевого смещения.
@@ -218,7 +218,7 @@ class TestLetterHttp:
         import sqlite3
         c, db = _client_for(tmp_path, monkeypatch, _FakeHint())
         with c:
-            c.post("/api/me", json={"device_id": "dev-l", "nick": "Л"})
+            c.post("/api/me", json={"device_id": "dev-l", "nick": "Лика"})
             # T09/U8 (c): серверная шкала вместо хост-локальной даты
             yest = server._date_minus(1)
             conn = sqlite3.connect(db)

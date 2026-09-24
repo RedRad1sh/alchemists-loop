@@ -43,13 +43,13 @@ class TestExperimentLimits:
         monkeypatch.setattr(srv, "EXPERIMENT_DAILY_LIMIT", 1)
         monkeypatch.setattr(srv, "EXPERIMENT_COOLDOWN_SEC", 0.0)
         monkeypatch.setattr(srv, "EXPERIMENT_GLOBAL_DAILY_LIMIT", 100)
-        payload = {"a": "dust", "b": "sky", "nick": "A", "device_id": "device-1", "experiment": True}
+        payload = {"a": "dust", "b": "sky", "nick": "Anna", "device_id": "device-1", "experiment": True}
         with client:
             first = client.post("/api/discover", json=payload)
             assert first.json()["status"] == "created"
             # The second client sees the same durable recipe; this is a cache hit,
             # not another LLM-backed experiment.
-            cached = client.post("/api/discover", json={**payload, "nick": "B", "device_id": "device-2"})
+            cached = client.post("/api/discover", json={**payload, "nick": "Boris", "device_id": "device-2"})
             assert cached.json()["status"] == "known"
             row = srv.get_db().execute(
                 "SELECT attempts FROM experiment_limits WHERE device_id = ?", ("device-2",)
@@ -67,11 +67,11 @@ class TestExperimentLimits:
         monkeypatch.setattr(srv, "EXPERIMENT_GLOBAL_DAILY_LIMIT", 100)
         with client:
             first = client.post("/api/discover", json={
-                "a": "dust", "b": "sky", "nick": "A", "device_id": "device-1", "experiment": True,
+                "a": "dust", "b": "sky", "nick": "Anna", "device_id": "device-1", "experiment": True,
             })
             assert first.json()["status"] == "created"
             limited = client.post("/api/discover", json={
-                "a": "sand", "b": "smoke", "nick": "A", "device_id": "device-1", "experiment": True,
+                "a": "sand", "b": "smoke", "nick": "Anna", "device_id": "device-1", "experiment": True,
             })
             assert limited.json()["status"] == "rate_limited"
             assert "лимит" in limited.json()["message"].lower()
@@ -87,11 +87,11 @@ class TestExperimentLimits:
         monkeypatch.setattr(srv, "EXPERIMENT_GLOBAL_DAILY_LIMIT", 100)
         with client:
             first = client.post("/api/discover", json={
-                "a": "dust", "b": "sky", "nick": "A", "device_id": "device-1", "experiment": True,
+                "a": "dust", "b": "sky", "nick": "Anna", "device_id": "device-1", "experiment": True,
             })
             assert first.json()["status"] == "created"
             limited = client.post("/api/discover", json={
-                "a": "sand", "b": "smoke", "nick": "A", "device_id": "device-1", "experiment": True,
+                "a": "sand", "b": "smoke", "nick": "Anna", "device_id": "device-1", "experiment": True,
             })
             assert limited.json()["status"] == "rate_limited"
             assert "через" in limited.json()["message"].lower()
@@ -107,10 +107,10 @@ class TestExperimentLimits:
         monkeypatch.setattr(srv, "EXPERIMENT_GLOBAL_DAILY_LIMIT", 1)
         with client:
             first = client.post("/api/discover", json={
-                "a": "dust", "b": "sky", "nick": "A", "device_id": "device-1", "experiment": True,
+                "a": "dust", "b": "sky", "nick": "Anna", "device_id": "device-1", "experiment": True,
             })
             second = client.post("/api/discover", json={
-                "a": "sand", "b": "smoke", "nick": "A", "device_id": "device-1", "experiment": True,
+                "a": "sand", "b": "smoke", "nick": "Anna", "device_id": "device-1", "experiment": True,
             })
             assert first.json()["status"] == "created"
             assert second.json()["status"] == "created"

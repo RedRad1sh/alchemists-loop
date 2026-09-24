@@ -239,7 +239,7 @@ class TestEchoesByDevice:
             assert client.post("/api/me", json={"device_id": "dev-hijacker", "nick": "Варда"}).status_code == 200
             # чужая повторная ВАРКА (discover) -> отголосок автору по device_id,
             # не хиджеру. T03: brew-check — читающий, экономику не пишет.
-            self._discover(client, "clay", "fire", "Плавильщик", "dev-brewer")  # своя пара
+            self._discover(client, "clay", "dust", "Плавильщик", "dev-brewer")  # своя пара
             r = client.post("/api/discover", json={
                 "a": "plant", "b": "stone", "nick": "Плавильщик", "device_id": "dev-brewer",
             })
@@ -286,7 +286,7 @@ class TestAccountLifecycle:
             _me(client, "dev-a", "Аврора")
             _me(client, "dev-b", "Борей")
             da = self._created(client, "stone", "plant", "Аврора", "dev-a")
-            db = self._created(client, "clay", "fire", "Борей", "dev-b")
+            db = self._created(client, "brick", "water", "Борей", "dev-b")
             r = client.request("DELETE", "/api/account", params={"device_id": "dev-a"})
             assert r.status_code == 200
             conn = srv.get_db()

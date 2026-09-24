@@ -53,7 +53,7 @@ class TestNameDedup:
 
         kind, disc = server._generate_for_pair(
             conn, "stone", "plant", server.canonical_pair_key("stone", "plant"),
-            "Тестер", _FakeLLM("Огонь")
+            "Тестер", llm=_FakeLLM("Огонь")
         )
         assert kind == "created"
         assert disc.reused is True
@@ -78,7 +78,7 @@ class TestNameDedup:
         # сопоставление по норме имени (Ёж == еж).
         fire_id = conn.execute("SELECT id FROM elements WHERE slug = 'fire'").fetchone()["id"]
         kind, disc = server._generate_for_pair(
-            conn, "stone", "sand", "sand|stone", "Тестер", _FakeLLM("  огонь ")
+            conn, "stone", "sand", "sand|stone", "Тестер", llm=_FakeLLM("  огонь ")
         )
         assert disc.reused is True
         assert disc.slug == "fire"
@@ -91,7 +91,7 @@ class TestNameDedup:
         conn = _fresh_conn()
         before = conn.execute("SELECT COUNT(*) AS c FROM elements").fetchone()["c"]
         kind, disc = server._generate_for_pair(
-            conn, "stone", "plant", "stone|plant", "Тестер", _FakeLLM("СовсемНовое")
+            conn, "stone", "plant", "stone|plant", "Тестер", llm=_FakeLLM("СовсемНовое")
         )
         assert kind == "created"
         assert disc.reused is False
@@ -106,7 +106,7 @@ class TestRejectedEndpoint:
         # person|gold — детерминированно несочетаемая пара в заглушке mock
         r = requests.post(
             f"{base_url}/discover",
-            json={"a": "person", "b": "gold", "nick": "Т", "device_id": "rej-1"},
+            json={"a": "person", "b": "gold", "nick": "Тест", "device_id": "rej-1"},
             timeout=5,
         )
         assert r.status_code == 200
@@ -145,8 +145,8 @@ class TestRatingEndpoint:
         assert isinstance(r["rows"], list)
         for row in r["rows"]:
             assert {"rank", "nick", "discoveries", "elements", "points"} <= set(row)
-        # device_id "rej-1" зарегистрирован (ник «Т») — me должен найтись
-        assert r["me"] is None or r["me"]["nick"] == "Т"
+        # device_id "rej-1" зарегистрирован (ник «Тест») — me должен найтись
+        assert r["me"] is None or r["me"]["nick"] == "Тест"
 
 
 class TestParametricGlyph:
@@ -166,7 +166,7 @@ class TestParametricGlyph:
         conn = _fresh_conn()
         kind, disc = server._generate_for_pair(
             conn, "stone", "sand", "sand|stone", "Тестер",
-            _FakeLLM("Кристаллон", glyph="crystal6")
+            llm=_FakeLLM("Кристаллон", glyph="crystal6")
         )
         assert kind == "created"
         assert disc.glyph == "crystal6"
@@ -181,7 +181,7 @@ class TestParametricGlyph:
         conn = _fresh_conn()
         kind, disc = server._generate_for_pair(
             conn, "stone", "sand", "sand|stone", "Тестер",
-            _FakeLLM("Песчаник", glyph="!!!")
+            llm=_FakeLLM("Песчаник", glyph="!!!")
         )
         assert kind == "created"
         assert disc.glyph != ""

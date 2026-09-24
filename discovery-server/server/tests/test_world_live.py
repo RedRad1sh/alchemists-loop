@@ -54,7 +54,7 @@ class TestEvents:
         client = TestClient(srv.app)
         with client:
             # fire+water — уже известный рецепт (steam), событие не пишется
-            r = client.post("/api/discover", json={"a": "fire", "b": "water", "nick": "Н", "device_id": "d2"})
+            r = client.post("/api/discover", json={"a": "fire", "b": "water", "nick": "Нина", "device_id": "d2"})
             assert r.json()["status"] == "known"
             ev = client.get("/api/events").json()
             assert ev["events"] == []
