@@ -19,9 +19,13 @@ var _prestige_dim: Control = null
 var _prestige_popup: Control = null
 var _prestige_confirm_label: Label = null
 var _profile_stats: Label = null
-# I-1 (T28): предыдущий ник до отправки me() — нужен, чтобы откатить локальное
-# состояние при серверном отказе ('' = ни одна смена не ждёт ответа).
+# I-1 (T28): предыдущий ник до отправки me() — значение, на которое откатываем
+# локальное состояние при серверном отказе.
 var _profile_prev_nick := ""
+# U25 (re-review #3): «заявка ждёт ответа» — отдельный признак, не пустой prev:
+# отказ ПЕРВОГО в жизни ника приходит именно с prev == "", и по одному prev его
+# было не отличить от стартового sync me() / онбординга (там откатывать нечего).
+var _profile_pending := false
 var _log_events: Array = []
 var _journal_dim: ColorRect = null
 var _journal_popup: CenterContainer = null
@@ -131,6 +135,7 @@ func _save_profile() -> void:
 	# кейс-мутант «t28 nick save prints no premature success» (краснеет, если
 	# вернуть успех в этот метод).
 	_profile_prev_nick = g._online._net_nick
+	_profile_pending = true
 	g._online._net_nick = filtered
 	g._saves._save_game()
 	g._me_avatar.setup(g._online._net_nick, 24)
@@ -144,7 +149,9 @@ func _save_profile() -> void:
 	g._online._rebuild_world_grid()
 
 func _on_net_me_result(result: Dictionary) -> void:
+	var was_pending := _profile_pending
 	var prev := _profile_prev_nick
+	_profile_pending = false
 	_profile_prev_nick = ""
 	if result.get("ok", false) == true:
 		var nick := g._clean_str(result.get("nick", ""))
@@ -153,14 +160,16 @@ func _on_net_me_result(result: Dictionary) -> void:
 			if g._me_avatar != null:
 				g._me_avatar.setup(g._online._net_nick, 24)
 			g._saves._save_game()
-		# успех объявляем только своей смене (prev != ""): стартовый sync me()
-		# (main.gd) и онбординг-ник (spirit.gd) тоже приходят сюда без заявки
-		if prev != "":
+		# успех объявляем только своей смене (U25: по флагу заявки, а не по
+		# непустому prev — иначе отказ/успех ПЕРВОГО в жизни ника не доходил до
+		# игрока): стартовый sync me() (main.gd) и онбординг-ник (spirit.gd)
+		# приходят сюда без заявки
+		if was_pending:
 			g._online._set_status("Имя сохранено: %s. Его видят все алхимики!" % g._online._net_nick)
 		return
-	# Отказ/офлайн пришедший НЕ в ответ на заявку игрока — молча игнорируем
-	# (поведение до T28): откатывать на пустой prev нечего.
-	if prev == "":
+	# Отказ/офлайн, пришедший НЕ в ответ на заявку игрока — молча игнорируем
+	# (поведение до T28): откатывать на чужую отправку нечего.
+	if not was_pending:
 		return
 	# I-1 (T28): ветка отказа. Мутация «удалить ветку отказа (оставить только
 	# if ok, успех — как в BASE — печатать в _save_profile)» красит кейс
@@ -178,6 +187,12 @@ func _on_net_me_result(result: Dictionary) -> void:
 		g._me_avatar.setup(g._online._net_nick, 24)
 	if _profile_avatar != null:
 		_profile_avatar.setup(g._online._net_nick, 96)
+	# U25 (re-review #3): поле диалога возвращаем тоже. Пока заявка в полёте,
+	# игрок успевает открыть профиль (_open_profile печатает в поле текущий
+	# _net_nick = ужеRejected), и без этой строки отказ повесил бы непринятое
+	# имя в открытой форме. Различник — тот же кейс сюиты (третий конъюнкт).
+	if _profile_nick != null:
+		_profile_nick.text = prev
 	g._saves._save_game()
 
 

@@ -10,6 +10,41 @@ static func run(g: Game) -> void:
 	g._spirit._companion_set_name("Тестер")
 	Selftest.check("companion naming", g._spirit._player_name == "Тестер" and g._spirit._spirit_name != "" and g._spirit._companion_met)
 	g._spirit._companion_met = saved_met
+	# U25 (re-review, Critical #1): онбординг заводит ник ТОЙ ЖЕ заявкой, что и
+	# диалог профиля (hub._profile_pending / _profile_prev_nick), поэтому отказ
+	# «Ник уже занят» откатывает локальное состояние, а не оставляет чужой ник.
+	# Различники: убрать `_profile_pending = true` в _companion_set_name (первый
+	# кейс красный: заявка без флага, отказ не откатывает) или убрать откат в
+	# _on_net_me_result (второй кейс красный).
+	var sp_nick0 := g._online._net_nick
+	var sp_enabled0 := g._online._net_enabled
+	var sp_prev0 := g._hub._profile_prev_nick
+	var sp_pending0 := g._hub._profile_pending
+	var sp_status0 := g._engine.status_text
+	var sp_base0 := Net.base_url
+	var sp_name0 := g._spirit._player_name
+	Net.base_url = ""
+	g._online._net_enabled = true
+	g._online._net_nick = "Т25Дефолт"
+	g._spirit._companion_set_name("Т25Занят")
+	Selftest.check("onboarding nick is sent as a rollback-able request",
+		g._online._net_nick == "Т25Занят"
+		and g._hub._profile_pending == true
+		and g._hub._profile_prev_nick == "Т25Дефолт")
+	g._hub._on_net_me_result({"ok": false, "error": "HTTP 400",
+		"message": "HTTP 400", "detail": "Ник уже занят"})
+	Selftest.check("onboarding refusal rolls the nick back",
+		g._online._net_nick == "Т25Дефолт"
+		and g._engine.status_text.contains("Имя не принято: Ник уже занят")
+		and g._hub._profile_pending == false)
+	Net.base_url = sp_base0
+	g._online._net_enabled = sp_enabled0
+	g._online._net_nick = sp_nick0
+	if g._me_avatar != null:
+		g._me_avatar.setup(g._online._net_nick, 24)
+	g._hub._profile_avatar.setup(g._online._net_nick, 96)
+	g._spirit._player_name = sp_name0
+	g._engine.status_text = sp_status0
 	Selftest.check("companion sprites loaded", g._spirit._companion != null and g._spirit._companion.has_sprites())
 	Selftest.check("ago text", g._online._ago_text(5) == "только что" and g._online._ago_text(120).contains("мин")
 		and g._online._ago_text(7200).contains("ч"))
@@ -43,6 +78,7 @@ static func run(g: Game) -> void:
 	var t28_base0 := Net.base_url
 	var t28_line0 := g._hub._profile_nick.text
 	var t28_prev0 := g._hub._profile_prev_nick
+	var t28_pending0 := g._hub._profile_pending
 	var t28_dim0 := g._hub._profile_dim.visible
 	var t28_popup0 := g._hub._profile_popup.visible
 	Net.base_url = ""
@@ -63,7 +99,11 @@ static func run(g: Game) -> void:
 	Selftest.check("t28 rejected nick rolls back",
 		not g._engine.status_text.contains("Имя сохранено")
 		and g._online._net_nick == "Т28Старый"
-		and g._engine.status_text.contains("Имя не принято: Ник уже занят"))
+		and g._engine.status_text.contains("Имя не принято: Ник уже занят")
+		and g._hub._profile_nick.text == "Т28Старый")
+	# U25 (re-review #3): четвёртый конъюнкт — поле диалога возвращаем вместе с
+	# ником (игрок мог успеть открыть профиль, пока заявка в полёте). Мутация
+	# «не восстанавливать _profile_nick.text» краснит именно его.
 	# Успех объявляется именно в ok-ветке и именно своей заявке: второй цикл
 	# save→ответ. Мутация «убрать печать успеха в ok-ветке» краснит этот кейс.
 	g._hub._profile_nick.text = "Т28Новый2"
@@ -72,12 +112,36 @@ static func run(g: Game) -> void:
 	Selftest.check("t28 success announced in ok branch",
 		g._online._net_nick == "Т28Новый2"
 		and g._engine.status_text.contains("Имя сохранено: Т28Новый2"))
+	# U25 (re-review #3): отказ ПЕРВОГО в жизни ника (prev == "") — игрок обязан
+	# увидеть отказ и локальное состояние должно откатиться на пустой ник.
+	# Мутации, краснящие кейс: вернуть сверку «своя ли заявка» по `prev != ""`
+	# (тогда отказ молча оставляет непринятый ник активным) или не сбросить
+	# _profile_pending в обработчике (третий конъюнкт).
+	var t28_first0 := g._online._net_nick
+	g._online._net_nick = ""
+	g._hub._profile_nick.text = "Т28Первый"
+	g._hub._save_profile()
+	g._hub._on_net_me_result({"ok": false, "error": "HTTP 400",
+		"message": "HTTP 400", "detail": "Ник уже занят"})
+	Selftest.check("t28 first nick rejection is announced and rolled back",
+		g._online._net_nick == ""
+		and g._engine.status_text.contains("Имя не принято: Ник уже занят")
+		and g._hub._profile_nick.text == ""
+		and g._hub._profile_pending == false)
+	g._online._net_nick = t28_first0
+	# Успешный me()-ответ БЕЗ заявки (стартовый sync из main.gd, онбординг) —
+	# молчит: различник «печатать успех в ok-ветке безусловно» краснит кейс.
+	g._engine.status_text = ""
+	g._hub._on_net_me_result({"ok": true, "nick": g._online._net_nick})
+	Selftest.check("t28 me sync without request stays silent",
+		not g._engine.status_text.contains("Имя сохранено"))
 	# restore: ничего из профиля/статуса/сети не оставляем изменённым.
 	g._online._net_nick = t28_nick0
 	g._engine.status_text = t28_status0
 	Net.base_url = t28_base0
 	g._hub._profile_nick.text = t28_line0
 	g._hub._profile_prev_nick = t28_prev0
+	g._hub._profile_pending = t28_pending0
 	g._hub._profile_dim.visible = t28_dim0
 	g._hub._profile_popup.visible = t28_popup0
 

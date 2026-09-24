@@ -166,16 +166,54 @@ def echo_ether() -> int:
     return int(m.group(1))
 
 
+def _echo_literal(section: str, prefix: str, label: str) -> str:
+    """Первый SQL-литерал секции, начинающийся с prefix (нормализованный)."""
+    for m in re.finditer(r'"([^"\n]*)"', section):
+        s = m.group(1).strip()
+        if s.upper().startswith(prefix.upper()):
+            return _norm(s)
+    raise AssertionError(
+        "server.py: в %s больше нет запроса `%s …` — копия харнесса зеркалит "
+        "не существующий переход" % (label, prefix))
+
+
+def echo_ensure() -> str:
+    """INSERT OR IGNORE из server._echo_row (создание строки отголосков)."""
+    return _echo_literal(_section(_read(SERVER_PY), "_echo_row"),
+                         "INSERT OR IGNORE INTO echoes", "_echo_row")
+
+
+def echo_read() -> str:
+    """SELECT баланса из server._echo_row — набор полей важен для клейма."""
+    return _echo_literal(_section(_read(SERVER_PY), "_echo_row"),
+                         "SELECT balance", "_echo_row")
+
+
+def echo_reread() -> str:
+    """Перечитывание total проигравшим в server._claim_echoes."""
+    return _echo_literal(_section(_read(SERVER_PY), "_claim_echoes"),
+                         "SELECT total", "_claim_echoes")
+
+
+def echo_update() -> str:
+    """Полный UPDATE обнуления из server._claim_echoes (не только WHERE)."""
+    return _echo_literal(_section(_read(SERVER_PY), "_claim_echoes"),
+                         "UPDATE echoes", "_claim_echoes")
+
+
 def verify(acquire_sql: str, release_sql: str, ttl: float, score_sql: str = None,
-           topup_sql: str = None, claim_sql: str = None) -> None:
+           topup_sql: str = None, claim_copy: tuple = None) -> None:
     """Сверить копии харнесса с исходником server.py; расхождение — падение.
 
     acquire_sql/release_sql/score_sql — полные строки харнесса; сравнивается их
     WHERE-хвост (whitespace-нормализованный) с эталонным хвостом из server.py.
     topup_sql (T09/U8 (d)) — полная TOPUP-строка харнесса: сравнивается
     целиком (в ней нет guarded-условия, важен и SET-хвост, и WHERE по ключу).
-    claim_sql (T29 I-1) — строка обнуления баланса клейма: сравнивается
-    WHERE-хвост, `AND balance = ?` обязано быть и в харнессе, и в сервере.
+    claim_copy (T29 I-1, U25 re-review #4) — кортеж харнесс-копий клейма
+    (ENSURE, READ, UPDATE, REREAD): каждая сверяется ПОЛНОСТЬЮ с литералом из
+    server._echo_row/_claim_echoes. Ранее привязывался только WHERE-хвост
+    обнуления, и копия читающего запроса (набор полей SELECT) могла уехать от
+    сервера молча.
     """
     exp_ttl = lock_ttl()
     if abs(ttl - exp_ttl) > 1e-9:
@@ -190,8 +228,15 @@ def verify(acquire_sql: str, release_sql: str, ttl: float, score_sql: str = None
         pairs += (("SCORE WHERE", _where_tail(score_sql), score_upsert_where()),)
     if topup_sql is not None:
         pairs += (("TOPUP SQL", _norm(topup_sql), score_topup_sql()),)
-    if claim_sql is not None:
-        pairs += (("CLAIM WHERE", _where_tail(claim_sql), claim_where()),)
+    if claim_copy is not None:
+        ensure_sql, read_sql, update_sql, reread_sql = claim_copy
+        pairs += (
+            ("CLAIM ENSURE SQL", _norm(ensure_sql), echo_ensure()),
+            ("CLAIM READ SQL", _norm(read_sql), echo_read()),
+            ("CLAIM UPDATE SQL", _norm(update_sql), echo_update()),
+            ("CLAIM REREAD SQL", _norm(reread_sql), echo_reread()),
+            ("CLAIM WHERE", _where_tail(update_sql), claim_where()),
+        )
     for label, mine, server_copy in pairs:
         if mine != server_copy:
             raise AssertionError(

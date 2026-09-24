@@ -76,10 +76,13 @@ ECHO_ETHER = server_tie.echo_ether()
 
 # T09/U8 (d): TOPUP-копия тоже привязана к исходнику — её расхождение с
 # server.py роняет харнесс, а не оставляет сценарий 4 с устаревшим UPDATE.
-# T29 (I-1): к той же сверке подключён CLAIM WHERE — правка guarded-`UPDATE` в
-# _claim_echoes роняет verify(), а не превращает сценарий 5 в зеркало самого себя.
+# T29 (I-1) + U25 (re-review #4): привязан весь переход клейма, а не только
+# WHERE обнуления — копия читающего запроса (набор полей SELECT из _echo_row)
+# могла уехать от сервера молча, а надпись «копия server._echo_row» осталась бы
+# правдой наполовину. Правка любого из четырёх запросов роняет verify(), а не
+# превращает сценарий 5 в зеркало самого себя.
 server_tie.verify(UPSERT, RELEASE_SQL, LOCK_TTL, SCORE_UPSERT, topup_sql=SCORE_TOPUP,
-                  claim_sql=CLAIM_UPDATE)
+                  claim_copy=(CLAIM_ENSURE, CLAIM_READ, CLAIM_UPDATE, CLAIM_REREAD))
 
 
 def _db_conn(db):

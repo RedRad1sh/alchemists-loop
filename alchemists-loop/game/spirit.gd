@@ -220,12 +220,23 @@ func _companion_set_name(pname: String) -> bool:
 	# то же имя пишем в профиль (ник в мире), если оно валидно
 	var nn := g._hub._clean_player_nick(pname)
 	if nn != "":
+		var prev_nick := g._online._net_nick
 		g._online._net_nick = nn
 		if g._me_avatar != null:
 			g._me_avatar.setup(g._online._net_nick, 24)
 		if g._hub._profile_avatar != null:
 			g._hub._profile_avatar.setup(g._online._net_nick, 96)
 		if g._online._net_enabled:
+			# U25 (re-review, Critical #1): сервер принимает ник не всегда (400
+			# «Ник уже занят» — и проверка занятости, и IntegrityError-гонка в
+			# set_me), поэтому онбординг идёт через тот же контракт заявки, что и
+			# диалог профиля: hub._on_net_me_result при отказе откатывает на
+			# prev_nick и печатает причину, при успехе принимает серверный
+			# канонический ник. Без флага ответ уходил в молчание (там prev ==
+			# "" — защита стартового sync me()), и мир продолжал показывать
+			# чужой ник.
+			g._hub._profile_prev_nick = prev_nick
+			g._hub._profile_pending = true
 			Net.me(g._online._net_nick, g._online._device_id)
 	var names := ["Светик"]
 	_spirit_name = String(names[randi() % names.size()])
