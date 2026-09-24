@@ -180,7 +180,8 @@ static func run(g: Game) -> void:
 	# ============ /U19 ============
 
 	# T13: если _try_send вернул err != OK, очередь НЕ дедлокавится — каждый
-	# заqueued-запрос получает offline-результат, _inflight пуст, очередь жива
+	# каждый поставленный в очередь запрос получает offline-результат, _inflight
+	# пуст, очередь жива
 	var dead_net = FailSendNet.new()
 	var sink_world = OfflineSink.new()
 	var sink_rating = OfflineSink.new()

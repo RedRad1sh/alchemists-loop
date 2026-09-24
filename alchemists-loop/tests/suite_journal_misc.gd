@@ -151,7 +151,7 @@ static func run(g: Game) -> void:
 	Selftest.check("esc false branch hid nothing", _no_modal_visible(g)
 		and g._engine._auto_cancel == _acancel0 and g._engine.status_text == _status0)
 
-	# T2: магазин декора (z=100) закрывается раньше нижнего попапа настроек хабa —
+	# T2: магазин декора (z=100) закрывается раньше нижнего попапа настроек хаба —
 	# и закрывается именно хелпером (R4), а не «просто visible=false»: у хелпера
 	# есть наблюдаемый побочный эффект, пересборка страницы дома (текст кнопки
 	# палитры зависит от _custom_unlocked["theme"]).

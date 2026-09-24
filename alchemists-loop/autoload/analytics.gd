@@ -5,7 +5,9 @@ extends Node
 # события остаются в локальной очереди только после согласия и могут быть
 # просмотрены в debug-логе.
 
-const QUEUE_PATH := "user://alchemists_loop_analytics.json"
+# var, а не const: автотест переводит очередь на свой файл, иначе selftest пишет
+# события в реальный файл аналитики установки (см. tests/selftest.gd).
+var QUEUE_PATH := "user://alchemists_loop_analytics.json"
 const MAX_QUEUE := 300
 
 var _consent := "unknown"

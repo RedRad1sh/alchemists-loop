@@ -163,6 +163,9 @@ func _normalize_state(raw: Dictionary) -> String:
 		value = raw["purchaseState"]
 	else:
 		return "rejected"
+	# Литеральные паттерны match в Godot 4 сверяют typeof(value) с типом литерала
+	# до сравнения значений, а равенства BOOL↔INT у движка нет: false/true/null/
+	# строка сюда не попадают и уходят в `_` -> "rejected".
 	match value:
 		0:
 			return "purchased"

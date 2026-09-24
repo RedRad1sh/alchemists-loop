@@ -5,6 +5,28 @@ class_name Selftest
 static var _total := 0
 static var _fails := 0
 
+# U20 (T25): файлы приватного контейнера, очереди аналитики и их ST-двойники.
+# Порядок индексов совпадает с порядком перевода путей в run(): user.json /
+# user.tmp / user.bak / purchases.json / purchases.tmp / analytics.json. Имена
+# двойников те же, что уже использует tests/suite_journal_misc.gd, — иначе две
+# слоя изоляции разошлись бы и чек «no trace» стал бы самообманом.
+const U20_REAL_FILES: Array = [
+	"user://alchemists_loop_user.json",
+	"user://alchemists_loop_user.tmp",
+	"user://alchemists_loop_user.bak",
+	"user://alchemists_loop_purchases.json",
+	"user://alchemists_loop_purchases.tmp",
+	"user://alchemists_loop_analytics.json",
+]
+const U20_ST_FILES: Array = [
+	"user://alchemy_st_user.json",
+	"user://alchemy_st_user.tmp",
+	"user://alchemy_st_user.bak",
+	"user://alchemy_st_purchases.json",
+	"user://alchemy_st_purchases.tmp",
+	"user://alchemy_st_analytics.json",
+]
+
 static func check(name: String, cond: bool) -> void:
 	_total += 1
 	if cond:
@@ -24,6 +46,22 @@ static func run(g: Game) -> void:
 	for p in [g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH]:
 		if FileAccess.file_exists(p):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
+
+	# U20 (T25): UserData и Analytics до этого перевода писали в настоящие файлы
+	# установки (сейв с pending-метками, журнал покупок, очередь событий). Снимок
+	# «что лежало в настоящих файлах до прогона» берётся ДО перевода путей, а
+	# проверяется в конце по тексту каждого файла: без перевода путей эти чеки
+	# краснеют (см. комментарии у них).
+	var real_before := {}
+	for rp in U20_REAL_FILES:
+		real_before[String(rp)] = _u20_read_text(String(rp))
+	UserData.SAVE_PATH = String(U20_ST_FILES[0])
+	UserData.TEMP_PATH = String(U20_ST_FILES[1])
+	UserData.BACKUP_PATH = String(U20_ST_FILES[2])
+	UserData.PURCHASES_PATH = String(U20_ST_FILES[3])
+	UserData.PURCHASES_TEMP_PATH = String(U20_ST_FILES[4])
+	Analytics.QUEUE_PATH = String(U20_ST_FILES[5])
+	_u20_wipe(U20_ST_FILES)
 
 	Selftest.check("colors parse", g._item_colors.size() == g.ITEMS.size())
 	var glyph_ok := true
@@ -55,15 +93,62 @@ static func run(g: Game) -> void:
 	await SuiteCompanionAtlas.run(g)
 	await SuiteQuestsGuild.run(g)
 	await SuiteJournalMisc.run(g)
+	await SuiteMonetization.run(g)
 	await SuiteHintsHouse.run(g)
 	await SuiteRiddlesRetention.run(g)
 
-	for p in [g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH]:
-		if FileAccess.file_exists(p):
-			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
+	_u20_wipe([g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH] + U20_ST_FILES)
 	g.SAVE_PATH = "user://alchemy_save.json"
 	g.TEMP_PATH = "user://alchemy_save.tmp"
 	g.BACKUP_PATH = "user://alchemy_save.bak"
+	UserData.SAVE_PATH = String(U20_REAL_FILES[0])
+	UserData.TEMP_PATH = String(U20_REAL_FILES[1])
+	UserData.BACKUP_PATH = String(U20_REAL_FILES[2])
+	UserData.PURCHASES_PATH = String(U20_REAL_FILES[3])
+	UserData.PURCHASES_TEMP_PATH = String(U20_REAL_FILES[4])
+	Analytics.QUEUE_PATH = String(U20_REAL_FILES[5])
+	# Каждый из трёх чеков краснеет ровно удалением своего перевода пути на входе:
+	# tests/suite_monetization.gd пишет метки («u20_sentinel_product» в сейв,
+	# «u20_hermetic_sku» в журнал, «u20_probe_event» в очередь аналитики) и тут же
+	# сверяет изолированный файл с настоящим; этот чек — второй слой: он сравнивает
+	# текст настоящего файла с снимком «до прогона». Убрать перевод
+	# UserData.SAVE_PATH — в реальном user.json появится pending-метка; убрать
+	# PURCHASES_PATH — в реальном журнале появится granted-запись; убрать
+	# Analytics.QUEUE_PATH — в реальном файле аналитики появится событие-проба.
+	# Сравнение идёт по тексту каждого файла, а не словарём через == (глубокое
+	# сравнение в Godot 4 пропустило бы «просто совпало»).
+	Selftest.check("u20 selftest left the real user data file untouched",
+		_u20_untouched(real_before, [String(U20_REAL_FILES[0]), String(U20_REAL_FILES[1]), String(U20_REAL_FILES[2])]))
+	Selftest.check("u20 selftest left the real purchase journal untouched",
+		_u20_untouched(real_before, [String(U20_REAL_FILES[3]), String(U20_REAL_FILES[4])]))
+	Selftest.check("u20 selftest left the real analytics queue untouched",
+		_u20_untouched(real_before, [String(U20_REAL_FILES[5])]))
 	print("SELFTEST ", "PASS" if _fails == 0 else "FAIL",
 		" (", _total - _fails, "/", _total, ")")
 	g.get_tree().quit(0 if _fails == 0 else 1)
+
+
+static func _u20_read_text(path: String) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return ""
+	var text := file.get_as_text()
+	file.close()
+	return text
+
+
+static func _u20_wipe(paths: Array) -> void:
+	for p in paths:
+		if FileAccess.file_exists(String(p)):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(String(p)))
+
+
+static func _u20_untouched(before: Dictionary, paths: Array) -> bool:
+	# Ключи снимка всегда заполнены на входе, поэтому default здесь — только
+	# страховка от «ключа нет вовсе»: он никогда не совпадёт с текстом файла.
+	for p in paths:
+		if _u20_read_text(String(p)) != String(before.get(String(p), "__u20_no_snapshot__")):
+			return false
+	return true
