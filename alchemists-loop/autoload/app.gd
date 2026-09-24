@@ -21,7 +21,7 @@ func _ready() -> void:
 	store_id = _detect_store()
 
 func _detect_store() -> String:
-	var override := OS.get_environment("ALCHEMY_STORE").strip_edges().to_lower()
+	var override := resolve_config("ALCHEMY_STORE", "application/config/alchemy_store").to_lower()
 	if override in [STORE_GOOGLE_PLAY, STORE_RUSTORE, STORE_STANDALONE]:
 		return override
 	if OS.has_feature("rustore"):
@@ -29,6 +29,22 @@ func _detect_store() -> String:
 	if OS.has_feature("google_play") or OS.has_feature("googleplay"):
 		return STORE_GOOGLE_PLAY
 	return STORE_STANDALONE
+
+# Одна цепочка «env → ProjectSettings → пусто» для всего рантайм-конфига (F1):
+# env остаётся приоритетным (staging/локальный запуск), значение из
+# project.godot печатает релизный CI, пустая строка = «не задано».
+
+# Чистое ядро цепочки: env важнее настройки, пустая (после strip_edges) = «не
+# задано». Статик и без побочных эффектов — поэтому покрыт selftest'ом.
+static func pick(env_value: String, setting_value: String) -> String:
+	var env := env_value.strip_edges()
+	if env != "":
+		return env
+	return setting_value.strip_edges()
+
+# Тонкий читатель OS/ProjectSettings: всё правило разрешения живёт в pick().
+func resolve_config(env_name: String, setting_key: String) -> String:
+	return pick(OS.get_environment(env_name), String(ProjectSettings.get_setting(setting_key, "")))
 
 func is_android() -> bool:
 	return OS.get_name() == "Android"
@@ -66,14 +82,22 @@ func consent_is_decided() -> bool:
 	return analytics_consent() != "unknown" and ads_consent() != "unknown"
 
 func privacy_policy_url() -> String:
-	var env := OS.get_environment("ALCHEMY_PRIVACY_URL").strip_edges()
-	if env != "":
-		return env
-	return String(ProjectSettings.get_setting("application/config/privacy_policy_url", ""))
+	return resolve_config("ALCHEMY_PRIVACY_URL", "application/config/privacy_policy_url")
+
+# Чистый предикт честного статуса ссылки (F3): placeholder-дефолт выглядит
+# настроенным, но ведёт в мёртвый example.com. Истинно только для непустой
+# https-строки без example.com / localhost внутри.
+static func privacy_url_is_real(url: String) -> bool:
+	var u := url.strip_edges()
+	if not u.begins_with("https://"):
+		return false
+	if u.contains("example.com") or u.contains("localhost"):
+		return false
+	return true
 
 func open_privacy_policy() -> bool:
 	var url := privacy_policy_url()
-	if url == "":
+	if not privacy_url_is_real(url):
 		return false
 	return OS.shell_open(url) == OK
 

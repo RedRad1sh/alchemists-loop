@@ -78,7 +78,9 @@ func _boot() -> void:
 		_adapter.purchase_failed.connect(_on_billing_failed)
 		_adapter.purchases_restored.connect(_on_purchases_restored)
 		if store_id == App.STORE_RUSTORE:
-			_adapter.initialize(OS.get_environment("RUSTORE_APPLICATION_ID"), OS.get_environment("RUSTORE_DEEPLINK_SCHEME"))
+			_adapter.initialize(
+				App.resolve_config("RUSTORE_APPLICATION_ID", "application/config/rustore_application_id"),
+				App.resolve_config("RUSTORE_DEEPLINK_SCHEME", "application/config/rustore_deeplink_scheme"))
 		else:
 			_adapter.initialize()
 	else:

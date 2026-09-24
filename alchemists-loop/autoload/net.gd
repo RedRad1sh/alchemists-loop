@@ -22,7 +22,10 @@
 # (path+body = POST на явный путь). Для privacy DELETE задаётся явным ключом
 # method, чтобы очередь запросов оставалась общей для игры и аккаунта.
 #
-# Базовый URL: переменная окружения ALCHEMY_SERVER, иначе http://127.0.0.1:8080/api
+# Базовый URL: переменная окружения ALCHEMY_SERVER, иначе ProjectSettings
+# application/config/alchemy_server (его печатает релизный CI), иначе DEFAULT_BASE.
+# В релизе (не debug-сборка) http:// запрещён: итог с http:// = пустая строка,
+# то есть «сервера нет» — игра живёт офлайн, а не молча греет 127.0.0.1.
 
 extends Node
 
@@ -60,16 +63,31 @@ var _inflight: Dictionary = {}
 var _available := false
 
 func _ready() -> void:
-	var env := OS.get_environment("ALCHEMY_SERVER")
-	if env != "":
-		base_url = env
+	base_url = resolve_base_url(
+		OS.get_environment("ALCHEMY_SERVER"),
+		String(ProjectSettings.get_setting("application/config/alchemy_server", "")),
+		OS.is_debug_build())
 	_http = HTTPRequest.new()
 	_http.timeout = 6.0
 	add_child(_http)
 	_http.request_completed.connect(_on_completed)
-	# в selftest сеть не трогаем (герметичный прогон)
-	if not OS.get_cmdline_user_args().has("--selftest"):
+	# в selftest сеть не трогаем (герметичный прогон); пустой base_url = «сервера
+	# нет» (F1: релиз без https-настройки) — пинг не шлём совсем
+	if base_url != "" and not OS.get_cmdline_user_args().has("--selftest"):
 		_ping()
+
+# Чистый шов разрешения базового URL: env → ProjectSettings → DEFAULT_BASE.
+# HTTPS-only часть релиза: итог начинается с http:// и это не debug-сборка → ""
+# (тихая подмена схемы увела бы запросы на чужой домен при ALCHEMY_SERVER=http://…).
+static func resolve_base_url(env_value: String, setting_value: String, is_debug: bool) -> String:
+	var url := env_value.strip_edges()
+	if url == "":
+		url = setting_value.strip_edges()
+	if url == "":
+		url = DEFAULT_BASE
+	if not is_debug and url.begins_with("http://"):
+		return ""
+	return url
 
 func is_available() -> bool:
 	return _available
@@ -233,7 +251,34 @@ func _build_request(req: Dictionary) -> Dictionary:
 		body = JSON.stringify(req.get("body", {}))
 	return {"url": url, "method": method, "body": body}
 
+func _drain_offline(message: String) -> void:
+	# Снимок длины + проверка пустоты на каждой итерации. Подписчик, синхронно
+	# enqueue-нувшийся во время _dispatch, вызывает вложенный _send_next (из
+	# _enqueue), а тот разбирает очередь целиком — включая элементы, до которых
+	# внешнему циклу ещё «дойти». Без guard'а следующий pop_front() на пустой
+	# очереди даёт null → рантайм-ошибка в autoload. Guard оборонительный: два
+	# известных в проекте enqueue-из-колбэка (online.gd:486 discover, online.gd:753
+	# следующая страница мира) гейтятся `ok == true` (online.gd:481, :737), а
+	# offline-ответ его не даёт — то есть сегодня из этого цикла они не достижимы.
+	# Оставлен, потому что достижимость зависит от подписчиков вне этого файла.
+	# Порядок — как в T13-ветке: сначала гасим inflight (тут гасить нечего),
+	# потом _dispatch. ping в _dispatch = pass, поэтому _available остаётся
+	# false (сервер не трогали).
+	var count := _queue.size()
+	for _i in count:
+		if _queue.is_empty():
+			return
+		var req: Dictionary = _queue.pop_front()
+		_dispatch(req, {"ok": false, "offline": true, "message": message})
+
 func _send_next() -> void:
+	if base_url == "":
+		# «Сервера нет» (F1) ≠ «забыли очередь»: закрываем каждый элемент
+		# offline-результатом тем же путём, что и рабочий T13-cleanup, иначе
+		# подписчики (рейтинг/мир/удаление аккаунта) остаются с предзаполненным
+		# статусом навсегда. HTTP не пробуем совсем.
+		_drain_offline("сервер не настроен")
+		return
 	# Re-entrant _send_next (подписчик синхронно enqueue-нулся во время _dispatch)
 	# не должен перетирать живой _inflight — продолжение идёт из следующего
 	# _on_completed / drain.

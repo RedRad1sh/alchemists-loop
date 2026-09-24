@@ -3,6 +3,7 @@ class_name SuiteResonanceNet
 # резонанс/маршрутизация сети (оп B1).
 
 const NetBase := preload("res://autoload/net.gd")
+const AppBase := preload("res://autoload/app.gd")
 
 # T13: seam Net._try_send всегда возвращает ошибку старта запроса (эмулирует
 # штатный для Android случай, когда HTTPRequest.request() падает в фоне/при
@@ -18,6 +19,13 @@ class OfflineSink extends RefCounted:
 	var results: Array[Dictionary] = []
 	func catch(res: Dictionary) -> void:
 		results.append(res)
+
+# подписчик на Net.error: считает эмиссии (F1: слив очереди при пустом base_url
+# не имеет права эмитировать error — только offline-результаты через _dispatch).
+class ErrorSink extends RefCounted:
+	var count := 0
+	func note(_message: String) -> void:
+		count += 1
 
 static func run(g: Game) -> void:
 	# резонанс: вехи, бонусы, claim-математика
@@ -71,6 +79,106 @@ static func run(g: Game) -> void:
 	Selftest.check("net privacy export route", String(b_export["url"]).ends_with("/api/account/export?device_id=d") and int(b_export["method"]) == HTTPClient.METHOD_GET)
 	var b_delete := Net._build_request({"kind": "account_delete", "path": "/account?device_id=d", "method": HTTPClient.METHOD_DELETE})
 	Selftest.check("net privacy delete route", String(b_delete["url"]).ends_with("/api/account?device_id=d") and int(b_delete["method"]) == HTTPClient.METHOD_DELETE)
+	# ============ U19 (T24): рантайм-конфиг env → ProjectSettings → дефолт ============
+	# Чистые статические швы: resolve_base_url / App.pick / privacy_url_is_real читают
+	# только аргументы, поэтому headless-проверяемы без живого сервера и без
+	# OS-состояния (тонкий читатель resolve_config, который трогает OS/ProjectSettings,
+	# headless не покрываем — там нечего проверять сверх pick).
+	# Мутационный анализ (какой кейс краснеет при удалении конъюнкта) — в имени ниже.
+	# env важнее настройки: удалить «if url=="": url=setting» или переставить
+	# порядок → краснеет u19 resolve env>setting.
+	Selftest.check("u19 resolve env>setting", NetBase.resolve_base_url("https://env.svc", "https://set.svc", true) == "https://env.svc")
+	# пустая настройка = «не задано» → DEFAULT_BASE: убрать ветку «url=="" → DEFAULT_BASE»
+	# → краснеет u19 resolve default when unset.
+	Selftest.check("u19 resolve default when unset", NetBase.resolve_base_url("", "", true) == NetBase.DEFAULT_BASE)
+	# настройка подхватывается, когда env пуст: удалить step «env → setting» → red.
+	Selftest.check("u19 resolve setting used", NetBase.resolve_base_url("", "https://set.svc", true) == "https://set.svc")
+	# strip_edges(): env из одних пробелов = «не задано»; убрать strip_edges →
+	# «   » сочтётся значением → краснеет u19 resolve blank env ignored.
+	Selftest.check("u19 resolve blank env ignored", NetBase.resolve_base_url("   ", "https://set.svc", true) == "https://set.svc")
+	# is_debug + begins_with("http://"): в релизе http:// → пустая строка («сервера
+	# нет»); удалить is_debug-гейт или begins_with("http://") → краснеет
+	# u19 resolve http refused in release.
+	Selftest.check("u19 resolve http refused in release", NetBase.resolve_base_url("http://staging.local", "", false) == "")
+	# в debug http проходит (иначе разработчик не протестирует localhost); инвертировать
+	# is_debug → краснеет u19 resolve http allowed in debug.
+	Selftest.check("u19 resolve http allowed in debug", NetBase.resolve_base_url("http://127.0.0.1:8080/api", "", true) == "http://127.0.0.1:8080/api")
+	# https в релизе всегда проходит; удалить ветку → "" для https → краснеет ниже.
+	Selftest.check("u19 resolve https ok in release", NetBase.resolve_base_url("https://api.svc", "", false) == "https://api.svc")
+	# F2: чистое ядро App.pick. Переставить ветки (сначала настройка) ИЛИ удалить
+	# «if env != "": return env» → краснеет ровно u19 pick env wins.
+	Selftest.check("u19 pick env wins", AppBase.pick("https://env.cfg", "https://set.cfg") == "https://env.cfg")
+	# пустой env берёт настройку: заменить шаг на безусловный «return env» →
+	# краснеет u19 pick setting when env empty.
+	Selftest.check("u19 pick setting when env empty", AppBase.pick("", "https://set.cfg") == "https://set.cfg")
+	# env из одних пробелов = «не задано»: убрать strip_edges() на env_value →
+	# «   » вернётся значением → краснеет ровно u19 pick whitespace env unset.
+	Selftest.check("u19 pick whitespace env unset", AppBase.pick("   ", "https://set.cfg") == "https://set.cfg")
+	# пробелы снимаются и с настройки: убрать strip_edges() на setting_value →
+	# вернётся «  https://set.cfg  » → краснеет ровно u19 pick setting trimmed.
+	Selftest.check("u19 pick setting trimmed", AppBase.pick("", "  https://set.cfg  ") == "https://set.cfg")
+	# обе пустые = «не задано»: дефолт подставляет вызывающий, не pick; заменить
+	# финальный return на любой литерал → краснеет u19 pick both unset empty.
+	Selftest.check("u19 pick both unset empty", AppBase.pick("", "") == "")
+	# пустой base_url обязан означать «ни одной HTTP-попытки» (ранний возврат
+	# _send_next): убрать guard → FailSendNet попытается отправить → attempts!=0.
+	# Ожидание «очередь = 1 элемент» было следствием прежнего молчаливого return;
+	# по F1 очередь сливается offline-результатами, поэтому она пуста.
+	var empty_net = FailSendNet.new()
+	empty_net.base_url = ""
+	empty_net._enqueue({"kind": "world", "path": "/world?page=1"})
+	Selftest.check("u19 empty base_url does not send", empty_net.attempts == 0 and empty_net._inflight.is_empty() and empty_net._queue.is_empty())
+	empty_net.free()
+	# F1: пустой base_url закрывает ВЕСЬ накопленный backlog offline-результатами
+	# через _dispatch (иначе подписчики rating/world/удаления аккаунта остаются с
+	# предзаполненным статусом навсегда). Удалить вызов _drain_offline в _send_next
+	# (или вернуть молчаливый return) → краснеет u19 empty base_url drains queue:
+	# очередь остаётся непустой, attempts при этом по-прежнему 0.
+	var drain_net = FailSendNet.new()
+	var drain_world = OfflineSink.new()
+	var drain_rating = OfflineSink.new()
+	var drain_err = ErrorSink.new()
+	drain_net.world_result.connect(drain_world.catch)
+	drain_net.rating_result.connect(drain_rating.catch)
+	drain_net.error.connect(drain_err.note)
+	drain_net.base_url = ""
+	drain_net._enqueue({"kind": "world", "path": "/world?page=1"})
+	drain_net._enqueue({"kind": "rating"})
+	# тот же мутационный removal роняет и этот кейс (sinks остаются пустыми);
+	# «delete _drain_offline → return» даёт ровно такую же картину
+	Selftest.check("u19 empty base_url drains queue", drain_net._queue.is_empty()
+		and drain_net._inflight.is_empty() and drain_net.attempts == 0
+		and not drain_net.is_available())
+	# подмена offline-результата на ok:true (или пропажа message из аргумента
+	# _drain_offline("сервер не настроен")) → краснеет этот кейс
+	Selftest.check("u19 drain dispatches offline results", drain_world.results.size() == 1
+		and drain_rating.results.size() == 1
+		and bool(drain_world.results[0].get("offline", false))
+		and not bool(drain_world.results[0].get("ok", true))
+		and bool(drain_rating.results[0].get("offline", false))
+		and String(drain_rating.results[0].get("message", "")) == "сервер не настроен")
+	# добавить error.emit в drain-ветку (_dispatch его не эмитит ни в одной
+	# ветке) → краснеет u19 drain emits no error. Красность этого кейса держится
+	# ещё и на подключении подписчика выше
+	# (`drain_net.error.connect(drain_err.note)`): без него count остаётся 0 при
+	# любом error.emit, поэтому мутация «удалить connect» называется здесь же.
+	Selftest.check("u19 drain emits no error", drain_err.count == 0)
+	drain_net.free()
+	# privacy_url_is_real: https без placeholder'ов = true (удалить begins_with →
+	# red на http-кейсе; удалить example.com-ветку → red на u19 privacy example.com).
+	# Домен — alchemists-loop.dev, НЕ *.example.*: позитивный кейс не должен
+	# проверять опечатку в списке placeholder'ов.
+	Selftest.check("u19 privacy real https", AppBase.privacy_url_is_real("https://alchemists-loop.dev/privacy"))
+	# strip_edges(): валидный https в обнимку с пробелами всё ещё реален; убрать
+	# strip_edges → begins_with("https://") не совпадёт → краснеет этот кейс.
+	Selftest.check("u19 privacy blank padded real", AppBase.privacy_url_is_real("  https://loop.dev/privacy  "))
+	Selftest.check("u19 privacy http false", not AppBase.privacy_url_is_real("http://alchemists-loop.dev/privacy"))
+	Selftest.check("u19 privacy empty false", not AppBase.privacy_url_is_real(""))
+	# placeholder-дефолт из project.godot выглядит настроенным — он не настоящий.
+	Selftest.check("u19 privacy example.com false", not AppBase.privacy_url_is_real("https://example.com/alchemists-loop/privacy"))
+	Selftest.check("u19 privacy localhost false", not AppBase.privacy_url_is_real("https://localhost:8080/privacy"))
+	# ============ /U19 ============
+
 	# T13: если _try_send вернул err != OK, очередь НЕ дедлокавится — каждый
 	# заqueued-запрос получает offline-результат, _inflight пуст, очередь жива
 	var dead_net = FailSendNet.new()

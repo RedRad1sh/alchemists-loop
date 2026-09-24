@@ -15,6 +15,31 @@
 - Build features: `google_play` для GP и `rustore` для RuStore.
 - В релизном CI задавать `ALCHEMY_STORE`, `ALCHEMY_PRIVACY_URL` и реальные SKU
   только через секреты/консоли, не в GDScript.
+- `tests/**` из экспорта НЕ исключать: `tests/selftest.gd` объявляет глобальный
+  класс `Selftest`, на который ссылается `main.gd` (`run/main_scene`), а кэш
+  классов `export_filter`/`exclude_filter` не перегенерирует.
+- Runtime-конфиг читается цепочкой «env → ProjectSettings → дефолт» (F1/T24):
+  CI прописывает значения в `project.godot` секции `[application]`
+  (`config/alchemy_server`, `config/alchemy_store`,
+  `config/rustore_application_id`, `config/rustore_deeplink_scheme`,
+  `config/privacy_policy_url`) — репозиторий хранит их пустыми, пустая строка =
+  «не задано». env (`ALCHEMY_SERVER`, `ALCHEMY_STORE`, `ALCHEMY_PRIVACY_URL`,
+  `RUSTORE_APPLICATION_ID`, `RUSTORE_DEEPLINK_SCHEME`) остаётся приоритетным для
+  staging/локального запуска.
+- Точный вызов релизного CI (keystore живёт в Editor Settings/CI-секретах, его
+  путей и паролей в репозитории нет — Godot подхватывает их сам при наличии):
+  ```
+  godot --headless --export-release "Google Play" build/alchemists-loop-gp.aab
+  godot --headless --export-release "RuStore" build/alchemists-loop-rustore.aab
+  ```
+  Перед экспортом CI обязан подставить реальные значения в `project.godot` и
+  задать `package/unique_name` (в `export_presets.cfg` стоит
+  `com.alchemistsloop.game` — заменить на reverse-domain владельца; `com.example.*`
+  отклоняют оба стора) и сверить `version/code` с §6 ТЗ-04 (формулы в репозитории нет).
+- Реальный `ALCHEMY_PRIVACY_URL` обязателен: placeholder `example.com/...`
+  считается «не настроено» (кнопка «Политика конфиденциальности» не откроет
+  мёртвую ссылку), а без живой https-политики сборка не готова к стору.
+
 
 ## 2. Google Play
 
@@ -83,3 +108,9 @@
   `DELETE /api/account?device_id=...`; мировые вещества сохраняются, но
   авторство анонимизируется.
 - [ ] AAB анализируется на 16 KB page size; target API 36.
+- [ ] `ALCHEMY_PRIVACY_URL` / `config/privacy_policy_url` — реальный https-документ
+  (не `example.com`/`localhost`): кнопка «Политика конфиденциальности» открывает его,
+  а placeholder ведёт себя как «не настроено».
+- [ ] В релизной сборке без настроенного https-сервера (`ALCHEMY_SERVER`/
+  `config/alchemy_server`) игра живёт офлайн: `http://` в продакшене отклоняется,
+  а не молча греется `127.0.0.1`.

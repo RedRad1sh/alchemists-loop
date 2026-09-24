@@ -23,8 +23,8 @@ func is_available() -> bool:
 	return _client != null
 
 func initialize(app_id: String = "", deeplink_scheme: String = "") -> void:
-	_app_id = app_id if app_id != "" else OS.get_environment("RUSTORE_APPLICATION_ID")
-	_deeplink_scheme = deeplink_scheme if deeplink_scheme != "" else OS.get_environment("RUSTORE_DEEPLINK_SCHEME")
+	_app_id = app_id if app_id != "" else App.resolve_config("RUSTORE_APPLICATION_ID", "application/config/rustore_application_id")
+	_deeplink_scheme = deeplink_scheme if deeplink_scheme != "" else App.resolve_config("RUSTORE_DEEPLINK_SCHEME", "application/config/rustore_deeplink_scheme")
 	_client = _find_client()
 	if _client == null:
 		initialized.emit(false, "RuStore Pay plugin не подключён")
