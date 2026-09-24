@@ -123,6 +123,25 @@ static func run(g: Game) -> void:
 		_u20_untouched(real_before, [String(U20_REAL_FILES[3]), String(U20_REAL_FILES[4])]))
 	Selftest.check("u20 selftest left the real analytics queue untouched",
 		_u20_untouched(real_before, [String(U20_REAL_FILES[5])]))
+	# U22 (T26): снимок выше (real_before) берётся уже внутри run — post-фактум, и
+	# записи онбординг-аналитики ДО изоляции путей не видит: к моменту real_before
+	# main.gd уже успел их дописать. Здесь точка отсчёта — boot-снимки g, снятые в
+	# самом верху Main._ready до первого обращения к Analytics. Мутация, краснящая
+	# ровно этот кейс: убрать `if not _selftest:` вокруг Analytics.session_start /
+	# Analytics.track в main.gd. Тогда session_start доходит до изоляции и
+	# record_session_start безусловно поднимает session_count в НАСТОЯЩЕМ user.json
+	# (согласие не нужен) — сравнение по user.json даёт детерминизм пары; при
+	# выданном согласии ещё и два события лягут в реальную очередь аналитики, и
+	# сравнение по ней их ловит, но сама по себе краснела бы лишь при granted.
+	# Граница окна: реальный user.json перезаписывается и ДО снимка (UserData._ready
+	# -> _load/_save при каждом старте, App._ready -> ensure_install_metadata при
+	# первом запуске) — это не тестовые данные, и кейс их сознательно не сверяет.
+	# Кейс рассчитан на канонический прогон (--selftest без демо-флагов); в гибриде
+	# --selftest --demo --action=hint без --shot= демо-обход вызывает
+	# Analytics.track вне гейта, и при выданном согласии он краснит эту пару.
+	Selftest.check("u22 selftest wrote no onboarding analytics or session data before path isolation",
+		_u20_read_text(String(U20_REAL_FILES[5])) == g._analytics_text_at_boot
+		and _u20_read_text(String(U20_REAL_FILES[0])) == g._user_data_text_at_boot)
 	print("SELFTEST ", "PASS" if _fails == 0 else "FAIL",
 		" (", _total - _fails, "/", _total, ")")
 	g.get_tree().quit(0 if _fails == 0 else 1)

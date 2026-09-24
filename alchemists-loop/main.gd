@@ -276,6 +276,12 @@ var _last_rank := 0
 
 # dev
 var _selftest := false
+# U22 (T26): снимки ТЕКСТА настоящих файлов (очередь аналитики и user.json), снятые
+# в самом верху _ready — ДО перевода путей на ST-двойники. Читает их Selftest.run,
+# чтобы поймать запись онбординг-аналитики «до изоляции»: снимок U20 берётся уже
+# внутри run, то есть post-фактум, и этой записи не видит (см. tests/selftest.gd).
+var _analytics_text_at_boot := ""
+var _user_data_text_at_boot := ""
 var _me_avatar: Avatar = null
 var _guild: Guild  # задания Светика + заказы + планировщик (R3)
 var _progress_ui: Progress  # попап прогресса + ачивки + комплекты (R4)
@@ -294,7 +300,30 @@ var _feed_list: VBoxContainer = null
 var _spirit: Spirit  # Светик (R9)
 var _inv_grid: GridContainer = null
 
+func _boot_snapshot_text(path: String) -> String:
+	# Только для U22: снимок текста файла до перевода путей на ST-двойники.
+	# Отсутствующий файл даёт пустую строку — так же, как и пустой файл, поэтому
+	# «нет файла» и «файл пуст» сравниваются корректно (см. tests/selftest.gd).
+	if not FileAccess.file_exists(path):
+		return ""
+	return FileAccess.get_file_as_string(path)
+
 func _ready() -> void:
+	# U22 (T26): разбор аргументов и снимки настоящих файлов подняты в самый верх
+	# _ready — до первого обращения к Analytics. Точка съёма осознанная: до неё
+	# автозагрузки успевают перезаписать реальный user.json (UserData._ready ->
+	# _load/_save, App._ready -> ensure_install_metadata при первом запуске), и
+	# этот first-run fingerprint в окно кейса не входит. В окне «снимок -> перевод
+	# путей на ST-двойники» реальными файлами владеет только гейтимый ниже блок,
+	# поэтому снимок здесь — честная точка отсчёта для сверки в конце прогона.
+	# Оговорка: гибрид `--selftest --demo --action=hint` без `--shot=` вызывает
+	# Analytics.track из демо-обхода (ниже в этом же _ready) и при выданном
+	# согласии пишет реальную очередь; канонический прогон (--selftest, без
+	# демо-флагов) таких вызовов не делает.
+	var args := OS.get_cmdline_user_args()
+	_selftest = args.has("--selftest")
+	_analytics_text_at_boot = _boot_snapshot_text(Analytics.QUEUE_PATH)
+	_user_data_text_at_boot = _boot_snapshot_text(UserData.SAVE_PATH)
 	_riddles = Riddles.new(self)
 	_retention = Retention.new(self)
 	_guild = Guild.new(self)
@@ -307,14 +336,18 @@ func _ready() -> void:
 	_spirit = Spirit.new(self)
 	_saves = Saves.new(self)
 	Monetization.bind_game(self)
-	Analytics.session_start("icon")
-	Analytics.track("app_open", {"store": App.store_id, "consent": App.analytics_consent()})
+	# Прогон selftest не эмитит онбординг-аналитику: это не сессия реального
+	# пользователя. Эти два вызова до перевода путей пишут в настоящие файлы
+	# установки — session_start поднимает session_count в реальном user.json, а
+	# track при выданном согласии кладёт события в реальную очередь аналитики.
+	# Потери данных нет: тестовый прогон не должен оставлять след в профиле.
+	if not _selftest:
+		Analytics.session_start("icon")
+		Analytics.track("app_open", {"store": App.store_id, "consent": App.analytics_consent()})
 	_pages = Pages.new(self)
 	_hub = Hub.new(self)
 	_engine = Core.new(self)
 	_demo_harness = Demo.new(self)
-	var args := OS.get_cmdline_user_args()
-	_selftest = args.has("--selftest")
 	_demo_harness._demo = args.has("--demo")
 	_demo_harness._geom = args.has("--geom")
 	_demo_harness._probe = args.has("--probe")
