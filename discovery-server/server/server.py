@@ -611,12 +611,23 @@ class ReceiptVerifyResponse(BaseModel):
 def get_db() -> sqlite3.Connection:
     """Фабрика соединений. Каждый запрос получает своё соединение.
 
-    T04: после перевода генерирующих эндпоинтов на sync `def` (threadpool
-    Starlette) соединения создаются, используются и закрываются в одном
-    рабочем потоке — check_same_thread остаётся True (дефолт): любое
-    случайное перетекание соединения между потоками упадёт явно, а не
-    испорченной базой. WAL включён; busy_timeout задан явно (timeout=),
-    т.к. писатели теперь потоки и краткие блокировки сериализуются ожиданием.
+    T04 + T29 (I-1), ЕДИНОЕ обоснование формы хендлеров (его не повторяем в 25
+    местах, см. README-server.md): любой HTTP-хендлер, который трогает SQLite, —
+    sync `def`. FastAPI/Starlette отводит такие эндпоинты в threadpool, и
+    писатель не держит единый event loop: до T29 21 async-хендлер синхронно
+    писал в БД и мог заблокировать loop на весь DB_BUSY_TIMEOUT_SEC (дефолт 10с)
+    на конкурирующем локе — вплоть до /api/health. Осознанные исключения:
+    `startup` (зовётся через asyncio.run из тестов) и `health` (в БД не ходит).
+    Форму держит тест-инвариант tests/test_u5_concurrency.py
+    ::test_generating_handlers_are_sync_def (правило по app.routes, а не список
+    имён), а гонку «прочитал-записал» внутри потоков — guarded-переходы вида
+    _claim_echoes/_try_acquire_pair_lock/_score_challenge.
+
+    Соединения создаются, используются и закрываются в одном рабочем потоке —
+    check_same_thread остаётся True (дефолт): любое случайное перетекание
+    соединения между потоками упадёт явно, а не испорченной базой. WAL включён;
+    busy_timeout задан явно (timeout=), т.к. писатели теперь потоки и краткие
+    блокировки сериализуются ожиданием.
     """
     os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=DB_BUSY_TIMEOUT_SEC)
@@ -1839,12 +1850,33 @@ def _apprentice_grant(conn: sqlite3.Connection, device_id: str, nick: str):
 
 
 def _claim_echoes(conn: sqlite3.Connection, device_id: str):
-    """Списать баланс отголосков в эфир. Возвращает (claimed, ether, total)."""
+    """Списать баланс отголосков в эфир. Возвращает (claimed, ether, total).
+
+    T29 (I-1): compare-and-swap вместо «прочитали balance → обнулили». После
+    перевода HTTP-хендлеров на sync `def` (см. обоснование у get_db()) клейм
+    живёт в threadpool, и два потока могли прочитать один и тот же баланс и
+    выдать эфир дважды. Обнуление условно по прочитанному значению:
+    rowcount == 1 — победитель, сумма ему известна (это прочитанный баланс);
+    rowcount == 0 — баланс изменился между чтением и списком (параллельный
+    клейм или кредит резонанса), ничего не списано, отвечаем честными нулями,
+    повторный тап игрока заберёт своё. Retry-цикла намеренно нет: кредиты идут
+    непрерывно и он не дал бы гарантии, а «0 сейчас» уже корректно.
+    RETURNING не используется: он есть только в SQLite >= 3.35 (Debian 11 несёт
+    3.34), а сервер легален на системном libsqlite3 — требование «Python >= 3.10»
+    этого не покрывает. Вечный счётчик total при клейме не меняется.
+    """
     row = _echo_row(conn, device_id)
-    claimed = row["balance"]
-    conn.execute("UPDATE echoes SET balance = 0 WHERE device_id = ?", (device_id,))
+    balance = row["balance"]
+    cur = conn.execute(
+        "UPDATE echoes SET balance = 0 WHERE device_id = ? AND balance = ?",
+        (device_id, balance))
     conn.commit()
-    return claimed, claimed * ECHO_ETHER, row["total"]
+    if cur.rowcount == 1:
+        return balance, balance * ECHO_ETHER, row["total"]
+    loser = conn.execute(
+        "SELECT total FROM echoes WHERE device_id = ?", (device_id,)
+    ).fetchone()
+    return 0, 0, loser["total"] if loser else 0
 
 
 LETTER_BACKLOG_MAX = 7  # конвертов в запасе (недоделки старше — в архив)
@@ -2296,7 +2328,7 @@ def _release_pair_lock(conn: sqlite3.Connection, pair_key: str, owner: str):
 
 
 @app.post("/api/brew-check", response_model=BrewCheckResponse)
-async def brew_check(req: BrewCheckRequest):
+def brew_check(req: BrewCheckRequest):
     """
     Проверить, является ли пара кандидатом на первооткрытие.
 
@@ -2548,7 +2580,7 @@ def discover(req: DiscoverRequest):
         conn.close()
 
 @app.get("/api/world", response_model=WorldResponse)
-async def world(
+def world(
     page: int = Query(1, ge=1, description="Номер страницы"),
     per_page: int = Query(50, ge=1, le=100, description="Количество на странице"),
 ):
@@ -2598,7 +2630,7 @@ async def world(
         conn.close()
 
 @app.get("/api/hall-of-fame", response_model=HallResponse)
-async def hall_of_fame():
+def hall_of_fame():
     """
     Топ-10 игроков по количеству первооткрытий.
     """
@@ -2638,7 +2670,7 @@ async def hall_of_fame():
         conn.close()
 
 @app.get("/api/events", response_model=EventsResponse)
-async def events(limit: int = Query(20, ge=1, le=100)):
+def events(limit: int = Query(20, ge=1, le=100)):
     """Лента последних первооткрытий мира (для «живой ленты» в игре)."""
     conn = get_db()
     try:
@@ -2676,7 +2708,7 @@ async def events(limit: int = Query(20, ge=1, le=100)):
 
 
 @app.get("/api/challenge", response_model=ChallengeResponse)
-async def challenge(device_id: str = Query("", max_length=128)):
+def challenge(device_id: str = Query("", max_length=128)):
     """Ежедневная цель: целевой ингредиент, первый справившийся, счётчик дня.
 
     U6/T05: completions — только реальные выполнения цели (challenge_scores,
@@ -2731,7 +2763,7 @@ async def challenge(device_id: str = Query("", max_length=128)):
 
 
 @app.post("/api/player/register")
-async def register_player(req: BrewCheckRequest):
+def register_player(req: BrewCheckRequest):
     """
     Регистрация игрока (device_id должен быть уникальным).
 
@@ -2748,7 +2780,7 @@ async def register_player(req: BrewCheckRequest):
 
 
 @app.get("/api/me", response_model=ProfileResponse)
-async def get_me(device_id: str = Query(..., min_length=1, max_length=128)):
+def get_me(device_id: str = Query(..., min_length=1, max_length=128)):
     """Профиль игрока: ник и процедурный аватар по device_id."""
     conn = get_db()
     try:
@@ -2764,7 +2796,7 @@ async def get_me(device_id: str = Query(..., min_length=1, max_length=128)):
 
 
 @app.post("/api/me", response_model=ProfileResponse)
-async def set_me(req: ProfileRequest):
+def set_me(req: ProfileRequest):
     """Установить ник игрока (уникальное имя); аватар считается из ника.
 
     Единственная дверь переименования (T02): ник занят другим устройством —
@@ -2813,7 +2845,7 @@ async def set_me(req: ProfileRequest):
 
 
 @app.get("/api/account/export")
-async def export_account(device_id: str = Query(..., min_length=1, max_length=128)):
+def export_account(device_id: str = Query(..., min_length=1, max_length=128)):
     """Экспорт серверных данных игрока перед удалением аккаунта.
 
     Игровой мир публичен, но персональная связь с ним возвращается в экспорте
@@ -2866,7 +2898,7 @@ async def export_account(device_id: str = Query(..., min_length=1, max_length=12
 
 
 @app.delete("/api/account")
-async def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
+def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
     """Удалить профиль и персональные связи, сохранив общий мир.
 
     Вещества, уже опубликованные в мир, не удаляются: иначе удаление одного
@@ -2912,7 +2944,7 @@ async def delete_account(device_id: str = Query(..., min_length=1, max_length=12
 
 
 @app.get("/api/rejected", response_model=RejectedResponse)
-async def rejected(limit: int = Query(5000, ge=1, le=200000)):
+def rejected(limit: int = Query(5000, ge=1, le=200000)):
     """Пары, которые сервер уже признал несочетаемыми (для фильтрации намёков)."""
     conn = get_db()
     try:
@@ -2925,7 +2957,7 @@ async def rejected(limit: int = Query(5000, ge=1, le=200000)):
 
 
 @app.post("/api/house", response_model=HouseResponse)
-async def save_house(req: HouseRequest):
+def save_house(req: HouseRequest):
     """Сохранить домик игрока, чтобы его могли открывать другие игроки."""
     conn = get_db()
     try:
@@ -2946,7 +2978,7 @@ async def save_house(req: HouseRequest):
 
 
 @app.get("/api/house", response_model=HouseResponse)
-async def get_house(nick: str = Query(..., min_length=1, max_length=64)):
+def get_house(nick: str = Query(..., min_length=1, max_length=64)):
     """Домик игрока по нику (публичный; None, если не построен)."""
     conn = get_db()
     try:
@@ -2967,7 +2999,7 @@ async def get_house(nick: str = Query(..., min_length=1, max_length=64)):
 
 
 @app.get("/api/rating", response_model=RatingResponse)
-async def rating(device_id: str = Query("", max_length=128)):
+def rating(device_id: str = Query("", max_length=128)):
     """Рейтинг игроков: открытия, вещества, очки целей, наличие домика."""
     conn = get_db()
     try:
@@ -3002,7 +3034,7 @@ async def rating(device_id: str = Query("", max_length=128)):
 
 
 @app.get("/api/echoes", response_model=EchoesResponse)
-async def echoes(device_id: str = Query("", max_length=128)):
+def echoes(device_id: str = Query("", max_length=128)):
     """Резонанс 2.0: баланс отголосков, вечный счётчик, топ веществ и потомки."""
     conn = get_db()
     try:
@@ -3050,7 +3082,7 @@ async def echoes(device_id: str = Query("", max_length=128)):
 
 
 @app.post("/api/echoes/claim", response_model=EchoesClaimResponse)
-async def echoes_claim(req: EchoesClaimRequest):
+def echoes_claim(req: EchoesClaimRequest):
     """Забрать накопленные отголоски эфиром. Вечный счётчик не уменьшается."""
     conn = get_db()
     try:
@@ -3131,7 +3163,7 @@ def letter_today(device_id: str = Query("", max_length=128)):
 
 
 @app.post("/api/letter/solve", response_model=LetterSolveResponse)
-async def letter_solve(req: LetterSolveRequest):
+def letter_solve(req: LetterSolveRequest):
     """Проверить сваренную пару против неразгаданных писем (сегодня + бэклог).
 
     Клиент никогда не получает слаги ответа, поэтому матчинг — только здесь.
@@ -3233,7 +3265,7 @@ def atlas_today(device_id: str = Query("", max_length=128)):
 
 
 @app.post("/api/atlas/solve", response_model=AtlasSolveResponse)
-async def atlas_solve(req: AtlasSolveRequest):
+def atlas_solve(req: AtlasSolveRequest):
     """Проверить сваренную пару против сегодняшней страницы Атласа.
 
     Разгадывается только сегодняшний день (прошлое — альбом, не игра).
@@ -3268,7 +3300,7 @@ async def atlas_solve(req: AtlasSolveRequest):
 
 
 @app.get("/api/week/status", response_model=WeekStatusResponse)
-async def week_status(device_id: str = Query("", max_length=128)):
+def week_status(device_id: str = Query("", max_length=128)):
     """Недельный слой: жила (теги, мои находки/прожилки) + котёл ярмарки."""
     conn = get_db()
     try:
@@ -3322,7 +3354,7 @@ async def week_status(device_id: str = Query("", max_length=128)):
 
 
 @app.post("/api/fair/brew", response_model=FairBrewResponse)
-async def fair_brew(req: FairBrewRequest):
+def fair_brew(req: FairBrewRequest):
     """Зачесть варку в котёл ярмарки, если выход пары — с тегом недели.
 
     Выход сверяется с recipes (античит надуманного out); одна пара считается
@@ -3368,7 +3400,7 @@ async def fair_brew(req: FairBrewRequest):
 
 
 @app.post("/api/fair/claim", response_model=FairClaimResponse)
-async def fair_claim(req: FairClaimRequest):
+def fair_claim(req: FairClaimRequest):
     """Забрать награды котла: текущая неделя (если закрыта) + прошлая.
 
     Закрытый котёл + вклад ≥3 → вечный реген (клиент капает +1.0 суммарно);

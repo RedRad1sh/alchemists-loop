@@ -1,12 +1,16 @@
-"""U5 (T04 + T08): неблокирующий event loop + атомарность pending_pairs/challenge.
+"""U5 (T04 + T08) + T29 (I-1): неблокирующий event loop + атомарность гонок.
 
 Регрессии на РЕАЛЬНЫХ потоках против настоящих хендлеров server.py (после T04
 это sync `def`, поэтому вызываются напрямую — та же кодовая путь, что и под
 uvicorn, без копий логики в тесте).
 
 Инварианты:
-- генерирующие эндпоинты — синхронные функции (уходят в threadpool, event
-  loop и /api/health не морозятся); читающие остаются async;
+- любой HTTP-хендлер, в чьём теле есть get_db(), — синхронная `def`: его ведёт
+  threadpool, и ни генерация, ни ожидание WAL-лока (DB_BUSY_TIMEOUT_SEC) не
+  морозят event loop и /api/health. После T29 это ПРАВИЛО, а не список из четырёх
+  «генерирующих» имён; «читающие остаются async» из старой формулировки было
+  правдой лишь для 4 из 27 хендлеров (brew_check, например, регистрирует
+  устройство и коммитит — он не читающий);
 - две параллельные варки ОДНОЙ новой пары: генерация ровно одна, проигравший
   получает 409 («в обработке») или known — никогда второй created;
 - лок-строка pending_pairs не оставляется ни после успеха, ни после отказа
@@ -18,11 +22,13 @@ uvicorn, без копий логики в тесте).
 Прямое доказательство атомарности SQL-переходов под потоками без fastapi —
 tests/harness_atomicity_u5.py (прогоняется и как скрипт, и как test_atomicity_harness).
 """
+import ast
 import asyncio
 import inspect
 import os
 import sqlite3
 import sys
+import textwrap
 import threading
 import time
 
@@ -89,19 +95,103 @@ def _pending_count(conn):
 
 
 PK = "fire|gold"  # обе слаги есть в стартовом графе, рецепта нет — свежая пара
+# Пол «живости» интроспекции в test_generating_handlers_are_sync_def: в HEAD это
+# 26 HTTP-хендлеров приложения плюс служебные роуты FastAPI (openapi/docs/redoc).
+# Нужен, чтобы тест не позеленел «молча», когда фильтр перестанет что-либо видеть.
+_HTTP_ROUTE_FLOOR = 25
 
 
-# --- T04: форма хендлеров ---------------------------------------------------
+# --- T04+T29: форма хендлеров (инвариант, а не список имён) ------------------
+
+def _http_endpoints():
+    """Эндпоинты HTTP-роутов приложения (роуты с methods).
+
+    on_event-обработчики (startup) в app.routes не лежат, а служебные роуты
+    FastAPI (openapi/docs) здесь останутся — они просто не зовут get_db() и под
+    правило не попадают.
+    """
+    out = {}
+    for route in server.app.routes:
+        endpoint = getattr(route, "endpoint", None)
+        if endpoint is None or not getattr(route, "methods", None):
+            continue
+        name = getattr(endpoint, "__name__", "")
+        if name:
+            out.setdefault(name, endpoint)
+    return out
+
+
+def _db_handlers():
+    """Хендлеры, в чьём ТЕЛЕ встречается вызов get_db() — то есть идущие в SQLite.
+
+    T29 (I-1): правило вместо перечисления. Именно тело, а не «генерирующий ли
+    это эндпоинт»: brew_check регистрирует устройство и коммитит, поэтому он не
+    «читющий», каким его закреплял старый пин.
+    """
+    found = {}
+    for name, endpoint in _http_endpoints().items():
+        try:
+            tree = ast.parse(textwrap.dedent(inspect.getsource(endpoint)))
+        except (OSError, TypeError):  # лямбда/синтетическая функция — не хендлер
+            continue
+        calls_db = any(
+            isinstance(node, ast.Call)
+            and getattr(node.func, "id", None) == "get_db"
+            for node in ast.walk(tree)
+        )
+        if calls_db:
+            found[name] = endpoint
+    return found
+
 
 def test_generating_handlers_are_sync_def():
-    """Генерирующие хендлеры — def: FastAPI/Starlette отведёт их в threadpool,
-    90-секундная генерация больше не замораживает event loop (и /api/health)."""
-    assert not inspect.iscoroutinefunction(server.discover)
-    assert not inspect.iscoroutinefunction(server.letter_today)
-    assert not inspect.iscoroutinefunction(server.atlas_today)
-    # читающие остаются async — контракт и дешёвый путь не трогаем
-    assert inspect.iscoroutinefunction(server.health)
-    assert inspect.iscoroutinefunction(server.brew_check)
+    """Хендлер, трогающий SQLite, обязан быть sync `def` (ведёт threadpool).
+
+    Различник (мутация, которая роняет этот тест): вернуть ЛЮБОЙ из найденных
+    хендлеров в `async def` — например написать `async def brew_check(...)` или
+    `async def echoes_claim(...)`. Тогда он попадёт в _db_handlers() как
+    корутина, assert ниже краснеет, и «красным» он становится ровно из-за
+    нарушения правила (такой хендлер зовёт sqlite3 с event loop'а и может
+    держать loop запертым до DB_BUSY_TIMEOUT_SEC).
+
+    Отдельные падения-от-пустоты (тест не должен «позеленеть», перестав что-либо
+    видеть): если интроспекция app.routes сломается (смена внутреннего устройства
+    FastAPI/Starlette) — red на _HTTP_ROUTE_FLOOR; если перестанет находиться
+    вызов get_db() в теле — red на «brew_check ∈ db_handlers» (именно этот
+    хендлер старый пин закреплял неверно).
+    """
+    endpoints = _http_endpoints()
+    assert len(endpoints) >= _HTTP_ROUTE_FLOOR, (
+        "интроспекция server.app.routes нашла только %d HTTP-эндпоинтов: "
+        "фильтр по route.methods/endpoint сломался, тест стал бы пустым"
+        % len(endpoints))
+    db_handlers = _db_handlers()
+    assert "brew_check" in db_handlers, (
+        "правило get_db() не увидело brew_check (он точно пишет в БД): "
+        "_db_handlers() больше не находит писателей — инвариант выродился")
+    coroutine_writers = sorted(n for n, ep in db_handlers.items()
+                               if inspect.iscoroutinefunction(ep))
+    assert not coroutine_writers, (
+        "хендлеры, ходящие в SQLite, обязаны быть sync `def` (threadpool), "
+        "иначе они блокируют event loop на время блокировки WAL-писателя: "
+        "%s" % coroutine_writers)
+    # startup — осознанное ИСКЛЮЧЕНИЕ из правила: это не HTTP-хендлер, его зовут
+    # через asyncio.run из tests/test_payments.py:313 и из
+    # test_startup_purge_removes_legacy_tombstones ниже; корутиной он обязан
+    # остаться, иначе оба теста валятся с TypeError.
+    assert inspect.iscoroutinefunction(server.startup), (
+        "startup больше не корутина — asyncio.run(srv.startup()) в тестах упадёт")
+    assert "startup" not in db_handlers, (
+        "startup попал в HTTP-роуты: фильтр _http_endpoints() перестал отделять "
+        "on_event-обработчики, и исключение ниже потеряло смысл")
+    # health — не «обязательно def»: он не ходит в get_db() и потому под правило
+    # не подпадает. Пин сохранён (T04): дешёвый read-only контракт loop не морозит.
+    assert inspect.iscoroutinefunction(server.health), (
+        "health перестал быть async: он вне правила (в БД не ходит), но именно "
+        "как дешёвый читющий контракт он и закреплён — см. T04")
+    assert "health" not in db_handlers, (
+        "health начал ходить в get_db(): он попадает под правило sync `def`, "
+        "пин выше надо снимать вместе с конверсией")
 
 
 # --- T08.1: атомарный захват пары -------------------------------------------

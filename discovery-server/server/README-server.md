@@ -377,12 +377,51 @@ retry с обратной связью до 3 попыток). Категори�
 
 ### Блокировка пар (race-condition)
 
-Блокировку берёт только `/api/discover` (brew-check — чисто читающий):
+Блокировку берёт только `/api/discover` (brew-check не создаёт веществ, но и не
+«чисто читающий»: он регистрирует устройство и коммитит — см. ниже):
 
 1. `INSERT INTO pending_pairs (pair_key, state, lock_ts, owner) VALUES (...) ON CONFLICT(pair_key) DO UPDATE SET state='locked', ... WHERE state != 'locked' OR lock_ts протух` — guarded-переход, победитель ровно один (U5/T08);
 2. Если пара уже залочена другим запросом (state='locked' и свежий lock_ts) — `409 Conflict`;
 3. После генерации лок **удаётся** по owner-токену (`DELETE FROM pending_pairs WHERE pair_key=? AND state='locked' AND owner=?`) — «могил» state='resolved' не копятся (T08.2);
 4. Что-то упало посреди генерации — строку снесёт следующий запрос после `LOCK_TTL` или startup-зачистка.
+
+### Форма хендлеров: SQLite только в threadpool (T04 + T29)
+
+Правило (держится тестом, а не договорённостью): **любой HTTP-хендлер, в теле
+которого есть `get_db()`, — синхронная `def`.** FastAPI/Starlette отводит такие
+эндпоинты в threadpool, поэтому блокирующий `sqlite3` не держит единый event loop:
+до T29 на `def` были только 4 хендлера из 26 (`discover`, `letter_today`,
+`atlas_today`, `receipt_verify`), а остальные 21 писали в БД прямо с loop — при
+конкурирующем WAL-локе такой хендлер запирал loop
+на весь `DB_BUSY_TIMEOUT_SEC` (дефолт 10 с), включая `/api/health`. Формулирующий
+инвариант докстринг — у `get_db()` в `server.py`, и он единственный: ни в одном
+из 25 хендлеров, вызывающих `get_db()`, обоснование не повторяется.
+
+Осознанные исключения: `startup` (`@app.on_event("startup")`, не HTTP-роут; его
+зовут через `asyncio.run` из `tests/test_payments.py` и
+`tests/test_u5_concurrency.py` — он обязан остаться корутиной) и `health` (в БД
+не ходит, остаётся async как дешёвый читающий контракт).
+
+Форма хендлеров — необходимое, но не достаточное условие: в threadpool
+однопоточный «прочитал → записал» перестаёт быть атомарным. Поэтому весь
+счёт-переход в БД — guarded (`_try_acquire_pair_lock`, `_ensure_challenge`,
+переход `_score_challenge`, а с T29 и `_claim_echoes`: обнуление баланса
+отголосков условно по прочитанному `balance`, победитель определяется по
+`rowcount`, проигравший честно отдаёт `claimed = 0` — повторный тап заберёт
+своё, retry-цикла нет). `RETURNING` не используется намеренно: сервер легален на
+системном libsqlite3 старше 3.35 (например Debian 11 = 3.34).
+
+Держит всё это:
+
+- `tests/test_u5_concurrency.py::test_generating_handlers_are_sync_def` —
+  правило по `server.app.routes` (хендлер с `get_db()` в теле обязан быть `def`),
+  а не список имён: возврат любого такого хендлера в `async def` роняет тест;
+- `tests/harness_atomicity_u5.py`, сценарий 5 — гонка из 8 потоков на одном
+  `device_id` против копии клейма: сумма `claimed` равна исходному балансу,
+  победитель ровно один. Сценарий краснеет, если guard обнуления
+  (`WHERE device_id = ? AND balance = ?`) сделать тавтологией — тогда каждый из
+  8 потоков заберёт свои 100 и сумма станет 800; привязка SQL к исходнику —
+  `server_tie.verify`.
 
 ### Авторство
 
@@ -486,7 +525,8 @@ python tests/harness_time_scale_u7.py    # ⇒ HARNESS U7 OK
 ```
 
 Копии SQL/TTL в харнессах привязаны к исходнику server.py через
-`server_tie.verify` (включая TOPUP-UPDATE скоринга цели дня), рассинхрон роняет
+`server_tie.verify` (включая TOPUP-UPDATE скоринга цели дня и guarded-обнуление
+баланса в `_claim_echoes`), рассинхрон роняет
 харнесс; все три харнесса исполняются и как pytest-тесты (`test_time_scale_u7.py`
 и др. обёртки).
 

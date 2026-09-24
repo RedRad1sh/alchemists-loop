@@ -7,6 +7,7 @@ server.py тянет fastapi, а gen_llm.py на 3.9 падает ещё до н
 Поэтому «живая» сверка через разбор ИСХОДНИКА server.py регулярками:
 - WHERE guarded UPSERT'а захвата лока (_try_acquire_pair_lock),
 - WHERE DELETE c owner-токеном в _release_pair_lock,
+- WHERE guarded-обнуления баланса в _claim_echoes (T29) + константа ECHO_ETHER,
 - вывод LOCK_TTL (override LOCK_TTL_SEC; иначе FLOOR/MARGIN × MAX_ATTEMPTS ×
   LLM_TIMEOUT — env-driven значения gen_llm/server).
 
@@ -133,14 +134,48 @@ def score_topup_sql() -> str:
     return _norm(m.group(1))
 
 
+def claim_where() -> str:
+    """T29 (I-1): WHERE guarded-обнуления баланса из server._claim_echoes.
+
+    Харнесс зеркалит именно этот переход (compare-and-swap клейма отголосков):
+    без привязки сценарий 5 доказывал бы атомарность своей копии, а не сервера.
+    """
+    sec = _section(_read(SERVER_PY), "_claim_echoes")
+    m = re.search(r'"(UPDATE echoes SET balance = 0[^"]*)"', sec)
+    if not m:
+        raise AssertionError(
+            "server.py: в _claim_echoes больше нет `UPDATE echoes SET balance = 0 "
+            "... WHERE ...` — копия клейма в харнессе осиротела; обнови харнесс "
+            "вместе с сервером")
+    tail = _where_tail(m.group(1))
+    if "balance = ?" not in tail:
+        raise AssertionError(
+            "server.py: обнуление в _claim_echoes больше не guarded (в WHERE нет "
+            "`AND balance = ?`) — клейм снова уязвим к двойной выдаче эфира, "
+            "сценарий 5 харнесса зеркалил бы неатомарный переход")
+    return tail
+
+
+def echo_ether() -> int:
+    """ECHO_ETHER из server.py (эфир за один забранный отголосок)."""
+    m = re.search(r"^ECHO_ETHER\s*=\s*(\d+)", _read(SERVER_PY), re.M)
+    if not m:
+        raise AssertionError(
+            "server.py: константа ECHO_ETHER больше не `ECHO_ETHER = <число>` — "
+            "копия клейма в харнессе больше не повторяет сервер")
+    return int(m.group(1))
+
+
 def verify(acquire_sql: str, release_sql: str, ttl: float, score_sql: str = None,
-           topup_sql: str = None) -> None:
+           topup_sql: str = None, claim_sql: str = None) -> None:
     """Сверить копии харнесса с исходником server.py; расхождение — падение.
 
     acquire_sql/release_sql/score_sql — полные строки харнесса; сравнивается их
     WHERE-хвост (whitespace-нормализованный) с эталонным хвостом из server.py.
     topup_sql (T09/U8 (d)) — полная TOPUP-строка харнесса: сравнивается
     целиком (в ней нет guarded-условия, важен и SET-хвост, и WHERE по ключу).
+    claim_sql (T29 I-1) — строка обнуления баланса клейма: сравнивается
+    WHERE-хвост, `AND balance = ?` обязано быть и в харнессе, и в сервере.
     """
     exp_ttl = lock_ttl()
     if abs(ttl - exp_ttl) > 1e-9:
@@ -155,6 +190,8 @@ def verify(acquire_sql: str, release_sql: str, ttl: float, score_sql: str = None
         pairs += (("SCORE WHERE", _where_tail(score_sql), score_upsert_where()),)
     if topup_sql is not None:
         pairs += (("TOPUP SQL", _norm(topup_sql), score_topup_sql()),)
+    if claim_sql is not None:
+        pairs += (("CLAIM WHERE", _where_tail(claim_sql), claim_where()),)
     for label, mine, server_copy in pairs:
         if mine != server_copy:
             raise AssertionError(
