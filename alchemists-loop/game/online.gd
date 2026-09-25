@@ -179,6 +179,11 @@ func _on_net_house_result(result: Dictionary) -> void:
 	var nick := g._clean_str(result.get("nick", ""))
 	var house_raw = result.get("house")
 	if not result.get("found", true):
+		# кнопка визита видима уже с момента открытия попапа (_open_player_house):
+		# у несуществующего домика ей нажиматься нельзя — спалит локальный
+		# дневной кэш _mark_visited
+		if g._home._house_visit_btn != null:
+			g._home._house_visit_btn.visible = false
 		if g._home._house_popup != null and g._home._house_popup.visible:
 			g._home._house_popup_title.text = "%s: домика нет" % nick
 		return
@@ -191,6 +196,8 @@ func _on_net_house_result(result: Dictionary) -> void:
 			g._home._mark_visited(nick)
 			Net.house_visit(g._online._device_id, nick)
 	else:
+		if g._home._house_visit_btn != null:
+			g._home._house_visit_btn.visible = false
 		if g._home._house_popup != null and g._home._house_popup.visible:
 			g._home._house_popup_title.text = "%s: домик ещё не построен" % nick
 

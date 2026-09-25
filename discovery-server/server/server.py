@@ -2865,7 +2865,15 @@ def set_me(req: ProfileRequest):
                 (req.device_id, old["nick"]),
             )
         conn.commit()
-        return ProfileResponse(ok=True, nick=nick, device_id=req.device_id, avatar=avatar_for(nick))
+        # γ: переименование отдаёт те же дом-поля, что и GET /api/me, — иначе
+        # ответ POST /api/me с дефолтами 0/[] сбрасывает ленту гостей клиента
+        # до следующего GET-синка. 8 — дефолт limit_guests из GET /api/me
+        # (POST параметров запроса не несёт).
+        return ProfileResponse(
+            ok=True, nick=nick, device_id=req.device_id, avatar=avatar_for(nick),
+            house_visits_week=_visits_week(conn, req.device_id),
+            house_visitors=_guest_list(conn, req.device_id, 8),
+        )
     finally:
         conn.close()
 

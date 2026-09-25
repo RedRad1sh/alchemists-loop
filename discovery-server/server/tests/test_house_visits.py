@@ -189,3 +189,16 @@ class TestVisit:
         pub = client.get("/api/house", params={"nick": "Варда"}).json()
         assert pub["visits_week"] == 2, pub
         assert "guests" not in pub and "house_visitors" not in pub, pub
+
+    def test_rename_response_keeps_guest_line(self, tmp_path, monkeypatch):
+        """POST /api/me отдаёт те же дом-поля, что и GET: rename не сбрасывает ленту гостей."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _build_house(srv, "Варда", "dev-host")
+        _player(srv, "ГостьПервый", "dev-g1")
+        client.post("/api/house/visit",
+                    json={"device_id": "dev-g1", "host_nick": "Варда"})
+        me = client.post("/api/me", json={"device_id": "dev-host", "nick": "Варда Вторая"})
+        assert me.status_code == 200, me.text
+        body = me.json()
+        assert [g["nick"] for g in body["house_visitors"]] == ["ГостьПервый"], body
+        assert body["house_visits_week"] == 1, body

@@ -557,6 +557,10 @@ static func run(g: Game) -> void:
 	var u28_furn := g._home.house_furniture.duplicate(true)
 	var u28_layout: Dictionary = g._home.house_layout.duplicate(true)
 	var u28_unlocked := g._spirit._companion_unlocked
+	# поручения дарят дружбу (+8 за каждое, spirit.gd:_companion_gain) — вернём
+	# и уровень, чтобы блок не оставлял хвост для аффинити-ассертов дальше по сюиту
+	var u28_affinity := g._spirit._companion_affinity
+	var u28_level := g._spirit._companion_level
 	g._home._cosmetic_house = true
 	# строгий аффинити-ассерт ниже обязан доказывать _companion_gain, а не его no-op
 	# (spirit.gd: ранний выход, пока Светик не открыт); снимок выше возвращает как было
@@ -596,6 +600,8 @@ static func run(g: Game) -> void:
 	# restore
 	g._home._cosmetic_house = u28_house
 	g._spirit._companion_unlocked = u28_unlocked
+	g._spirit._companion_affinity = u28_affinity
+	g._spirit._companion_level = u28_level
 	g._home.house_owned = u28_owned
 	g._home.house_tasks_done = u28_done
 	g._home.house_furniture = u28_furn
