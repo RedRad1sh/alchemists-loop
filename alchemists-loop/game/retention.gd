@@ -148,6 +148,7 @@ func _circle_on_local_brew(output: String) -> void:
 	if not g._selftest:
 		g._hub._log_event("Локальная цель дня выполнена: +%d очк." % Game.CIRCLE_LOCAL_POINTS)
 		g._saves._save_game()
+		_refresh_circle_page()
 
 
 func _circle_disc_done() -> bool:

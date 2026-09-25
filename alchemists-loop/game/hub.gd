@@ -674,6 +674,8 @@ func _mastery_next_benefit(rank: int) -> String:
 		return "Ранг %d: этап автоварки %d → %d операций." % [nxt, g._engine._stage_ops(), g._engine._stage_ops() + 1]
 	if nxt == Game.MASTERY_RETORT_SLOT_RANK:
 		return "Ранг %d: четвёртый сосуд реторты." % nxt
+	if nxt == 1:
+		return "Ранг %d: новый титул в архиве, выгода — со 2-го." % nxt
 	return "Ранг %d: реторта зреет на %d %% быстрее." % [nxt, int(round(Game.MASTERY_RETORT_SPEED * 100.0))]
 
 func _up_row(u: Dictionary) -> Button:
