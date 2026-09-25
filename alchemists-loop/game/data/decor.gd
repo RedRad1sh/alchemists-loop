@@ -34,6 +34,19 @@ const DECOR := [
 		{"id": "window_8", "label": "Эркер", "tint": "#bcd9f2", "cost": 190},
 		{"id": "window_9", "label": "Витражное", "tint": "#c9e0f5", "cost": 205},
 	]},
+	{"id": "painting", "label": "Картина", "items": [
+		{"id": "painting", "label": "Витраж", "tint": "#3f6fb5", "cost": 130},
+		{"id": "painting_1", "label": "Портрет предка", "tint": "#7a6a3c", "cost": 145},
+		{"id": "painting_2", "label": "Лунный собор", "tint": "#8fa8c8", "cost": 160},
+		{"id": "painting_3", "label": "Натюрморт с колбами", "tint": "#4f8a5b", "cost": 175},
+		{"id": "painting_4", "label": "Гобелен", "tint": "#a3543c", "cost": 190},
+	]},
+	{"id": "herbs", "label": "Гербарий", "items": [
+		{"id": "herbs", "label": "Связка трав", "tint": "#8a9a5b", "cost": 115},
+		{"id": "herbs_1", "label": "Корешки", "tint": "#a5794a", "cost": 130},
+		{"id": "herbs_2", "label": "Сушёные грибы", "tint": "#b06a78", "cost": 145},
+		{"id": "herbs_3", "label": "Лунные травы", "tint": "#95c8eb", "cost": 160},
+	]},
 	{"id": "rug", "label": "Ковёр", "items": [
 		{"id": "rug", "label": "Классический", "tint": "#b06a78", "cost": 80},
 		{"id": "rug_1", "label": "Восточный", "tint": "#954f62", "cost": 95},
