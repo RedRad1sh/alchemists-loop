@@ -395,11 +395,32 @@ class ProfileRequest(BaseModel):
     device_id: str = Field(..., min_length=1, max_length=128, description="Уникальный ID устройства")
     nick: str = Field("", max_length=64, description="Ник игрока (2..24 символа после очистки)")
 
+class HouseGuest(BaseModel):
+    nick: str
+    avatar: dict
+    day: str
+
+
+class HouseVisitRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    host_nick: str = Field(..., min_length=1, max_length=64)
+
+
+class HouseVisitResponse(BaseModel):
+    ok: bool
+    found: bool = True
+    visits_week: int = 0
+
+
 class ProfileResponse(BaseModel):
     ok: bool
     nick: str
     device_id: str
     avatar: dict
+    # γ «Гостевая книга»: счётчик гостей за неделю и приватная лента «кто
+    # именно» — только в СВОЁМ профиле (публичный домик имён не отдаёт).
+    house_visits_week: int = 0
+    house_visitors: list[HouseGuest] = []
 
 
 class RejectedResponse(BaseModel):
@@ -419,6 +440,7 @@ class HouseResponse(BaseModel):
     avatar: Optional[dict] = None
     house: Optional[dict] = None
     found: bool = True
+    visits_week: int = 0      # γ: уникальных гостей за 7 дней (0, а не null)
 
 
 class RatingRow(BaseModel):
@@ -429,6 +451,7 @@ class RatingRow(BaseModel):
     elements: int = 0
     points: int = 0
     house_built: bool = False
+    house_guests: int = 0
     updated_at: Optional[str] = None
 
 
@@ -2780,7 +2803,8 @@ def register_player(req: BrewCheckRequest):
 
 
 @app.get("/api/me", response_model=ProfileResponse)
-def get_me(device_id: str = Query(..., min_length=1, max_length=128)):
+def get_me(device_id: str = Query(..., min_length=1, max_length=128),
+           limit_guests: int = Query(8, ge=0, le=20)):
     """Профиль игрока: ник и процедурный аватар по device_id."""
     conn = get_db()
     try:
@@ -2790,6 +2814,8 @@ def get_me(device_id: str = Query(..., min_length=1, max_length=128)):
         nick = row["nick"] if row else ""
         return ProfileResponse(
             ok=True, nick=nick, device_id=device_id, avatar=avatar_for(nick or device_id),
+            house_visits_week=_visits_week(conn, device_id),
+            house_visitors=_guest_list(conn, device_id, limit_guests),
         )
     finally:
         conn.close()
@@ -2956,6 +2982,37 @@ def rejected(limit: int = Query(5000, ge=1, le=200000)):
         conn.close()
 
 
+def _visits_week(conn: sqlite3.Connection, host_device: str) -> int:
+    """γ: уникальных гостей хоста за последние VISITS_WEEK_DAYS дней (включая сегодня)."""
+    since = _date_minus(VISITS_WEEK_DAYS - 1)
+    return conn.execute(
+        "SELECT COUNT(DISTINCT visitor_device) AS c FROM house_visits "
+        "WHERE host_device = ? AND day >= ?",
+        (host_device, since),
+    ).fetchone()["c"]
+
+
+def _guest_list(conn: sqlite3.Connection, host_device: str, limit: int = 10) -> list[HouseGuest]:
+    """γ §7.2: последние гости хоста (ник + аватар + день визита).
+
+    INNER JOIN по players: гость, который ни разу не регистрировался (нет
+    строки в players), в ленту не попадает — показывать внутренний device_id
+    вместо имени нечего, а такой визит всё равно засчитан в visits_week.
+    Порядок day DESC, затем visitor_device: в house_visits нет INTEGER
+    PRIMARY KEY (составной текстовый PK → rowid отсутствует), поэтому второго
+    ключа сортировки, кроме самих колонок PK, у записей просто нет.
+    """
+    since = _date_minus(VISITS_WEEK_DAYS - 1)
+    rows = conn.execute(
+        "SELECT hv.day AS day, p.nick AS nick FROM house_visits hv "
+        "JOIN players p ON p.device_id = hv.visitor_device "
+        "WHERE hv.host_device = ? AND hv.day >= ? "
+        "ORDER BY hv.day DESC, hv.visitor_device ASC LIMIT ?",
+        (host_device, since, limit),
+    ).fetchall()
+    return [HouseGuest(nick=r["nick"], avatar=avatar_for(r["nick"]), day=r["day"]) for r in rows]
+
+
 @app.post("/api/house", response_model=HouseResponse)
 def save_house(req: HouseRequest):
     """Сохранить домик игрока, чтобы его могли открывать другие игроки."""
@@ -2977,13 +3034,65 @@ def save_house(req: HouseRequest):
         conn.close()
 
 
+VISITS_PER_VISITOR_DAY = 10   # γ: анти-фарм — разных хостов на посетителя в день
+VISITS_WEEK_DAYS = 7          # окно «недели гостей» = 7 дней по единой шкале (T06)
+
+
+@app.post("/api/house/visit", response_model=HouseVisitResponse)
+def visit_house(req: HouseVisitRequest):
+    """Засвидетельствовать визит в чужой домик.
+
+    Награда хоста — на клиенте (спека §7.3): здесь только источник истины числа
+    и суточный анти-фарм. Визит (host, visitor, day) идемпотентен.
+    """
+    conn = get_db()
+    try:
+        host = conn.execute(
+            "SELECT device_id, house FROM players WHERE nick = ? ORDER BY id DESC LIMIT 1",
+            (req.host_nick,),
+        ).fetchone()
+        # сначала «сам себе»: у игрока без домика свой ник тоже находится по nick
+        if host and host["device_id"] == req.device_id:
+            raise HTTPException(status_code=400, detail="Себя не навестишь")
+        if not host or not host["house"]:
+            return HouseVisitResponse(ok=False, found=False, visits_week=0)
+        day = _today()
+        known = conn.execute(
+            "SELECT 1 FROM house_visits WHERE host_device = ? AND visitor_device = ? AND day = ?",
+            (host["device_id"], req.device_id, day),
+        ).fetchone()
+        if known is None:
+            used = conn.execute(
+                "SELECT COUNT(DISTINCT host_device) AS c FROM house_visits "
+                "WHERE visitor_device = ? AND day = ?",
+                (req.device_id, day),
+            ).fetchone()["c"]
+            if used >= VISITS_PER_VISITOR_DAY:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Лимит %d визитов в день исчерпан" % VISITS_PER_VISITOR_DAY,
+                )
+        # сравнение выше и вставка — не один транзакционный шаг: при гонке двух
+        # параллельных визитов лимит может «протечь» на +1. Это анти-фарм, а не
+        # экономика, и документировано здесь, а не чинится мьютексом.
+        conn.execute(
+            "INSERT OR IGNORE INTO house_visits (host_device, visitor_device, day) VALUES (?, ?, ?)",
+            (host["device_id"], req.device_id, day),
+        )
+        conn.commit()
+        return HouseVisitResponse(
+            ok=True, found=True, visits_week=_visits_week(conn, host["device_id"]))
+    finally:
+        conn.close()
+
+
 @app.get("/api/house", response_model=HouseResponse)
 def get_house(nick: str = Query(..., min_length=1, max_length=64)):
     """Домик игрока по нику (публичный; None, если не построен)."""
     conn = get_db()
     try:
         row = conn.execute(
-            "SELECT nick, house FROM players WHERE nick = ? ORDER BY id DESC LIMIT 1", (nick,)
+            "SELECT nick, device_id, house FROM players WHERE nick = ? ORDER BY id DESC LIMIT 1", (nick,)
         ).fetchone()
         if not row:
             return HouseResponse(ok=True, nick=nick, avatar=avatar_for(nick), house=None, found=False)
@@ -2993,7 +3102,10 @@ def get_house(nick: str = Query(..., min_length=1, max_length=64)):
                 house = json.loads(row["house"])
             except ValueError:
                 house = None
-        return HouseResponse(ok=True, nick=row["nick"], avatar=avatar_for(row["nick"]), house=house)
+        return HouseResponse(
+            ok=True, nick=row["nick"], avatar=avatar_for(row["nick"]), house=house,
+            visits_week=_visits_week(conn, row["device_id"]),
+        )
     finally:
         conn.close()
 
@@ -3005,20 +3117,25 @@ def rating(device_id: str = Query("", max_length=128)):
     try:
         # T28 (I-2): discoveries — только настоящие первооткрытия (r.linked = 0),
         # linked-строки дедупа имени здесь не считаются (см. _link_existing).
+        since = _date_minus(VISITS_WEEK_DAYS - 1)
         rows = conn.execute(
             """SELECT p.nick, p.house, p.created_at,
+                   (SELECT COUNT(DISTINCT hv.visitor_device) FROM house_visits hv
+                      WHERE hv.host_device = p.device_id AND hv.day >= ?) AS house_guests,
                    (SELECT COUNT(*) FROM recipes r WHERE r.discoverer = p.nick AND r.linked = 0) AS discoveries,
                    (SELECT COUNT(*) FROM elements e WHERE e.author = p.nick) AS elements,
                    (SELECT COALESCE(SUM(c.points), 0) FROM challenge_scores c WHERE c.nick = p.nick)
                  + (SELECT COALESCE(SUM(v.points), 0) FROM vein_points v WHERE v.nick = p.nick) AS points
             FROM players p
-            ORDER BY discoveries DESC, elements DESC, points DESC, p.created_at ASC"""
+            ORDER BY discoveries DESC, elements DESC, points DESC, p.created_at ASC""",
+            (since,),
         ).fetchall()
         built = [
             RatingRow(
                 rank=i + 1, nick=r["nick"], avatar=avatar_for(r["nick"]),
                 discoveries=r["discoveries"], elements=r["elements"],
                 points=r["points"], house_built=bool(r["house"]),
+                house_guests=r["house_guests"],
                 updated_at=r["created_at"],
             )
             for i, r in enumerate(rows)

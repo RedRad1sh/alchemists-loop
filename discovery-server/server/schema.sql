@@ -270,3 +270,17 @@ CREATE TABLE IF NOT EXISTS receipts (
     last_seen_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_receipts_device ON receipts(device_id);
+
+-- γ «Гостевая книга»: один визит (host, visitor) на день. Ключ дня — ISO-дата
+-- в ЕДИНОЙ серверной шкале (T06), поэтому «окно 7 дней» = day >= _date_minus(6),
+-- а NOT BETWEEN ничего не разворачивается.
+-- Визит не имеет награды на сервере: начисление — клиент (спека §7.3), здесь
+-- только источник истины числа и суточный анти-фарм.
+CREATE TABLE IF NOT EXISTS house_visits (
+    host_device TEXT NOT NULL,
+    visitor_device TEXT NOT NULL,
+    day TEXT NOT NULL,
+    PRIMARY KEY (host_device, visitor_device, day)
+);
+CREATE INDEX IF NOT EXISTS idx_house_visits_host ON house_visits (host_device, day);
+CREATE INDEX IF NOT EXISTS idx_house_visits_visitor_day ON house_visits (visitor_device, day);
