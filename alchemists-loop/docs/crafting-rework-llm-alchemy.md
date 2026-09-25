@@ -44,7 +44,7 @@ all-or-nothing автокрафт больше не является целев�
 
 | Параметр | Значение по умолчанию | Где задаётся |
 |---|---:|---|
-| Операций в foreground/offline этапе | `3` | `Balance.CRAFT_STAGE_OPERATIONS` |
+| Операций в foreground/offline этапе | `3 (+1 за ранг 3, +1 за ранг 7 — до 5)` | `Balance.CRAFT_STAGE_OPERATIONS + Core._stage_ops() (ранги MASTERY_STAGE_RANKS)` |
 | Предупреждение о длинном маршруте | `20` операций | `Balance.CRAFT_PLAN_WARNING_OPERATIONS` |
 | Hard cap локального плана | `200` операций | `Balance.CRAFT_PLAN_HARD_LIMIT_OPERATIONS` |
 | Скидка blueprint | `0.90` | `Balance.BLUEPRINT_DISCOUNT` |
