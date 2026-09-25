@@ -4,8 +4,13 @@ class_name SuiteRetortReturn
 
 static func run(g: Game) -> void:
 	# реторта: сроки, слоты, настой, эссенции
+	# u32: кейс часов получил множитель ранга печати — пиним ранг 0, чтобы проверка
+	# базовых 8/24/12 ч не зависела от того, какой ранг оставили предыдущие сюиты.
+	var u32_rank0 := g._engine.mastery_rank
+	g._engine.mastery_rank = 0
 	Selftest.check("retort hours", g._retort._retort_hours_for_tier(0) == 8.0 and g._retort._retort_hours_for_tier(4) == 24.0
 		and g._retort._retort_hours_text(1) == "12 ч")
+	g._engine.mastery_rank = u32_rank0
 	Selftest.check("retort left text", g._retort._retort_left_text(7 * 3600 + 20 * 60) == "7 ч 20 мин"
 		and g._retort._retort_left_text(45 * 60) == "45 мин" and g._retort._retort_left_text(50) == "50 с")
 	g._retort._essences.clear()
@@ -146,3 +151,33 @@ static func run(g: Game) -> void:
 	Selftest.check("u16 retort view fields restored", _ui_ok
 		and g._retort._retort_head == u16_head0 and g._retort._retort_cards == u16_cards0
 		and g._retort._retort_ess == u16_ess0 and g._retort._retort_desc == u16_desc0)
+	# ============ U32 (A2): срок реторты от ранга печати ============
+	g._engine.mastery_rank = 1
+	Selftest.check("u32 rank 1 no bonus", g._retort._retort_mastery_factor() == 1.0)
+	g._engine.mastery_rank = 2
+	Selftest.check("u32 rank 2 minus 6", absf(g._retort._retort_mastery_factor() - 0.94) < 0.0001)
+	g._engine.mastery_rank = 5
+	Selftest.check("u32 tier0 at rank 5", absf(g._retort._retort_hours_for_tier(0) - 6.08) < 0.001)
+	g._engine.mastery_rank = 6
+	Selftest.check("u32 floor at rank 6", g._retort._retort_hours_for_tier(0) == 6.0)
+	g._engine.mastery_rank = 20
+	Selftest.check("u32 floor holds", g._retort._retort_hours_for_tier(0) == 6.0
+		and g._retort._retort_hours_for_tier(4) == 6.0)
+	var u32_r0 := g._engine.mastery_rank
+	g._engine.mastery_rank = 1
+	Selftest.check("u32 tier1 at rank 1", g._retort._retort_hours_for_tier(1) == 12.0)
+	g._engine.mastery_rank = u32_r0
+	# срок фиксируется при закладке: работающий сосуд не укорачивается задним числом.
+	# Отступление от брифа (задача 2): огонь, а не камень. Камень — слой 1 (рецепт
+	# земля+огонь известен с бутстрапа, saves.gd) → тир 1 → база 12 ч, и на ранге 7
+	# пол ещё не достигнут (12 × 0.64 = 7.68 ч) — кейс с камнем был бы красным всегда.
+	# Огонь — первостихия, тир 0: 8 × 0.64 = 5.12 → пол 6 ч, как в ruling Q2.
+	g._retort._retort_slots.clear()
+	g._engine.mastery_rank = 7
+	g._engine.inventory["fire"] = 1
+	Selftest.check("u32 start at rank 7", g._retort._retort_start(0, "fire")
+		and absf(float(g._retort._retort_slot(0)["dur"]) - 6.0 * 3600.0) < 1.0)
+	g._engine.mastery_rank = 0
+	Selftest.check("u32 running job keeps dur", absf(float(g._retort._retort_slot(0)["dur"]) - 6.0 * 3600.0) < 1.0)
+	g._retort._retort_cancel(0)
+	g._engine.inventory["fire"] = maxi(1, int(g._engine.inventory.get("fire", 0)))

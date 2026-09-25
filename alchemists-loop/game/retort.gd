@@ -26,7 +26,13 @@ func _retort_now(when: float = -1.0) -> float:
 	return when if when >= 0.0 else Time.get_unix_time_from_system()
 
 func _retort_hours_for_tier(tier: int) -> float:
-	return Game.RETORT_BASE_HOURS * (1.0 + float(maxi(0, tier)) * 0.5)
+	var base := Game.RETORT_BASE_HOURS * (1.0 + float(maxi(0, tier)) * 0.5)
+	return maxf(Game.MASTERY_RETORT_MIN_HOURS, base * _retort_mastery_factor())
+
+func _retort_mastery_factor() -> float:
+	# A2: каждый ранг ≥ 2 снимает 6 % срока; ранг 1 — без бонуса. Пол — 6 ч.
+	var ranks := maxi(0, g._engine.mastery_rank - 1)
+	return maxf(0.0, 1.0 - Game.MASTERY_RETORT_SPEED * float(ranks))
 
 func _retort_hours_text(tier: int) -> String:
 	return "%d ч" % int(_retort_hours_for_tier(tier))
