@@ -222,6 +222,68 @@ static func run(g: Game) -> void:
 	g._retention._hearth_claim = ""
 	g._retention._refresh_circle_page()
 	Selftest.check("circle chip dot", String((g._pages._mode_chips["circle"] as Button).text) == "Круг ●")
+	# ============ U35 (A3): локальная цель дня ============
+	var u35_pts := g._retention._circle_pts_total
+	var u35_done_day := g._retention._circle_local_done_day
+	var u35_mine := g._retention._circle_mine
+	var u35_hint := g._retention._circle_hint
+	var u35_reward_day := g._retention._circle_reward_day
+	var u35_mpts := g._retention._circle_mpts
+	g._retention._circle_mine = 0
+	g._retention._circle_hint = ""
+	g._retention._circle_local_done_day = ""
+	g._retention._circle_reward_day = ""
+	Selftest.check("u35 offline challenge dead before", not g._retention._circle_challenge_done())
+	# детерминизм: один и тот же день — одна и та же цель
+	var u35_g1 := g._retention._circle_local_goal_for("2026-09-25")
+	var u35_g2 := g._retention._circle_local_goal_for("2026-09-25")
+	Selftest.check("u35 deterministic", String(u35_g1.get("out", "")) == String(u35_g2.get("out", ""))
+		and String(u35_g1.get("a", "")) == String(u35_g2.get("a", "")))
+	# достижима из баз: оба реагента — базовые стихии; цель никогда не пуста
+	Selftest.check("u35 base-only and nonempty", not u35_g1.is_empty()
+		and Game.BASE_IDS.has(String(u35_g1["a"])) and Game.BASE_IDS.has(String(u35_g1["b"])))
+	# дата действительно участвует: на 12 датах подряд встречается ≥ 2 разных выхода
+	var u35_variants := {}
+	for u35_i in range(12):
+		var u35_gd := g._retention._circle_local_goal_for("2026-10-%02d" % (u35_i + 1))
+		u35_variants[String(u35_gd.get("out", ""))] = true
+	Selftest.check("u35 date matters", u35_variants.size() >= 2)
+	# варка цели закрывает «цель дня» офлайн и даёт очки ровно один раз
+	g._retention._circle_on_local_brew(String(g._retention._circle_local_goal()["out"]))
+	Selftest.check("u35 local done", g._retention._circle_challenge_done())
+	Selftest.check("u35 points once", g._retention._circle_pts_total == u35_pts + Game.CIRCLE_LOCAL_POINTS)
+	g._retention._circle_on_local_brew(String(g._retention._circle_local_goal()["out"]))
+	Selftest.check("u35 no double points", g._retention._circle_pts_total == u35_pts + Game.CIRCLE_LOCAL_POINTS)
+	# чужая варка не засчитывается
+	g._retention._circle_local_done_day = ""
+	g._retention._circle_on_local_brew("dragon")
+	Selftest.check("u35 wrong output ignored", not g._retention._circle_challenge_done())
+	# серверная цель перебивает локальную по факту: my_points > 0 → done и без локали
+	g._retention._circle_mine = 3
+	Selftest.check("u35 server overrides", g._retention._circle_challenge_done())
+	# закрытый круг офлайн отдаёт награду один раз в день
+	g._retention._circle_local_done_day = g._retention._circle_today()
+	g._guild._order_day = g._retention._circle_today()
+	g._guild._order_targets_cache = ["steam", "stone", "clay"]
+	g._guild._order_done = {"steam": true, "stone": true, "clay": true}
+	g._retention._circle_disc_day = g._retention._circle_today()
+	g._retention._circle_disc = Game.CIRCLE_DISC_GOAL
+	Selftest.check("u35 circle closed offline", g._retention._circle_reward_claimable())
+	g._retention._circle_claim_reward()
+	Selftest.check("u35 reward once", g._retention._circle_reward_day == g._retention._circle_today()
+		and not g._retention._circle_reward_claimable())
+	# restore
+	g._retention._circle_mine = u35_mine
+	g._retention._circle_hint = u35_hint
+	g._retention._circle_local_done_day = u35_done_day
+	g._retention._circle_pts_total = u35_pts
+	g._retention._circle_mpts = u35_mpts
+	g._retention._circle_reward_day = u35_reward_day
+	g._guild._order_day = ""
+	g._guild._order_targets_cache = []
+	g._guild._order_done = {}
+	g._retention._circle_disc_day = ""
+	g._retention._circle_disc = 0
 	# --- v30: недельный слой ---
 	g._retention._week_cache = {"week": "2026-W37",
 		"vein": {"tag1": "Свет", "tag2": "Тьма", "spread": false, "my_hits": 0, "my_streaks": 0, "streak_cap": 5},

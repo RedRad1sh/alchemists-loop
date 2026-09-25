@@ -18,6 +18,8 @@ var _circle_mdays := 0
 var _circle_mpts := 0
 var _circle_hint := ""
 var _circle_mine := 0
+var _circle_local_done_day := ""
+var _circle_local_goal_cache := {}
 var _circle_head: Label = null
 var _circle_list: VBoxContainer = null
 # недельный слой (v30): кэш статуса недели + вечные бонусы
@@ -98,7 +100,51 @@ func _circle_orders_done() -> bool:
 
 
 func _circle_challenge_done() -> bool:
-	return _circle_mine > 0
+	return _circle_mine > 0 or _circle_local_done()
+
+
+func _circle_local_goal_for(day: String) -> Dictionary:
+	# Локальная цель дня (A3): детерминирована датой тем же приёмом, что заказы
+	# гильдии (_order_targets_for), и заведомо достижима из базовых стихий —
+	# только рецепты из двух баз.
+	var h: String = ("local_goal_" + day).sha256_text()
+	var pool: Array = []
+	for r in g.RECIPES:
+		if Game.BASE_IDS.has(String(r["a"])) and Game.BASE_IDS.has(String(r["b"])):
+			pool.append(r)
+	if pool.is_empty():
+		return {}
+	var idx := h.substr(0, 2).hex_to_int() % pool.size()
+	return pool[idx]
+
+
+func _circle_local_goal() -> Dictionary:
+	var day := _circle_today()
+	if String(_circle_local_goal_cache.get("day", "")) != day:
+		var pick := _circle_local_goal_for(day)
+		_circle_local_goal_cache = {"day": day}
+		_circle_local_goal_cache.merge(pick)
+	return _circle_local_goal_cache
+
+
+func _circle_local_done() -> bool:
+	return _circle_local_done_day == _circle_today() and _circle_local_done_day != ""
+
+
+func _circle_on_local_brew(output: String) -> void:
+	# Офлайн-закрытие «цели дня»: одна награда на день (ключ _circle_today());
+	# серверная цель, когда связь есть, перебивает по факту (_circle_mine > 0),
+	# двойного начисления нет — очки локали и сервера живут в одном счётчике.
+	if output == "" or _circle_local_done():
+		return
+	if String(_circle_local_goal().get("out", "")) != output:
+		return
+	_circle_local_done_day = _circle_today()
+	_circle_pts_total += Game.CIRCLE_LOCAL_POINTS
+	_circle_check_pts_miles()
+	if not g._selftest:
+		g._hub._log_event("Локальная цель дня выполнена: +%d очк." % Game.CIRCLE_LOCAL_POINTS)
+		g._saves._save_game()
 
 
 func _circle_disc_done() -> bool:
@@ -275,9 +321,19 @@ func _refresh_circle_page() -> void:
 	hb.pressed.connect(_circle_claim_hearth)
 	hearth.add_child(hb)
 	# три строки круга
-	var ch_txt := "Цель дня: %s" % (_circle_hint if _circle_hint != "" else "нужна связь с миром")
+	var ch_txt := ""
+	if _circle_hint != "":
+		ch_txt = "Цель дня: %s" % _circle_hint
+	elif not _circle_local_goal().is_empty() and String(_circle_local_goal().get("out", "")) != "":
+		var lg := _circle_local_goal()
+		ch_txt = "Цель дня (без мира): свари «%s» из %s и %s" % [
+			g._online._item_name(String(lg["out"])),
+			g._online._item_name(String(lg["a"])),
+			g._online._item_name(String(lg["b"]))]
+	else:
+		ch_txt = "Цель дня: нужна связь с миром"
 	if _circle_challenge_done():
-		ch_txt += " ✓ (%d очк.)" % _circle_mine
+		ch_txt += " ✓ (%d очк.)" % maxi(_circle_mine, Game.CIRCLE_LOCAL_POINTS if _circle_local_done() else 0)
 	var ch := g._label(ch_txt, 14)
 	if _circle_challenge_done():
 		ch.add_theme_color_override("font_color", Color(0.55, 0.8, 0.6))

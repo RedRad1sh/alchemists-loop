@@ -1481,6 +1481,7 @@ func _commit_brew(a: String, b: String) -> Dictionary:
 	_layer_cache.erase(output)
 	successes += 1
 	g._retention._circle_on_discovery(first_time)
+	g._retention._circle_on_local_brew(output)
 	var milestones: Array = []
 	if first_time:
 		milestones = _grant_first_open(output)

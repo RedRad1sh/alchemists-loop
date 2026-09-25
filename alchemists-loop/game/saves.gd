@@ -115,6 +115,7 @@ func _save_game() -> void:
 		"circle_mpts": g._retention._circle_mpts,
 		"circle_hint": g._retention._circle_hint,
 		"circle_mine": g._retention._circle_mine,
+		"circle_local_done_day": g._retention._circle_local_done_day,
 		"week_cache": g._retention._week_cache,
 		"vein_cap_total": g._retention._vein_cap_total,
 		"fair_regen_total": g._retention._fair_regen_total
@@ -379,6 +380,7 @@ func _load_game() -> void:
 	g._retention._circle_mpts = clampi(int(data.get("circle_mpts", 0)), 0, Game.CIRCLE_PTS_MILES.size())
 	g._retention._circle_hint = String(data.get("circle_hint", ""))
 	g._retention._circle_mine = maxi(0, int(data.get("circle_mine", 0)))
+	g._retention._circle_local_done_day = String(data.get("circle_local_done_day", ""))
 	g._retention._week_cache = data.get("week_cache", {}) if data.get("week_cache", {}) is Dictionary else {}
 	g._retention._vein_cap_total = maxi(0, int(data.get("vein_cap_total", 0)))
 	g._retention._fair_regen_total = clampf(float(data.get("fair_regen_total", 0.0)), 0.0, Game.FAIR_REGEN_CAP)
