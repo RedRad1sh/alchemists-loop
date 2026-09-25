@@ -95,6 +95,8 @@ const HOUSE_COST := DecorData.HOUSE_COST
 const CUSTOM_COSTS := DecorData.CUSTOM_COSTS
 const DECOR := DecorData.DECOR
 const COLOR_SWATCHES := DecorData.COLOR_SWATCHES
+# HouseTasksData (β)
+const HOUSE_TASKS := HouseTasksData.TASKS
 # QuestData
 const QUEST_CAP := QuestData.QUEST_CAP
 const QUEST_REGEN := QuestData.QUEST_REGEN

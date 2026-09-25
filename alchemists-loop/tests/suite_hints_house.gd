@@ -479,3 +479,82 @@ static func run(g: Game) -> void:
 			u26_view._item_rect("lamp", "lamp_1", 400.0, 300.0) == u26_r)
 		u26_view.queue_free()
 		u26_host.queue_free()
+
+	# ============ U27 (β): правила поручений на чистой геометрии ============
+	# Проверка идёт на Rect2-ах, собранных вручную: так краснеет именно правило,
+	# а не подбор якорей (это уже меряет u24).
+	var u27_a := Rect2(100.0, 200.0, 60.0, 40.0)      # x 100..160, y 200..240
+	var u27_b := Rect2(160.0, 200.0, 60.0, 40.0)      # x 160..220 — ровно касание по x
+	var u27_r := {"a": u27_a, "b": u27_b}
+	var near := {"id": "n", "a": "a", "b": "b", "rule": "near", "gap": 0.0}
+	Selftest.check("b near: touching rects satisfy gap 0",
+		Home.house_task_satisfied(near, u27_r, 400.0, 300.0))
+	var u27_far := {"a": u27_a, "b": Rect2(240.0, 200.0, 60.0, 40.0)}   # разрыв 80 px
+	Selftest.check("b near: 80px gap fails gap 0",
+		not Home.house_task_satisfied(near, u27_far, 400.0, 300.0))
+	# 80/400 == 0.2 — ровно граница: правило обязано пропускать равенство
+	Selftest.check("b near: gap threshold is inclusive",
+		Home.house_task_satisfied({"id": "n", "a": "a", "b": "b", "rule": "near", "gap": 0.2},
+			u27_far, 400.0, 300.0))
+	# диагональное соседство: по y пересечение, по x разрыв 80 px -> не выполнено
+	var u27_diag := {"a": u27_a, "b": Rect2(240.0, 220.0, 60.0, 40.0)}
+	Selftest.check("b near: diagonal neighbour does not satisfy gap 0",
+		not Home.house_task_satisfied(near, u27_diag, 400.0, 300.0))
+	var over := {"id": "o", "a": "a", "b": "b", "rule": "over", "gap": 0.1}
+	# a (120..160 по x, низ 190) целиком над b (100..200, верх 200): dy = 10/300
+	var u27_ov_ok := {"a": Rect2(120.0, 170.0, 40.0, 20.0), "b": Rect2(100.0, 200.0, 100.0, 40.0)}
+	Selftest.check("b over: a above b within the horizontal span",
+		Home.house_task_satisfied(over, u27_ov_ok, 400.0, 300.0))
+	var u27_ov_wide := {"a": Rect2(80.0, 170.0, 140.0, 20.0), "b": Rect2(100.0, 200.0, 100.0, 40.0)}
+	Selftest.check("b over: wider than b refuses",
+		not Home.house_task_satisfied(over, u27_ov_wide, 400.0, 300.0))
+	var u27_ov_below := {"a": Rect2(120.0, 260.0, 40.0, 20.0), "b": Rect2(100.0, 200.0, 100.0, 40.0)}
+	Selftest.check("b over: a under b refuses", not Home.house_task_satisfied(over, u27_ov_below, 400.0, 300.0))
+	# too far up: те же прямоугольники, но зазор 100 px = 0.33 > gap 0.1
+	var u27_ov_high := {"a": Rect2(120.0, 100.0, 40.0, 20.0), "b": Rect2(100.0, 200.0, 100.0, 40.0)}
+	Selftest.check("b over: gap threshold is honoured vertically",
+		not Home.house_task_satisfied(over, u27_ov_high, 400.0, 300.0))
+	# near выполнено там, где over отказывает (a рядом, но не «над»)
+	Selftest.check("b near and over disagree by construction",
+		Home.house_task_satisfied(near, u27_r, 400.0, 300.0)
+		and not Home.house_task_satisfied(over, u27_r, 400.0, 300.0))
+	# нулевой размер сцены молчит: до первого layout'а у вью size == 0 (спека §5.2)
+	Selftest.check("b rules silent on zero size",
+		not Home.house_task_satisfied(near, u27_r, 0.0, 300.0)
+		and not Home.house_task_satisfied(over, u27_r, 400.0, 0.0))
+	# и на отсутствующей категории (дом без half-обстановки)
+	Selftest.check("b rules silent on missing category",
+		not Home.house_task_satisfied(near, {"a": u27_a}, 400.0, 300.0))
+	# данные: a/b — настоящие и разные категории, награда — платный вариант,
+	# правило из двух, зазор неотрицательный, текст есть
+	var u27_cats := {}
+	for c in Game.DECOR:
+		u27_cats[String(c["id"])] = true
+	var u27_data_ok := Game.HOUSE_TASKS.size() == 6
+	for t in Game.HOUSE_TASKS:
+		if not u27_cats.has(String(t["a"])) or not u27_cats.has(String(t["b"])):
+			u27_data_ok = false
+		if String(t["a"]) == String(t["b"]):
+			u27_data_ok = false  # «поставь ковёр рядом с ковром» — не поручение
+		if float(t["gap"]) < 0.0 or String(t["rule"]) not in ["near", "over"]:
+			u27_data_ok = false
+		if String(t["text"]) == "" or String(t["give"]) == String(t["id"]):
+			u27_data_ok = false
+		var gcat := Home._give_cat(String(t["give"]))
+		if gcat == "" or not u27_cats.has(gcat):
+			u27_data_ok = false
+		if gcat == String(t["give"]):
+			u27_data_ok = false  # награда = дефолт категории: он и так свободен
+		if not _u27_variant_exists(gcat, String(t["give"])):
+			u27_data_ok = false
+	Selftest.check("b task data well-formed", u27_data_ok)
+
+
+static func _u27_variant_exists(cat: String, item_id: String) -> bool:
+	for c in Game.DECOR:
+		if String(c["id"]) != cat:
+			continue
+		for it in (c.get("items", []) as Array):
+			if String(it["id"]) == item_id:
+				return true
+	return false

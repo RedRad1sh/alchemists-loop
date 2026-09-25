@@ -757,6 +757,79 @@ func _swatch_button(hex: String) -> Button:
 	return b
 
 
+# ---------- поручения дома (β) ----------
+
+const TASK_AFFINITY := 8   # дружба за выполненное поручение: валюта дома, не эфир (спека §1)
+
+
+static func _give_cat(item_id: String) -> String:
+	# id варианта = "<категория>" или "<категория>_<N>"; берём самую длинную подходящую
+	# префиксную категорию. `id + "_"` в условии — чтобы "chair_2" не свёлся к
+	# произвольному совпадению по началу строки.
+	# НЕ путать с HouseView._cat_of(item_id) (:354): та функция ищет категорию среди
+	# РАССТАВЛЕННЫХ предметов (читает `furniture`) и на пустом домике вернёт "misc".
+	# Здесь же нужен категори́я варианта по самому каталогу DECOR, независимо от того,
+	# куплен предмет, поставлен или нет, — поэтому это отдельная функция, а не вызов.
+	var best := ""
+	for c in Game.DECOR:
+		var cid := String(c["id"])
+		if item_id == cid or item_id.begins_with(cid + "_"):
+			if cid.length() > best.length():
+				best = cid
+	return best
+
+
+static func _gap_norm(ra: Rect2, rb: Rect2, w: float, h: float) -> Vector2:
+	# Зазор по оси — расстояние между интервалами (0 при пересечении), а не размер
+	# координат, и нормирован к размеру сцены: порог не должен зависеть от разрешения.
+	var gx := maxf(0.0, maxf(ra.position.x, rb.position.x) - minf(ra.end.x, rb.end.x))
+	var gy := maxf(0.0, maxf(ra.position.y, rb.position.y) - minf(ra.end.y, rb.end.y))
+	return Vector2(gx / w, gy / h)
+
+
+static func house_task_satisfied(task: Dictionary, rects: Dictionary, w: float, h: float) -> bool:
+	if w <= 0.0 or h <= 0.0:
+		return false  # до первого layout'а у Control размер нулевой: проверки молчат
+	if not rects.has(task["a"]) or not rects.has(task["b"]):
+		return false
+	var ra: Rect2 = rects[task["a"]]
+	var rb: Rect2 = rects[task["b"]]
+	if ra.size.x <= 0.0 or ra.size.y <= 0.0 or rb.size.x <= 0.0 or rb.size.y <= 0.0:
+		return false
+	var d := _gap_norm(ra, rb, w, h)
+	if String(task["rule"]) == "over":
+		# спека §5.3: a по горизонтали целиком внутри b, a обязана быть выше b,
+		# вертикальный зазор в пределах gap. 1.0 px — допуск на плавающую точку
+		# «ровно касание», а не разрешение на перекрытие.
+		var inside := ra.position.x >= rb.position.x and ra.end.x <= rb.end.x
+		var above := ra.end.y <= rb.position.y + 1.0
+		return inside and above and d.y <= float(task["gap"])
+	return maxf(d.x, d.y) <= float(task["gap"])
+
+
+func _task_rects() -> Dictionary:
+	# Геометрию берём у HouseView — единственного источника. Вид может ещё не иметь
+	# размера (size 0 до первого layout'а) или не иметь спрайта: тогда пустой словарь,
+	# и правила смолчат (спека §5.2, §5.6).
+	var out := {}
+	if _house_view == null:
+		return out
+	var w: float = _house_view.size.x
+	var h: float = _house_view.size.y
+	if w <= 0.0 or h <= 0.0:
+		return out
+	for raw_cat in HouseView.DRAW_ORDER:
+		var cat := String(raw_cat)
+		if not _house_view.furniture.has(cat):
+			continue
+		var item_id := String(_house_view.furniture[cat])
+		var tex: Texture2D = _house_view._tex_of(item_id)
+		if tex == null:
+			continue
+		out[cat] = _house_view._visual_rect(item_id, _house_view._item_rect(cat, item_id, w, h))
+	return out
+
+
 # ---------- домик: сериализация для сервера ----------
 
 func _house_json() -> Dictionary:
