@@ -486,7 +486,7 @@ func _advance_craft_job_offline(elapsed: float) -> Dictionary:
 	var route_discount := float(job.get("discount", 1.0))
 	if route_discount <= 0.0:
 		route_discount = Game.BLUEPRINT_DISCOUNT if g._engine._blueprints.has(item_id) else 1.0
-	var available_steps := mini(Game.CRAFT_STAGE_OPERATIONS,
+	var available_steps := mini(g._engine._stage_ops(),
 		int(floor(minf(elapsed, Game.OFFLINE_CAP_SEC) / g._engine._brew_time())))
 	if available_steps <= 0:
 		return {}

@@ -94,6 +94,12 @@ const EXPERIMENT_DAILY_LIMIT := 200
 const EXPERIMENT_COST := BREW_COST
 const EXPERIMENT_FAILURE_REFUND := FAILURE_REFUND
 const CRAFT_STAGE_OPERATIONS := 3
+# A2 «Печать мастерства»: продаём время и параллелизм, не эфир.
+const MASTERY_STAGE_RANKS := [3, 7]     # +1 операция этапа за каждый достигнутый ранг
+const MASTERY_RETORT_SPEED := 0.06      # −6 % срока реторты за каждый ранг ≥ 2 (задача 2)
+const MASTERY_RETORT_MIN_HOURS := 6.0   # пол срока реторты, ч (задача 2)
+const MASTERY_RETORT_SLOT_RANK := 5     # ранг, открывающий 4-й сосуд (задача 3)
+const RETORT_SLOT_MAX := 4              # физических сосудов в массиве (задача 3)
 const CRAFT_PLAN_WARNING_OPERATIONS := 20
 const CRAFT_PLAN_HARD_LIMIT_OPERATIONS := 200
 # The existing save migration already clamps stacks to this value. Производство

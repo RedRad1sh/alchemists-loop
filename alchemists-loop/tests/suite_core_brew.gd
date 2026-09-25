@@ -96,6 +96,31 @@ static func run(g: Game) -> void:
 	g._engine.ether_overflow = 0
 	g._engine.mastery_rank = overflow_rank
 
+	# ============ U31 (A2): ранг печати удлиняет этап автоварки ============
+	var u31_rank := g._engine.mastery_rank
+	g._engine.mastery_rank = 0
+	Selftest.check("u31 stage ops base", g._engine._stage_ops() == Game.CRAFT_STAGE_OPERATIONS)
+	g._engine.mastery_rank = 2
+	Selftest.check("u31 below first rank", g._engine._stage_ops() == 3)
+	g._engine.mastery_rank = 3
+	Selftest.check("u31 rank 3 widens", g._engine._stage_ops() == 4)
+	g._engine.mastery_rank = 6
+	Selftest.check("u31 still 4 at rank 6", g._engine._stage_ops() == 4)
+	g._engine.mastery_rank = 7
+	Selftest.check("u31 rank 7 widens", g._engine._stage_ops() == 5)
+	g._engine.mastery_rank = 50
+	Selftest.check("u31 capped at 5", g._engine._stage_ops() == 5)
+	var u31_mono := true
+	var u31_prev := -1
+	for u31_r in range(0, 60):
+		g._engine.mastery_rank = u31_r
+		var u31_now := g._engine._stage_ops()
+		if u31_now < u31_prev:
+			u31_mono = false
+		u31_prev = u31_now
+	Selftest.check("u31 monotonic", u31_mono)
+	g._engine.mastery_rank = u31_rank
+
 	# автоварка: планировщик цепочки
 	g._engine.inventory["steam"] = 0  # убрать остатки прошлых варок
 	var p_steam := g._guild._plan_craft("steam")
@@ -143,15 +168,15 @@ static func run(g: Game) -> void:
 	var p_house := g._guild._plan_craft("house")
 	var staged := await g._engine._run_auto_plan("house", p_house)
 	Selftest.check("craft job pauses by stage", staged and not g._engine._craft_job.is_empty()
-		and int(g._engine._craft_job.get("completed", 0)) == Game.CRAFT_STAGE_OPERATIONS)
+		and int(g._engine._craft_job.get("completed", 0)) == g._engine._stage_ops())
 	g._engine._craft_job = {
 		"item": "house", "completed": 0, "total_estimate": int(p_house.get("total", 0)),
 		"plan": p_house.duplicate(true), "discount": 1.0, "status": "paused_stage",
 	}
 	var offline_stage := g._saves._advance_craft_job_offline(3600.0)
-	Selftest.check("offline craft stage", int(offline_stage.get("steps", 0)) == Game.CRAFT_STAGE_OPERATIONS
+	Selftest.check("offline craft stage", int(offline_stage.get("steps", 0)) == g._engine._stage_ops()
 		and String(offline_stage.get("status", "")) == "operation_cap"
-		and int(g._engine._craft_job.get("completed", 0)) == Game.CRAFT_STAGE_OPERATIONS)
+		and int(g._engine._craft_job.get("completed", 0)) == g._engine._stage_ops())
 	var saved_stack := int(g._engine.inventory.get("steam", 0))
 	g._engine.inventory["steam"] = Game.CRAFT_INVENTORY_STACK_CAP
 	Selftest.check("inventory pause reason", g._engine._production_pair_block("fire", "water") == "inventory")

@@ -501,6 +501,15 @@ func _spend_ether(amount: int) -> bool:
 func _spend_mastery_ether(amount: int) -> bool:
 	return _spend_ether(amount)
 
+func _stage_ops() -> int:
+	# A2: этап автоварки растёт от ранга печати (3 → 4 → 5). Константа — база;
+	# читают этап только отсюда.
+	var n := Game.CRAFT_STAGE_OPERATIONS
+	for r in Game.MASTERY_STAGE_RANKS:
+		if mastery_rank >= int(r):
+			n += 1
+	return n
+
 func _mastery_cost() -> int:
 	return int(round(float(Game.ETHER_MASTERY_BASE) * pow(Game.ETHER_MASTERY_GROWTH, mastery_rank)))
 
@@ -1144,7 +1153,7 @@ func _auto_craft(item_id: String) -> void:
 		return
 	var route_discount := Game.BLUEPRINT_DISCOUNT if _blueprints.has(item_id) else 1.0
 	var ether_need := _plan_ether_cost(plan, -1, route_discount)
-	var stage_preview := mini(Game.CRAFT_STAGE_OPERATIONS, int(plan.get("total", 0)))
+	var stage_preview := mini(_stage_ops(), int(plan.get("total", 0)))
 	var stage_cost_preview := _plan_ether_cost(plan, stage_preview, route_discount)
 	Analytics.track("craft_plan_preview", {
 		"target": item_id, "operations": int(plan.get("total", 0)),
@@ -1157,7 +1166,7 @@ func _auto_craft(item_id: String) -> void:
 		Sfx.error()
 		_refresh()
 		return
-	var stage_limit := mini(Game.CRAFT_STAGE_OPERATIONS, int(plan.get("total", 0)))
+	var stage_limit := mini(_stage_ops(), int(plan.get("total", 0)))
 	var stage_cost := _plan_ether_cost(plan, stage_limit, route_discount)
 	_pending_item = item_id
 	_pending_plan = plan
@@ -1242,7 +1251,7 @@ func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
 			Analytics.track("craft_job_repeat", {"target": item_id, "discount": route_discount})
 	var job_plan: Dictionary = _craft_job.get("plan", plan)
 	var total_estimate := maxi(total, int(_craft_job.get("total_estimate", total)))
-	var stage_budget := maxi(1, Game.CRAFT_STAGE_OPERATIONS)
+	var stage_budget := maxi(1, _stage_ops())
 	var stage_cost := _plan_ether_cost(plan, stage_budget, route_discount)
 	_production_discount = route_discount
 	if stage_cost > 0 and _available_ether() <= 0:
@@ -1379,7 +1388,7 @@ func _run_bench_plan(item_id: String, plan: Dictionary) -> bool:
 	_production_discount = route_discount
 	_auto_new.clear()
 	var st := 0
-	var stage_limit := mini(total, Game.CRAFT_STAGE_OPERATIONS)
+	var stage_limit := mini(total, _stage_ops())
 	for op in plan["ops"]:
 		var a := String(op["a"])
 		var b := String(op["b"])
