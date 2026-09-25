@@ -355,3 +355,70 @@ static func run(g: Game) -> void:
 	# чужие сигналы не тронуты: дом сохранился бы только от реального сдвига
 	Selftest.check("u14 house state untouched", g._home.house_layout.is_empty()
 		and g._engine.ether == u14_ether)
+
+	# ============ U24 (H1): дефолтные якоря — у каждого предмета остаётся зона тапа ============
+	# Проверка идёт теми же функциями, которыми игра проверяет тап, на 8 размерах
+	# сцены:Wide Room (1040x300) — ровно тот случай, где старый ковёр проваливался
+	# под зону стола и стула и терял 98% своей площади для пальца.
+	var u24_sizes: Array = [Vector2(400, 300), Vector2(540, 300), Vector2(1040, 300),
+		Vector2(320, 300), Vector2(480, 360), Vector2(300, 300),
+		Vector2(320, 240), Vector2(720, 540)]
+	var u24_furn := {}
+	for c in Game.DECOR:
+		u24_furn[String(c["id"])] = String(c["id"])
+	var u24_host := Control.new()
+	u24_host.visible = false
+	g.add_child(u24_host)
+	var u24_no_clamp := true
+	var u24_floor_ok := true
+	var u24_pocket_ok := true
+	var u24_on_screen := true
+	var u24_checked := 0
+	for sz in u24_sizes:
+		var u24_view: HouseView = Game.HouseViewScript.new()
+		u24_view.set_editable(false)
+		u24_view.animate = false
+		u24_host.add_child(u24_view)
+		u24_view.size = sz
+		u24_view.set_state(false, u24_furn, null)
+		for raw_cat in HouseView.DRAW_ORDER:
+			var cat := String(raw_cat)
+			var item_id := String(u24_furn[cat])
+			var tex: Texture2D = u24_view._tex_of(item_id)
+			if tex == null:
+				continue  # missing-ассет: геометрию не измеряем, но и не считаем зелёным молча
+			u24_checked += 1
+			var p: Array = u24_view._anchor_params(cat, item_id)
+			var res: Vector2 = u24_view._resolved_anchor(cat, item_id, sz.x, sz.y, tex)
+			if res.distance_to(Vector2(float(p[0]), float(p[1]))) > 0.001:
+				u24_no_clamp = false  # дефолт клампится — значит якорь/размер подобраны неверно
+			var vr: Rect2 = u24_view._visual_rect(item_id,
+				u24_view._item_rect(cat, item_id, sz.x, sz.y))
+			if vr.position.x < -0.5 or vr.position.y < -0.5 \
+					or vr.end.x > sz.x + 0.5 or vr.end.y > sz.y + 0.5:
+				u24_on_screen = false
+			# напольный предмет стоит на полу: низ видимой части — за линией пола (0.60·h),
+			# а ковёр дополнительно не задирается на стену целиком
+			if int(u24_view._mode_of(item_id)) == 0:
+				if vr.end.y < sz.y * 0.60:
+					u24_floor_ok = false
+				if cat == "rug" and vr.position.y < sz.y * 0.60:
+					u24_floor_ok = false
+			var own := 0
+			for ix in 3:
+				for iy in 3:
+					var pt := Vector2(vr.position.x + vr.size.x * (0.25 + 0.25 * float(ix)),
+						vr.position.y + vr.size.y * (0.25 + 0.25 * float(iy)))
+					var hit := u24_view._hit_decor(pt)
+					if not hit.is_empty() and String(hit["cat"]) == cat:
+						own += 1
+			if own < 2:
+				u24_pocket_ok = false
+		u24_view.queue_free()
+	u24_host.queue_free()
+	# невакуумность: без измеренных предметов блок зелёный по инерции
+	Selftest.check("u24 measured a real number of pieces", u24_checked >= 72)
+	Selftest.check("u24 h1 default anchors are never clamped", u24_no_clamp)
+	Selftest.check("u24 h1 floor pieces stay on the floor", u24_floor_ok)
+	Selftest.check("u24 h1 every piece keeps a tappable pocket", u24_pocket_ok)
+	Selftest.check("u24 h1 nothing drifts off the scene", u24_on_screen)
