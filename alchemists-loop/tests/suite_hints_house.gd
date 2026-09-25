@@ -635,6 +635,48 @@ static func run(g: Game) -> void:
 	Selftest.check("d showcase data applied", u29_view._display_bottles == 4)
 	u29_view.free()
 
+	# ============ U30 (γ): недельный подарок хосту — из серверного числа, не из тапа ============
+	var u30_week := g._home.house_gift_week
+	var u30_count := g._home.house_gift_count
+	var u30_owned := g._home.house_owned.duplicate(true)
+	var u30_ether := g._engine.ether
+	g._home.house_gift_week = ""
+	g._home.house_gift_count = 0
+	g._home.house_owned.clear()
+	# 0..2 визита — не за что
+	for v in [0, 1, 2]:
+		g._home._check_house_gift(v)
+	Selftest.check("c no gift below 3 guests", g._home.house_gift_count == 0)
+	# 3 визита -> 1, 6 -> 2, 20 -> всё равно 2 (потолок недели)
+	g._home._check_house_gift(3)
+	Selftest.check("c one gift at 3 guests", g._home.house_gift_count == 1)
+	g._home._check_house_gift(20)
+	Selftest.check("c gift cap is 2 per week", g._home.house_gift_count == 2)
+	g._home._check_house_gift(20)
+	Selftest.check("c repeat check in the same week grants nothing", g._home.house_gift_count == 2)
+	Selftest.check("c host gift grants ownership, never ether",
+		g._engine.ether == u30_ether and g._home.house_owned.size() > 0)
+	# смена недели обнуляет счётчик
+	g._home.house_gift_week = "2000-W01"
+	g._home._check_house_gift(9)
+	Selftest.check("c new week restarts the counter", g._home.house_gift_count == 2)
+	# Календарная математика (решение R7) проверяется на датах, где она реально
+	# ломается: 2026-01-01 — четверг, «своя» первая неделя; 2027-01-01 — пятница,
+	# т.е. принадлежит ISO-году 2026 и его 53-й неделе; 2024-12-30 — понедельник
+	# первой недели ISO-года 2025. Формат «YYYY-Www» из этих трёх следует сам.
+	Selftest.check("c iso week 2026-01-01 is W01 of 2026",
+		g._home._iso_week_of(2026, 1, 1) == "2026-W01")
+	Selftest.check("c iso week 2027-01-01 belongs to 2026-W53",
+		g._home._iso_week_of(2027, 1, 1) == "2026-W53")
+	Selftest.check("c iso week 2024-12-30 belongs to 2025-W01",
+		g._home._iso_week_of(2024, 12, 30) == "2025-W01")
+	var u30_id := g._home._iso_week_id()
+	Selftest.check("c week id looks like YYYY-Www",
+		u30_id.length() == 8 and u30_id.contains("-W"))
+	g._home.house_gift_week = u30_week
+	g._home.house_gift_count = u30_count
+	g._home.house_owned = u30_owned
+
 
 static func _u28_task(id: String) -> Dictionary:
 	# настоящая запись Game.HOUSE_TASKS: _complete_house_task читает не только

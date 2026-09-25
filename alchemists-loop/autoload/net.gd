@@ -40,6 +40,7 @@ signal challenge_result(result: Dictionary)
 signal me_result(result: Dictionary)
 signal rejected_result(result: Dictionary)
 signal house_result(result: Dictionary)
+signal house_visit_result(result: Dictionary)
 signal rating_result(result: Dictionary)
 signal echoes_result(result: Dictionary)
 signal echoes_claim_result(result: Dictionary)
@@ -153,6 +154,12 @@ func house_save(device_id: String, nick: String, house: Dictionary) -> void:
 	_enqueue({
 		"kind": "house_save", "path": "/house",
 		"body": {"device_id": device_id, "nick": nick, "house": house},
+	})
+
+func house_visit(device_id: String, host_nick: String) -> void:
+	_enqueue({
+		"kind": "house_visit", "path": "/house/visit",
+		"body": {"device_id": device_id, "host_nick": host_nick},
 	})
 
 func rating(device_id: String = "") -> void:
@@ -374,6 +381,8 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 		"house_save":
 			parsed["_saved"] = true
 			house_result.emit(parsed)
+		"house_visit":
+			house_visit_result.emit(parsed)
 		"rating":
 			rating_result.emit(parsed)
 		"echoes":

@@ -20,6 +20,12 @@ var house_layout: Dictionary = {}      # категория -> [ax, ay] поль
 var house_owned: Dictionary = {}   # категория -> Array[String] купленных id (коллекция, локально)
 var house_tasks_done: Array = []   # β: id выполненных поручений (одноразовые, без таймеров)
 var _task_rows := {}               # id -> Label строки на странице дома
+var house_visited_day: Dictionary = {}   # γ: nick -> "YYYY-MM-DD" (локальный кэш кнопки)
+var house_gift_week := ""                # γ: ISO-неделя последнего недельного подарка хосту
+var house_gift_count := 0                # γ: подарков уже выдано на текущей неделе
+var _guests_lbl: Label = null            # γ: строка о гостях на странице дома
+var _house_visit_btn: Button = null      # γ: кнопка визита в гостевом попапе (собирается один раз)
+var _house_popup_nick := ""              # γ: чей домик сейчас открыт в гостевом попапе
 var _theme_custom_on := false
 var _theme_custom := Color("#0d1219")
 var _aura_custom_on := false
@@ -339,6 +345,11 @@ func _build_house_page(page: VBoxContainer) -> void:
 		row.add_theme_color_override("font_color", Color(0.62, 0.7, 0.76))
 		page.add_child(row)
 		_task_rows[String(ht["id"])] = row
+
+	# γ: кто заглядывал в гости на этой неделе (заполняется из GET /api/me)
+	_guests_lbl = g._label("", 12)
+	_guests_lbl.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
+	page.add_child(_guests_lbl)
 
 	page.add_child(g._label("Тема лаборатории (фон)", 14))
 	var theme_grid := GridContainer.new()
@@ -1139,6 +1150,18 @@ func _build_house_popup() -> void:
 	_house_popup_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_house_popup_title.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
 	col.add_child(_house_popup_title)
+	# γ: кнопка отклика гостя. Попап собирается один раз на старте (main.gd), здесь
+	# нет ни хоста, ни актуального состояния визита — поэтому видимость и адресат
+	# назначаются при открытии домика (_open_player_house), а нажатие только
+	# подтверждает отметку и прячет кнопку: сам запрос шлёт _on_net_house_result.
+	_house_visit_btn = g._small_button("Засвидетельствовать визит", Vector2(0, 42), 1)
+	_house_visit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_house_visit_btn.visible = false
+	_house_visit_btn.pressed.connect(func() -> void:
+		_mark_visited(_house_popup_nick)
+		_house_visit_btn.visible = false
+	)
+	col.add_child(_house_visit_btn)
 	_house_popup_view = Game.HouseViewScript.new()
 	_house_popup_view.set_editable(false)
 	_house_popup_view.custom_minimum_size = Vector2(0, 260)
@@ -1194,6 +1217,9 @@ func _apply_player_house(nick: String, h: Dictionary) -> void:
 
 
 func _open_player_house(nick: String) -> void:
+	_house_popup_nick = nick
+	if _house_visit_btn != null:
+		_house_visit_btn.visible = _visit_allowed(nick)
 	if _house_popup != null:
 		_house_popup.visible = true
 	_house_popup_title.text = "Домик: %s" % nick
@@ -1205,3 +1231,112 @@ func _close_house_popup() -> void:
 	if _house_popup != null:
 		_house_popup.visible = false
 	Sfx.click()
+
+
+# ---------- γ: визиты, гости и недельный подарок ----------
+
+func _today_key() -> String:
+	var d := Time.get_date_dict_from_system()
+	return "%04d-%02d-%02d" % [int(d["year"]), int(d["month"]), int(d["day"])]
+
+
+func _visit_allowed(host_nick: String) -> bool:
+	if not g._online._net_enabled or g._online._device_id == "":
+		return false
+	if host_nick == g._online._net_nick:
+		return false
+	return String(house_visited_day.get(host_nick, "")) != _today_key()
+
+
+func _mark_visited(host_nick: String) -> void:
+	house_visited_day[host_nick] = _today_key()
+
+
+func _on_house_profile(week_visits: int, visitors: Array) -> void:
+	# Спека §7.2: строка о гостях и лента «кто именно». Имена приходят только из
+	# GET /api/me по своему device_id — чужой GET /api/house их не отдаёт.
+	if _guests_lbl != null:
+		var parts := PackedStringArray()
+		for v in visitors.slice(0, 3):
+			var d: Dictionary = v
+			var n := String(d.get("nick", ""))
+			if n != "":
+				parts.append(n)
+		if parts.is_empty():
+			if week_visits == 0:
+				_guests_lbl.text = "Пока никто не заглядывал."
+			else:
+				_guests_lbl.text = "За неделю тебя навестили: %d" % week_visits
+		else:
+			var names := ", ".join(parts)
+			# длинные ники (24 символа на максимуме) не должны превращать строку в простыню
+			if names.length() > 40:
+				_guests_lbl.text = "За неделю тебя навестили: %d" % week_visits
+			else:
+				_guests_lbl.text = "За неделю тебя навестили: %s" % names
+	_check_house_gift(week_visits)
+
+
+func _check_house_gift(week_visits: int) -> void:
+	# Награда хосту в обход эфира (спека §7.3): источник истины числа — сервер,
+	# начисление — клиент, ровно как с my_points из /api/challenge.
+	var due: int = mini(2, int(week_visits / 3.0))
+	var wk := _iso_week_id()
+	if house_gift_week != wk:
+		house_gift_week = wk
+		house_gift_count = 0
+	while house_gift_count < due:
+		var got := _grant_free_variant()
+		house_gift_count += 1
+		if got == "":
+			break  # всё выкуплено: инкремент уже сделан, цикла на весь прогон не будет
+		g._online._set_status("Гости принесли тебе %s" % got)
+		g._saves._save_game()
+
+
+func _grant_free_variant() -> String:
+	var cats: Array = []
+	for c in Game.DECOR:
+		cats.append(String(c["id"]))
+	if cats.is_empty():
+		return ""
+	# стабильный по неделе выбор стартовой категории: две недели — разные подарки
+	var start: int = absi(_iso_week_id().hash()) % cats.size()
+	for i in cats.size():
+		var cat := String(cats[(start + i) % cats.size()])
+		var nxt := _next_locked_variant(cat)
+		if nxt != "":
+			_own_item(cat, nxt)
+			return "%s: «%s»" % [_decor_cat(cat).get("label", cat), _decor_label(cat, nxt)]
+	return ""
+
+
+static func _days_from_civil(y: int, m: int, d: int) -> int:
+	# Число суток с 1970-01-01 (алгоритм H. Hinnant, civil_from_days наоборот).
+	# Нужен потому, что ISO-неделя привязана к четвергу, а разница четвергов — в сутках.
+	var yy := y - (1 if m <= 2 else 0)
+	var era := int(yy / 400.0)
+	var yoe := yy - era * 400
+	var mp := m - 3 if m > 2 else m + 9
+	var doy := int((153 * mp + 2) / 5.0) + d - 1
+	var doe := yoe * 365 + int(yoe / 4.0) - int(yoe / 100.0) + doy
+	return era * 146097 + doe - 719468
+
+
+static func _iso_week_of(y: int, m: int, d: int) -> String:
+	# ISO 8601: неделя с понедельника; её номер и её год задаёт четверг этой недели.
+	var z := _days_from_civil(y, m, d)
+	var wday := ((z + 3) % 7) + 1  # 1=Пн..7=Вс: 1970-01-01 был четвергом
+	var thu := z + 4 - wday
+	var iy := y
+	if thu < _days_from_civil(y, 1, 1):
+		iy = y - 1  # четверг ещё в прошлом году
+	elif thu >= _days_from_civil(y + 1, 1, 1):
+		iy = y + 1  # четверг уже в следующем году
+	var ordinal := thu - _days_from_civil(iy, 1, 1)
+	return "%04d-W%02d" % [iy, int(ordinal / 7.0) + 1]
+
+
+static func _iso_week_id() -> String:
+	var d := Time.get_date_dict_from_system()
+	return _iso_week_of(int(d["year"]), int(d["month"]), int(d["day"]))

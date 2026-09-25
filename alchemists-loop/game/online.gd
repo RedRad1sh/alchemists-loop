@@ -159,7 +159,10 @@ func _on_net_rating_result(result: Dictionary) -> void:
 		row.add_child(v)
 		var nm := g._label(nick, 14)
 		v.add_child(nm)
-		var st := g._label("открытий %d · веществ %d · очки %d" % [disc, elems, pts], 11)
+		# γ: сколько человек побывало в гостях у этого игрока за ISO-неделю (T7)
+		var guests := int(d.get("house_guests", 0))
+		var extra := "" if guests == 0 else " · гостей %d" % guests
+		var st := g._label("открытий %d · веществ %d · очки %d%s" % [disc, elems, pts, extra], 11)
 		st.add_theme_color_override("font_color", Color(0.55, 0.62, 0.68))
 		v.add_child(st)
 		if has_house:
@@ -181,9 +184,22 @@ func _on_net_house_result(result: Dictionary) -> void:
 		return
 	if typeof(house_raw) == TYPE_DICTIONARY:
 		g._home._apply_player_house(nick, house_raw as Dictionary)
+		# γ: у визита должны быть последствия — сообщаем хосту, что заходили.
+		# Один раз на хоста в день: локальный кэш, чтобы не долбить сеть при каждом
+		# открытии попапа (и офлайн сюда не доходит: Net.house_get зовётся только с сетью).
+		if g._online._device_id != "" and nick != "" and g._home._visit_allowed(nick):
+			g._home._mark_visited(nick)
+			Net.house_visit(g._online._device_id, nick)
 	else:
 		if g._home._house_popup != null and g._home._house_popup.visible:
 			g._home._house_popup_title.text = "%s: домик ещё не построен" % nick
+
+
+func _on_net_house_visit_result(result: Dictionary) -> void:
+	# Ответ нужен только для статуса: награда хосту идёт через /api/me (T7),
+	# а не здесь — иначе счётчик зависел бы от того, кто первым успел зайти.
+	if result.get("ok", false) == true:
+		g._engine.status_text = "Визит засвидетельствован."
 
 
 func _on_net_rejected_result(result: Dictionary) -> void:

@@ -442,6 +442,7 @@ func _ready() -> void:
 		Net.me_result.connect(_hub._on_net_me_result)
 		Net.rejected_result.connect(_online._on_net_rejected_result)
 		Net.house_result.connect(_online._on_net_house_result)
+		Net.house_visit_result.connect(_online._on_net_house_visit_result)
 		Net.rating_result.connect(_online._on_net_rating_result)
 		Net.echoes_result.connect(_resonance._on_net_echoes_result)
 		Net.echoes_claim_result.connect(_resonance._on_net_echoes_claim_result)

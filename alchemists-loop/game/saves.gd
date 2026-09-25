@@ -92,6 +92,9 @@ func _save_game() -> void:
 		"house_furniture": g._home.house_furniture,
 		"house_layout": g._home.house_layout,
 		"house_owned": g._home.house_owned,
+		"house_visited_day": g._home.house_visited_day,
+		"house_gift_week": g._home.house_gift_week,
+		"house_gift_count": g._home.house_gift_count,
 		"house_tasks_done": g._home.house_tasks_done,
 		"theme_custom_on": g._home._theme_custom_on,
 		"theme_custom": "#" + g._home._theme_custom.to_html(false),
@@ -327,6 +330,16 @@ func _load_game() -> void:
 					if not g._home._decor_item(ocat, ovid).is_empty() and not oarr.has(ovid):
 						oarr.append(ovid)
 			g._home.house_owned[ocat] = oarr
+	# γ: локальный кэш визитов — словарь nick -> "YYYY-MM-DD"; фильтр по строковым
+	# ключам-никнеймам, как у house_owned по категориям
+	g._home.house_visited_day.clear()
+	if data.get("house_visited_day") is Dictionary:
+		for k in data["house_visited_day"]:
+			var vnick := String(k)
+			if vnick != "":
+				g._home.house_visited_day[vnick] = String(data["house_visited_day"][k])
+	g._home.house_gift_week = String(data.get("house_gift_week", ""))
+	g._home.house_gift_count = maxi(0, int(data.get("house_gift_count", 0)))
 	g._home.house_tasks_done.clear()
 	if data.get("house_tasks_done") is Array:
 		for raw_tid in data["house_tasks_done"]:
