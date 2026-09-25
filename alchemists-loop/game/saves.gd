@@ -213,21 +213,10 @@ func _load_game() -> void:
 				g._resonance._res_done[mi] = true
 	g._resonance._res_total = maxi(0, int(data.get("res_total", 0)))
 	g._resonance._res_balance = maxi(0, int(data.get("res_balance", 0)))
-	g._retort._retort_slots.clear()
 	if data.get("retort_slots") is Array:
-		for s in data["retort_slots"]:
-			if typeof(s) != TYPE_DICTIONARY:
-				continue
-			var sd := s as Dictionary
-			g._retort._retort_slots.append({
-				"sub": String(sd.get("sub", "")),
-				"name": String(sd.get("name", "")),
-				"started": maxf(0.0, float(sd.get("started", 0.0))),
-				"dur": maxf(0.0, float(sd.get("dur", 0.0))),
-			})
-	while g._retort._retort_slots.size() < 3:
-		g._retort._retort_slots.append({"sub": "", "name": "", "started": 0.0, "dur": 0.0})
-	g._retort._retort_slots = g._retort._retort_slots.slice(0, 3)
+		_load_retort_slots_for_test(data["retort_slots"] as Array)
+	else:
+		_load_retort_slots_for_test([])
 	g._retort._essences.clear()
 	if data.get("essences") is Dictionary:
 		for k in data["essences"]:
@@ -446,6 +435,24 @@ func _load_game() -> void:
 	g._engine.status_text = "Лаборатория восстановлена. Продолжим эксперименты!"
 	_grant_offline()
 	g._progress_ui._ach_update()
+
+func _load_retort_slots_for_test(raw: Array) -> void:
+	# чтение массива retort_slots: тот же разбор, что в _load_game, вынесен в метод,
+	# чтобы у сейва и теста u33 не появилось второе определение «валидного слота»
+	g._retort._retort_slots.clear()
+	for s in raw:
+		if typeof(s) != TYPE_DICTIONARY:
+			continue
+		var sd := s as Dictionary
+		g._retort._retort_slots.append({
+			"sub": String(sd.get("sub", "")),
+			"name": String(sd.get("name", "")),
+			"started": maxf(0.0, float(sd.get("started", 0.0))),
+			"dur": maxf(0.0, float(sd.get("dur", 0.0))),
+		})
+	while g._retort._retort_slots.size() < Game.RETORT_SLOT_MAX:
+		g._retort._retort_slots.append({"sub": "", "name": "", "started": 0.0, "dur": 0.0})
+	g._retort._retort_slots = g._retort._retort_slots.slice(0, Game.RETORT_SLOT_MAX)
 
 func _offline_gain(elapsed: float, rate: float, cur: int, cap: int) -> int:
 	# чистая формула офлайн-накопления (тестируется напрямую)
@@ -711,7 +718,7 @@ func _refresh_return_popup() -> void:
 	else:
 		var bc := 0
 		var best := -1.0
-		for i in 3:
+		for i in Game.RETORT_SLOT_MAX:
 			if g._retort._retort_busy(i):
 				bc += 1
 				var left := g._retort._retort_left(i)

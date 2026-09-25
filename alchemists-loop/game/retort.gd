@@ -43,13 +43,15 @@ func _retort_slots_open() -> int:
 		n += 1
 	if g._engine.sage_gold > 0:
 		n += 1
-	return n
+	if g._engine.mastery_rank >= Game.MASTERY_RETORT_SLOT_RANK:
+		n += 1
+	return mini(n, Game.RETORT_SLOT_MAX)
 
 func _retort_slot(i: int) -> Dictionary:
-	# слотов всегда 3; пустой — {sub: ""}; чинит сейвы до реторты
-	while _retort_slots.size() < 3:
+	# сосудов физически RETORT_SLOT_MAX; пустой — {sub: ""}; чинит сейвы до реторты
+	while _retort_slots.size() < Game.RETORT_SLOT_MAX:
 		_retort_slots.append({"sub": "", "name": "", "started": 0.0, "dur": 0.0})
-	if i < 0 or i >= 3:
+	if i < 0 or i >= _retort_slots.size():
 		return {}
 	return _retort_slots[i]
 
@@ -80,7 +82,7 @@ func _essence_cap_bonus() -> int:
 	return Game.RETORT_CAP_EACH * mini(_essences.size(), Game.RETORT_CAP_FIRST)
 
 func _retort_any_ready(when: float = -1.0) -> bool:
-	for i in 3:
+	for i in Game.RETORT_SLOT_MAX:
 		if _retort_ready(i, when):
 			return true
 	return false
@@ -90,7 +92,7 @@ func _retort_hello_line(when: float = -1.0) -> String:
 	if _retort_any_ready(when):
 		return "Реторта готова — неси кружку!"
 	var best := -1.0
-	for i in 3:
+	for i in Game.RETORT_SLOT_MAX:
 		if _retort_busy(i):
 			var left := _retort_left(i, when)
 			if best < 0.0 or left < best:
@@ -205,7 +207,7 @@ func _build_retort_page(container: VBoxContainer) -> void:
 	_retort_cards = VBoxContainer.new()
 	_retort_cards.add_theme_constant_override("separation", 8)
 	col.add_child(_retort_cards)
-	for i in 3:
+	for i in Game.RETORT_SLOT_MAX:
 		var card := VBoxContainer.new()
 		card.add_theme_constant_override("separation", 4)
 		_retort_cards.add_child(card)
@@ -236,12 +238,12 @@ func _build_retort_page(container: VBoxContainer) -> void:
 func _refresh_retort_page() -> void:
 	if _retort_head == null or _retort_cards == null or _retort_ess == null:
 		return
-	if _retort_ui.size() < 3:
+	if _retort_ui.size() < Game.RETORT_SLOT_MAX:
 		return
 	var n := _essences.size()
 	_retort_head.text = "Эссенций собрано: %d · бонус капа: +%d" % [n, _essence_cap_bonus()]
 	var open := _retort_slots_open()
-	for i in 3:
+	for i in Game.RETORT_SLOT_MAX:
 		var u: Dictionary = _retort_ui[i]
 		var title: Label = u["title"]
 		var state: Label = u["state"]
@@ -251,8 +253,10 @@ func _refresh_retort_page() -> void:
 			title.text = "Слот %d — закрыт" % (i + 1)
 			if i == 1:
 				state.text = "Откроется за 3 уникальные эссенции (%d/3)." % mini(n, 3)
-			else:
+			elif i == 2:
 				state.text = "Откроется за Перегонку (престиж)."
+			else:
+				state.text = "Откроется за Печать мастерства: ранг %d (сейчас %d)." % [Game.MASTERY_RETORT_SLOT_RANK, g._engine.mastery_rank]
 			primary.visible = false
 			cancel.visible = false
 			continue

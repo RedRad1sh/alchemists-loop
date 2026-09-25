@@ -13,6 +13,10 @@ static func run(g: Game) -> void:
 	g._engine.mastery_rank = u32_rank0
 	Selftest.check("retort left text", g._retort._retort_left_text(7 * 3600 + 20 * 60) == "7 ч 20 мин"
 		and g._retort._retort_left_text(45 * 60) == "45 мин" and g._retort._retort_left_text(50) == "50 с")
+	# u33: четвёртый сосуд открывается рангом печати ≥ 5 — пиним ранг 0, чтобы базовые
+	# проверки 1/2/3 слота не зависели от ранга, оставленного предыдущими сюитами.
+	var u33_rank := g._engine.mastery_rank
+	g._engine.mastery_rank = 0
 	g._retort._essences.clear()
 	g._retort._retort_slots.clear()
 	var sg_keep := g._engine.sage_gold
@@ -24,6 +28,7 @@ static func run(g: Game) -> void:
 	Selftest.check("retort third slot by prestige", g._retort._retort_slots_open() == 3)
 	g._retort._essences.clear()
 	g._engine.sage_gold = sg_keep
+	g._engine.mastery_rank = u33_rank
 	var t0 := 1000000.0
 	g._engine.inventory["fire"] = 5
 	var fire_have := int(g._engine.inventory["fire"])
@@ -74,6 +79,32 @@ static func run(g: Game) -> void:
 		and float(g._retort._retort_slot(0).get("started", 0.0)) == 2000000.0)
 	g._retort._retort_cancel(0)
 	g._retort._essences.clear()
+	# ============ U33 (A2): четвёртый сосуд за ранг 5 ============
+	g._engine.mastery_rank = 4
+	g._retort._essences = {"a": "А", "b": "Б", "c": "В"}
+	g._engine.sage_gold = 1
+	Selftest.check("u33 rank 4 still 3", g._retort._retort_slots_open() == 3)
+	g._engine.mastery_rank = 5
+	Selftest.check("u33 rank 5 opens 4th", g._retort._retort_slots_open() == 4)
+	Selftest.check("u33 slot 3 valid", not g._retort._retort_slot(3).is_empty())
+	g._engine.inventory["water"] = 1
+	Selftest.check("u33 start on 4th slot", g._retort._retort_start(3, "water"))
+	Selftest.check("u33 start beyond max refused", not g._retort._retort_start(4, "water"))
+	g._retort._retort_cancel(3)
+	g._engine.mastery_rank = 0
+	Selftest.check("u33 rank 0 back to 3", g._retort._retort_slots_open() == 3
+		and g._retort._retort_slots.size() == Game.RETORT_SLOT_MAX)
+	# старый сейв из трёх слотов читается: добивание до 4, без потери данных
+	var u33_old := [{"sub": "glass", "name": "Стекло", "started": 1.0, "dur": 2.0},
+		{"sub": "", "name": "", "started": 0.0, "dur": 0.0},
+		{"sub": "", "name": "", "started": 0.0, "dur": 0.0}]
+	g._retort._retort_slots = u33_old.duplicate(true)
+	g._saves._load_retort_slots_for_test(u33_old)
+	Selftest.check("u33 old save padded", g._retort._retort_slots.size() == 4
+		and String(g._retort._retort_slot(0)["sub"]) == "glass"
+		and String(g._retort._retort_slot(3)["sub"]) == "")
+	g._retort._essences.clear()
+	g._engine.sage_gold = 0
 	# сводка возврата
 	Selftest.check("spring offline gain", g._saves._spring_offline_gain(3600.0) == 50 and g._saves._spring_offline_gain(60.0) == 10
 		and g._saves._spring_offline_gain(30.0) == 0)
