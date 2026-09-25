@@ -18,6 +18,8 @@ var _house_hint: Label = null
 var house_furniture: Dictionary = {}   # категория -> id варианта (DECOR)
 var house_layout: Dictionary = {}      # категория -> [ax, ay] пользовательской расстановки
 var house_owned: Dictionary = {}   # категория -> Array[String] купленных id (коллекция, локально)
+var house_tasks_done: Array = []   # β: id выполненных поручений (одноразовые, без таймеров)
+var _task_rows := {}               # id -> Label строки на странице дома
 var _theme_custom_on := false
 var _theme_custom := Color("#0d1219")
 var _aura_custom_on := false
@@ -219,6 +221,7 @@ func _on_house_layout_changed(layout: Dictionary) -> void:
 	g._saves._save_game()
 	_upload_house()
 	g._engine.status_text = "Расстановка домика сохранена."
+	_check_house_tasks()
 
 
 func _refresh_house_view() -> void:
@@ -248,6 +251,9 @@ func _build_house_page(page: VBoxContainer) -> void:
 	_house_view = Game.HouseViewScript.new()
 	_house_view.set_editable(true)
 	_house_view.layout_changed.connect(_on_house_layout_changed)
+	# Первый реальный размер — единственный момент, когда дефолтная раскладка
+	# становится измеримой: без этого подарка-онбординга механика невидима.
+	_house_view.resized.connect(_check_house_tasks)
 	_house_view.custom_minimum_size = Vector2(0, 300)
 	page.add_child(_house_view)
 	_house_hint = g._label("", 12)
@@ -294,6 +300,16 @@ func _build_house_page(page: VBoxContainer) -> void:
 		b.pressed.connect(_open_decor_shop.bind(cid))
 		row.add_child(b)
 		_decor_cat_btns[cid] = b
+
+	page.add_child(g._label("Поручения Светика", 14))
+	var hint := g._label("Поставь мебель как он просит — и получишь то, что не купить.", 11)
+	hint.add_theme_color_override("font_color", Color(0.55, 0.62, 0.68))
+	page.add_child(hint)
+	for ht in Game.HOUSE_TASKS:
+		var row := g._label("", 12)
+		row.add_theme_color_override("font_color", Color(0.62, 0.7, 0.76))
+		page.add_child(row)
+		_task_rows[String(ht["id"])] = row
 
 	page.add_child(g._label("Тема лаборатории (фон)", 14))
 	var theme_grid := GridContainer.new()
@@ -433,6 +449,7 @@ func _refresh_house_page() -> void:
 		_house_hint.text = "Светик парит в домике. Выбирай обстановку и цвета — всё видно гостям." if _cosmetic_house \
 			else "Сначала построй домик — потом обставишь его."
 	_refresh_house_view()
+	_refresh_task_rows()
 
 
 func _buy_theme(id: String, cost: int) -> void:
@@ -828,6 +845,83 @@ func _task_rects() -> Dictionary:
 			continue
 		out[cat] = _house_view._visual_rect(item_id, _house_view._item_rect(cat, item_id, w, h))
 	return out
+
+
+func _next_locked_variant(cat_id: String) -> String:
+	# награда уже куплена -> отдаём самый дешёвый некупленный вариант той же категории
+	var items: Array = (_decor_cat(cat_id).get("items", []) as Array).duplicate(true)
+	items.sort_custom(func(x, y) -> bool: return int(x["cost"]) < int(y["cost"]))
+	for it in items:
+		var iid := String(it["id"])
+		if not _decor_owned(cat_id, iid):
+			return iid
+	return ""
+
+
+func _grant_task_reward(task: Dictionary) -> String:
+	var cat := _give_cat(String(task["give"]))
+	if cat == "":
+		return ""
+	var give := String(task["give"])
+	if _decor_owned(cat, give):
+		give = _next_locked_variant(cat)
+		if give == "":
+			return ""  # категория выкуплена целиком: остаётся только дружба
+	_own_item(cat, give)
+	return "%s: «%s»" % [_decor_cat(cat).get("label", cat), _decor_label(cat, give)]
+
+
+func _complete_house_task(task: Dictionary) -> void:
+	var tid := String(task["id"])
+	if house_tasks_done.has(tid):
+		return
+	house_tasks_done.append(tid)
+	var got := _grant_task_reward(task)
+	g._spirit._companion_gain(TASK_AFFINITY)
+	g._spirit._companion_react("quest_done", String(task.get("text", "")))
+	if got == "":
+		g._online._set_status("Поручение выполнено: %s. Светик доволен." % String(task["text"]))
+	else:
+		g._online._set_status("Поручение Светика выполнено: %s — подарок: %s" % [String(task["text"]), got])
+	g._saves._save_game()
+	_refresh_task_rows()
+
+
+func _check_house_tasks() -> void:
+	# Вызывается по факту реальной раскладки: resized (первый layout) и layout_changed
+	# (перетаскивание). До первого layout'а size нулевой и _task_rects молчит.
+	if not _cosmetic_house or _house_view == null:
+		return
+	var rects := _task_rects()
+	if rects.is_empty():
+		return
+	var w: float = _house_view.size.x
+	var h: float = _house_view.size.y
+	for task in Game.HOUSE_TASKS:
+		var tid := String(task["id"])
+		if house_tasks_done.has(tid):
+			continue
+		if house_task_satisfied(task, rects, w, h):
+			_complete_house_task(task)
+
+
+func _refresh_task_rows() -> void:
+	for raw_id in _task_rows:
+		var tid := String(raw_id)
+		var b: Label = _task_rows[tid]
+		if house_tasks_done.has(tid):
+			b.text = "✓ " + _task_text(tid)
+			b.add_theme_color_override("font_color", Color(0.55, 0.8, 0.6))
+		else:
+			b.text = "· " + _task_text(tid)
+			b.add_theme_color_override("font_color", Color(0.62, 0.7, 0.76))
+
+
+func _task_text(id: String) -> String:
+	for t in Game.HOUSE_TASKS:
+		if String(t["id"]) == id:
+			return String(t["text"])
+	return id
 
 
 # ---------- домик: сериализация для сервера ----------

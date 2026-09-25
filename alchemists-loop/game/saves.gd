@@ -92,6 +92,7 @@ func _save_game() -> void:
 		"house_furniture": g._home.house_furniture,
 		"house_layout": g._home.house_layout,
 		"house_owned": g._home.house_owned,
+		"house_tasks_done": g._home.house_tasks_done,
 		"theme_custom_on": g._home._theme_custom_on,
 		"theme_custom": "#" + g._home._theme_custom.to_html(false),
 		"aura_custom_on": g._home._aura_custom_on,
@@ -326,6 +327,13 @@ func _load_game() -> void:
 					if not g._home._decor_item(ocat, ovid).is_empty() and not oarr.has(ovid):
 						oarr.append(ovid)
 			g._home.house_owned[ocat] = oarr
+	g._home.house_tasks_done.clear()
+	if data.get("house_tasks_done") is Array:
+		for raw_tid in data["house_tasks_done"]:
+			var tid := String(raw_tid)
+			for t in Game.HOUSE_TASKS:
+				if String(t["id"]) == tid and not g._home.house_tasks_done.has(tid):
+					g._home.house_tasks_done.append(tid)
 	# миграция: текущая расстановка считается купленной
 	for fcat in g._home.house_furniture:
 		g._home._own_item(String(fcat), String(g._home.house_furniture[fcat]))
