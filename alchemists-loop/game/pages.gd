@@ -24,6 +24,7 @@ var _spend_guard_ms: Dictionary = {}
 var _bench_rows: VBoxContainer
 var _bench_toggle_btn: Button
 var _bench_info: Label
+var _bench_page_labels = null
 var _spring_toggle_btn: Button
 var _spring_info: Label
 var _spring_pick_btn: Dictionary = {}
@@ -1435,7 +1436,11 @@ func _hint_candidates() -> Array:
 
 func _build_bench_page(container: VBoxContainer) -> void:
 	container.add_child(g._label(_mode_hint("bench"), 15))
-	container.add_child(g._label("Подмастерье копит выбранное вещество до %d шт., затем останавливается." % Game.BENCH_LIMIT, 12))
+	var bench_poster := "Подмастерье: варит выбранное вещество каждые %d с, копит до %d шт. и останавливается. Эфир на эти варки не тратится." % [int(Game.BENCH_INTERVAL), Game.BENCH_LIMIT]
+	container.add_child(g._label(bench_poster, 12))
+	if _bench_page_labels == null:
+		_bench_page_labels = []
+	(_bench_page_labels as Array).append(bench_poster)
 	_bench_info = g._label("", 14)
 	container.add_child(_bench_info)
 	var scroll := ScrollContainer.new()
@@ -1594,7 +1599,7 @@ func _refresh_mode_pages() -> void:
 	if _spring_info != null:
 		var spring_ready := g._engine._mode_unlocked("spring")
 		var base_name := g._online._item_name(g._engine.spring_source)
-		_spring_info.text = ("Каждые %d с: +1 «%s»." % [int(Game.SPRING_INTERVAL), base_name]) if spring_ready else "Родник откроется после открытия Ростка."
+		_spring_info.text = ("Каждые %d с: +1 «%s» — базовая стихия, без трат эфира." % [int(Game.SPRING_INTERVAL), base_name]) if spring_ready else "Родник откроется после открытия Ростка."
 		if _spring_toggle_btn != null:
 			_spring_toggle_btn.disabled = not spring_ready
 			_spring_toggle_btn.text = "Остановить родник" if g._engine.spring_on else "Пустить родник"

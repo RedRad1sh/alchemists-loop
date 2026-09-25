@@ -346,32 +346,6 @@ func _mode_of(item_id: String) -> int:
 	return int(a[4])
 
 
-func _mw_of(item_id: String) -> float:
-	if HANG.has(item_id):
-		return HANG[item_id][2]
-	if WALL_MOUNT.has(item_id):
-		return WALL_MOUNT[item_id][2]
-	if item_id in FLOOR_STANDING:
-		return 0.30
-	var cat: String = _cat_of(item_id)
-	var a: Array = ANCHOR.get(cat, [0.5, 0.9, 0.2, 0.3, 0])
-	return a[2]
-
-
-func _mh_of(item_id: String) -> float:
-	if HANG.has(item_id):
-		return HANG[item_id][3]
-	if WALL_MOUNT.has(item_id):
-		return WALL_MOUNT[item_id][3]
-	if item_id in FLOOR_STANDING:
-		return 0.55
-	var cat: String = _cat_of(item_id)
-	if cat == "lamp":
-		return LAMP_H.get(item_id, 0.34)
-	var a: Array = ANCHOR.get(cat, [0.5, 0.9, 0.2, 0.3, 0])
-	return a[3]
-
-
 func _cat_of(item_id: String) -> String:
 	for cat in DRAW_ORDER:
 		if furniture.has(cat) and String(furniture[cat]) == item_id:

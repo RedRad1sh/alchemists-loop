@@ -56,3 +56,15 @@ static func run(g: Game) -> void:
 		if not Game.BASE_IDS.has(String(item_id)):
 			nonbase_half += int(g._engine.inventory[item_id])
 	Selftest.check("gift waits full interval", nonbase_half == nonbase_after)
+
+	# ============ U38 (A5): афиши стоков не дрейфуют от констант ============
+	var u38_desc := ""
+	for u38_u in Game.UPGRADES:
+		if String((u38_u as Dictionary).get("id", "")) == "auto_gift":
+			u38_desc = String((u38_u as Dictionary).get("desc", ""))
+	Selftest.check("u38 gift poster matches const", u38_desc.contains("%d мин" % int(Game.GIFT_INTERVAL / 60.0)))
+	var u38_found := 0
+	for u38_c in g._pages._bench_page_labels:
+		if String(u38_c).contains("%d с" % int(Game.BENCH_INTERVAL)) and String(u38_c).contains("%d шт" % Game.BENCH_LIMIT):
+			u38_found += 1
+	Selftest.check("u38 bench poster matches const", u38_found >= 1)
