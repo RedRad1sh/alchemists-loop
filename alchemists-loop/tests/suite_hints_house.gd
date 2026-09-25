@@ -422,3 +422,31 @@ static func run(g: Game) -> void:
 	Selftest.check("u24 h1 floor pieces stay on the floor", u24_floor_ok)
 	Selftest.check("u24 h1 every piece keeps a tappable pocket", u24_pocket_ok)
 	Selftest.check("u24 h1 nothing drifts off the scene", u24_on_screen)
+
+	# ============ U25 (H2): чтение якоря не переписывает сохранённую раскладку ============
+	var u25_furn := {}
+	for c in Game.DECOR:
+		u25_furn[String(c["id"])] = String(c["id"])
+	var u25_host := Control.new()
+	u25_host.visible = false
+	g.add_child(u25_host)
+	var u25_view: HouseView = Game.HouseViewScript.new()
+	u25_view.set_editable(true)
+	u25_view.animate = false
+	u25_host.add_child(u25_view)
+	u25_view.size = Vector2(400, 300)
+	# устаревший override заведомо за краем — ровно то, что «самовосстанавливает» запись
+	u25_view.set_state(true, u25_furn, null, Color(1.0, 0.72, 0.36),
+		Color("#5a4d40"), Color("#5d452f"), {"rug": [9.0, 9.0]})
+	var u25_before: Vector2 = u25_view._anchor_overrides["rug"]
+	# тап в правый нижний угол: _hit_decor пройдёт по всем категориям и наведёт порядок
+	u25_view._hit_decor(Vector2(398.0, 298.0))
+	Selftest.check("u25 hit-test left the stored anchor alone",
+		u25_view._anchor_overrides["rug"] == u25_before)
+	# но картинка обязана остаться в кадре: нормализация — на чтении, а не в поле
+	var u25_vr: Rect2 = u25_view._visual_rect("rug", u25_view._item_rect("rug", "rug", 400.0, 300.0))
+	Selftest.check("u25 stale anchor still renders inside the scene",
+		u25_vr.size.x > 20.0 and u25_vr.end.x <= 400.5 and u25_vr.end.y <= 300.5
+		and u25_vr.position.x >= -0.5 and u25_vr.position.y >= -0.5)
+	u25_view.queue_free()
+	u25_host.queue_free()

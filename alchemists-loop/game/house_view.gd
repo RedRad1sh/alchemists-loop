@@ -284,13 +284,12 @@ func _clamp_anchor_to_view(cat: String, item_id: String, ax: float, ay: float,
 
 
 func _resolved_anchor(cat: String, item_id: String, w: float, h: float, tex: Texture2D) -> Vector2:
+	# Только чтение. Это вызывают `_hit_decor` (на каждый тап, по всем категориям) и
+	# `_draw` (на каждый кадр): запись сюда фиксировала бы сохранённую раскладку под
+	# текущий размер экрана и подмешивала нормализованные якоря соседей в payload
+	# перетаскивания, а home.gd на такой эмит пишет сейв и POST /api/house.
 	var p: Array = _anchor_params(cat, item_id)
-	var safe := _clamp_anchor_to_view(cat, item_id, float(p[0]), float(p[1]), tex, w, h)
-	if _anchor_overrides.has(cat):
-		# Самовосстановление старых сейвов, в которых предмет уже был
-		# унесён за пределы экрана предыдущим clamp.
-		_anchor_overrides[cat] = safe
-	return safe
+	return _clamp_anchor_to_view(cat, item_id, float(p[0]), float(p[1]), tex, w, h)
 
 
 func _item_rect(cat: String, item_id: String, w: float, h: float) -> Rect2:
@@ -642,8 +641,9 @@ func _tabletop_rect(tex: Texture2D, item_id: String, _w: float, h: float) -> Rec
 	# Высота настольной лампы никогда не берётся из старого layout:
 	# при смене стола она заново садится на его текущую поверхность.
 	var surface_y: float = _table_surface_y()
-	if _anchor_overrides.has(cat):
-		_anchor_overrides[cat] = Vector2(spot / _w, surface_y / h)
+	# Раньше здесь ещё и писало: _anchor_overrides[cat] = Vector2(spot / _w, surface_y / h).
+	# Это тот же дефект, что в _resolved_anchor: посадка на стол — производная от
+	# геометрии стола, а не от намерения игрока, и хранить её в раскладке нельзя.
 	# Якорь — низ видимой части лампы. Поэтому прозрачное поле снизу
 	# больше не оставляет лампу «висящей» над столом.
 	var used := _content_rect(item_id, tex)
