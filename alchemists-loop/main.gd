@@ -25,7 +25,6 @@ const MILESTONE_REWARDS := Balance.MILESTONE_REWARDS
 const MAX_ETHER := Balance.MAX_ETHER
 const START_ETHER := Balance.START_ETHER
 const UPGRADES := Balance.UPGRADES
-const LENS_COST := Balance.LENS_COST
 const HINT_COST := Balance.HINT_COST
 const SPEND_GUARD_MSEC := Balance.SPEND_GUARD_MSEC
 const RES_MILES := Balance.RES_MILES
@@ -305,7 +304,6 @@ var _shop: Shop  # магазин, rewarded и приватность
 # произвольные цвета (палитра + RGB)
 # магазин декора и палитра
 # пары, отвергнутые сервером (фильтр намёков)
-# линза: целевое вещество
 # рейтинг и чужие домики
 var _set_rows: VBoxContainer = null
 var _feed_list: VBoxContainer = null
@@ -371,8 +369,6 @@ func _ready() -> void:
 	for a in args:
 		if a == "--action=upgrades":
 			_demo_harness._action_upgrades = true
-		elif a == "--action=lens":
-			_demo_harness._action_lens = true
 		elif a == "--action=hint":
 			_demo_harness._action_hint = true
 		elif a == "--action=event":
@@ -488,9 +484,6 @@ func _ready() -> void:
 			tc.current_tab = _demo_harness._shot_tab
 	if _demo_harness._demo and _demo_harness._action_upgrades:
 		_hub._open_upgrades()
-	if _demo_harness._demo and _demo_harness._action_lens:
-		_pages._lens_reveal()
-		_engine._refresh()
 	if _demo_harness._demo and _demo_harness._action_hint:
 		# для кадра подсказку жмём ближе к моменту съёмки, чтобы кольцо было видно
 		if _demo_harness._shot_path != "":

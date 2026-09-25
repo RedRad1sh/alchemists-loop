@@ -15,7 +15,6 @@ var _geom_frame := 0
 var _probe := false
 var _shot_scroll := -1
 var _action_upgrades := false
-var _action_lens := false
 var _action_hint := false
 var _action_event := false
 var _action_companion := false

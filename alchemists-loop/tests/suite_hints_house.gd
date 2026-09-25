@@ -49,13 +49,6 @@ static func run(g: Game) -> void:
 	Selftest.check("hint excludes rejected pair", _gone)
 	g._engine._rejected_pairs.clear()
 
-	# v22: у линзы свой перк — рецепт для выбранной цели
-	var _lt := g._pages._lens_targets()
-	Selftest.check("lens targets are undiscovered", not _lt.is_empty() and not _lt.has("fire"))
-	g._pages._lens_target = String(_lt[0])
-	Selftest.check("lens target set", g._pages._lens_target != "")
-	Selftest.check("lens target candidates is array", typeof(g._pages._lens_target_candidates(g._pages._lens_target)) == TYPE_ARRAY)
-	g._pages._lens_target = ""
 	g._engine.known_recipes.clear()
 
 	# дом Светика: траты и обстановка
@@ -118,7 +111,7 @@ static func run(g: Game) -> void:
 
 	# ============ U13 (T17): анти-спам кнопок траты ============
 	# Гейты чистые (часы параметром) — окно проверяется без реального кадра; затем
-	# живой двойной тап по _hint/_lens_reveal: одно списание на два нажатия.
+	# живой двойной тап по _hint: одно списание на два нажатия.
 	var u13_ether := g._engine.ether
 	var u13_overflow := g._engine.ether_overflow
 	var u13_inv := g._engine.inventory.duplicate(true)
@@ -135,8 +128,8 @@ static func run(g: Game) -> void:
 	var u13_exp_b := g._pages._experiment_b
 	var u13_guard := g._pages._spend_guard_ms.duplicate(true)
 	var u13_claim_at := g._resonance._res_claim_at
-	# _lens_reveal открывает попап и уводит табу в лабораторию — иначе блок оставил бы
-	# открытый попап на все последующие сюиты.
+	# _hint уводит табу в эксперимент — снимаем и возвращаем табу/попап, иначе блок
+	# оставил бы чужую активную вкладку на все последующие сюиты.
 	var u13_tab := g._tabs_ref.current_tab
 	var u13_popup := g._popup.visible
 	var u13_n_inv := g._engine.inventory.size()
@@ -157,9 +150,9 @@ static func run(g: Game) -> void:
 	# свежий ключ не «съедает» тап в первые 250 мс жизни игры (отметка стартует с
 	# -SPEND_GUARD_MSEC, а не с 0, как _collect_all_ms)
 	Selftest.check("u13 spend gate allows first tap at boot", g._pages._spend_gate("boot", 100))
-	# ключи независимы: линза не наследует занятую подсказкой отметку
-	Selftest.check("u13 spend gate keys independent", g._pages._spend_gate("lens", 1100)
-		and not g._pages._spend_gate("lens", 1200))
+	# ключи независимы: probe не наследует занятую подсказкой отметку
+	Selftest.check("u13 spend gate keys independent", g._pages._spend_gate("probe", 1100)
+		and not g._pages._spend_gate("probe", 1200))
 	g._pages._spend_guard_ms.clear()
 	g._spirit._companion_unlocked = true
 	g._engine.brewing = false
@@ -178,18 +171,6 @@ static func run(g: Game) -> void:
 	Selftest.check("u13 second hint in same frame spends nothing", not g._pages._hint()
 		and g._engine.ether + g._engine.ether_overflow == u13_avail0 - Game.HINT_COST
 		and g._engine.status_text == u13_status1 and g._pages._experiment_hint_ids == u13_ids1)
-	# то же для линзы (30⚡): состояние подбирается честно, до обоих вызовов
-	Selftest.check("u13 lens candidates leave room", g._pages._lens_candidates().size() >= 2)
-	var u13_avail1 := g._engine.ether + g._engine.ether_overflow
-	var u13_known1 := g._engine.known_recipes.size()
-	Selftest.check("u13 first lens pays", g._pages._lens_reveal()
-		and g._engine.ether + g._engine.ether_overflow == u13_avail1 - Game.LENS_COST
-		and g._engine.known_recipes.size() == u13_known1 + 1)
-	var u13_status2 := g._engine.status_text
-	Selftest.check("u13 second lens in same frame spends nothing", not g._pages._lens_reveal()
-		and g._engine.ether + g._engine.ether_overflow == u13_avail1 - Game.LENS_COST
-		and g._engine.known_recipes.size() == u13_known1 + 1
-		and g._engine.status_text == u13_status2)
 	# restore: мир после блока — ровно как до него; снятые окна не должны отбить
 	# тап позднего сюжета (Time.get_ticks_msec() монотонна)
 	g._engine.ether = u13_ether
@@ -206,7 +187,6 @@ static func run(g: Game) -> void:
 	g._pages._experiment_b = u13_exp_b
 	g._pages._spend_guard_ms = u13_guard
 	g._pages._spend_guard_ms.erase("hint")
-	g._pages._spend_guard_ms.erase("lens")
 	g._resonance._res_claim_at = u13_claim_at
 	g._tabs_ref.current_tab = u13_tab
 	if not u13_popup:
@@ -224,8 +204,7 @@ static func run(g: Game) -> void:
 		and g._pages._experiment_hint_ids.size() == u13_n_hint_ids
 		and g._resonance._res_claim_at == u13_claim_at
 		and g._tabs_ref.current_tab == u13_tab and g._popup.visible == u13_popup)
-	Selftest.check("u13 guards released for later suites", not g._pages._spend_guard_ms.has("hint")
-		and not g._pages._spend_guard_ms.has("lens"))
+	Selftest.check("u13 guards released for later suites", not g._pages._spend_guard_ms.has("hint"))
 
 	# ============ U14 (T18): HouseView — кадры только видимому виду, emit только по факту сдвига ============
 	# Хост — обычный Control, не Container: вёрстка перетёрла бы размер вида.

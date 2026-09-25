@@ -13,8 +13,6 @@ var _tools_sel := ""
 var _tools_hint: Label = null
 var _mode_pages: Dictionary = {}
 var _mode_chips: Dictionary = {}
-var _lens_btn: Button
-var _lens_info: Label
 var _hint_btn: Button
 var _hint_id := ""
 var _bench_target := ""
@@ -29,10 +27,6 @@ var _bench_info: Label
 var _spring_toggle_btn: Button
 var _spring_info: Label
 var _spring_pick_btn: Dictionary = {}
-var _lens_target := ""
-var _lens_grid: HBoxContainer = null
-var _lens_sel_label: Label = null
-var _lens_target_count := -1
 
 # Эксперимент (v1: two reagents; hash/API version leaves room for 3–4).
 var _experiment_a := ""
@@ -1124,10 +1118,6 @@ func _ensure_modes() -> void:
 		match String(key):
 			"experiment":
 				box.add_child(g._label("Эксперимент перенесён в основную вкладку — здесь он больше не дублируется.", 12))
-			"lens":
-				# Старый экран не удаляем из внутреннего реестра ради миграции,
-				# но он недоступен: кнопка скрыта, бесплатный reveal больше не является UI.
-				box.add_child(g._label("Старая функция отключена: используй основную вкладку Эксперимент или компактное Производство.", 12))
 			"spring":
 				box.add_child(g._label("Родник перенесён в Лабораторию.", 12))
 			"bench":
@@ -1325,36 +1315,6 @@ func _refresh_experiment_page() -> void:
 	_experiment_info.text = line + "\n" + String(check.get("reason", "Готово к эксперименту."))
 	if _experiment_button != null:
 		_experiment_button.disabled = not bool(check.get("ok", false)) or g._engine._experiment_pending_pair.size() > 0
-
-func _build_lens_page(container: VBoxContainer) -> void:
-	var pad := MarginContainer.new()
-	pad.add_theme_constant_override("margin_left", 14)
-	pad.add_theme_constant_override("margin_right", 14)
-	pad.add_theme_constant_override("margin_top", 12)
-	pad.add_theme_constant_override("margin_bottom", 8)
-	container.add_child(pad)
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 10)
-	pad.add_child(col)
-	col.add_child(g._label(_mode_hint("lens"), 15))
-	_lens_info = g._label("", 14)
-	col.add_child(_lens_info)
-	_lens_sel_label = g._label("Цель: выбери вещество — линза найдёт рецепт именно для него (или «Любое»).", 13)
-	_lens_sel_label.add_theme_color_override("font_color", Color(0.62, 0.74, 0.82))
-	col.add_child(_lens_sel_label)
-	var tscroll := ScrollContainer.new()
-	tscroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	tscroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	tscroll.custom_minimum_size = Vector2(0, 64)
-	col.add_child(tscroll)
-	_lens_grid = HBoxContainer.new()
-	_lens_grid.add_theme_constant_override("separation", 6)
-	tscroll.add_child(_lens_grid)
-	_lens_btn = g._round_brew_button("Рассеять туман (−%d ⚡)" % Game.LENS_COST)
-	_lens_btn.custom_minimum_size = Vector2(210, 42)
-	_lens_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_lens_btn.pressed.connect(_lens_reveal)
-	col.add_child(_lens_btn)
 
 func _build_spring_page(container: VBoxContainer) -> void:
 	container.add_child(g._label(_mode_hint("spring"), 15))
@@ -1604,7 +1564,7 @@ func _bench_tick(delta: float) -> void:
 	# первый доступный шаг. Следующий тик продолжит маршрут.
 	g._engine._run_bench_plan(_bench_target, plan)
 
-func _lens_candidates() -> Array:
+func _unrevealed_recipe_candidates() -> Array:
 	var res: Array = []
 	for r in g.RECIPES:
 		var a := String(r["a"])
@@ -1614,105 +1574,6 @@ func _lens_candidates() -> Array:
 		if g._engine.inventory.has(a) and g._engine.inventory.has(b):
 			res.append(r)
 	return res
-
-
-func _lens_targets() -> Array:
-	# неоткрытые вещества (известны миру, но их нет в запасе) — цели линзы
-	var res: Array = []
-	for item_id in g.ITEMS:
-		var sid := String(item_id)
-		if not g._engine.inventory.has(sid):
-			res.append(sid)
-	res.sort_custom(func(a: String, b: String) -> bool:
-		return g._online._item_name(a) < g._online._item_name(b))
-	return res
-
-
-func _lens_target_candidates(target: String) -> Array:
-	var res: Array = []
-	for r in g.RECIPES:
-		var a := String(r["a"])
-		var b := String(r["b"])
-		if String(r["out"]) != target:
-			continue
-		if g._engine.known_recipes.has(g._pair_key(a, b)) or g._engine._rejected_pairs.has(g._pair_key(a, b)):
-			continue
-		if g._engine.inventory.has(a) and g._engine.inventory.has(b):
-			res.append(r)
-	return res
-
-
-func _set_lens_target(slug: String) -> void:
-	_lens_target = slug
-	Sfx.click()
-	g._engine.status_text = "Цель линзы: %s" % (g._online._item_name(slug) if slug != "" else "любое неоткрытое вещество")
-	_refresh_lens_targets()
-
-
-func _refresh_lens_targets() -> void:
-	if _lens_grid == null:
-		return
-	for child in _lens_grid.get_children():
-		_lens_grid.remove_child(child)
-		child.queue_free()
-	var any := g._small_button("Любое", Vector2(0, 40), 1 if _lens_target == "" else 0)
-	any.pressed.connect(_set_lens_target.bind(""))
-	_lens_grid.add_child(any)
-	for slug in _lens_targets():
-		var sid := String(slug)
-		var orb := g._make_orb(sid, 40)
-		orb.interactive = true
-		orb.tapped.connect(_set_lens_target.bind(sid))
-		_lens_grid.add_child(orb)
-		var mark := g._label("▼", 12) if _lens_target == sid else null
-		if mark != null:
-			mark.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
-			_lens_grid.add_child(mark)
-
-
-func _lens_reveal() -> bool:
-	if not _spend_gate("lens", Time.get_ticks_msec()):
-		return false
-	if g._engine.brewing or g._engine._auto:
-		return false
-	if g._engine._available_ether() < Game.LENS_COST:
-		g._engine.status_text = "Линзе нужен эфир: %d." % Game.LENS_COST
-		Sfx.error()
-		g._engine._refresh()
-		return false
-	var cand := _lens_candidates()
-	if _lens_target != "":
-		cand = _lens_target_candidates(_lens_target)
-	if cand.is_empty():
-		if _lens_target != "":
-			g._engine.status_text = "Линза: «%s» напрямую из твоих запасов не сварить — открой недостающие ингредиенты." % g._online._item_name(_lens_target)
-		else:
-			g._engine.status_text = "Линза видит только знакомое: все пары из известных веществ уже открыты."
-		Sfx.error()
-		g._engine._refresh()
-		return false
-	g._engine._spend_ether(Game.LENS_COST)
-	var r: Dictionary = cand[randi() % cand.size()]
-	var a := String(r["a"])
-	var b := String(r["b"])
-	var out := String(r["out"])
-	g._engine.known_recipes[g._pair_key(a, b)] = true
-	# показать на месте: попап + переход в лабораторию + подсветка ингредиентов
-	if g._tabs_ref != null:
-		g._tabs_ref.current_tab = 1
-	g._engine.status_text = "Линза подсветила: %s + %s → %s" % [g._online._item_name(a), g._online._item_name(b), g._online._item_name(out)]
-	Sfx.legendary()
-	g._present_popup(out, "Линза открыла рецепт:\n%s + %s → %s\n\nОн уже в книге рецептов в лаборатории." % [
-		g._online._item_name(a), g._online._item_name(b), g._online._item_name(out)])
-	var orb_a: ElementOrb = g._engine._item_orbs.get(a)
-	if orb_a != null:
-		orb_a.hint_pulse()
-	var orb_b: ElementOrb = g._engine._item_orbs.get(b)
-	if orb_b != null:
-		orb_b.hint_pulse()
-	g._engine._refresh()
-	g._saves._save_game()
-	return true
 
 func _on_spring_pick(_orb: ElementOrb, item_id: String) -> void:
 	g._engine.spring_source = item_id
@@ -1730,20 +1591,6 @@ func _toggle_spring() -> void:
 func _refresh_mode_pages() -> void:
 	_refresh_experiment_location()
 	_refresh_experiment_page()
-	if _lens_info != null:
-		var n := _lens_candidates().size()
-		if _lens_target != "":
-			n = _lens_target_candidates(_lens_target).size()
-			_lens_info.text = "Рецептов для цели «%s» из твоего запаса: %d." % [g._online._item_name(_lens_target), n]
-		elif n > 0:
-			_lens_info.text = "Неизвестных пар среди открытых веществ: %d." % n
-		else:
-			_lens_info.text = "Над открытыми веществами тумана не осталось. Открывай новые ингредиенты!"
-		if _lens_btn != null:
-			_lens_btn.disabled = n == 0
-		if _lens_grid != null and _lens_target_count != _lens_targets().size():
-			_lens_target_count = _lens_targets().size()
-			_refresh_lens_targets()
 	if _spring_info != null:
 		var spring_ready := g._engine._mode_unlocked("spring")
 		var base_name := g._online._item_name(g._engine.spring_source)

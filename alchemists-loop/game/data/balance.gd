@@ -33,9 +33,7 @@ const UPGRADES := [
 # Светик подсказывает направление, но не раскрывает результат. Цена — существующий эфир.
 # Значение вынесено в баланс, чтобы аналитика могла менять его без рерайта UI.
 const HINT_COST := 10
-# Legacy Lens cost remains only as a save/diagnostic compatibility constant; no Lens UI is built.
-const LENS_COST := 30
-# Анти-спам окно для кнопок траты (подсказка/линза): повторный тап внутри него
+# Анти-спам окно для кнопок траты (подсказка): повторный тап внутри него
 # молча отбрасывается. Тот же интервал, что и у _collect_all_ms в core.gd.
 const SPEND_GUARD_MSEC := 250
 

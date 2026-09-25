@@ -117,7 +117,7 @@ static func run(g: Game) -> void:
 
 	# судьбоносные режимы
 	g._engine.inventory["plant"] = maxi(int(g._engine.inventory.get("plant", 0)), 1)
-	Selftest.check("modes unlocked by items", g._engine._mode_unlocked("lens") and g._engine._mode_unlocked("spring"))
+	Selftest.check("modes unlocked by items", g._engine._mode_unlocked("spring"))
 	g._engine.inventory["person"] = maxi(int(g._engine.inventory.get("person", 0)), 1)
 	g._engine._refresh()
 	Selftest.check("mode bench unlocked", g._engine._mode_unlocked("bench"))
@@ -132,11 +132,10 @@ static func run(g: Game) -> void:
 		g._engine.inventory[String(mode_id)] = maxi(int(g._engine.inventory.get(String(mode_id), 0)), 1)
 	g._engine._refresh()
 	Selftest.check("mode resonance unlocked by discovery", g._engine._mode_unlocked("resonance"))
-	Selftest.check("mode pages built", g._pages._mode_pages.size() == 10 and g._pages._mode_chips.size() == 10)
-	Selftest.check("mode tabs compat", g._pages._mode_tabs.size() == 10)
+	Selftest.check("mode pages built", g._pages._mode_pages.size() == 9 and g._pages._mode_chips.size() == 9)
+	Selftest.check("mode tabs compat", g._pages._mode_tabs.size() == 9)
 	Selftest.check("compact tools omit experiment", not (g._pages._mode_chips["experiment"] as Button).visible
 		and (g._pages._mode_chips["letters"] as Button).visible
-		and not (g._pages._mode_chips["lens"] as Button).visible
 		and not (g._pages._mode_chips["spring"] as Button).visible
 		and not (g._pages._mode_chips["resonance"] as Button).visible
 		and not (g._pages._mode_chips["atlas"] as Button).visible)

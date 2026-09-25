@@ -1284,7 +1284,7 @@ func _on_event_tap() -> void:
 			else:
 				g._engine.status_text = "☄ Дар тумана: пока нечего дарить."
 		"insight":
-			var cand := g._pages._lens_candidates()
+			var cand := g._pages._unrevealed_recipe_candidates()
 			if not cand.is_empty():
 				var r: Dictionary = cand[randi() % cand.size()]
 				var ra := String(r["a"])

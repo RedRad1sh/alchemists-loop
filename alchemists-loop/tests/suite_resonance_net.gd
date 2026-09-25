@@ -223,9 +223,6 @@ static func run(g: Game) -> void:
 	guard_net.free()
 	dead_net.free()
 	g._engine.ether = 300
-	var known_b2 := g._engine.known_recipes.size()
-	Selftest.check("lens reveal", g._pages._lens_reveal() and g._engine.known_recipes.size() == known_b2 + 1
-		and g._engine.ether == 300 - Game.LENS_COST)
 	var a_before := int(g._engine.inventory.get("water", 0))
 	g._engine.spring_source = "water"
 	g._engine.spring_on = true
