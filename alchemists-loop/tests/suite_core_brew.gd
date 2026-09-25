@@ -334,8 +334,8 @@ static func run(g: Game) -> void:
 	Selftest.check("experiment refused during brew", not bool(u9_exp.get("ok", false))
 		and String(u9_exp.get("reason", "")).contains("Котёл занят варкой или производством")
 		and g._engine._experiment_pending_pair.is_empty())
-	Selftest.check("bench refused during brew", not g._engine._run_bench_plan("steam", u9_plan)
-		and not g._pages._bench_busy)
+	var u9_bench_refused: bool = await g._engine._run_bench_plan("steam", u9_plan)
+	Selftest.check("bench refused during brew", not u9_bench_refused and not g._pages._bench_busy)
 	var u9_auto_refused: bool = await g._engine._run_auto_plan("steam", u9_plan)
 	Selftest.check("auto plan refused during brew", not u9_auto_refused and not g._engine._auto)
 	await g.get_tree().create_timer(1.0).timeout
