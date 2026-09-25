@@ -660,11 +660,21 @@ func _rebuild_up_rows() -> void:
 
 func _mastery_row() -> Button:
 	var cost := g._engine._mastery_cost()
-	var b := g._small_button("✦ Архивная печать · ранг %d\n%d ⚡ из эфира или резерва" % [g._engine.mastery_rank, cost], Vector2(0, 62), 1)
+	var b := g._small_button("✦ Архивная печать · ранг %d\n%d ⚡ из эфира или резерва\n%s" % [g._engine.mastery_rank, cost, _mastery_next_benefit(g._engine.mastery_rank)], Vector2(0, 62), 1)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.disabled = g._engine._available_ether() < cost
 	b.pressed.connect(g._engine._buy_mastery)
 	return b
+
+func _mastery_next_benefit(rank: int) -> String:
+	# A2: печать продаёт время и параллелизм — строка обязана называть
+	# ближайший реальный порог, а не абстрактную «силу».
+	var nxt := rank + 1
+	if Game.MASTERY_STAGE_RANKS.has(nxt):
+		return "Ранг %d: этап автоварки %d → %d операций." % [nxt, g._engine._stage_ops(), g._engine._stage_ops() + 1]
+	if nxt == Game.MASTERY_RETORT_SLOT_RANK:
+		return "Ранг %d: четвёртый сосуд реторты." % nxt
+	return "Ранг %d: реторта зреет на %d %% быстрее." % [nxt, int(round(Game.MASTERY_RETORT_SPEED * 100.0))]
 
 func _up_row(u: Dictionary) -> Button:
 	var id := String(u["id"])

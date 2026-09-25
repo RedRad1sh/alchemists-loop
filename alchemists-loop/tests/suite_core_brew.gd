@@ -121,6 +121,19 @@ static func run(g: Game) -> void:
 	Selftest.check("u31 monotonic", u31_mono)
 	g._engine.mastery_rank = u31_rank
 
+	# ============ U34 (A2): строка печати называет ближайший порог ============
+	g._engine.mastery_rank = 2
+	Selftest.check("u34 text at rank 2", g._hub._mastery_next_benefit(2).contains("автоварки"))
+	g._engine.mastery_rank = 4
+	Selftest.check("u34 text at rank 4", g._hub._mastery_next_benefit(4).contains("сосуд"))
+	Selftest.check("u34 text elsewhere", g._hub._mastery_next_benefit(10).contains("реторта"))
+	var u34_nonempty := true
+	for u34_r in range(1, 12):
+		if g._hub._mastery_next_benefit(u34_r).is_empty():
+			u34_nonempty = false
+	Selftest.check("u34 never empty", u34_nonempty)
+	g._engine.mastery_rank = u31_rank
+
 	# автоварка: планировщик цепочки
 	g._engine.inventory["steam"] = 0  # убрать остатки прошлых варок
 	var p_steam := g._guild._plan_craft("steam")
