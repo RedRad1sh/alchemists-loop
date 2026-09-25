@@ -493,6 +493,8 @@ func _fair_offline_available() -> bool:
 func _fair_offline_claimable() -> bool:
 	if _fair_off_claim_week == Home._iso_week_id():
 		return false
+	if _fair_local_week != Home._iso_week_id():
+		return false
 	return _fair_local_brews.size() >= Game.FAIR_OFFLINE_GOAL \
 		and _fair_regen_total < Game.FAIR_REGEN_CAP
 
