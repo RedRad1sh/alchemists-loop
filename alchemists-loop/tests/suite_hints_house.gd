@@ -510,7 +510,7 @@ static func run(g: Game) -> void:
 		not Home.house_task_satisfied(over, u27_ov_wide, 400.0, 300.0))
 	var u27_ov_below := {"a": Rect2(120.0, 260.0, 40.0, 20.0), "b": Rect2(100.0, 200.0, 100.0, 40.0)}
 	Selftest.check("b over: a under b refuses", not Home.house_task_satisfied(over, u27_ov_below, 400.0, 300.0))
-	# too far up: те же прямоугольники, но зазор 100 px = 0.33 > gap 0.1
+	# too far up: те же прямоугольники, но зазор 200-120 = 80 px -> 80/300 ≈ 0.267 > gap 0.1
 	var u27_ov_high := {"a": Rect2(120.0, 100.0, 40.0, 20.0), "b": Rect2(100.0, 200.0, 100.0, 40.0)}
 	Selftest.check("b over: gap threshold is honoured vertically",
 		not Home.house_task_satisfied(over, u27_ov_high, 400.0, 300.0))
