@@ -27,6 +27,9 @@ var _week_cache: Dictionary = {}
 var _week_offline := false
 var _vein_cap_total := 0
 var _fair_regen_total := 0.0
+var _fair_local_week := ""
+var _fair_local_brews: Array = []
+var _fair_off_claim_week := ""
 var _week_head: Label = null
 var _week_list: VBoxContainer = null
 
@@ -466,6 +469,52 @@ func _fair_claim() -> void:
 	Net.fair_claim(g._online._device_id)
 
 
+func _fair_on_brew(output: String) -> void:
+	# Локальный котёл (A3): считаем варки разных веществ, чтобы ярмарка жила и
+	# без сети — вдвое дешевле на выходе. Чистый счётчик: без гейта selftest,
+	# как _circle_on_discovery (suite_resonance_net: его мутации восстанавливаются).
+	if output == "":
+		return
+	var w := Home._iso_week_id()
+	if _fair_local_week != w:
+		_fair_local_week = w
+		_fair_local_brews.clear()
+	if not _fair_local_brews.has(output):
+		_fair_local_brews.append(output)
+		if not g._selftest:
+			g._saves._save_game()
+			_refresh_week_page()
+
+
+func _fair_offline_available() -> bool:
+	return not g._online._net_enabled or not Net.is_available() or g._online._device_id == ""
+
+
+func _fair_offline_claimable() -> bool:
+	if _fair_off_claim_week == Home._iso_week_id():
+		return false
+	return _fair_local_brews.size() >= Game.FAIR_OFFLINE_GOAL \
+		and _fair_regen_total < Game.FAIR_REGEN_CAP
+
+
+func _fair_offline_claim() -> void:
+	if not _fair_offline_claimable():
+		g._engine.status_text = "Локальный котёл: свари %d разных вещества за неделю (%d/%d)." % [
+			Game.FAIR_OFFLINE_GOAL, _fair_local_brews.size(), Game.FAIR_OFFLINE_GOAL]
+		Sfx.error()
+		return
+	_fair_off_claim_week = Home._iso_week_id()
+	var before := _fair_regen_total
+	_fair_regen_total = minf(Game.FAIR_REGEN_CAP, _fair_regen_total + Game.FAIR_REGEN_EACH * Game.FAIR_OFFLINE_FACTOR)
+	g._hub._log_event("Ярмарка без мира: +%.2f регена навсегда (вполовину)" % (_fair_regen_total - before))
+	g._engine.status_text = "Локальный котёл закрыт: +%.2f к регену навсегда. Без мира — вполовину." % (_fair_regen_total - before)
+	g._spirit._companion_react("milestone", "ярмарка")
+	Sfx.stage_up()
+	g._saves._save_game()
+	_refresh_week_page()
+	g._engine._refresh()
+
+
 func _on_net_fair_claim_result(result: Dictionary) -> void:
 	if result.get("offline", false) == true or result.get("ok", false) != true:
 		g._engine.status_text = "Мир не ответил — награда котла подождёт."
@@ -558,7 +607,7 @@ func _refresh_week_page() -> void:
 	var vtitle := "Жила: «%s»" % g._clean_str(v.get("tag1", "?"))
 	if bool(v.get("spread", false)):
 		vtitle += " + «%s» (туман расползся)" % g._clean_str(v.get("tag2", "?"))
-	var vt := g._label(vtitle, 14)
+	var vt := g._label(vtitle + (" · ждёт связи с миром" if _fair_offline_available() else ""), 14)
 	vt.add_theme_color_override("font_color", Color(0.55, 0.95, 0.9))
 	_week_list.add_child(vt)
 	_week_list.add_child(g._label("Твоих находок в жиле: %d · прожилки: %d/%d · +кап от жилы: %d" % [
@@ -582,6 +631,14 @@ func _refresh_week_page() -> void:
 	cb.disabled = not _week_claimable()
 	cb.pressed.connect(_fair_claim)
 	_week_list.add_child(cb)
+	if _fair_offline_available():
+		_week_list.add_child(g._label("Без мира: локальный котёл — %d/%d разных вещества за неделю, награда вполовину." % [
+			_fair_local_brews.size(), Game.FAIR_OFFLINE_GOAL], 13))
+		var ob := g._small_button("Закрыть локальный котёл (−50 %)", Vector2(0, 46), 2)
+		ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ob.disabled = not _fair_offline_claimable()
+		ob.pressed.connect(_fair_offline_claim)
+		_week_list.add_child(ob)
 	var pv = f.get("prev", null)
 	if typeof(pv) == TYPE_DICTIONARY and not (pv as Dictionary).is_empty():
 		var pd := pv as Dictionary

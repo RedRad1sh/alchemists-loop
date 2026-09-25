@@ -1491,5 +1491,6 @@ func _commit_brew(a: String, b: String) -> Dictionary:
 		g._spirit._companion_unlock()
 	g._guild._quest_on_brew(output)
 	g._retention._fair_report_brew(a, b)
+	g._retention._fair_on_brew(output)
 	Analytics.track("combine_try", {"left": a, "right": b, "result": "new" if newly_learned else "known", "output": output, "source": "recipe"})
 	return {"failed": false, "output": output, "newly_learned": newly_learned, "milestones": milestones}

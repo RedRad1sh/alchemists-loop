@@ -118,7 +118,10 @@ func _save_game() -> void:
 		"circle_local_done_day": g._retention._circle_local_done_day,
 		"week_cache": g._retention._week_cache,
 		"vein_cap_total": g._retention._vein_cap_total,
-		"fair_regen_total": g._retention._fair_regen_total
+		"fair_regen_total": g._retention._fair_regen_total,
+		"fair_local_week": g._retention._fair_local_week,
+		"fair_local_brews": g._retention._fair_local_brews,
+		"fair_off_claim_week": g._retention._fair_off_claim_week
 	}
 	var file := FileAccess.open(g.TEMP_PATH, FileAccess.WRITE)
 	if file == null:
@@ -384,6 +387,12 @@ func _load_game() -> void:
 	g._retention._week_cache = data.get("week_cache", {}) if data.get("week_cache", {}) is Dictionary else {}
 	g._retention._vein_cap_total = maxi(0, int(data.get("vein_cap_total", 0)))
 	g._retention._fair_regen_total = clampf(float(data.get("fair_regen_total", 0.0)), 0.0, Game.FAIR_REGEN_CAP)
+	g._retention._fair_local_week = String(data.get("fair_local_week", ""))
+	g._retention._fair_local_brews.clear()
+	if data.get("fair_local_brews") is Array:
+		for b in data["fair_local_brews"]:
+			g._retention._fair_local_brews.append(String(b))
+	g._retention._fair_off_claim_week = String(data.get("fair_off_claim_week", ""))
 	g._spirit._companion_apply_level()
 	g._engine.ether_overflow = maxi(0, int(data.get("ether_overflow", 0)))
 	g._engine.mastery_rank = maxi(0, int(data.get("mastery_rank", 0)))

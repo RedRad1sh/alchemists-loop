@@ -323,3 +323,38 @@ static func run(g: Game) -> void:
 	Selftest.check("net week route", String(b_week["url"]).ends_with("/week/status?device_id=d") and int(b_week["method"]) == HTTPClient.METHOD_GET)
 	var b_fair := Net._build_request({"kind": "fair_brew", "path": "/fair/brew", "body": {"device_id": "d", "a": "x", "b": "y"}})
 	Selftest.check("net fair route", String(b_fair["url"]).ends_with("/api/fair/brew") and int(b_fair["method"]) == HTTPClient.METHOD_POST)
+	# ============ U36 (A3): офлайн-котёл ярмарки ============
+	var u36_total := g._retention._fair_regen_total
+	var u36_lw := g._retention._fair_local_week
+	var u36_lb := (g._retention._fair_local_brews as Array).duplicate()
+	var u36_ow := g._retention._fair_off_claim_week
+	g._retention._fair_local_week = ""
+	g._retention._fair_local_brews.clear()
+	g._retention._fair_off_claim_week = ""
+	g._retention._fair_regen_total = 0.0
+	Selftest.check("u36 not claimable empty", not g._retention._fair_offline_claimable())
+	for u36_out in ["steam", "stone", "steam", "clay"]:
+		g._retention._fair_on_brew(u36_out)
+	Selftest.check("u36 distinct counted", (g._retention._fair_local_brews as Array).size() == 3)
+	Selftest.check("u36 claimable at 3", g._retention._fair_offline_claimable())
+	g._retention._fair_offline_claim()
+	Selftest.check("u36 half regen", absf(g._retention._fair_regen_total - Game.FAIR_REGEN_EACH * Game.FAIR_OFFLINE_FACTOR) < 0.0001)
+	Selftest.check("u36 once per week", not g._retention._fair_offline_claimable()
+		and g._retention._fair_off_claim_week == Home._iso_week_id())
+	# потолок общий с серверной ярмаркой
+	g._retention._fair_regen_total = Game.FAIR_REGEN_CAP
+	g._retention._fair_off_claim_week = ""
+	Selftest.check("u36 cap respected", not g._retention._fair_offline_claimable())
+	# неделя сменилась — счётчик обнулился, ключ недели поменялся
+	g._retention._fair_regen_total = 0.0
+	g._retention._fair_local_week = "2000-W01"
+	g._retention._fair_off_claim_week = "2000-W01"
+	g._retention._fair_on_brew("steam")
+	Selftest.check("u36 week rollover resets", (g._retention._fair_local_brews as Array).size() == 1
+		and g._retention._fair_local_week == Home._iso_week_id()
+		and g._retention._fair_off_claim_week == "2000-W01")
+	# restore
+	g._retention._fair_regen_total = u36_total
+	g._retention._fair_local_week = u36_lw
+	g._retention._fair_local_brews = u36_lb
+	g._retention._fair_off_claim_week = u36_ow
