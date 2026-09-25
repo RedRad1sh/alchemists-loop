@@ -70,6 +70,15 @@ var wall_color: Color = Color("#5a4d40")
 var floor_color: Color = Color("#5d452f")
 var animate := true
 var solo_item: String = ""
+# Витрина (δ): дом показывает то, что разбросано по вкладкам. Только отрисовка —
+# ни кликабельности, ни влияния на ANCHOR/layout/хит-тест.
+var _display_bottles := -1            # -1 = данных нет → не рисуем (гость/превью)
+var _display_flame: Color = Color(1.0, 0.62, 0.25)
+var _display_caption := ""
+const GLASS := [                      # цвета стекла на полке — векторные, без ассетов
+	Color(0.36, 0.62, 0.95), Color(0.74, 0.45, 0.95), Color(0.98, 0.80, 0.20),
+	Color(0.45, 0.80, 0.55), Color(0.95, 0.50, 0.45), Color(0.55, 0.85, 0.85),
+]
 # Полей _table_ok/_table_rect/_window_ok/_window_rect больше нет: геометрия стола,
 # окна и настольных ламп — чистая функция от (furniture, overrides, размер) внутри
 # _item_rect, а не побочный эффект последнего кадра _draw. На скрытой вкладке «Дом»
@@ -454,6 +463,13 @@ func set_solo(item_id: String) -> void:
 	queue_redraw()
 
 
+func set_display_data(bottles: int, flame: Color, caption: String) -> void:
+	_display_bottles = bottles
+	_display_flame = flame
+	_display_caption = caption
+	queue_redraw()
+
+
 func _process(delta: float) -> void:
 	if not animate:
 		# Страховка на случай `animate = false` уже в дереве с включённым process:
@@ -523,6 +539,8 @@ func _draw() -> void:
 		if not furniture.has(cat):
 			continue
 		_draw_item(String(cat), String(furniture[cat]), w, h)
+	_draw_shelf_bottles(w, h)
+	_draw_window_caption(w, h)
 	_draw_atmosphere(w, h)
 	_draw_spirit(w, h)
 	_draw_dust(w, h)
@@ -700,6 +718,12 @@ func _glow_mod(item_id: String) -> Color:
 	if e.has("tint"):
 		var tc: Array = e["tint"]
 		tint = Color(tc[0], tc[1], tc[2])
+	# Витрина (δ): цвет пламени камина — самое редкое вещество в запасе.
+	# Гейт по _display_bottles, а не по цвету: 0 колб — это «данные есть»,
+	# -1 — «данных нет» (гостевой просмотр, превью магазина), и тогда
+	# дефолтный оранжевый не должен подмешиваться в калиброванный tint.
+	if is_fire and _display_bottles >= 0:
+		tint = _display_flame.lerp(tint, 0.25)
 	return Color(tint.r, tint.g, tint.b, flick * 2.0)
 
 
@@ -718,6 +742,45 @@ func _fx_glow(item_id: String, r: Rect2) -> void:
 func _draw_atmosphere(w: float, h: float) -> void:
 	# дневной тон: тёплая вуаль сверху, к полу сходит на нет
 	_grad(Rect2(0, 0, w, h), Color(1.0, 0.96, 0.88, 0.07), Color(1.0, 0.96, 0.88, 0.0))
+
+
+func _draw_shelf_bottles(w: float, h: float) -> void:
+	if _display_bottles <= 0 or not furniture.has("shelf"):
+		return
+	var shelf_id := String(furniture["shelf"])
+	var vr := _visual_rect(shelf_id, _item_rect("shelf", shelf_id, w, h))
+	if vr.size.x <= 0.0:
+		return
+	var n: int = mini(_display_bottles, 9)
+	var bw: float = maxf(2.0, vr.size.x / 20.0)
+	var bh: float = maxf(4.0, vr.size.y * 0.30)
+	var base_y: float = vr.end.y - vr.size.y * 0.10
+	for i in n:
+		var x: float = vr.position.x + vr.size.x * (0.08 + 0.10 * float(i))
+		if x + bw > vr.end.x:
+			break  # полка короткая: лишние колбы не лезут за край
+		var col: Color = GLASS[i % GLASS.size()]
+		draw_rect(Rect2(x, base_y - bh, bw, bh), Color(col.r, col.g, col.b, 0.85))
+		draw_rect(Rect2(x + bw * 0.3, base_y - bh - bw * 0.8, bw * 0.4, bw * 0.8),
+			Color(col.r, col.g, col.b, 0.6))
+		draw_rect(Rect2(x, base_y - bh - bw * 1.0, bw, bw * 0.25),
+			Color(0.75, 0.72, 0.66, 0.7))  # пробка
+
+
+func _draw_window_caption(w: float, h: float) -> void:
+	if _display_caption == "" or not furniture.has("window"):
+		return
+	var f := get_theme_default_font()
+	if f == null:
+		return
+	var wr := _window_rect_of(w, h)
+	if wr.size.x <= 0.0:
+		return
+	var sz := 11
+	var ts := f.get_string_size(_display_caption, HORIZONTAL_ALIGNMENT_LEFT, -1, sz)
+	var x := clampf(wr.position.x, 2.0, maxf(2.0, w - ts.x - 2.0))
+	draw_string(f, Vector2(x, wr.end.y + float(sz) + 2.0), _display_caption,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, sz, Color(0.85, 0.9, 0.95, 0.72))
 
 
 func _window_rect_of(w: float, h: float) -> Rect2:

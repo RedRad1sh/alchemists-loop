@@ -226,6 +226,35 @@ func _on_house_layout_changed(layout: Dictionary) -> void:
 
 func _refresh_house_view() -> void:
 	_sync_house_view(_house_view)
+	if _house_view != null and _cosmetic_house:
+		_house_view.set_display_data(_showcase_bottles(), _showcase_flame_color(),
+			_showcase_window_caption())
+
+
+func _showcase_bottles() -> int:
+	return mini(9, maxi(0, g._progress_ui._ach_world_first))
+
+
+func _showcase_flame_color() -> Color:
+	# цвет самого редкого вещества в запасе: слой считает _rarity_of, цвет берём у вещества
+	var best_tier := -1
+	var best := Color(1.0, 0.62, 0.25)
+	for raw_id in g._engine.inventory:
+		var id := String(raw_id)
+		if not g.ITEMS.has(id):
+			continue
+		var r: Dictionary = g._engine._rarity_of(id)
+		if int(r["tier"]) > best_tier:
+			best_tier = int(r["tier"])
+			best = g._item_colors.get(id, r["color"])
+	return best
+
+
+func _showcase_window_caption() -> String:
+	# Честность (спека §6): без связи окно показывает заглушку, а не вчерашнюю цель.
+	if g._online._net_nick == "" or g._retention._circle_hint == "":
+		return "цель мира — после связи"
+	return "мир: " + g._retention._circle_hint
 
 
 func _sync_house_view(view) -> void:
@@ -938,6 +967,7 @@ func _house_json() -> Dictionary:
 		"floor": _cosmetic_floor.to_html(false),
 		"furniture": house_furniture,
 		"layout": house_layout,
+		"world_first": g._progress_ui._ach_world_first,
 	}
 
 
@@ -1154,6 +1184,10 @@ func _apply_player_house(nick: String, h: Dictionary) -> void:
 	var layout: Dictionary = {}
 	if typeof(h.get("layout", {})) == TYPE_DICTIONARY:
 		layout = h.get("layout", {}) as Dictionary
+	# δ: гость видит и витрину хозяина — колбы первооткрытий и цвет пламени.
+	# Подпись окна гостю не показываем: цель дня гость не запрашивал.
+	var host_first := maxi(0, int(h.get("world_first", 0)))
+	_house_popup_view.set_display_data(mini(9, host_first), _showcase_flame_color(), "")
 	_house_popup_title.text = "Домик: %s" % nick
 	_house_popup_view.set_state(built, furn, tex, aura, wall, floor, layout)
 	_house_popup_view.set_editable(false)

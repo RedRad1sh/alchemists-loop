@@ -601,6 +601,40 @@ static func run(g: Game) -> void:
 	g._home.house_furniture = u28_furn
 	g._home.house_layout = u28_layout
 
+	# ============ U29 (δ): витрина считает данные, а не выдумывает их ============
+	var u29_first := g._progress_ui._ach_world_first
+	var u29_inv := g._engine.inventory.duplicate(true)
+	g._progress_ui._ach_world_first = 12
+	g._engine.inventory.clear()
+	# цвет пламени — самое редкое вещество из запаса; без запаса — базовое
+	var u29_empty_flame := g._home._showcase_flame_color()
+	g._engine.inventory["fire"] = 1
+	var u29_flame := g._home._showcase_flame_color()
+	Selftest.check("d flame follows the rarest held substance", u29_flame != u29_empty_flame)
+	Selftest.check("d bottle count caps at 9", g._home._showcase_bottles() == 9)
+	g._progress_ui._ach_world_first = 3
+	Selftest.check("d bottle count follows world-firsts", g._home._showcase_bottles() == 3)
+	g._progress_ui._ach_world_first = 0
+	Selftest.check("d no world-firsts means no bottles", g._home._showcase_bottles() == 0)
+	# окно честно: без связи — заглушка, а не вчерашняя цель
+	var u29_nick := g._online._net_nick
+	var u29_hint := g._retention._circle_hint
+	g._online._net_nick = ""
+	g._retention._circle_hint = "Лодка"
+	Selftest.check("d window says so offline", g._home._showcase_window_caption().contains("после связи"))
+	g._online._net_nick = "Варда"
+	Selftest.check("d window shows the world goal", g._home._showcase_window_caption() == "мир: Лодка")
+	g._online._net_nick = u29_nick
+	g._retention._circle_hint = u29_hint
+	g._progress_ui._ach_world_first = u29_first
+	g._engine.inventory = u29_inv
+	# вью без display-данных не рисует витрину: key-контракт для гостевых превью
+	var u29_view: HouseView = Game.HouseViewScript.new()
+	Selftest.check("d showcase off until data set", u29_view._display_bottles < 0)
+	u29_view.set_display_data(4, Color(0.2, 0.6, 1.0), "мир: Лодка")
+	Selftest.check("d showcase data applied", u29_view._display_bottles == 4)
+	u29_view.free()
+
 
 static func _u28_task(id: String) -> Dictionary:
 	# настоящая запись Game.HOUSE_TASKS: _complete_house_task читает не только
