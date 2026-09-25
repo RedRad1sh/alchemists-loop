@@ -556,22 +556,29 @@ static func run(g: Game) -> void:
 	var u28_done: Array = g._home.house_tasks_done.duplicate(true)
 	var u28_furn := g._home.house_furniture.duplicate(true)
 	var u28_layout: Dictionary = g._home.house_layout.duplicate(true)
+	var u28_unlocked := g._spirit._companion_unlocked
 	g._home._cosmetic_house = true
+	# строгий аффинити-ассерт ниже обязан доказывать _companion_gain, а не его no-op
+	# (spirit.gd: ранний выход, пока Светик не открыт); снимок выше возвращает как было
+	g._spirit._companion_unlocked = true
 	g._home.house_tasks_done.clear()
 	g._home.house_owned.clear()
-	# награда = то же владение, что дала бы покупка, и без списания эфира
-	g._home._complete_house_task({"id": "chair_at_table", "give": "chair_2"})
+	# награда = то же владение, что дала бы покупка, и без списания эфира;
+	# настоящий словарь HOUSE_TASKS: _complete_house_task читает и "text" (статус)
+	g._home._complete_house_task(_u28_task("chair_at_table"))
 	Selftest.check("b reward grants ownership", g._home.house_owned.get("chair", []).has("chair_2"))
 	Selftest.check("b reward spends no ether", g._engine.ether == u28_ether)
 	Selftest.check("b reward marks the task done once", g._home.house_tasks_done == ["chair_at_table"])
 	# повтор того же поручения — ни второй награды, ни второго id
-	g._home._complete_house_task({"id": "chair_at_table", "give": "chair_2"})
+	g._home._complete_house_task(_u28_task("chair_at_table"))
 	Selftest.check("b reward idempotent", g._home.house_tasks_done.size() == 1
 		and (g._home.house_owned.get("chair", []) as Array).count("chair_2") == 1)
 	# уже купленная награда -> ближайший некупленный вариант той же категории дешевле всех
 	g._home.house_tasks_done.clear()
 	g._home.house_owned["chair"] = ["chair_2"]
-	g._home._complete_house_task({"id": "rug_tucked_bed", "give": "chair_2"})
+	var u28_taken: Dictionary = _u28_task("rug_tucked_bed").duplicate()
+	u28_taken["give"] = "chair_2"  # куплена награда не из этого поручения, а категория та же
+	g._home._complete_house_task(u28_taken)
 	Selftest.check("b taken reward falls to the next locked variant",
 		g._home.house_owned.get("chair", []).has("chair_1"))
 	# категория выкуплена целиком -> остаётся только дружба, тихого исключения нет
@@ -580,16 +587,28 @@ static func run(g: Game) -> void:
 	for it in (g._home._decor_cat("chair").get("items", []) as Array):
 		g._home.house_owned["chair"].append(String(it["id"]))
 	g._home.house_tasks_done.clear()
-	g._home._complete_house_task({"id": "plant_by_window", "give": "chair_9"})
+	var u28_giftless: Dictionary = _u28_task("plant_by_window").duplicate()
+	u28_giftless["give"] = "chair_9"  # награда из категории chair, выкупленной целиком выше
+	g._home._complete_house_task(u28_giftless)
 	Selftest.check("b fully-owned category still completes", g._home.house_tasks_done == ["plant_by_window"])
 	Selftest.check("b completion gives affinity, not ether",
-		g._spirit._companion_affinity >= u28_aff0 and g._engine.ether == u28_ether)
+		g._spirit._companion_affinity > u28_aff0 and g._engine.ether == u28_ether)
 	# restore
 	g._home._cosmetic_house = u28_house
+	g._spirit._companion_unlocked = u28_unlocked
 	g._home.house_owned = u28_owned
 	g._home.house_tasks_done = u28_done
 	g._home.house_furniture = u28_furn
 	g._home.house_layout = u28_layout
+
+
+static func _u28_task(id: String) -> Dictionary:
+	# настоящая запись Game.HOUSE_TASKS: _complete_house_task читает не только
+	# id/give, но и "text" (статус в home.gd) — синтетика без него падала бы
+	for t in Game.HOUSE_TASKS:
+		if String(t["id"]) == id:
+			return t
+	return {}
 
 
 static func _u27_variant_exists(cat: String, item_id: String) -> bool:
