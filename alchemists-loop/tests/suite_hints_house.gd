@@ -450,3 +450,32 @@ static func run(g: Game) -> void:
 		and u25_vr.position.x >= -0.5 and u25_vr.position.y >= -0.5)
 	u25_view.queue_free()
 	u25_host.queue_free()
+
+	# ============ U26 (H3): настольная лампа даёт один rect и до, и после кадра ============
+	var u26_host := Control.new()
+	u26_host.visible = false
+	g.add_child(u26_host)
+	var u26_view: HouseView = Game.HouseViewScript.new()
+	u26_view.set_editable(false)
+	u26_view.animate = false
+	u26_host.add_child(u26_view)
+	u26_view.size = Vector2(400, 300)
+	u26_view.set_state(true, {"table": "table", "lamp": "lamp_1"}, null)
+	# вид скрыт => _draw ни разу не вызывался. Раньше это значило «_table_ok == false»,
+	# и тап по лампе попадал в ветку ANCHOR, то есть на пол, а не на стол.
+	var u26_tex: Texture2D = u26_view._tex_of("lamp_1")
+	if u26_tex == null:
+		# невакуумность: без спрайта кейс не должен зеленеть молча
+		u26_host.queue_free()
+		Selftest.check("u26 lamp_1 sprite present", false)
+	else:
+		var u26_r: Rect2 = u26_view._item_rect("lamp", "lamp_1", 400.0, 300.0)
+		var u26_table: Rect2 = u26_view._visual_rect("table", u26_view._item_rect("table", "table", 400.0, 300.0))
+		Selftest.check("u26 tabletop lamp sits on the table before any draw",
+			u26_r.end.y <= u26_table.position.y + 6.0 and u26_r.position.x >= u26_table.position.x - 1.0
+			and u26_r.end.x <= u26_table.end.x + 1.0)
+		# и детерминирована: второй вызов без перерисовки даёт тот же rect
+		Selftest.check("u26 tabletop rect is pure",
+			u26_view._item_rect("lamp", "lamp_1", 400.0, 300.0) == u26_r)
+		u26_view.queue_free()
+		u26_host.queue_free()

@@ -70,10 +70,12 @@ var wall_color: Color = Color("#5a4d40")
 var floor_color: Color = Color("#5d452f")
 var animate := true
 var solo_item: String = ""
-var _table_ok: bool = false  # стол отрисован в этом кадре (для настольных ламп)
-var _table_rect: Rect2 = Rect2()
-var _window_ok: bool = false  # окно отрисовано (для светового shaft)
-var _window_rect: Rect2 = Rect2()
+# Полей _table_ok/_table_rect/_window_ok/_window_rect больше нет: геометрия стола,
+# окна и настольных ламп — чистая функция от (furniture, overrides, размер) внутри
+# _item_rect, а не побочный эффект последнего кадра _draw. На скрытой вкладке «Дом»
+# _draw не вызывается вообще (гейт _visibility_changed), и раньше тап по настольной
+# лампе попадал в другую ветку, чем последний нарисованный кадр (см. u26 в
+# tests/suite_hints_house.gd).
 var _phase: float = 0.0
 var _redraw_clock: float = 0.0   # аккумулятор кадров: `_draw` всей сцены дороже одного тика
 var _press_layout: Dictionary = {}   # раскладка в момент захвата — эмитим только реальный сдвиг
@@ -114,17 +116,17 @@ func _gui_input(event: InputEvent) -> void:
 				var tex_for_anchor: Texture2D = _tex_of(item_id)
 				var resolved := _resolved_anchor(_drag_cat, item_id, size.x, size.y, tex_for_anchor)
 				_drag_start_anchor = resolved
-				if item_id in TABLETOP and _table_ok:
+				if item_id in TABLETOP and furniture.has("table"):
 					var tex: Texture2D = _tex_of(item_id)
 					if tex != null:
 						var r: Rect2 = _tabletop_rect(tex, item_id, size.x, size.y)
 						_drag_start_anchor = Vector2(
 							(r.position.x + r.size.x * 0.5) / size.x,
-							_table_surface_y() / size.y
+							_table_surface_y(size.x, size.y) / size.y
 						)
-				# Снимок берётся после посадочных блоков: _tabletop_rect сам
-				# доводит якорь настольной лампы до поверхности стола, и это
-				# нормальная посадка, а не перетаскивание.
+				# Снимок берётся после посадочных блоков: посадка настольной лампы
+				# считается чистой геометрией (_tabletop_rect) и ничего не пишет
+				# в раскладку, поэтому это нормальная посадка, а не перетаскивание.
 				_press_layout = _layout_data()
 				mouse_filter = Control.MOUSE_FILTER_STOP
 		else:
@@ -152,16 +154,16 @@ func _gui_input(event: InputEvent) -> void:
 		var new_ay: float = _drag_start_anchor.y + ndy
 		var tex: Texture2D = _tex_of(item_id)
 		if tex != null:
-			if item_id in TABLETOP and _table_ok:
+			if item_id in TABLETOP and furniture.has("table"):
 				# Настольная лампа перемещается по ширине реальной поверхности
 				# стола. По высоте она всегда остаётся на поверхности.
-				var table_surface := _table_surface_rect()
-				var table_sc := _tabletop_scale(tex, h)
+				var table_surface := _table_surface_rect(w, h)
+				var table_sc := _tabletop_scale(tex, w, h)
 				var table_tw := tex.get_width() * table_sc
 				var table_min_x := (table_surface.position.x + table_tw * 0.5) / w
 				var table_max_x := (table_surface.end.x - table_tw * 0.5) / w
 				new_ax = clampf(new_ax, table_min_x, table_max_x)
-				new_ay = _table_surface_y() / h
+				new_ay = _table_surface_y(w, h) / h
 			else:
 				# Ограничиваем anchor по реальной видимой части PNG и по типу
 				# предмета: пол остаётся полом, стена — стеной, без старого
@@ -293,10 +295,14 @@ func _resolved_anchor(cat: String, item_id: String, w: float, h: float, tex: Tex
 
 
 func _item_rect(cat: String, item_id: String, w: float, h: float) -> Rect2:
+	# Единственная функция геометрии: чистая от (furniture, overrides, размер). Никаких
+	# фласов «отрисован в этом кадре» — на скрытой вкладке «Дом» _draw не вызывается
+	# вообще (гейт _visibility_changed), и тап по настольной лампе использовал другую
+	# ветку, чем последний нарисованный кадр.
 	var tex: Texture2D = _tex_of(item_id)
 	if tex == null:
 		return Rect2()
-	if item_id in TABLETOP and _table_ok:
+	if item_id in TABLETOP and furniture.has("table"):
 		return _tabletop_rect(tex, item_id, w, h)
 	var mode: int = _mode_of(item_id)
 	var params: Array = _anchor_params(cat, item_id)
@@ -511,10 +517,8 @@ func _draw() -> void:
 		_draw_plot(w, h, wall_h)
 		return
 
-	_table_ok = false
-	_window_ok = false
-	_window_rect = _place_window(w, h)
-	_draw_shaft_from_window(w, h)
+	var window_rect := _window_rect_of(w, h)
+	_draw_shaft_from_window(w, h, window_rect)
 	for cat in DRAW_ORDER:
 		if not furniture.has(cat):
 			continue
@@ -568,7 +572,7 @@ func _draw_item(cat: String, item_id: String, w: float, h: float) -> void:
 	var tex: Texture2D = _tex_of(item_id)
 	if tex == null:
 		return
-	if item_id in TABLETOP and _table_ok:
+	if item_id in TABLETOP and furniture.has("table"):
 		_place_tabletop(tex, item_id, w, h)
 		return
 	var mode: int = _mode_of(item_id)
@@ -590,9 +594,6 @@ func _draw_item(cat: String, item_id: String, w: float, h: float) -> void:
 	else:
 		dy = ay * h - th
 	var r: Rect2 = Rect2(dx, dy, tw, th)
-	if cat == "table":
-		_table_rect = r
-		_table_ok = true
 	_fx_shadow(item_id, r)
 	var dim: float = 1.0
 	if mode == 1:
@@ -603,49 +604,49 @@ func _draw_item(cat: String, item_id: String, w: float, h: float) -> void:
 	_fx_glow(item_id, r)
 
 
-func _table_surface_rect() -> Rect2:
+func _table_canvas_rect(w: float, h: float) -> Rect2:
+	# Прямоугольник стола — производная от его же геометрии, а не из последнего кадра.
 	if not furniture.has("table"):
-		return _table_rect
-	var table_id := String(furniture["table"])
-	var table_tex := _tex_of(table_id)
-	if table_tex == null:
-		return _table_rect
-	return _visual_rect(table_id, _table_rect)
+		return Rect2()
+	return _item_rect("table", String(furniture["table"]), w, h)
 
 
-func _table_surface_y() -> float:
+func _table_surface_rect(w: float, h: float) -> Rect2:
+	var tr := _table_canvas_rect(w, h)
+	if tr.size.x <= 0.0:
+		return Rect2()
+	return _visual_rect(String(furniture["table"]), tr)
+
+
+func _table_surface_y(w: float, h: float) -> float:
 	# Верхняя кромка реального стола, а не верх прозрачного PNG-поля.
-	return _table_surface_rect().position.y + 4.0
+	return _table_surface_rect(w, h).position.y + 4.0
 
 
-func _tabletop_scale(tex: Texture2D, h: float) -> float:
-	return minf(_table_rect.size.x * 0.30 * OBJECT_SCALE / tex.get_width(),
+func _tabletop_scale(tex: Texture2D, w: float, h: float) -> float:
+	var tr := _table_canvas_rect(w, h)
+	return minf(tr.size.x * 0.30 * OBJECT_SCALE / tex.get_width(),
 		h * 0.20 * OBJECT_SCALE / tex.get_height())
 
 
-func _tabletop_rect(tex: Texture2D, item_id: String, _w: float, h: float) -> Rect2:
-	var sc: float = _tabletop_scale(tex, h)
+func _tabletop_rect(tex: Texture2D, item_id: String, w: float, h: float) -> Rect2:
+	var sc: float = _tabletop_scale(tex, w, h)
 	var tw: float = tex.get_width() * sc
 	var th: float = tex.get_height() * sc
 	var cat := _cat_of(item_id)
-	var table_surface := _table_surface_rect()
-	var default_spot: float = table_surface.position.x + table_surface.size.x * 0.72
-	var min_spot: float = table_surface.position.x + tw * 0.5
-	var max_spot: float = table_surface.end.x - tw * 0.5
+	var surface := _table_surface_rect(w, h)
+	var default_spot: float = surface.position.x + surface.size.x * 0.72
+	var min_spot: float = surface.position.x + tw * 0.5
+	var max_spot: float = surface.end.x - tw * 0.5
 	if max_spot < min_spot:
 		max_spot = min_spot
 	var spot: float = default_spot
 	if _anchor_overrides.has(cat):
-		spot = _anchor_overrides[cat].x * _w
+		spot = _anchor_overrides[cat].x * w
 	spot = clampf(spot, min_spot, max_spot)
-	# Высота настольной лампы никогда не берётся из старого layout:
-	# при смене стола она заново садится на его текущую поверхность.
-	var surface_y: float = _table_surface_y()
-	# Раньше здесь ещё и писало: _anchor_overrides[cat] = Vector2(spot / _w, surface_y / h).
-	# Это тот же дефект, что в _resolved_anchor: посадка на стол — производная от
-	# геометрии стола, а не от намерения игрока, и хранить её в раскладке нельзя.
-	# Якорь — низ видимой части лампы. Поэтому прозрачное поле снизу
-	# больше не оставляет лампу «висящей» над столом.
+	# Высота настольной лампы никогда не берётся из старого layout: при смене стола
+	# она заново садится на его текущую поверхность.
+	var surface_y: float = _table_surface_y(w, h)
 	var used := _content_rect(item_id, tex)
 	var visible_bottom_offset := used.end.y * sc
 	return Rect2(spot - tw * 0.5, surface_y - visible_bottom_offset, tw, th)
@@ -719,45 +720,21 @@ func _draw_atmosphere(w: float, h: float) -> void:
 	_grad(Rect2(0, 0, w, h), Color(1.0, 0.96, 0.88, 0.07), Color(1.0, 0.96, 0.88, 0.0))
 
 
-func _place_window(w: float, h: float) -> Rect2:
+func _window_rect_of(w: float, h: float) -> Rect2:
 	if not furniture.has("window"):
 		return Rect2()
-	var item_id: String = String(furniture["window"])
-	var tex: Texture2D = _tex_of(item_id)
-	if tex == null:
-		return Rect2()
-	var mode: int = _mode_of(item_id)
-	var p: Array = _anchor_params("window", item_id)
-	var anchor := _resolved_anchor("window", item_id, w, h, tex)
-	var ax: float = anchor.x
-	var ay: float = anchor.y
-	var mw: float = p[2]
-	var mh: float = p[3]
-	var sc: float = minf(mw * w / tex.get_width(), mh * h / tex.get_height()) * OBJECT_SCALE
-	var tw: float = tex.get_width() * sc
-	var th: float = tex.get_height() * sc
-	var dx: float = ax * w - tw * 0.5
-	var dy: float
-	if mode == 1:
-		dy = ay * h
-	elif mode == 2:
-		dy = ay * h - th * 0.5
-	else:
-		dy = ay * h - th
-	_window_ok = true
-	return Rect2(dx, dy, tw, th)
+	return _item_rect("window", String(furniture["window"]), w, h)
 
 
-func _draw_shaft_from_window(w: float, h: float) -> void:
-	# shaft из реального стекла (широкое слабое + узкое ядро), за мебелью
-	if not _window_ok:
+func _draw_shaft_from_window(w: float, h: float, r: Rect2) -> void:
+	if r.size.x <= 0.0:
 		return
+	# shaft из реального стекла (широкое слабое + узкое ядро), за мебелью
 	var wid: String = String(furniture.get("window", ""))
 	var e: Dictionary = DecorCalib.CALIB.get(wid, {})
 	if not e.has("glass"):
 		return
 	var gg: Array = e["glass"]
-	var r: Rect2 = _window_rect
 	var gy: float = r.position.y + r.size.y * (gg[1] + gg[3]) * 0.5
 	var gx0: float = r.position.x + r.size.x * lerpf(gg[0], gg[2], 0.15)
 	var gx1: float = r.position.x + r.size.x * lerpf(gg[0], gg[2], 0.85)
