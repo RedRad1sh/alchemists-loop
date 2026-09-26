@@ -60,11 +60,12 @@
 
 1. UI вызывает `Monetization.purchase(product_id)`.
 2. Фасад переводит логический id в store SKU и пишет pending запись в
-   `UserData`.
+   пользовательский файл `alchemists_loop_user.json` (секция `purchases`).
 3. Google Play/RuStore адаптер возвращает нормализованный callback с
    `{provider, sku, token}`.
 4. SKU сопоставляется с каталогом. Повторный token от restore/onResume
-   отбрасывается по SHA-256 отпечатку в `UserData`.
+   отбрасывается по отпечатку `provider:sku:sha256(token)` в журнале покупок
+   `alchemists_loop_purchases.json` (см. §6).
 5. После выдачи награды вызывается consume/confirm для consumable или
    acknowledge для non-consumable.
 6. `purchase_start/success/fail` уходят в Analytics только после согласия.
@@ -152,9 +153,15 @@ release.
 Локально:
 
 - `alchemy_save.json` — прогресс и настройки, версия `2`, temp+backup;
-- `alchemists_loop_user.json` — случайный install/device id, consent, hash
-  обработанных чеков, owned products и лимиты рекламы;
-- `analytics.json`-подобная очередь создаётся только после согласия;
+- `alchemists_loop_user.json` — случайный install/device id, consent,
+  pending-заявки покупок, owned products и лимиты рекламы; затирается при
+  «Удалить локальные данные»;
+- `alchemists_loop_purchases.json` — журнал покупок: завершённые чеки (ключ
+  `provider:sku:sha256(token)`) и granted-отметки «начислено, store ещё не
+  подтверждён». Переживает удаление локальных данных: это платёжная защита от
+  повторной выдачи, а не поведенческие данные;
+- `alchemists_loop_analytics.json` — consent-gated очередь событий,
+  создаётся только после согласия;
 - сырые purchase token не сохраняются.
 
 Сервер:
