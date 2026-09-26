@@ -95,6 +95,10 @@ def cmd_list(conn) -> None:
            WHERE r.discoverer IS NOT NULL
            ORDER BY e.layer, e.name"""
     ).fetchall()
+    # (#17) Стартовый граф не «сгенерированный», даже когда его пара приписана
+    # боту витрины или легаси-игроку: фильтр по pair_key из seed.RECIPES.
+    seed_pairs = _seed_pair_keys()
+    rows = [r for r in rows if r["pair_key"] not in seed_pairs]
     if not rows:
         print("  (нет)")
     for r in rows:
@@ -141,15 +145,39 @@ def _dependent_recipes(conn, element_id: int):
     ).fetchall()
 
 
-def _delete_recipe_and_element(conn, recipe, cascade: bool, stack: list) -> None:
-    """Рекурсивно удалить рецепт и его выходной элемент (и зависимые рецепты при cascade)."""
-    pair_key = recipe["pair_key"]
+def _purge_pair_rows(conn, pair_key: str) -> None:
+    conn.execute("DELETE FROM world_events WHERE pair_key = ?", (pair_key,))
+    conn.execute("DELETE FROM pending_pairs WHERE pair_key = ?", (pair_key,))
+
+
+def _delete_recipe_and_element(conn, recipe, cascade: bool, stack: list, visiting=None) -> None:
+    """Рекурсивно удалить рецепт и его выходной элемент (и зависимые рецепты при cascade).
+
+    Инвариант (issue #13): после удаления ни один рецепт не ссылается на
+    несуществующее вещество. Поэтому:
+      * удаляются ВСЕ производящие рецепты элемента, а не только первый;
+      * рецепт со стартовым выходом и удаляемым ингредиентом удаляется целиком
+        (стартовое вещество остаётся) — иначе он повиснет на мёртвом a_id/b_id;
+      * visiting защищает от бесконечной рекурсии на циклических цепочках.
+    """
+    if visiting is None:
+        visiting = set()
+    if recipe["id"] in visiting:
+        return
+    visiting.add(recipe["id"])
     out_id = recipe["out_id"]
     el = conn.execute("SELECT id, slug, name FROM elements WHERE id = ?", (out_id,)).fetchone()
     if el is None:
+        # выход уже удалён — мёртвую строку рецепта всё равно надо снять
+        _purge_pair_rows(conn, recipe["pair_key"])
+        conn.execute("DELETE FROM recipes WHERE id = ?", (recipe["id"],))
         return
     if el["slug"] in _seed_slugs():
-        print(f"  пропуск: «{el['name']}» ({el['slug']}) — стартовое вещество, не трогаем")
+        _purge_pair_rows(conn, recipe["pair_key"])
+        conn.execute("DELETE FROM recipes WHERE id = ?", (recipe["id"],))
+        stack.append(
+            f"рецепт {recipe['pair_key']} (выход «{el['name']}» — стартовое вещество, оно остаётся)"
+        )
         return
 
     deps = _dependent_recipes(conn, out_id)
@@ -163,13 +191,47 @@ def _delete_recipe_and_element(conn, recipe, cascade: bool, stack: list) -> None
 
     # зависимые рецепты — сначала (в глубину)
     for d in deps:
-        _delete_recipe_and_element(conn, d, cascade, stack)
+        _delete_recipe_and_element(conn, d, cascade, stack, visiting)
 
-    conn.execute("DELETE FROM world_events WHERE pair_key = ?", (pair_key,))
-    conn.execute("DELETE FROM pending_pairs WHERE pair_key = ?", (pair_key,))
-    conn.execute("DELETE FROM recipes WHERE id = ?", (recipe["id"],))
+    for prod in conn.execute(
+        "SELECT id, pair_key FROM recipes WHERE out_id = ? ORDER BY id", (out_id,)
+    ).fetchall():
+        _purge_pair_rows(conn, prod["pair_key"])
+        conn.execute("DELETE FROM recipes WHERE id = ?", (prod["id"],))
+        stack.append(f"рецепт {prod['pair_key']} -> «{el['name']}» ({el['slug']})")
     conn.execute("DELETE FROM elements WHERE id = ?", (out_id,))
-    stack.append(f"рецепт {pair_key} -> «{el['name']}» ({el['slug']})")
+
+
+def _dangling_report(conn) -> list:
+    """Проверка ссылочной целостности после чистки (issue #13):
+    recipes не должны ссылаться на несуществующие elements; сгенерированное
+    вещество без производящего рецепта — мусор, переживший чистку."""
+    problems: list = []
+    for r in conn.execute(
+        """SELECT r.pair_key, r.a_id, r.b_id, r.out_id,
+                  ea.id AS ea_id, eb.id AS eb_id, eo.id AS eo_id
+           FROM recipes r
+           LEFT JOIN elements ea ON ea.id = r.a_id
+           LEFT JOIN elements eb ON eb.id = r.b_id
+           LEFT JOIN elements eo ON eo.id = r.out_id"""
+    ).fetchall():
+        for col, link, target in (("a_id", r["a_id"], r["ea_id"]),
+                                  ("b_id", r["b_id"], r["eb_id"]),
+                                  ("out_id", r["out_id"], r["eo_id"])):
+            if link is not None and target is None:
+                problems.append(f"рецепт {r['pair_key']}: {col} -> висячая ссылка id={link}")
+    for o in conn.execute(
+        """SELECT e.slug FROM elements e
+           LEFT JOIN recipes r ON r.out_id = e.id
+           WHERE e.author IS NOT NULL AND r.id IS NULL ORDER BY e.slug"""
+    ).fetchall():
+        problems.append(f"вещество {o['slug']}: сгенерировано, но производящий рецепт удалён")
+    return problems
+
+
+def _print_dangling(conn) -> None:
+    for p in _dangling_report(conn):
+        print("ВНИМАНИЕ, висячая ссылка: " + p)
 
 
 def cmd_rm(conn, token: str, cascade: bool) -> None:
@@ -192,6 +254,7 @@ def cmd_rm(conn, token: str, cascade: bool) -> None:
             print("  - " + line)
     else:
         print("Ничего не удалено.")
+    _print_dangling(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +293,7 @@ def cmd_reset(conn, also_events: bool) -> None:
     r = conn.execute("SELECT COUNT(*) AS c FROM recipes").fetchone()["c"]
     e = conn.execute("SELECT COUNT(*) AS c FROM world_events").fetchone()["c"]
     print(f"Готово: {n} веществ / {r} рецептов (чистый стартовый граф), событий в ленте: {e}.")
+    _print_dangling(conn)
 
 
 # ---------------------------------------------------------------------------

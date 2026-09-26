@@ -226,8 +226,23 @@ def seed_bots(conn) -> None:
     С players.nick UNIQUE (T02) «INSERT OR IGNORE» молча пропускал бы бота,
     чей ник уже занят живым игроком, — пропуск стал явным и логируется.
     Поведение остального кода не меняется.
+
+    Атрибуция открытий (#17): экономически значимая связь — в
+    discoverer_device ('bot-*'), nick — только витрина (принцип T02). Если
+    ник бота занят живым устройством, бот пропускается, а его прежние
+    seed-строки отзывов обратно в «ничьи»: иначе по ник-связанным витринам
+    чужие открытия показались бы засветившимся ником игрокам.
+
+    init_db() зовёт seed_bots ДО миграции _migrate_nick_identity, поэтому на
+    старой БД колонки discoverer_device ещё нет: пишем по нику, а device
+    допишет backfill той же миграции (бот-строки есть в players).
     """
     rng = _random.Random(20260912)
+    has_device_col = any(
+        r[1] == "discoverer_device"
+        for r in conn.execute("PRAGMA table_info(recipes)").fetchall()
+    )
+    alive = []  # (slot, nick, device_id) ботов, реально представленных в players
     for i, nick in enumerate(BOT_NICKS):
         device_id = f"bot-{i}"
         holder = conn.execute(
@@ -242,19 +257,43 @@ def seed_bots(conn) -> None:
                 "(players.nick UNIQUE — INSERT OR IGNORE молча не вставил бы строку)",
                 nick, device_id, holder_dev,
             )
+            if has_device_col:
+                conn.execute(
+                    "UPDATE recipes SET discoverer = NULL, discoverer_device = NULL "
+                    "WHERE discoverer = ? AND discoverer_device = ?",
+                    (nick, device_id),
+                )
             continue
         conn.execute(
             "INSERT OR IGNORE INTO players (nick, device_id, house) VALUES (?, ?, ?)",
             (nick, device_id, _bot_house(rng)),
         )
-    # по 1 открытию каждому: первые рецепты по pair_key, только если ничьи
+        alive.append((i, nick, device_id))
+    # по 1 открытию каждому живому боту: фиксированный слот по pair_key,
+    # только если пара ничья; строки прошлых прогонов дописываются по device
     rows = conn.execute(
         "SELECT pair_key FROM recipes ORDER BY pair_key LIMIT ?",
         (len(BOT_NICKS),),
     ).fetchall()
-    for nick, r in zip(BOT_NICKS, rows):
-        conn.execute(
-            "UPDATE recipes SET discoverer = ? WHERE pair_key = ? AND discoverer IS NULL",
-            (nick, r["pair_key"] if isinstance(r, dict) else r[0]),
-        )
+    keys = [(r["pair_key"] if hasattr(r, "keys") else r[0]) for r in rows]
+    for slot, nick, device_id in alive:
+        if slot < len(keys):
+            if has_device_col:
+                conn.execute(
+                    "UPDATE recipes SET discoverer = ?, discoverer_device = ? "
+                    "WHERE pair_key = ? AND discoverer IS NULL",
+                    (nick, device_id, keys[slot]),
+                )
+            else:
+                conn.execute(
+                    "UPDATE recipes SET discoverer = ? "
+                    "WHERE pair_key = ? AND discoverer IS NULL",
+                    (nick, keys[slot]),
+                )
+        if has_device_col:
+            conn.execute(
+                "UPDATE recipes SET discoverer_device = ? "
+                "WHERE discoverer = ? AND discoverer_device IS NULL",
+                (device_id, nick),
+            )
     conn.commit()

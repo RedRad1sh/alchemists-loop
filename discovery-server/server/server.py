@@ -1237,7 +1237,11 @@ def _vein_state(conn: sqlite3.Connection, week: str, today=None):
     monday = _week_monday(week).isoformat()
     hits = conn.execute(
         "SELECT COUNT(*) AS c FROM recipes r JOIN elements e ON r.out_id = e.id "
-        "WHERE e.tag = ? AND date(r.created_at) >= date(?) AND r.discoverer IS NOT NULL",
+        "WHERE e.tag = ? AND date(r.created_at) >= date(?) AND r.discoverer IS NOT NULL "
+        # (#17) Бот-атрибуция стартового графа — не находка живых игроков:
+        # свежая БД с seed-строками created_at=сегодня не должна «расползать»
+        # туман жилы без единого реального открытия.
+        "AND COALESCE(r.discoverer_device, '') NOT LIKE 'bot-%'",
         (tag1, monday),
     ).fetchone()["c"]
     day = today or _today_date()
