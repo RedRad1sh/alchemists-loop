@@ -26,7 +26,7 @@ jobs:
         run: python -m pytest tests -q
 
   lint:
-    name: Lint (ruff: syntax + real errors)
+    name: "Lint (ruff: syntax + real errors)"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
