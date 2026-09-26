@@ -756,6 +756,29 @@ func _load_device_id() -> String:
 				return old_id
 	return "install_" + ("%s:%s" % [Time.get_unix_time_from_system(), randi()]).sha256_text().substr(0, 32)
 
+# ---------------------------------------------------------------------------
+# #8: «Удалить локальные данные» внутри живой сессии.
+# ---------------------------------------------------------------------------
+func _forget_net_identity() -> void:
+	# старый device_id больше не должен уходить на сервер: почти все Net-вызовы
+	# гейтятся _net_enabled и непустым _device_id (resonance/retention/riddles/
+	# home). Само удаление сервера — исключение: оно идёт ДО вызова этого метода.
+	_net_enabled = false
+	_device_id = ""
+	_net_nick = ""
+
+func _retry_pending_account_delete(net: Object = null) -> void:
+	if net == null:
+		net = Net
+	var pending := UserData.get_account_delete_pending()
+	if pending == "":
+		return
+	net.delete_account(pending)
+
+func _on_account_delete_result(result: Dictionary) -> void:
+	if result.get("ok", false) == true:
+		UserData.clear_account_delete_pending()
+
 func _on_net_world_result(result: Dictionary) -> void:
 	if result.get("ok", false) != true:
 		_world_loaded = true

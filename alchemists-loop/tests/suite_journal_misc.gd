@@ -2,6 +2,8 @@ extends RefCounted
 class_name SuiteJournalMisc
 # сброс/повтор/журнал/звук/что-вапить/добыть-всё (оп B1).
 
+const NetBase := preload("res://autoload/net.gd")
+
 static func run(g: Game) -> void:
 	# полный сброс — в самом конце, так как меняет состояние
 	g._engine.inventory.clear()
@@ -1200,6 +1202,141 @@ static func run(g: Game) -> void:
 		and g._engine.ether + g._engine.ether_overflow == _t23_eth_base
 		and g._engine._auto == _t23_auto0)
 
+	# ---------- #8: удаление аккаунта внутри живой сессии ----------
+	# Дефект был: «Удалить локальные данные» не переживало живую сессию — автосейв
+	# и пауза пересоздавали стёртый файл из памяти, а device_id продолжал ходить
+	# на сервер. Механизм: заморозка записи в единственной точке (_save_game),
+	# маркер-файл, переживающий вайп, и сброс сетевой идентичности (все DELETE в
+	# shop.gd гейтятся _net_enabled). Живого HTTP здесь нет: в селфтесте net
+	# выключен, а маршрут/точный id DELETE проверяются на экземплярах — чистый
+	# Net._build_request и seam I8FailSendNet (тот же приём, что FailSendNet в
+	# suite_resonance_net: старт запроса всегда падает, HTTP не делается).
+	var _i8_data0 := UserData._data.duplicate(true)
+	var _i8_dev0 := g._online._device_id
+	var _i8_en0 := g._online._net_enabled
+	var _i8_nick0 := g._online._net_nick
+	var _i8_frozen0 := g._saves._save_frozen
+	var _i8_armed0 := g._shop._delete_armed
+	var _i8_marker0 := UserData.get_account_delete_pending()
+	# Маркер обязан быть чистым, иначе первый нажим уйдёт в pending-ветку и весь
+	# блок проверит не то.
+	Selftest.check("i8 no stale marker before test", _i8_marker0 == "")
+	UserData._data["device_id"] = "i8-dev/1"
+	g._online._device_id = "i8-dev/1"
+	g._online._net_nick = "И8"
+	# _net_enabled НЕ включаем: в селфтесте это означало бы живой HTTP-DELETE на
+	# dev-сервер. Веткой «net выключен» проверяется, что вайп доводится до конца
+	# независимо от доступности сети.
+	g._online._net_enabled = false
+	# Сейв на диске обязателен для предусловия: на первом прогоне автосейв мог
+	# ещё не создать ST-файл.
+	g._saves._save_game()
+	var _i8_boot := g._saves._read_save(g.SAVE_PATH)
+	Selftest.check("i8 preconditions: real device id and save on disk",
+		UserData.get_or_create_device_id() == "i8-dev/1" and not _i8_boot.is_empty())
+	# Маршрут DELETE: /api/account + METHOD_DELETE (контракт server.py delete_account).
+	var _i8_route := Net._build_request({"kind": "account_delete",
+		"path": "/account?device_id=" + "i8-dev/1".uri_encode(),
+		"method": HTTPClient.METHOD_DELETE})
+	Selftest.check("i8 delete route is DELETE /api/account with encoded id",
+		String(_i8_route["url"]).ends_with("/api/account?device_id=i8-dev%2F1")
+		and int(_i8_route["method"]) == HTTPClient.METHOD_DELETE)
+	# Первый нажим: только arm (исходная подпись кнопки — из константы shop.gd).
+	var _i8_label0 := String(g._shop._delete_button.text)
+	g._shop._delete_data()
+	Selftest.check("i8 first press only arms", g._shop._delete_armed
+		and String(g._shop._delete_button.text) != _i8_label0
+		and _i8_label0 == "Удалить данные: журнал покупок останется"
+		and UserData.get_account_delete_pending() == ""
+		and g._online._device_id == "i8-dev/1")
+	# Второй нажим без сети: вайп всё равно завершён (сервер — не условие
+	# локального удаления), маркер остался, старая идентичность сброшена.
+	var _i8_status_before := String(g._shop._status.text)
+	g._shop._delete_data()
+	Selftest.check("i8 offline wipe completes: save gone, marker kept, identity cleared",
+		not FileAccess.file_exists(g.SAVE_PATH)
+		and UserData.get_account_delete_pending() == "i8-dev/1"
+		and g._saves._save_frozen and g._online._device_id == ""
+		and not g._online._net_enabled and g._online._net_nick == ""
+		and _i8_status_before != String(g._shop._status.text))
+	# Заморозка: прямой вызов единственной точки записи не пересоздаёт файл.
+	g._saves._save_game()
+	Selftest.check("i8 direct save after wipe does not recreate files",
+		not FileAccess.file_exists(g.SAVE_PATH)
+		and not FileAccess.file_exists(g.TEMP_PATH)
+		and not FileAccess.file_exists(g.BACKUP_PATH))
+	# Пауза приложения — путь, который до правки и resurrect'ил файл.
+	g.notification(Node.NOTIFICATION_APPLICATION_PAUSED)
+	Selftest.check("i8 pause does not resurrect the deleted save",
+		not FileAccess.file_exists(g.SAVE_PATH))
+	# Вайп пользовательского файла маркер не стирает (он для того и отдельный).
+	UserData.delete_all_local_data()
+	Selftest.check("i8 marker survives delete_all_local_data",
+		UserData.get_account_delete_pending() == "i8-dev/1")
+	# Ответ без ok маркер НЕ снимает: хендлеры вызываются напрямую (в
+	# селфтесте коннект main.gd не поставлен). Статус перед вызовом перетирается,
+	# чтобы «contains(повтори)» доказывал именно этот вызов, а не offline-слив
+	# предыдущей проверки.
+	g._shop._status.text = "i8-маркер-до-отказа"
+	g._shop._on_account_delete_result({"ok": false, "offline": true})
+	g._online._on_account_delete_result({"ok": false, "offline": true})
+	Selftest.check("i8 failed result keeps the marker",
+		UserData.get_account_delete_pending() == "i8-dev/1"
+		and String(g._shop._status.text).contains("повтори удаление"))
+	# Ретрай в той же сессии: повторный нажим берёт device_id из маркера (не из
+	# уже стёртой локальной идентичности), ничего не перетирает второй раз и не
+	# дёргает сеть при выключенном net.
+	var _i8_status_p := String(g._shop._status.text)
+	g._shop._delete_data()
+	Selftest.check("i8 re-press retries by saved id without wiping again",
+		String(g._shop._status.text) != _i8_status_p
+		and g._online._device_id == "" and Net._queue.is_empty()
+		and UserData.get_account_delete_pending() == "i8-dev/1"
+		and not g._shop._delete_armed and not FileAccess.file_exists(g.SAVE_PATH))
+	# Startup-ретрай (main.gd зовёт его в net-блоке) обязан послать DELETE ровно
+	# по id из маркера. Seam I8FailSendNet считает попытки и маршрут: с живым
+	# HTTP селфтест никогда не трогает dev-сервер.
+	var _i8_net := I8FailSendNet.new()
+	g._online._retry_pending_account_delete(_i8_net)
+	Selftest.check("i8 startup retry sends DELETE /api/account for saved id",
+		_i8_net.attempts == 1 and _i8_net.urls.size() == 1
+		and String(_i8_net.urls[0]).ends_with("/api/account?device_id=i8-dev%2F1"))
+	# Пустой маркер — ретрай молчит: сначала снимаем маркер, иначе кейс был бы
+	# недостижим (после первого ретрая он ещё стоит).
+	UserData.clear_account_delete_pending()
+	var _i8_net2 := I8FailSendNet.new()
+	g._online._retry_pending_account_delete(_i8_net2)
+	Selftest.check("i8 retry with empty marker sends nothing", _i8_net2.attempts == 0)
+	UserData.mark_account_delete_pending("i8-dev/1")
+	# ok-ответ: online-хендлер снимает маркер (путь коннекта main.gd),
+	# shop-хендлер обновляет статус.
+	g._online._on_account_delete_result({"ok": true, "deleted": true})
+	var _i8_status_ok := String(g._shop._status.text)
+	g._shop._on_account_delete_result({"ok": true, "deleted": true})
+	Selftest.check("i8 ok result clears the marker and reports",
+		UserData.get_account_delete_pending() == ""
+		and String(g._shop._status.text).contains("Серверные данные удалены")
+		and _i8_status_ok != String(g._shop._status.text))
+	# Размороженный сейв пишет снова: путь _save_game жив после отпуска.
+	g._saves._save_frozen = false
+	g._saves._save_game()
+	var _i8_rewritten := g._saves._read_save(g.SAVE_PATH)
+	Selftest.check("i8 unfrozen save writes again", not _i8_rewritten.is_empty())
+	# восстановление состояния сюиты
+	UserData.clear_account_delete_pending()
+	UserData._data = _i8_data0
+	UserData._save()
+	g._online._device_id = _i8_dev0
+	g._online._net_enabled = _i8_en0
+	g._online._net_nick = _i8_nick0
+	g._saves._save_frozen = _i8_frozen0
+	g._shop._delete_armed = _i8_armed0
+	Selftest.check("i8 marker, online identity and UserData restored",
+		UserData.get_account_delete_pending() == "" and _i8_marker0 == ""
+		and UserData.get_or_create_device_id() == String(_i8_data0.get("device_id", ""))
+		and g._online._device_id == _i8_dev0 and g._online._net_enabled == _i8_en0
+		and g._online._net_nick == _i8_nick0 and not g._saves._save_frozen)
+
 	UserData.SAVE_PATH = _us0
 	UserData.TEMP_PATH = _ut0
 	UserData.BACKUP_PATH = _ub0
@@ -1397,3 +1534,18 @@ static func _no_modal_visible(g: Game) -> bool:
 	if g._home._house_popup != null and g._home._house_popup.visible:
 		return false
 	return true
+
+
+class I8FailSendNet extends NetBase:
+	# Seam для #8 (тот же приём, что FailSendNet в suite_resonance_net): эмулирует
+	# штатный для Android случай «HTTPRequest.request() не стартовал» без живого
+	# HTTP, записывая url/method каждого DELETE — так селфтест доказывает, что
+	# стартовый ретрай шлёт сохранённый device_id, не трогая dev-сервер.
+	var attempts := 0
+	var urls: Array = []
+	var methods: Array = []
+	func _try_send(url: String, _headers: PackedStringArray, method: int, _body: String) -> int:
+		attempts += 1
+		urls.append(url)
+		methods.append(method)
+		return ERR_CANT_CONNECT

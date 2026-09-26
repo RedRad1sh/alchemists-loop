@@ -24,7 +24,15 @@ func _init(game: Game) -> void:
 
 # ================= сейвы =================
 
+var _save_frozen := false
+# #8: после «Удалить локальные данные» память всё ещё держит старый прогресс,
+# а _save_game() вызывается ~из ста мест (автосейв по таймеру, пауза, закрытие,
+# награды). Заморозка в единственной точке записи — единственный способ
+# гарантированно не пересоздать удалённый файл старым состоянием.
+
 func _save_game() -> void:
+	if _save_frozen:
+		return
 	var data := {
 		"version": Game.SAVE_VERSION,
 		"ether": g._engine.ether,
@@ -620,6 +628,7 @@ func _read_save(path: String) -> Dictionary:
 	return data
 
 func _delete_local_save() -> void:
+	_save_frozen = true
 	for path in [g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

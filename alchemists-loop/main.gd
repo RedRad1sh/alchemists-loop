@@ -461,6 +461,11 @@ func _ready() -> void:
 		Net.fair_brew_result.connect(_retention._on_net_fair_brew_result)
 		Net.fair_claim_result.connect(_retention._on_net_fair_claim_result)
 		Net.week_status(_online._device_id)
+		# #8: доводка удаления аккаунта. Хендлер чистит маркер при ok; ретрай
+		# поднимает незавершённое удаление прошлой сессии (маркер переживает
+		# вайп). В селфтесте блок не выполняется: _net_enabled = not _selftest.
+		Net.account_delete_result.connect(_online._on_account_delete_result)
+		_online._retry_pending_account_delete()
 	_init_new_game()
 	_saves._load_game()
 	_build_ui()
