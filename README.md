@@ -2,6 +2,7 @@
 
 Алхимический idle-луп на Godot (Android) с сетевым discovery-сервером на FastAPI.
 
+![CI](https://github.com/RedRad1sh/alchemists-loop/actions/workflows/ci.yml/badge.svg)
 [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyFormNoncommercial1.0.0-blue)](LICENSE.md)
 ![Godot 4.7.2](https://img.shields.io/badge/Godot-4.7.2-478CBF?logo=godotengine&logoColor=white)
 ![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
