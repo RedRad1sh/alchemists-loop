@@ -187,6 +187,11 @@ func _connect_signal(signal_name: String, callback: Callable) -> void:
 		_client.connect(signal_name, callback)
 
 func _on_rewarded_signal(value = null, _extra = null) -> void:
+	if _placement_pending == "":
+		# Нет активного показа — нет и права на награду: поздний колбэк плагина
+		# или сигнал, прилетевший после отзыва согласия (initialize снимает
+		# _placement_pending вместе с клиентом, см. гейт выше).
+		return
 	if _reward_earned:
 		# Дубликат (плагин шлёт награду дважды) — второе начисление не проходим.
 		return
@@ -204,6 +209,9 @@ func _on_rewarded_closed(_value = null, _extra = null) -> void:
 	# уже выдал _on_rewarded_signal, и второй эмит был бы двойной выдачей.
 	if _reward_earned:
 		_reward_earned = false
+		return
+	if _placement_pending == "":
+		# Late closed вне активного показа: сообщать нечего, показ не начинали.
 		return
 	_report_reward_not_earned()
 

@@ -138,7 +138,11 @@ func _on_purchase(raw: Dictionary) -> void:
 	purchase_received.emit(purchase)
 
 func _normalize_purchase(raw: Dictionary) -> Dictionary:
-	var sku := String(raw.get("sku", raw.get("product_id", raw.get("productId", _sku_pending))))
+	var sku := String(raw.get("sku", raw.get("product_id", raw.get("productId", ""))))
+	if sku == "":
+		sku = _first_product_id(raw)
+	if sku == "":
+		sku = _sku_pending
 	var token := String(raw.get("purchase_token", raw.get("purchaseToken", raw.get("token", ""))))
 	if sku == "" or token == "":
 		return {}
@@ -183,6 +187,18 @@ func _extract_purchase_array(raw: Dictionary) -> Array:
 		if raw.get(key) is Array:
 			return raw[key] as Array
 	return []
+
+# Плагин v2 несёт sku восстановленной покупки в массиве product_ids, одиночного
+# поля нет. При restore _sku_pending пуст, поэтому без чтения массива покупка
+# превращалась бы в «нераспознанную».
+func _first_product_id(raw: Dictionary) -> String:
+	for key in ["product_ids", "productIds"]:
+		var ids = raw.get(key, null)
+		if (ids is Array or ids is PackedStringArray) and not ids.is_empty():
+			var first := String(ids[0])
+			if first != "":
+				return first
+	return ""
 
 func _looks_like_purchase(raw: Dictionary) -> bool:
 	return String(raw.get("purchase_token", raw.get("purchaseToken", raw.get("token", "")))) != ""

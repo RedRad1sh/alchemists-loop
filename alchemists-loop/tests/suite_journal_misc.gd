@@ -848,6 +848,9 @@ static func run(g: Game) -> void:
 		and g._engine.ether + g._engine.ether_overflow == _t23_eth2
 		and UserData.rewarded_count_for_today() == 0)
 	var _t23_ev4 := _t23_probe.events.size()
+	# not_earned снял _placement_pending, поэтому второй награде нужен новый показ:
+	# адаптер платит только непустому pending (гейт issue #10).
+	_t23_ad._placement_pending = "extra_brew"
 	_t23_client.rewarded.emit({"amount": 12, "type": "item"})
 	Selftest.check("t23 reward payload without earned pays by signal name",
 		_t23_probe.count_since(_t23_ev4, "rewarded:extra_brew") == 1
@@ -878,6 +881,7 @@ static func run(g: Game) -> void:
 	_t23_client.rewarded_closed.emit(null)
 	Selftest.check("t23 withdrawn consent drops the in-flight show",
 		not _t23_ad.is_available()
+		and _t23_probe.count_since(_t23_ev5, "rewarded:") == 0
 		and _t23_probe.count_since(_t23_ev5, "rewarded:extra_brew") == 0
 		and _t23_probe.count_since(_t23_ev5, "finished:extra_brew") == 0
 		and g._engine.ether + g._engine.ether_overflow == _t23_eth5

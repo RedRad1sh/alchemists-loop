@@ -162,6 +162,25 @@ static func run(g: Game) -> void:
 	Selftest.check("u20 gp receipt falls back to the sku being bought",
 		String(_u20_gp_pend.get("sku", "")) == "al_loop_sage_gold_1")
 	_u20_gp._sku_pending = ""
+	# Issue #11: restore v2-плагина приносит sku в массиве product_ids, а
+	# _sku_pending при restore пуст. Убрать вызов _first_product_id() — краснеет
+	# она (чек станет пустым словарём).
+	var _u20_gp_ids: Dictionary = _u20_gp._normalize_purchase(
+		{"product_ids": ["al_loop_remove_ads"], "purchase_token": "u20_tok_ids", "purchase_state": 0})
+	Selftest.check("u20 gp receipt reads sku from non-empty product_ids",
+		String(_u20_gp_ids.get("sku", "")) == "al_loop_remove_ads")
+	# Пустой массив и массив из пустой строки не имеют права глушить фолбэк на
+	# покупаемый sku: если брать ids[0] без проверки на пустоту, краснеет
+	# второй конъюнкт (чек станет пустым).
+	_u20_gp._sku_pending = "al_loop_sage_gold_1"
+	var _u20_gp_ids_empty: Dictionary = _u20_gp._normalize_purchase(
+		{"product_ids": [], "purchase_token": "u20_tok_ids_empty", "purchase_state": 0})
+	var _u20_gp_ids_blank: Dictionary = _u20_gp._normalize_purchase(
+		{"product_ids": [""], "purchase_token": "u20_tok_ids_blank", "purchase_state": 0})
+	Selftest.check("u20 gp receipt ignores empty product_ids and keeps the pending fallback",
+		String(_u20_gp_ids_empty.get("sku", "")) == "al_loop_sage_gold_1"
+		and String(_u20_gp_ids_blank.get("sku", "")) == "al_loop_sage_gold_1")
+	_u20_gp._sku_pending = ""
 	# acknowledged: дефолт false (без него non-consumable признали бы выданным до
 	# acknowledge) — убрать чтение is_acknowledged — краснеет второй конъюнкт.
 	var _u20_gp_ack: Dictionary = _u20_gp._normalize_purchase(
