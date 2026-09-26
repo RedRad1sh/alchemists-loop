@@ -1270,10 +1270,11 @@ func _on_event_tap() -> void:
 	_update_event_ui()
 	match _event_type:
 		"comet":
-			var gained := mini(g._engine._max_ether() - g._engine.ether, 25)
-			g._engine._grant_ether(gained, "comet")
-			g._engine.status_text = "☄ Комета! +%d эфира." % gained
-			_floater_at(reward_pos, "+%d ⚡" % gained, Color(1.0, 0.9, 0.4))
+			# Полный грант 25: сверх кэпа уходит в ether_overflow (резерв),
+			# а не теряется.
+			g._engine._grant_ether(25, "comet")
+			g._engine.status_text = "☄ Комета! +25 эфира."
+			_floater_at(reward_pos, "+25 ⚡", Color(1.0, 0.9, 0.4))
 		"gift":
 			var pick := _random_opened_item()
 			if pick != "":

@@ -40,6 +40,23 @@ static func run(g: Game) -> void:
 	g._saves._load_game()
 	Selftest.check("letter persist", g._riddles._letter_milestones == 1 and g._riddles._letter_solved_total == 5
 		and g._riddles._letter_pending.has("a|b") and bool(g._riddles._letter_today.get("solved", false)))
+	# Issue #7: в чужом сейве letter_cache/atlas_cache могут лежать строкой или
+	# числом. Без typeof-проверки ДО typed-присваивания _load_game падает с
+	# runtime error — мутация: вернуть в saves.gd `var lcache: Dictionary =
+	# data.get(...)` (проверку после объявления), и этот кейс покраснеет.
+	var _s7_today = g._riddles._letter_today.duplicate(true)
+	var _s7_s0 := FileAccess.get_file_as_string(g.SAVE_PATH)
+	var _s7_json = JSON.parse_string(_s7_s0)
+	_s7_json["letter_cache"] = "испорченный"
+	_s7_json["atlas_cache"] = 42
+	var _s7_f := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	_s7_f.store_string(JSON.stringify(_s7_json))
+	_s7_f.close()
+	g._saves._load_game()
+	Selftest.check("broken cache types load into clean defaults",
+		typeof(g._riddles._letter_today) == TYPE_DICTIONARY and g._riddles._letter_today.is_empty()
+		and typeof(g._riddles._atlas_today) == TYPE_DICTIONARY)
+	g._riddles._letter_today = _s7_today
 	# The fixture may have loaded an earlier save with fewer collection keys;
 	# stage the late-game laboratory explicitly before selecting gated pages.
 	var late_ids: Array = g.ITEMS.keys()
