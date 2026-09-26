@@ -1,0 +1,6 @@
+# Dev/тестовые зависимости discovery-server (T09/U8).
+# Ставится поверх requirements.txt:  pip install -r requirements-dev.txt
+# Требуется Python >= 3.10 (см. заметку в requirements.txt).
+pytest==7.4.0
+httpx>=0.24,<0.26  # нужен fastapi.testclient.TestClient (юнит-слой тестов)
+requests>=2.31     # интеграционные тесты ходят по HTTP на uvicorn-подпроцесс

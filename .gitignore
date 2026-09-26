@@ -1,0 +1,17 @@
+.env
+.godot/
+__pycache__/
+.pytest_cache/
+*.pyc
+node_modules/
+.superpowers/
+superpowers/
+# T09/U8: тестовые SQLite-артефакты не должны оседать в репозитории
+discovery-server/server/tests/*.db
+discovery-server/server/tests/*.db-wal
+discovery-server/server/tests/*.db-shm
+discovery-server/server/tests/*.sqlite
+
+# Godot: генерируемые метаданные импорта/uid (regenerable locally)
+*.import
+*.uid

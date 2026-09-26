@@ -1,0 +1,15 @@
+# CodeRabbit — ревью только живого кода, не артов и не генерируемых Godot-файлов.
+reviews:
+  path_filters:
+    - "!alchemists-loop/assets/**"
+    - "!alchemists-loop/previews/**"
+    - "!decor-samples/**"
+    - "!**/*.png"
+    - "!**/*.jpg"
+    - "!**/*.svg"
+    - "!**/*.ttf"
+    - "!**/*.otf"
+    - "!**/*.import"
+    - "!**/*.uid"
+    - "!**/*.wasm"
+    - "!**/*.zip"

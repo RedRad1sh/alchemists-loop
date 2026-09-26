@@ -1,0 +1,47 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Alchemist's Loop — MVP"
+config/description="Локальный MVP кликера-алхимика: источники, котёл, рецепты, книга."
+config/version="0.2.0"
+config/privacy_policy_url="https://example.com/alchemists-loop/privacy"
+config/alchemy_server=""
+config/alchemy_store=""
+config/rustore_application_id=""
+config/rustore_deeplink_scheme=""
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[autoload]
+
+UserData="*res://autoload/user_data.gd"
+App="*res://autoload/app.gd"
+Analytics="*res://autoload/analytics.gd"
+Monetization="*res://autoload/monetization.gd"
+Sfx="*res://autoload/sfx.gd"
+Net="*res://autoload/net.gd"
+
+[display]
+
+window/size/viewport_width=540
+window/size/viewport_height=960
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0.055, 0.065, 0.1, 1)
