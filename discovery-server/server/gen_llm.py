@@ -71,7 +71,16 @@ def _load_dotenv(paths=None) -> None:
                         continue
                     k, _, v = line.partition("=")
                     k = k.strip()
-                    v = v.strip().strip('"').strip("'")
+                    v = v.strip()
+                    if v[:1] in ('"', "'"):
+                        # кавычки защищают решётку внутри значения
+                        q = v[0]
+                        end = v.find(q, 1)
+                        v = v[1:end] if end != -1 else v[1:].strip(q)
+                    else:
+                        # unquoted: « #» начинает inline-комментарий
+                        v = v.split(" #", 1)[0].rstrip()
+                        v = v.strip('"').strip("'")
                     if k and k not in os.environ:
                         os.environ[k] = v
         except FileNotFoundError:
