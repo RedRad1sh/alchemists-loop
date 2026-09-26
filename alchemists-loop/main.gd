@@ -1241,7 +1241,7 @@ func _small_button(text: String, min_size: Vector2, kind: int = 0) -> Button:
 	# компактную, но не микроскопическую Android-friendly высоту.
 	var requested_h := min_size.y
 	var compact_h := 38.0 if requested_h <= 0.0 else clampf(requested_h, 38.0, 42.0)
-	if text.contains("\\n"):
+	if text.contains("\n"):
 		compact_h = maxf(requested_h, 46.0)
 	b.custom_minimum_size = Vector2(min_size.x, compact_h)
 	b.add_theme_font_size_override("font_size", 14)

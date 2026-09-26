@@ -257,8 +257,9 @@ def main():
         bg.alpha_composite(ov, ((cell - ov.width) // 2, (cell - ov.height) // 2 + 6))
         sheet.paste(bg.convert("RGB"), (i * cell, cell * 3 + 30))
         d.text((i * cell + 6, cell * 3 + 32), sid, fill=(20, 20, 20))
-    sheet.save("/home/user/qa_fx.png")
-    print("wrote /home/user/qa_fx.png")
+    qa_out = os.environ.get("QA_FX_OUT", os.path.join(ROOT, "qa_fx.png"))
+    sheet.save(qa_out)
+    print("wrote", qa_out)
 
 
 if __name__ == "__main__":

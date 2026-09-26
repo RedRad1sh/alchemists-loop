@@ -1436,7 +1436,7 @@ func _hint_candidates() -> Array:
 
 func _build_bench_page(container: VBoxContainer) -> void:
 	container.add_child(g._label(_mode_hint("bench"), 15))
-	var bench_poster := "Подмастерье: варит выбранное вещество каждые %d с, копит до %d шт. и останавливается. Эфир на эти варки не тратится." % [int(Game.BENCH_INTERVAL), Game.BENCH_LIMIT]
+	var bench_poster := "Подмастерье: варит выбранное вещество каждые %d с, копит до %d шт. и останавливается. Эфир списывается по обычной цене варки; скидка чертежа применяется." % [int(Game.BENCH_INTERVAL), Game.BENCH_LIMIT]
 	container.add_child(g._label(bench_poster, 12))
 	if _bench_page_labels == null:
 		_bench_page_labels = []
