@@ -102,6 +102,28 @@ def test_cycle_status_endpoint(fresh_unit_db):
     assert "pending_auto_applied" not in data
 
 
+def test_cycle_status_my_points_scoped_to_cycle(fresh_unit_db):
+    """my_points sums ONLY this device's vein_points rows with day >= cycle start."""
+    from fastapi.testclient import TestClient
+    srv.init_db()
+    client = TestClient(srv.app)
+    cycle_id = client.get("/api/vein/cycle/status").json()["cycle_id"]
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    started = conn.execute(
+        "SELECT started_at FROM vein_cycles WHERE cycle_id=?", (cycle_id,)
+    ).fetchone()["started_at"][:10]
+    srv._add_vein_points(conn, srv._today(), "dev-mp", "nick", 2)
+    old_day = "2000-01-01"
+    assert old_day < started  # pre-cycle row must exist strictly before the window
+    srv._add_vein_points(conn, old_day, "dev-mp", "nick", 5)
+    conn.commit()
+    conn.close()
+    data = client.get("/api/vein/cycle/status",
+                      params={"device_id": "dev-mp"}).json()
+    assert data["my_points"] == 2
+
+
 def test_cycle_status_stable_across_calls(fresh_unit_db):
     """Two consecutive GETs return the same cycle_id (lazy creation persists)."""
     from fastapi.testclient import TestClient
