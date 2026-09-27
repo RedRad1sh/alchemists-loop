@@ -15,7 +15,7 @@ var _rr := 0
 func _ready() -> void:
 	for i in 10:
 		var p := AudioStreamPlayer.new()
-		p.volume_db = -6.0
+		p.volume_db = -10.0
 		add_child(p)
 		_players.append(p)
 	_music_player = AudioStreamPlayer.new()
@@ -205,7 +205,7 @@ func _build_music() -> AudioStreamWAV:
 			for f in freqs:
 				v += sin(TAU * f * t) * 0.55
 				v += sin(TAU * f * 2.0 * t) * 0.12
-			out[ci * chord_len + i] = v * env * 0.055
+			out[ci * chord_len + i] = v * env * 0.18
 	return _make_wav(out, true)
 
 func toggle_music() -> bool:
