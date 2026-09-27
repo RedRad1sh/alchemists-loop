@@ -627,6 +627,23 @@ class ReceiptVerifyResponse(BaseModel):
     receipt_hash: str = ""  # SHA-256 токена: клиент сверяет ответ со своим запросом
 
 
+class VeinFindRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    pair_key: str = Field(..., min_length=1, max_length=256)
+    tag: str = Field(..., min_length=1, max_length=64)
+    cycle_id: str = Field(..., min_length=1, max_length=128)
+
+
+class VeinFindResponse(BaseModel):
+    ok: bool
+    points: int = 0
+    streak_added: bool = False
+    streak_count: int = 0
+    cap_reached: bool = False
+    cycle_id: str = ""
+    error: str = ""
+
+
 # ---------------------------------------------------------------------------
 # Работа с БД
 # ---------------------------------------------------------------------------
@@ -2825,6 +2842,113 @@ def discover(req: DiscoverRequest):
             # time.time()). Могилы state='resolved' не копятся (T08.2).
             _release_pair_lock(conn, pair_key, owner)
 
+    finally:
+        conn.close()
+
+@app.post("/api/vein/find", response_model=VeinFindResponse)
+def vein_find(req: VeinFindRequest):
+    """Register a personal find: pair exists in server recipes but not in
+    personal_discoveries for this device. Scores +1 point, 10% streak roll.
+
+    T04/T29 форма: sync def (threadpool), commit в конце успешного пути,
+    rollback по исключению, close в finally (как /api/discover).
+    """
+    conn = get_db()
+    try:
+        # Личное нахождение не несёт игрового ника: для известного устройства
+        # _upsert_player возвращает хранящийся ник (переданный игнорируется),
+        # новое устройство заводится с дефолтом клиента («Алхимик», унификация
+        # при коллизии — внутри _upsert_player). Пустая строка тут недопустима:
+        # clean_nick("") упал бы в 400 на первом же запросе нового устройства.
+        nick = _upsert_player(conn, "Алхимик", req.device_id)
+        conn.commit()
+
+        # Validate cycle_id matches current active/spread
+        cycle = _ensure_active_cycle(conn)
+        if req.cycle_id != cycle["cycle_id"]:
+            # Check if it matches a spread cycle still active
+            spread_row = conn.execute(
+                "SELECT * FROM vein_cycles WHERE cycle_id=? AND state='spread'",
+                (req.cycle_id,),
+            ).fetchone()
+            if spread_row:
+                cycle = dict(spread_row)
+            else:
+                return VeinFindResponse(ok=False, error="cycle_mismatch")
+
+        # Pair must be known to the server (recipe + its output element)
+        recipe = conn.execute(
+            "SELECT out_id FROM recipes WHERE pair_key=?", (req.pair_key,)
+        ).fetchone()
+        if not recipe:
+            return VeinFindResponse(ok=False, error="unknown_pair")
+        elem = conn.execute(
+            "SELECT tag FROM elements WHERE id=?", (recipe["out_id"],)
+        ).fetchone()
+        if not elem:
+            return VeinFindResponse(ok=False, error="unknown_element")
+        if elem["tag"] != req.tag:
+            return VeinFindResponse(ok=False, error="tag_mismatch")
+
+        # Check tag is active in cycle
+        active_tags = {cycle["tag1"]}
+        if cycle["tag2"]:
+            active_tags.add(cycle["tag2"])
+        if req.tag not in active_tags:
+            return VeinFindResponse(ok=False, error="tag_mismatch")
+
+        # Idempotency: already scored this (device, cycle, pair)?
+        existing_hit = conn.execute(
+            "SELECT 1 FROM vein_hits WHERE device_id=? AND cycle_id=? AND pair_key=?",
+            (req.device_id, cycle["cycle_id"], req.pair_key),
+        ).fetchone()
+        if existing_hit:
+            # Return original result from vein_streaks
+            streak_row = conn.execute(
+                "SELECT count, cap_claimed FROM vein_streaks WHERE device_id=? AND cycle_id=?",
+                (req.device_id, cycle["cycle_id"]),
+            ).fetchone()
+            return VeinFindResponse(
+                ok=True, points=1,
+                streak_added=False,
+                streak_count=streak_row["count"] if streak_row else 0,
+                cap_reached=bool(streak_row["cap_claimed"]) if streak_row else False,
+                cycle_id=cycle["cycle_id"],
+            )
+
+        # Register personal discovery (PK device_id+pair_key — глобальный:
+        # INSERT OR IGNORE, повтор в новом цикле не дублирует строку)
+        conn.execute(
+            "INSERT OR IGNORE INTO personal_discoveries (device_id, pair_key, discovered_at) "
+            "VALUES (?, ?, ?)",
+            (req.device_id, req.pair_key, _now_iso()),
+        )
+
+        # Score
+        result = _score_vein_cycle(
+            conn, cycle, req.tag, req.pair_key,
+            req.device_id, nick, is_world_first=False,
+        )
+        if result is None:
+            conn.rollback()
+            return VeinFindResponse(ok=False, error="scoring_failed")
+
+        # Check cycle spread transition (state у dict-а после CAS-loss не
+        # перечитывается — endpoint дальше cycle не использует)
+        _maybe_spread_cycle(conn, cycle)
+
+        conn.commit()
+        return VeinFindResponse(
+            ok=True,
+            points=result["points"],
+            streak_added=result["streak_added"],
+            streak_count=result["streak_count"],
+            cap_reached=result["cap_reached"],
+            cycle_id=cycle["cycle_id"],
+        )
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 
