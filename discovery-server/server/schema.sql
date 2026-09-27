@@ -275,6 +275,15 @@ CREATE TABLE IF NOT EXISTS vein_cycles (
     world_finds INT NOT NULL DEFAULT 0
 );
 
+-- Финальное ревью (F2): не более ОДНОГО открытого цикла на уровне БД.
+-- uuid-суффикс cycle_id снял случайную PK-защиту, и два конкурентных
+-- _ensure_active_cycle могли создать по open-циклу. Частичный UNIQUE по
+-- константе-ключу: под предикат попадает только state IN ('active','spread'),
+-- все такие строки получают один ключ индекса → вторая вставка —
+-- IntegrityError. Закрытые циклы (state='closed') индекс не видит.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_vein_cycles_one_open ON vein_cycles(1)
+    WHERE state IN ('active', 'spread');
+
 -- Личные открытия: глобальная таблица (не привязана к циклу).
 -- PK (device_id, pair_key) — одна пара на устройство за всю историю.
 CREATE TABLE IF NOT EXISTS personal_discoveries (

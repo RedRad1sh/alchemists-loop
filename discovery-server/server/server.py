@@ -792,6 +792,13 @@ def init_db():
             cap_claimed INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (device_id, cycle_id)
         )""")
+        # F2 (по конвенции init_db для старых БД, дубль см. в schema.sql):
+        # частичный UNIQUE — не более одного открытого (active/spread) цикла.
+        # Константа-ключ: все подходящие строки делят один ключ индекса.
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_vein_cycles_one_open "
+            "ON vein_cycles(1) WHERE state IN ('active', 'spread')"
+        )
         # Migration: old vein_hits(week, device_id) → legacy_vein_hits
         # New vein_hits uses (device_id, cycle_id, pair_key) for anti-farm.
         old_vh_cols = {r["name"] for r in conn.execute("PRAGMA table_info(vein_hits)").fetchall()}
@@ -1401,11 +1408,23 @@ def _ensure_active_cycle(conn: sqlite3.Connection) -> dict:
     # дал бы коллизию PRIMARY KEY.
     cycle_id = f"vc:{int(time.time())}-{uuid.uuid4().hex[:6]}"
     now = _now_iso()
-    conn.execute(
-        "INSERT INTO vein_cycles (cycle_id, started_at, tag1, state, spread_threshold) "
-        "VALUES (?, ?, ?, 'active', ?)",
-        (cycle_id, now, tag1, VEIN_SPREAD_THRESHOLD),
-    )
+    try:
+        conn.execute(
+            "INSERT INTO vein_cycles (cycle_id, started_at, tag1, state, spread_threshold) "
+            "VALUES (?, ?, ?, 'active', ?)",
+            (cycle_id, now, tag1, VEIN_SPREAD_THRESHOLD),
+        )
+    except sqlite3.IntegrityError:
+        # F2 (гонка): ux_vein_cycles_one_open — между пустым SELECT выше и
+        # этим INSERT конкурент успел создать (и закоммитить) открытый цикл.
+        # Возвращаем его ряд в той же dict-форме, что и обычный путь.
+        row = conn.execute(
+            "SELECT * FROM vein_cycles WHERE state IN ('active', 'spread') "
+            "ORDER BY started_at DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            raise
+        return dict(row)
     return {
         "cycle_id": cycle_id, "started_at": now, "ended_at": None,
         "spread_at": None, "tag1": tag1, "tag2": None,
@@ -1490,8 +1509,8 @@ def _score_vein_cycle(conn: sqlite3.Connection, cycle: dict, tag: str,
         (device_id, cycle_id, pair_key, _now_iso()),
     )
 
-    # Points: world-first=2, personal=1
-    points = 2 if is_world_first else 1
+    # Points: world-first=VEIN_POINTS, personal=1
+    points = VEIN_POINTS if is_world_first else 1  # личные находки: всегда 1 (спека §3.1)
 
     # Day points (existing vein_points channel)
     day = _today()
@@ -1520,6 +1539,11 @@ def _score_vein_cycle(conn: sqlite3.Connection, cycle: dict, tag: str,
             streak_added = True
         else:
             streak_added = random.random() < VEIN_STREAK_CHANCE
+            if not streak_added:
+                # §3.1.2: при неудачном roll streak сбрасывается в 0. Reset
+                # только здесь — на проигрышном ролле scoring-находки;
+                # wrong-tag/anti-farm ранние выходы (§6 п.4) не трогают streak.
+                cur_count = 0
 
         if streak_added:
             cur_count += 1
@@ -3422,6 +3446,9 @@ def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
         for table in [
             "echoes", "letters", "challenge_scores", "vein_points", "atlas_solves",
             "fair_pairs", "fair_contrib", "fair_claims", "vein_hits", "legacy_vein_hits",
+            # F3 (приватность): цикл-модель жилы добавила свои таблицы —
+            # личные находки, прожилки и журнал вливаний тоже чистим.
+            "personal_discoveries", "vein_streaks", "vein_pour_log",
         ]:
             conn.execute(f"DELETE FROM {table} WHERE device_id = ?", (device_id,))
         conn.execute("DELETE FROM players WHERE device_id = ?", (device_id,))

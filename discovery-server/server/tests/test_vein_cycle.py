@@ -1,4 +1,7 @@
 import sqlite3
+
+import pytest
+
 import server as srv  # noqa: import triggers module-level constants
 
 
@@ -301,4 +304,114 @@ def test_spread_cas_loss_rereads_winner_tag2(fresh_unit_db, monkeypatch):
         "SELECT * FROM vein_cycles WHERE cycle_id=?", (cycle["cycle_id"],)
     ).fetchone()
     assert row["tag2"] == "racer-tag"  # winner's value intact
+    conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Финальное ревью (F2): один открытый цикл гарантирован на уровне БД —
+# частичный UNIQUE-индекс ux_vein_cycles_one_open + race-tolerant
+# _ensure_active_cycle (uuid-суффикс PK снял случайную защиту от коллизий,
+# два конкурента могли создать по открытому циклу).
+# ---------------------------------------------------------------------------
+
+def _close_all_open_cycles(conn):
+    """Свежий старт: коммит-тесты предыдущих кейсов могут оставить открытый
+    цикл в module-scoped БД — закрываем все open-ряды перед ассертами."""
+    conn.execute(
+        "UPDATE vein_cycles SET state='closed', ended_at=? "
+        "WHERE state IN ('active', 'spread')",
+        (srv._now_iso(),),
+    )
+    conn.commit()
+
+
+def test_one_open_cycle_unique_index(fresh_unit_db):
+    """Прямой INSERT второго открытого цикла — IntegrityError, пока первый активен."""
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    _close_all_open_cycles(conn)
+    c1 = srv._ensure_active_cycle(conn)
+    conn.commit()
+    assert c1["state"] == "active"
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            "INSERT INTO vein_cycles (cycle_id, started_at, tag1, state, spread_threshold) "
+            "VALUES (?, ?, ?, 'active', 20)",
+            ("vc:second-active", srv._now_iso(), c1["tag1"]),
+        )
+    # spread тоже «открытый» state — второй открытый ряд недопустим и в spread
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            "INSERT INTO vein_cycles (cycle_id, started_at, tag1, state, spread_threshold) "
+            "VALUES (?, ?, ?, 'spread', 20)",
+            ("vc:second-spread", srv._now_iso(), c1["tag1"]),
+        )
+    conn.close()
+
+
+def test_closed_rows_do_not_conflict_with_open_cycle(fresh_unit_db):
+    """Закрытые ряды не попадают в частичный индекс; после closed снова можно создать active."""
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    _close_all_open_cycles(conn)
+    c1 = srv._ensure_active_cycle(conn)
+    conn.commit()
+    # closed-ряды не конфликтуют с открытым циклом — сколько угодно
+    for i in range(3):
+        conn.execute(
+            "INSERT INTO vein_cycles (cycle_id, started_at, tag1, state, spread_threshold) "
+            "VALUES (?, ?, ?, 'closed', 20)",
+            (f"vc:closed-{i}", srv._now_iso(), c1["tag1"]),
+        )
+    conn.commit()
+    # закрываем активный — и новый active создаётся свободно
+    conn.execute(
+        "UPDATE vein_cycles SET state='closed', ended_at=? WHERE cycle_id=?",
+        (srv._now_iso(), c1["cycle_id"]),
+    )
+    c2 = srv._ensure_active_cycle(conn)
+    conn.commit()
+    assert c2["cycle_id"] != c1["cycle_id"]
+    assert c2["state"] == "active"
+    conn.close()
+
+
+def test_ensure_active_cycle_race_returns_winner(fresh_unit_db, monkeypatch):
+    """Гонка: конкурент вставил открытый цикл между SELECT и INSERT —
+    _ensure_active_cycle ловит IntegrityError и возвращает ряд победителя
+    (тот же shape, что у обычного возврата), без исключения."""
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    _close_all_open_cycles(conn)
+    real_pick = srv._cycle_pick
+
+    def racing_pick(c, exclude=None):
+        # после пустого SELECT и до нашего INSERT другой запрос успевает
+        # создать (и закоммитить) открытый цикл
+        other = sqlite3.connect(srv.DB_PATH)
+        other.row_factory = sqlite3.Row
+        other.execute(
+            "INSERT INTO vein_cycles (cycle_id, started_at, tag1, state, spread_threshold) "
+            "VALUES (?, ?, ?, 'active', 20)",
+            ("vc:race-winner", srv._now_iso(), "iron"),
+        )
+        other.commit()
+        other.close()
+        return real_pick(c, exclude=exclude)
+
+    monkeypatch.setattr(srv, "_cycle_pick", racing_pick)
+    cycle = srv._ensure_active_cycle(conn)
+    assert cycle["cycle_id"] == "vc:race-winner"
+    # dict-та же форма, что у нормального возврата (SELECT * → dict(row))
+    assert set(cycle.keys()) == {
+        "cycle_id", "started_at", "ended_at", "spread_at", "tag1", "tag2",
+        "state", "spread_threshold", "world_finds",
+    }
+    assert cycle["state"] == "active"
+    # и повторный вызов идемпотентен — возвращает того же победителя
+    again = srv._ensure_active_cycle(conn)
+    assert again["cycle_id"] == "vc:race-winner"
     conn.close()
