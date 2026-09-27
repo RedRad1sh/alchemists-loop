@@ -193,3 +193,66 @@ def test_cycle_status_spread_expiry_closes_and_returns_fresh(fresh_unit_db):
     assert old_row["state"] == "closed"
     assert old_row["ended_at"]
     conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Task 10: CAS-переходы цикла active→spread→closed
+# ---------------------------------------------------------------------------
+
+def test_spread_transition_cas(fresh_unit_db):
+    """active→spread sets tag2 and spread_at atomically."""
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cycle = srv._ensure_active_cycle(conn)
+    # Simulate threshold reached
+    conn.execute(
+        "UPDATE vein_cycles SET world_finds=? WHERE cycle_id=?",
+        (cycle["spread_threshold"], cycle["cycle_id"]),
+    )
+    cycle["world_finds"] = cycle["spread_threshold"]
+    srv._maybe_spread_cycle(conn, cycle)
+    updated = conn.execute(
+        "SELECT * FROM vein_cycles WHERE cycle_id=?", (cycle["cycle_id"],)
+    ).fetchone()
+    assert updated["state"] == "spread"
+    assert updated["tag2"] is not None
+    assert updated["spread_at"] is not None
+    # вызванный dict тоже мутирован (контракт _maybe_spread_cycle)
+    assert cycle["state"] == "spread"
+    assert cycle["tag2"] == updated["tag2"]
+    conn.close()
+
+
+def test_closed_transition_after_spread_duration(fresh_unit_db):
+    """spread→closed after VEIN_SPREAD_DURATION days."""
+    from datetime import date as _date, timedelta
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cycle = srv._ensure_active_cycle(conn)
+    # Force spread state with old spread_at (единая серверная шкала — _now_dt)
+    old_spread = (srv._now_dt() - timedelta(days=4)).isoformat()
+    conn.execute(
+        "UPDATE vein_cycles SET state='spread', tag2='secondary', spread_at=? WHERE cycle_id=?",
+        (old_spread, cycle["cycle_id"]),
+    )
+    conn.commit()
+    # Trigger via cycle_status-like check
+    spread_row = conn.execute(
+        "SELECT * FROM vein_cycles WHERE cycle_id=?", (cycle["cycle_id"],)
+    ).fetchone()
+    spread_date = _date.fromisoformat(spread_row["spread_at"][:10])
+    today = srv._today_date()
+    assert (today - spread_date).days >= srv.VEIN_SPREAD_DURATION
+    cursor = conn.execute(
+        "UPDATE vein_cycles SET state='closed', ended_at=? WHERE cycle_id=? AND state='spread'",
+        (srv._now_iso(), cycle["cycle_id"]),
+    )
+    assert cursor.rowcount == 1
+    conn.commit()
+    # New active cycle should be creatable
+    new_cycle = srv._ensure_active_cycle(conn)
+    assert new_cycle["cycle_id"] != cycle["cycle_id"]
+    assert new_cycle["state"] == "active"
+    conn.close()

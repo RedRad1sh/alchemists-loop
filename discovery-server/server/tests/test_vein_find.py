@@ -59,23 +59,42 @@ def test_score_vein_cycle_anti_farm(fresh_unit_db):
     conn.close()
 
 
-def test_score_vein_cycle_personal_find(fresh_unit_db):
-    """Personal find: +1 point, 10% streak roll (forced via seed)."""
-    import random
+def test_score_vein_cycle_personal_find(fresh_unit_db, monkeypatch):
+    """Personal find: +1 point, 10% streak roll — success forced via monkeypatch."""
     srv.init_db()
     conn = sqlite3.connect(srv.DB_PATH)
     conn.row_factory = sqlite3.Row
     cycle = _setup_cycle(conn)
-    random.seed(0)  # deterministic roll
+    # roll < VEIN_STREAK_CHANCE (0.10) → streak added
+    monkeypatch.setattr(srv.random, "random", lambda: 0.0)
     result = srv._score_vein_cycle(
         conn, cycle, cycle["tag1"], "salt|water", "dev1", "alice",
         is_world_first=False,
     )
     assert result is not None
     assert result["points"] == 1
-    # streak_added depends on random seed; just check structure
-    assert "streak_added" in result
-    assert "streak_count" in result
+    assert result["streak_added"] is True
+    assert result["streak_count"] == 1
+    assert result["cap_reached"] is False
+    conn.close()
+
+
+def test_score_vein_cycle_personal_find_roll_fail(fresh_unit_db, monkeypatch):
+    """Personal find with losing roll (>= 0.10): +1 point, no streak."""
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cycle = _setup_cycle(conn)
+    monkeypatch.setattr(srv.random, "random", lambda: 1.0)
+    result = srv._score_vein_cycle(
+        conn, cycle, cycle["tag1"], "salt|water", "dev1-fail", "alice",
+        is_world_first=False,
+    )
+    assert result is not None
+    assert result["points"] == 1
+    assert result["streak_added"] is False
+    assert result["streak_count"] == 0
+    assert result["cap_reached"] is False
     conn.close()
 
 
@@ -349,5 +368,101 @@ def test_vein_find_idempotent(fresh_unit_db):
             "SELECT COALESCE(SUM(points), 0) AS p FROM vein_points WHERE device_id='dev-pf4'"
         ).fetchone()["p"]
         assert vp == 1
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Task 10 (G1/G2): покрытие веток /api/vein/find
+# ---------------------------------------------------------------------------
+
+def test_vein_find_tag_outside_active_cycle(fresh_unit_db):
+    """G1: element tag == req.tag, but that tag is NOT in current cycle
+    {tag1, tag2} → tag_mismatch (цикл-membership ветка, не element-ветка)."""
+    from fastapi.testclient import TestClient
+    srv.init_db()
+    client = TestClient(srv.app)
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cycle = srv._ensure_active_cycle(conn)
+    # Новый pair/element: elem.tag == req.tag, но tag вне {tag1, tag2=None}.
+    assert "out_of_cycle_tag" not in {cycle["tag1"], cycle["tag2"]}
+    conn.execute(
+        "INSERT OR IGNORE INTO elements (id, slug, name, color, layer, category, tag) "
+        "VALUES (9997, 'test_elem_ooc', 'Out Of Cycle Element', '#fff', 1, 'basic', 'out_of_cycle_tag')"
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO recipes (pair_key, a, b, a_id, b_id, out_id, discoverer, discoverer_device, created_at) "
+        "VALUES ('dust|ash', 'dust', 'ash', 1, 2, 9997, 'bob', 'dev-bob', datetime('now'))"
+    )
+    conn.commit()
+    conn.close()
+    resp = client.post("/api/vein/find", json={
+        "device_id": "dev-pf6",
+        "pair_key": "dust|ash",
+        "tag": "out_of_cycle_tag",
+        "cycle_id": cycle["cycle_id"],
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ok"] is False
+    assert data.get("error") == "tag_mismatch"
+    # nothing scored, nothing registered
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        pd = conn.execute(
+            "SELECT 1 FROM personal_discoveries WHERE device_id='dev-pf6'"
+        ).fetchone()
+        assert pd is None
+        hit = conn.execute(
+            "SELECT 1 FROM vein_hits WHERE device_id='dev-pf6'"
+        ).fetchone()
+        assert hit is None
+    finally:
+        conn.close()
+
+
+def test_vein_find_unknown_element(fresh_unit_db):
+    """G2: recipe row exists whose out_id points at a missing element →
+    unknown_element. (Тестовое соединение без PRAGMA foreign_keys — подвешенный
+    out_id сидит инородно только в этой строке recipes.)"""
+    from fastapi.testclient import TestClient
+    srv.init_db()
+    client = TestClient(srv.app)
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cycle = srv._ensure_active_cycle(conn)
+    conn.execute(
+        "INSERT OR IGNORE INTO recipes (pair_key, a, b, a_id, b_id, out_id, discoverer, discoverer_device, created_at) "
+        "VALUES ('ghost|brine', 'ghost', 'brine', 1, 2, 9996, 'bob', 'dev-bob', datetime('now'))"
+    )
+    conn.commit()
+    assert conn.execute(
+        "SELECT 1 FROM elements WHERE id=9996"
+    ).fetchone() is None  # out_id указывает на отсутствующий элемент
+    conn.close()
+    resp = client.post("/api/vein/find", json={
+        "device_id": "dev-pf7",
+        "pair_key": "ghost|brine",
+        "tag": cycle["tag1"],
+        "cycle_id": cycle["cycle_id"],
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ok"] is False
+    assert data.get("error") == "unknown_element"
+    # nothing scored, nothing registered
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        pd = conn.execute(
+            "SELECT 1 FROM personal_discoveries WHERE device_id='dev-pf7'"
+        ).fetchone()
+        assert pd is None
+        hit = conn.execute(
+            "SELECT 1 FROM vein_hits WHERE device_id='dev-pf7'"
+        ).fetchone()
+        assert hit is None
     finally:
         conn.close()
