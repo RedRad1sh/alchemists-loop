@@ -82,7 +82,7 @@ const GLASS := [                      # цвета стекла на полке 
 # Полей _table_ok/_table_rect/_window_ok/_window_rect больше нет: геометрия стола,
 # окна и настольных ламп — чистая функция от (furniture, overrides, размер) внутри
 # _item_rect, а не побочный эффект последнего кадра _draw. На скрытой вкладке «Дом»
-# _draw не вызывается вообще (гейт _visibility_changed), и раньше тап по настольной
+# _draw не вызывается вообще (гейт visibility_changed), и раньше тап по настольной
 # лампе попадал в другую ветку, чем последний нарисованный кадр (см. u26 в
 # tests/suite_hints_house.gd).
 var _phase: float = 0.0
@@ -95,10 +95,14 @@ var _fx: Dictionary = {}  # fx-имя -> Texture2D (кэш)
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP if editable else Control.MOUSE_FILTER_IGNORE
 	# Первый расчёт гейта: рисовать нужно только видимой и анимируемой сцене.
-	set_process(animate and is_visible_in_tree())
+	# В Godot 4 у CanvasItem НЕТ виртуального метода _visibility_changed() —
+	# движок вызывает только сигнал visibility_changed, и он приходит и при смене
+	# видимости предка, поэтому переключение вкладки «Дом» попадает сюда.
+	visibility_changed.connect(_update_process_gate)
+	_update_process_gate()
 
 
-func _visibility_changed() -> void:
+func _update_process_gate() -> void:
 	# TabContainer прячет неактивные страницы, поэтому уход с вкладки «Дом»
 	# приходит сюда, а не в main: на скрытом виде `_draw` жжёт кадры и батарею.
 	set_process(animate and is_visible_in_tree())
@@ -306,7 +310,7 @@ func _resolved_anchor(cat: String, item_id: String, w: float, h: float, tex: Tex
 func _item_rect(cat: String, item_id: String, w: float, h: float) -> Rect2:
 	# Единственная функция геометрии: чистая от (furniture, overrides, размер). Никаких
 	# фласов «отрисован в этом кадре» — на скрытой вкладке «Дом» _draw не вызывается
-	# вообще (гейт _visibility_changed), и тап по настольной лампе использовал другую
+	# вообще (гейт visibility_changed), и тап по настольной лампе использовал другую
 	# ветку, чем последний нарисованный кадр.
 	var tex: Texture2D = _tex_of(item_id)
 	if tex == null:
@@ -448,11 +452,11 @@ func _process(delta: float) -> void:
 	if not animate:
 		# Страховка на случай `animate = false` уже в дереве с включённым process:
 		# сегодня таких мест нет (все превью в home.gd пишут false до add_child и
-		# паркуются в _ready/_visibility_changed), но поле публичное.
+		# паркуются в _ready/visibility_changed), но поле публичное.
 		set_process(false)
 		return
 	if not is_visible_in_tree():
-		# страховка за _visibility_changed: у скрытого вида рисовать нечего
+		# страховка за visibility_changed: у скрытого вида рисовать нечего
 		set_process(false)
 		return
 	_phase += delta

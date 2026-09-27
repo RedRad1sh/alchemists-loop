@@ -297,17 +297,29 @@ func _on_account_delete_result(result: Dictionary) -> void:
 		_status.text = "Локальные данные очищены, но сервер пока недоступен — повтори удаление позже."
 
 func _delete_data() -> void:
+	# #8: маркер незавершённого серверного удаления переживает вайп. Если он
+	# остался (сервер был недоступен в прошлый раз) — повторный нажим шлёт
+	# DELETE по сохранённому device_id, а не по уже стёртой локальной идентичности.
+	var pending := UserData.get_account_delete_pending()
+	if pending != "":
+		if g._online._net_enabled:
+			Net.delete_account(pending)
+		_status.text = "Повторяю удаление с сервера…"
+		return
 	if not _delete_armed:
 		_delete_armed = true
 		_delete_button.text = "Нажми ещё раз — покупки останутся в журнале"
 		_status.text = "Будут удалены локальный прогресс, согласия и ID установки. Мировые вещества останутся, авторство будет анонимизировано сервером. На устройстве сохранится журнал уже выданных покупок (отпечаток чека, SKU и время) — это платёжная защита от повторной выдачи, а не прогресс."
 		return
 	var device_id := g._online._device_id
+	if device_id != "":
+		UserData.mark_account_delete_pending(device_id)
 	if g._online._net_enabled and device_id != "":
 		Net.delete_account(device_id)
 	g._saves._delete_local_save()
 	UserData.delete_all_local_data()
 	Analytics.clear_local_queue()
+	g._online._forget_net_identity()
 	_status.text = "Локальные данные удалены, журнал покупок сохранён. Перезапусти игру для новой установки."
 	_delete_armed = false
 	_delete_button.text = DELETE_BUTTON_LABEL

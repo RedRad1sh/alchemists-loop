@@ -461,6 +461,11 @@ func _ready() -> void:
 		Net.fair_brew_result.connect(_retention._on_net_fair_brew_result)
 		Net.fair_claim_result.connect(_retention._on_net_fair_claim_result)
 		Net.week_status(_online._device_id)
+		# #8: доводка удаления аккаунта. Хендлер чистит маркер при ok; ретрай
+		# поднимает незавершённое удаление прошлой сессии (маркер переживает
+		# вайп). В селфтесте блок не выполняется: _net_enabled = not _selftest.
+		Net.account_delete_result.connect(_online._on_account_delete_result)
+		_online._retry_pending_account_delete()
 	_init_new_game()
 	_saves._load_game()
 	_build_ui()
@@ -1241,7 +1246,7 @@ func _small_button(text: String, min_size: Vector2, kind: int = 0) -> Button:
 	# компактную, но не микроскопическую Android-friendly высоту.
 	var requested_h := min_size.y
 	var compact_h := 38.0 if requested_h <= 0.0 else clampf(requested_h, 38.0, 42.0)
-	if text.contains("\\n"):
+	if text.contains("\n"):
 		compact_h = maxf(requested_h, 46.0)
 	b.custom_minimum_size = Vector2(min_size.x, compact_h)
 	b.add_theme_font_size_override("font_size", 14)

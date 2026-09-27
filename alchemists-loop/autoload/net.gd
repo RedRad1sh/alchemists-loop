@@ -73,7 +73,7 @@ func _ready() -> void:
 	add_child(_http)
 	_http.request_completed.connect(_on_completed)
 	# в selftest сеть не трогаем (герметичный прогон); пустой base_url = «сервера
-	# нет» (F1: релиз без https-настройки) — пинг не шлём совсем
+	# нет» (F1: релиз без https-настройки) — пинг не шлём совсем.
 	if base_url != "" and not SelftestMode.enabled():
 		_ping()
 
@@ -316,6 +316,15 @@ func _send_next() -> void:
 # _http.request(...); нужна как seam для selftest (см. suite_resonance_net.gd),
 # чтобы эмулировать err != OK на старте запроса без живого сервера.
 func _try_send(url: String, headers: PackedStringArray, method: int, body: String) -> int:
+	if SelftestMode.enabled():
+		# Герметичный прогон: сокет не открываем НИКОГДА. Раньше skip касался
+		# только _ping(), а production-вызовы (main.gd `_refetch_world` на
+		# вкладке «Мир» гейта по selftest не имеет) уходили живым сокетом на
+		# 127.0.0.1 — и глобальные ассерты сюит на «очереди нет» краснели от
+		# чужого трафика. «Запрос не стартовал» — ровно рабочий путь err != OK:
+		# тот же offline-результат, тот же синхронный слив очереди. base_url не
+		# трогаем: склейку базы с путём меряют кейсы «net … route».
+		return ERR_CANT_CONNECT
 	return _http.request(url, headers, method, body)
 
 func _on_completed(result: int, response_code: int, _headers: PackedStringArray, data: PackedByteArray) -> void:

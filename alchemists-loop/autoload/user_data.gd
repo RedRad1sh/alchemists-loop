@@ -1,8 +1,11 @@
 extends Node
 
 # UserData — минимальный приватный контейнер для данных, которые не относятся
-# к игровому графу: идентификаторы установки, согласия, идемпотентность покупок
-# и лимиты рекламы. Игровой прогресс остаётся в Saves и экспортируется отдельно.
+# к игровому графу: идентификаторы установки, согласия, pending/owned покупок
+# и лимиты рекламы (файл alchemists_loop_user.json, затирается «Удалить
+# данные»). Идемпотентность завершённых чеков — не здесь, а в журнале покупок
+# alchemists_loop_purchases.json (ниже), который вайп переживает. Игровой
+# прогресс остаётся в Saves и экспортируется отдельно.
 #
 # Важно: device_id не является аппаратным идентификатором. Это случайный
 # идентификатор установки, который можно удалить кнопкой «Удалить данные».
@@ -32,12 +35,20 @@ const ST_PURCHASES_PATH := "user://alchemy_st_purchases.json"
 const ST_PURCHASES_TEMP_PATH := "user://alchemy_st_purchases.tmp"
 const PURCHASES_VERSION := 1
 const PROCESSED_CAP := 200
+# #8: маркер «удаление аккаунта с сервера запрошено, но не подтверждено».
+# Живёт в ОТДЕЛЬНОМ файле, который переживает delete_all_local_data(): без
+# него закрытие игры до ответа сервера теряло бы запрос удаления — а после
+# вайпа device_id взять было неоткуда. Хранит ровно тот device_id, который
+# сервер и так знает; стирается только успешным ответом DELETE.
+const REAL_DELETE_PENDING_PATH := "user://alchemists_loop_delete_pending.json"
+const ST_DELETE_PENDING_PATH := "user://alchemy_st_delete_pending.json"
 
 var SAVE_PATH := REAL_SAVE_PATH
 var TEMP_PATH := REAL_TEMP_PATH
 var BACKUP_PATH := REAL_BACKUP_PATH
 var PURCHASES_PATH := REAL_PURCHASES_PATH
 var PURCHASES_TEMP_PATH := REAL_PURCHASES_TEMP_PATH
+var DELETE_PENDING_PATH := REAL_DELETE_PENDING_PATH
 
 signal changed
 
@@ -74,7 +85,9 @@ func _isolate_selftest_paths() -> void:
 	BACKUP_PATH = ST_BACKUP_PATH
 	PURCHASES_PATH = ST_PURCHASES_PATH
 	PURCHASES_TEMP_PATH = ST_PURCHASES_TEMP_PATH
-	for p in [SAVE_PATH, TEMP_PATH, BACKUP_PATH, PURCHASES_PATH, PURCHASES_TEMP_PATH]:
+	DELETE_PENDING_PATH = ST_DELETE_PENDING_PATH
+	for p in [SAVE_PATH, TEMP_PATH, BACKUP_PATH, PURCHASES_PATH, PURCHASES_TEMP_PATH,
+			DELETE_PENDING_PATH]:
 		if FileAccess.file_exists(p):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 
@@ -472,10 +485,34 @@ func delete_all_local_data() -> void:
 	# Журнал покупок (_processed и granted-отметки / PURCHASES_PATH) здесь
 	# СОХРАНЯЕТСЯ целиком: он защищает от повторной выдачи уже потреблённых и уже
 	# начисленных, но не закрытых чеков и не является поведенческими данными.
-	# Временный файл журнала — мусор, его удаляем.
+	# Временный файл журнала — мусор, его удаляем. Маркер незавершённого
+	# серверного удаления (#8) тоже переживает вайп — он для того и отдельный.
 	_data = _defaults()
 	_save()
 	for path in [SAVE_PATH, TEMP_PATH, BACKUP_PATH, PURCHASES_TEMP_PATH]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	changed.emit()
+
+# --- Маркер незавершённого серверного удаления (#8) ---------------------------
+
+func mark_account_delete_pending(device_id: String) -> void:
+	var file := FileAccess.open(DELETE_PENDING_PATH, FileAccess.WRITE)
+	if file == null:
+		push_warning("UserData: не удалось записать маркер удаления (#8).")
+		return
+	file.store_string(JSON.stringify({
+		"device_id": device_id,
+		"marked_at": int(Time.get_unix_time_from_system()),
+	}))
+	file.close()
+
+func get_account_delete_pending() -> String:
+	if not FileAccess.file_exists(DELETE_PENDING_PATH):
+		return ""
+	var stored := _read_json(DELETE_PENDING_PATH)
+	return String(stored.get("device_id", ""))
+
+func clear_account_delete_pending() -> void:
+	if FileAccess.file_exists(DELETE_PENDING_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(DELETE_PENDING_PATH))

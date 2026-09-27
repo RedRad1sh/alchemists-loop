@@ -46,7 +46,10 @@ def test_account_export_and_delete_preserves_world(tmp_path, monkeypatch):
             "/api/account", params={"device_id": "privacy-device"}
         )
         assert deleted.status_code == 200
-        assert deleted.json() == {"ok": True, "deleted": True}
+        body = deleted.json()
+        assert body["ok"] is True
+        assert body["deleted"] is True
+        assert body.get("device_id") == "privacy-device"
 
         conn = sqlite3.connect(srv.DB_PATH)
         assert conn.execute(

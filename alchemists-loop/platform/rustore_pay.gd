@@ -160,7 +160,11 @@ func _normalize_state(raw: Dictionary) -> String:
 	var value := ""
 	for key in ["purchase_state", "purchaseState", "state"]:
 		if raw.has(key):
-			value = String(raw[key]).to_upper()
+			# str(), а не String(...): плагин отдаёт и числовой purchase_state, а
+			# конструктор String на Int в этом билде движка — рантайм-ошибка
+			# («Nonexistent 'String' constructor»), после которой match видит
+			# пустую строку. Контракт тот же: число ≠ подтверждение покупки.
+			value = str(raw[key]).to_upper()
 			break
 	match value:
 		"PAID", "BOUGHT", "PURCHASED":

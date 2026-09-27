@@ -24,7 +24,15 @@ func _init(game: Game) -> void:
 
 # ================= сейвы =================
 
+var _save_frozen := false
+# #8: после «Удалить локальные данные» память всё ещё держит старый прогресс,
+# а _save_game() вызывается ~из ста мест (автосейв по таймеру, пауза, закрытие,
+# награды). Заморозка в единственной точке записи — единственный способ
+# гарантированно не пересоздать удалённый файл старым состоянием.
+
 func _save_game() -> void:
+	if _save_frozen:
+		return
 	var data := {
 		"version": Game.SAVE_VERSION,
 		"ether": g._engine.ether,
@@ -232,9 +240,10 @@ func _load_game() -> void:
 	g._riddles._letter_pending = data.get("letter_pending", [])
 	if g._riddles._letter_pending == null or typeof(g._riddles._letter_pending) != TYPE_ARRAY:
 		g._riddles._letter_pending = []
-	var lcache: Dictionary = data.get("letter_cache", {})
-	if lcache == null or typeof(lcache) != TYPE_DICTIONARY:
-		lcache = {}
+	# Тип проверяем до typed-присваивания: String в Dictionary-поле сейва
+	# иначе роняет загрузку на этапе объявления переменной.
+	var lcache_raw: Variant = data.get("letter_cache", {})
+	var lcache: Dictionary = lcache_raw if typeof(lcache_raw) == TYPE_DICTIONARY else {}
 	g._riddles._letter_today = lcache.get("today", {})
 	if g._riddles._letter_today == null or typeof(g._riddles._letter_today) != TYPE_DICTIONARY:
 		g._riddles._letter_today = {}
@@ -246,9 +255,8 @@ func _load_game() -> void:
 	g._riddles._atlas_pending = data.get("atlas_pending", [])
 	if g._riddles._atlas_pending == null or typeof(g._riddles._atlas_pending) != TYPE_ARRAY:
 		g._riddles._atlas_pending = []
-	var acache: Dictionary = data.get("atlas_cache", {})
-	if acache == null or typeof(acache) != TYPE_DICTIONARY:
-		acache = {}
+	var acache_raw: Variant = data.get("atlas_cache", {})
+	var acache: Dictionary = acache_raw if typeof(acache_raw) == TYPE_DICTIONARY else {}
 	g._riddles._atlas_today = acache.get("today", {})
 	if g._riddles._atlas_today == null or typeof(g._riddles._atlas_today) != TYPE_DICTIONARY:
 		g._riddles._atlas_today = {}
@@ -620,6 +628,7 @@ func _read_save(path: String) -> Dictionary:
 	return data
 
 func _delete_local_save() -> void:
+	_save_frozen = true
 	for path in [g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

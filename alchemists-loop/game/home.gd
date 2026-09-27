@@ -844,6 +844,13 @@ static func _gap_norm(ra: Rect2, rb: Rect2, w: float, h: float) -> Vector2:
 	return Vector2(gx / w, gy / h)
 
 
+# Компоненты Rect2/Vector2 в этом билде движка — float32 (80.0/400.0 внутри
+# Vector2 даёт 0.20000000298023), а порог `gap` из JSON — double. Ровно граница
+# «зазор == gap» без допуска оказалась бы невыполнима, хотя правило задумано
+# включющим. 1e-6 от размера сцены — доли пикселя, перекрытия не разрешает.
+const GAP_EPS := 1e-6
+
+
 static func house_task_satisfied(task: Dictionary, rects: Dictionary, w: float, h: float) -> bool:
 	if w <= 0.0 or h <= 0.0:
 		return false  # до первого layout'а у Control размер нулевой: проверки молчат
@@ -860,8 +867,8 @@ static func house_task_satisfied(task: Dictionary, rects: Dictionary, w: float, 
 		# «ровно касание», а не разрешение на перекрытие.
 		var inside := ra.position.x >= rb.position.x and ra.end.x <= rb.end.x
 		var above := ra.end.y <= rb.position.y + 1.0
-		return inside and above and d.y <= float(task["gap"])
-	return maxf(d.x, d.y) <= float(task["gap"])
+		return inside and above and d.y <= float(task["gap"]) + GAP_EPS
+	return maxf(d.x, d.y) <= float(task["gap"]) + GAP_EPS
 
 
 func _task_rects() -> Dictionary:
