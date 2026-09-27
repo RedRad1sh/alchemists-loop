@@ -49,11 +49,13 @@ func _build_profile_popup() -> void:
 	dim.name = "ProfileDim"
 	dim.color = Color(0, 0, 0, 0.55)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.z_index = 20
 	dim.visible = false
 	g.add_child(dim)
 	_profile_dim = dim
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.z_index = 21
 	center.visible = false
 	g.add_child(center)
 	_profile_popup = center
@@ -222,11 +224,13 @@ func _build_craftable_popup() -> void:
 	dim.name = "CraftableDim"
 	dim.color = Color(0, 0, 0, 0.55)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.z_index = 20
 	dim.visible = false
 	g.add_child(dim)
 	_craftable_dim = dim
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.z_index = 21
 	center.visible = false
 	g.add_child(center)
 	_craftable_popup = center
@@ -323,11 +327,13 @@ func _build_settings_popup() -> void:
 	dim.name = "SettingsDim"
 	dim.color = Color(0, 0, 0, 0.55)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.z_index = 20
 	dim.visible = false
 	g.add_child(dim)
 	_settings_dim = dim
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.z_index = 21
 	center.visible = false
 	g.add_child(center)
 	_settings_popup = center
@@ -400,11 +406,13 @@ func _build_journal_popup() -> void:
 	dim.name = "JournalDim"
 	dim.color = Color(0, 0, 0, 0.55)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.z_index = 20
 	dim.visible = false
 	g.add_child(dim)
 	_journal_dim = dim
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.z_index = 21
 	center.visible = false
 	g.add_child(center)
 	_journal_popup = center
@@ -465,12 +473,14 @@ func _build_upgrade_popup() -> void:
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.55)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.z_index = 20
 	dim.visible = false
 	g.add_child(dim)
 	_up_dim = dim
 
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.z_index = 21
 	center.visible = false
 	g.add_child(center)
 	_up_popup = center
@@ -523,11 +533,13 @@ func _build_prestige_popup() -> void:
 	dim.name = "PrestigeDim"
 	dim.color = Color(0, 0, 0, 0.55)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.z_index = 20
 	dim.visible = false
 	g.add_child(dim)
 	_prestige_dim = dim
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.z_index = 21
 	center.visible = false
 	g.add_child(center)
 	_prestige_popup = center

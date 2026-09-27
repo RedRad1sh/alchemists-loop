@@ -884,7 +884,7 @@ func _refresh() -> void:
 func _refresh_header() -> void:
 	if not is_instance_valid(_ether_label):
 		return
-	_ether_label.text = "⚡ Эфир: %d / %d   ·   резерв: %d   ·   +%.2f/с" % [ether, _max_ether(), ether_overflow, _ether_rate()]
+	_ether_label.text = "⚡%d/%d · рез:%d · +%.1f/с" % [ether, _max_ether(), ether_overflow, _ether_rate()]
 	var nxt := _next_milestone(inventory.size())
 	var atlas := ""
 	if nxt > 0:
