@@ -644,6 +644,16 @@ class VeinFindResponse(BaseModel):
     error: str = ""
 
 
+class VeinPourRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    idempotency_key: str = Field(..., min_length=1, max_length=256)
+
+
+class VeinPourResponse(BaseModel):
+    ok: bool
+    already_poured: bool = False
+
+
 # ---------------------------------------------------------------------------
 # Работа с БД
 # ---------------------------------------------------------------------------
@@ -2949,6 +2959,30 @@ def vein_find(req: VeinFindRequest):
     except Exception:
         conn.rollback()
         raise
+    finally:
+        conn.close()
+
+@app.post("/api/vein/pour", response_model=VeinPourResponse)
+def vein_pour(req: VeinPourRequest):
+    """UI-only ceremony. Records pour in vein_pour_log for idempotency.
+    Never scores points."""
+    conn = get_db()
+    try:
+        existing = conn.execute(
+            "SELECT 1 FROM vein_pour_log WHERE device_id=? AND idempotency_key=?",
+            (req.device_id, req.idempotency_key),
+        ).fetchone()
+        if existing:
+            return VeinPourResponse(ok=True, already_poured=True)
+        conn.execute(
+            "INSERT INTO vein_pour_log (device_id, idempotency_key, processed_at) VALUES (?, ?, ?)",
+            (req.device_id, req.idempotency_key, _now_iso()),
+        )
+        conn.commit()
+        return VeinPourResponse(ok=True, already_poured=False)
+    except sqlite3.IntegrityError:
+        # Race: another request inserted same key
+        return VeinPourResponse(ok=True, already_poured=True)
     finally:
         conn.close()
 
