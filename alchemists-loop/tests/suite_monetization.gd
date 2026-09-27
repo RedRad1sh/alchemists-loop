@@ -221,18 +221,20 @@ static func run(g: Game) -> void:
 		_u20_rs._normalize_state({}) == "rejected")
 	# Числовые состояния — язык Google Play; здесь они не подтверждают покупку.
 	# Утверждение намеренно «не purchased», а не точная строка ответа: RuStore
-	# приводит значение через String(raw[key]) (rustore_pay.gd:163), и сверять
-	# "0"/"1" значило бы закрепить поведение каста, а не контракт. Мутация,
-	# которая красит оба конъюнкта ровно этой проверки: начать матчить числовые
-	# статусы в purchased-шаблон — добавить строковые литералы "0"/"1" рядом с
-	# "PAID", "BOUGHT", "PURCHASED" (String(0) == "0" попадёт в шаблон и даст
-	# "purchased"). Int-литералы 0/1 в шаблон добавлять бесполезно — value
-	# после String() всегда строка, мутация не доживает до ответа.
+	# приводит значение через str(raw[key]) в _normalize_state, и сверять "0"/"1"
+	# значило бы закрепить поведение каста, а не контракт. Мутация, которая красит
+	# оба конъюнкта ровно этой проверки: начать матчить числовые статусы в
+	# purchased-шаблон — добавить строковые литералы "0"/"1" рядом с "PAID",
+	# "BOUGHT", "PURCHASED" (str(0) == "0" попадёт в шаблон и даст "purchased").
+	# Int-литералы 0/1 в шаблон добавлять бесполезно — value после str() всегда
+	# строка, мутация не доживает до ответа. До правки здесь стоял String(...),
+	# который на Int падает в рантайм-ошибку, и отказ выходил «не через каст, а
+	# через пустое value» — то есть конъюнкт зелёный не по своей причине.
 	Selftest.check("u20 rs numeric status is never a purchase",
 		_u20_rs._normalize_state({"purchase_state": 0}) != "purchased"
 		and _u20_rs._normalize_state({"purchase_state": 1}) != "purchased")
 	# Порядок ключей + break: решает первый найденный из перечисленных в цикле
-	# (rustore_pay.gd:161-164), независимо от порядка вставки в словаре — оба
+	# в _normalize_state, независимо от порядка вставки в словаре — оба
 	# входа содержат purchase_state и state с разной вставкой. Мутации: убрать
 	# break (побеждает последний найденный — "state", т.е. "PAID") краснит оба
 	# конъюнкта; переставить ключи так, чтобы "state" стал первым, — тоже оба:
@@ -390,9 +392,10 @@ static func run(g: Game) -> void:
 		and _u20_ev.count_since(_u20_ev5, "failed:unknown_sku:u20_no_such_product") == 1
 		and Monetization._pending_product == _u20_pproduct0
 		and UserData.get_pending_purchase("u20_no_such_product").is_empty())
-	# already_owned стоит ДО обращения в стор: снять гейт — _u20_bill получил бы
-	# sku (второй конъюнкт). Снять `type == "non_consumable"` — краснеет последний
-	# конъюнкт: consumable «уже купленный» обязан пройти.
+	# already_owned стоит ДО обращения в стор: снять гейт — краснеет второй
+	# конъюнкт (замер после отказа обязан совпадать с замером до него). Снять
+	# `type == "non_consumable"` — краснеет последний конъюнкт: consumable «уже
+	# купленный» обязан пройти.
 	UserData.set_owned_product("remove_ads", true)
 	UserData.set_owned_product("ether_pack_small", true)
 	var _u20_ev6 := _u20_ev.events.size()
@@ -401,7 +404,7 @@ static func run(g: Game) -> void:
 	var _u20_consumable_calls := _u20_bill.calls.size()
 	var _u20_still_ok := Monetization.purchase("ether_pack_small")
 	Selftest.check("u20 owned non-consumable is refused before the store is asked",
-		not _u20_already and _u20_bill.calls.size() == _u20_owned_calls
+		not _u20_already and _u20_consumable_calls == _u20_owned_calls
 		and _u20_ev.count_since(_u20_ev6, "failed:already_owned:remove_ads") == 1
 		and UserData.get_pending_purchase("remove_ads").is_empty()
 		and _u20_still_ok and _u20_bill.calls.size() == _u20_consumable_calls + 1)

@@ -178,7 +178,7 @@ static func run(g: Game) -> void:
 	if u16_title0 == null:
 		_ui_ok = g._retort._retort_ui.is_empty()
 	else:
-		_ui_ok = g._retort._retort_ui.size() > 0 and (g._retort._retort_ui[0]["title"] as Object).is_same(u16_title0)
+		_ui_ok = g._retort._retort_ui.size() > 0 and is_same(g._retort._retort_ui[0]["title"], u16_title0)
 	Selftest.check("u16 retort view fields restored", _ui_ok
 		and g._retort._retort_head == u16_head0 and g._retort._retort_cards == u16_cards0
 		and g._retort._retort_ess == u16_ess0 and g._retort._retort_desc == u16_desc0)
