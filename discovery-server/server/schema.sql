@@ -265,6 +265,24 @@ CREATE TABLE IF NOT EXISTS vein_cycles (
     world_finds INT NOT NULL DEFAULT 0
 );
 
+-- Личные открытия: глобальная таблица (не привязана к циклу).
+-- PK (device_id, pair_key) — одна пара на устройство за всю историю.
+CREATE TABLE IF NOT EXISTS personal_discoveries (
+    device_id TEXT NOT NULL,
+    pair_key TEXT NOT NULL,
+    discovered_at TEXT NOT NULL,
+    PRIMARY KEY (device_id, pair_key)
+);
+
+-- Журнал церемоний вливания (UI-only). Идемпотентность по (device_id, idempotency_key).
+-- TTL 90 дней; cleanup вне этого плана.
+CREATE TABLE IF NOT EXISTS vein_pour_log (
+    device_id TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    processed_at TEXT NOT NULL,
+    PRIMARY KEY (device_id, idempotency_key)
+);
+
 -- Журнал платёжных чеков (T22, /api/receipt/verify). Сырой токен магазина здесь
 -- НЕ хранится: receipt_hash = SHA-256 от токена (тот же отпечаток, что у ключа
 -- клиентского журнала идемпотентности). device_id фиксирует, какому устройству

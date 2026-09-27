@@ -37,3 +37,21 @@ def test_ensure_active_cycle_returns_existing(fresh_unit_db):
     c2 = srv._ensure_active_cycle(conn)
     assert c1["cycle_id"] == c2["cycle_id"]
     conn.close()
+
+
+def test_personal_discoveries_table_exists(fresh_unit_db):
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(personal_discoveries)").fetchall()}
+    assert cols >= {"device_id", "pair_key", "discovered_at"}
+    conn.close()
+
+
+def test_vein_pour_log_table_exists(fresh_unit_db):
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(vein_pour_log)").fetchall()}
+    assert cols >= {"device_id", "idempotency_key", "processed_at"}
+    conn.close()

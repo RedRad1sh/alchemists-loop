@@ -736,6 +736,18 @@ def init_db():
                    PRIMARY KEY (day, device_id)
                )"""
         )
+        conn.execute("""CREATE TABLE IF NOT EXISTS personal_discoveries (
+            device_id TEXT NOT NULL,
+            pair_key TEXT NOT NULL,
+            discovered_at TEXT NOT NULL,
+            PRIMARY KEY (device_id, pair_key)
+        )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS vein_pour_log (
+            device_id TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            processed_at TEXT NOT NULL,
+            PRIMARY KEY (device_id, idempotency_key)
+        )""")
         scols = {r["name"] for r in conn.execute("PRAGMA table_info(challenge_scores)").fetchall()}
         if "completed_at" not in scols:
             conn.execute("ALTER TABLE challenge_scores ADD COLUMN completed_at TEXT")
