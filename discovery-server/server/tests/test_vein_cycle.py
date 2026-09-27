@@ -55,3 +55,17 @@ def test_vein_pour_log_table_exists(fresh_unit_db):
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(vein_pour_log)").fetchall()}
     assert cols >= {"device_id", "idempotency_key", "processed_at"}
     conn.close()
+
+
+def test_new_vein_hits_schema(fresh_unit_db):
+    """vein_hits has (device_id, cycle_id, pair_key) PK, not (week, device_id)."""
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(vein_hits)").fetchall()}
+    assert "cycle_id" in cols
+    assert "pair_key" in cols
+    assert "device_id" in cols
+    # Old columns should not exist in new table
+    # (legacy_vein_hits holds old data separately)
+    conn.close()

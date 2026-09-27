@@ -242,8 +242,18 @@ CREATE TABLE IF NOT EXISTS fair_claims (
     kind TEXT NOT NULL,
     PRIMARY KEY (week, device_id)
 );
--- Находки устройства в жиле недели (счётчик + прожилки с капом 5/неделю)
+-- Anti-farm per cycle: одна пара даёт очки жилы только раз за цикл.
+-- Старая схема (week, device_id) мигрируется в legacy_vein_hits.
 CREATE TABLE IF NOT EXISTS vein_hits (
+    device_id TEXT NOT NULL,
+    cycle_id TEXT NOT NULL,
+    pair_key TEXT NOT NULL,
+    hit_at TEXT NOT NULL,
+    PRIMARY KEY (device_id, cycle_id, pair_key)
+);
+
+-- Legacy vein_hits (weekly counter). Read-only after migration.
+CREATE TABLE IF NOT EXISTS legacy_vein_hits (
     week TEXT NOT NULL,
     device_id TEXT NOT NULL,
     count INTEGER NOT NULL DEFAULT 0,

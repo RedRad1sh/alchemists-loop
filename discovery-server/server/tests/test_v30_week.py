@@ -160,8 +160,8 @@ class TestVein:
             for _ in range(10):
                 srv._score_vein(db, st["week"], tag1, "2026-09-12", "dev-s", "Жила")
             db.commit()
-            n = db.execute("SELECT streaks FROM vein_hits WHERE device_id='dev-s'").fetchone()[0]
-            hits = db.execute("SELECT count FROM vein_hits WHERE device_id='dev-s'").fetchone()[0]
+            n = db.execute("SELECT streaks FROM legacy_vein_hits WHERE device_id='dev-s'").fetchone()[0]
+            hits = db.execute("SELECT count FROM legacy_vein_hits WHERE device_id='dev-s'").fetchone()[0]
             db.close()
             assert (hits, n) == (10, 5)
 

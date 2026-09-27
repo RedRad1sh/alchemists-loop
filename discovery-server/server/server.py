@@ -748,6 +748,22 @@ def init_db():
             processed_at TEXT NOT NULL,
             PRIMARY KEY (device_id, idempotency_key)
         )""")
+        # Migration: old vein_hits(week, device_id) → legacy_vein_hits
+        # New vein_hits uses (device_id, cycle_id, pair_key) for anti-farm.
+        old_vh_cols = {r["name"] for r in conn.execute("PRAGMA table_info(vein_hits)").fetchall()}
+        if "week" in old_vh_cols and "cycle_id" not in old_vh_cols:
+            conn.execute("""CREATE TABLE IF NOT EXISTS legacy_vein_hits (
+                week TEXT NOT NULL, device_id TEXT NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0, streaks INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (week, device_id)
+            )""")
+            conn.execute("INSERT OR IGNORE INTO legacy_vein_hits SELECT * FROM vein_hits")
+            conn.execute("DROP TABLE vein_hits")
+            conn.execute("""CREATE TABLE vein_hits (
+                device_id TEXT NOT NULL, cycle_id TEXT NOT NULL, pair_key TEXT NOT NULL,
+                hit_at TEXT NOT NULL,
+                PRIMARY KEY (device_id, cycle_id, pair_key)
+            )""")
         scols = {r["name"] for r in conn.execute("PRAGMA table_info(challenge_scores)").fetchall()}
         if "completed_at" not in scols:
             conn.execute("ALTER TABLE challenge_scores ADD COLUMN completed_at TEXT")
@@ -1353,22 +1369,21 @@ def _ensure_active_cycle(conn: sqlite3.Connection) -> dict:
 
 def _score_vein(conn: sqlite3.Connection, week: str, tag: str, day: str,
                 device_id: str, nick: str, today=None):
-    """Находка в жиле: +очки дня (vein-канал), счётчик, бросок прожилки.
-    None — мимо жилы."""
+    """Legacy scorer — uses legacy_vein_hits. Will be replaced by _score_vein_cycle."""
     tag1, tag2, spread = _vein_state(conn, week, today)
     active = {tag1} | ({tag2} if spread else set())
     if tag not in active:
         return None
     conn.execute(
-        """INSERT INTO vein_hits (week, device_id, count, streaks) VALUES (?, ?, 1, 0)
+        """INSERT INTO legacy_vein_hits (week, device_id, count, streaks) VALUES (?, ?, 1, 0)
            ON CONFLICT(week, device_id) DO UPDATE SET count = count + 1""",
         (week, device_id),
     )
     streak = False
-    cur = conn.execute("SELECT streaks FROM vein_hits WHERE week = ? AND device_id = ?",
+    cur = conn.execute("SELECT streaks FROM legacy_vein_hits WHERE week = ? AND device_id = ?",
                        (week, device_id)).fetchone()["streaks"]
     if cur < VEIN_STREAK_CAP and random.random() < VEIN_STREAK_CHANCE:
-        conn.execute("UPDATE vein_hits SET streaks = streaks + 1 WHERE week = ? AND device_id = ?",
+        conn.execute("UPDATE legacy_vein_hits SET streaks = streaks + 1 WHERE week = ? AND device_id = ?",
                      (week, device_id))
         streak = True
     if device_id:
@@ -3034,7 +3049,7 @@ def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
         )
         for table in [
             "echoes", "letters", "challenge_scores", "vein_points", "atlas_solves",
-            "fair_pairs", "fair_contrib", "fair_claims", "vein_hits",
+            "fair_pairs", "fair_contrib", "fair_claims", "vein_hits", "legacy_vein_hits",
         ]:
             conn.execute(f"DELETE FROM {table} WHERE device_id = ?", (device_id,))
         conn.execute("DELETE FROM players WHERE device_id = ?", (device_id,))
@@ -3502,7 +3517,7 @@ def week_status(device_id: str = Query("", max_length=128)):
         my_hits = 0
         my_streaks = 0
         if device_id:
-            r = conn.execute("SELECT count, streaks FROM vein_hits WHERE week = ? AND device_id = ?",
+            r = conn.execute("SELECT count, streaks FROM legacy_vein_hits WHERE week = ? AND device_id = ?",
                              (week, device_id)).fetchone()
             if r:
                 my_hits, my_streaks = r["count"], r["streaks"]
