@@ -324,7 +324,7 @@ class DiscoverResponse(BaseModel):
     status: str = "created"  # created | known | not_combinable | unavailable
     message: str
     challenge: Optional[dict] = None  # состояние ежедневной цели: {won, first, target_name}
-    vein: Optional[dict] = None  # бонус жилы: {tag, points, streak} | None
+    vein: Optional[dict] = None  # бонус жилы: {points, streak_added, streak_count, cap_reached} | None
 
 class EventData(BaseModel):
     pair_key: str
@@ -1371,6 +1371,50 @@ def _ensure_active_cycle(conn: sqlite3.Connection) -> dict:
         "state": "active", "spread_threshold": VEIN_SPREAD_THRESHOLD,
         "world_finds": 0,
     }
+
+
+def _maybe_spread_cycle(conn: sqlite3.Connection, cycle: dict) -> None:
+    """CAS transition active→spread if threshold reached or max days elapsed.
+
+    Re-читает строку цикла из БД: инкремент world_finds, сделанный
+    _score_vein_cycle в ЭТОМ ЖЕ соединении/транзакции, виден только так
+    (снимка-аргумент устарел). Мутит переданный dict, чтобы вызывающий
+    увидел свежий state/tag2.
+    """
+    fresh = conn.execute(
+        "SELECT * FROM vein_cycles WHERE cycle_id = ?", (cycle["cycle_id"],)
+    ).fetchone()
+    if fresh is None:
+        return
+    cycle.update(dict(fresh))
+    if cycle["state"] != "active":
+        return
+    started = date.fromisoformat(cycle["started_at"][:10])
+    days_elapsed = (_today_date() - started).days
+    needs_spread = (
+        cycle["world_finds"] >= cycle["spread_threshold"]
+        or days_elapsed >= VEIN_MAX_CYCLE_DAYS
+    )
+    if not needs_spread:
+        return
+    tag2 = _cycle_pick(conn, exclude=[cycle["tag1"]])
+    now = _now_iso()
+    cursor = conn.execute(
+        "UPDATE vein_cycles SET state='spread', tag2 = ?, spread_at = ? "
+        "WHERE cycle_id = ? AND state='active'",
+        (tag2, now, cycle["cycle_id"]),
+    )
+    if cursor.rowcount == 0:
+        # Другой запрос уже перевёл цикл: перечитать tag2, state не трогаем.
+        updated = conn.execute(
+            "SELECT tag2 FROM vein_cycles WHERE cycle_id = ?", (cycle["cycle_id"],)
+        ).fetchone()
+        if updated:
+            cycle["tag2"] = updated["tag2"]
+    else:
+        cycle["tag2"] = tag2
+        cycle["state"] = "spread"
+        cycle["spread_at"] = now
 
 
 def _score_vein(conn: sqlite3.Connection, week: str, tag: str, day: str,
@@ -2730,9 +2774,15 @@ def discover(req: DiscoverRequest):
             )
             # ежедневная личная цель дня
             challenge_info = _score_challenge(conn, req.a, req.b, nick, req.device_id)
-            # туманная жила: находка с тегом недели → +очки и бросок прожилки
-            vein_info = _score_vein(conn, _week_key(), discovery.tag or "", _today(),
-                                    req.device_id, nick)
+            # туманная жила: находка с тегом цикла → +очки и бросок прожилки
+            # (T6: цикл-скорер вместо недельного; reused-ветка наград не даёт)
+            cycle = _ensure_active_cycle(conn)
+            vein_info = _score_vein_cycle(
+                conn, cycle, discovery.tag or "", pair_key,
+                req.device_id, nick, is_world_first=True,
+            )
+            # порог/возраст цикла → активный цикл переходит в spread
+            _maybe_spread_cycle(conn, cycle)
             conn.commit()
             return DiscoverResponse(
                 ok=True, status="created", discovery=discovery, already_known=False,

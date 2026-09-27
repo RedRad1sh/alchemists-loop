@@ -99,3 +99,68 @@ def test_score_vein_cycle_cap_claimed_prevents_roll(fresh_unit_db):
     assert result["streak_added"] is False
     assert result["cap_reached"] is False
     conn.close()
+
+
+class _CycleTagGen:
+    """Fake LLM generator emitting a fixed (cycle) tag → created-branch."""
+
+    def __init__(self, tag):
+        self.tag = tag
+
+    def generate(self, a_slug, b_slug, a_name, b_name, pair_key):
+        return {"combinable": True, "name": "Циклолит", "glyph": "mist",
+                "description": "Рождено циклом.", "tag": self.tag}
+
+
+def test_discover_world_first_uses_cycle_scorer(tmp_path, monkeypatch):
+    """POST /api/discover created-branch scores via _score_vein_cycle:
+    vein field has the new shape and vein_hits row carries cycle_id."""
+    from fastapi.testclient import TestClient
+    db = str(tmp_path / "wf.db")
+    monkeypatch.setattr(srv, "DB_PATH", db)
+    srv.init_db()
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    cycle = srv._ensure_active_cycle(conn)
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(srv, "get_llm", lambda: _CycleTagGen(cycle["tag1"]))
+    client = TestClient(srv.app)
+    resp = client.post("/api/discover", json={
+        "a": "mud", "b": "stone", "nick": "tester", "device_id": "dev-wf1",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "created"
+    assert data["discovery"]["reused"] is False
+
+    vein = data["vein"]
+    assert vein is not None
+    # world-first roll: +2 points, streak guaranteed, cap far away
+    assert vein["points"] == 2
+    assert vein["streak_added"] is True
+    assert vein["streak_count"] == 1
+    assert vein["cap_reached"] is False
+
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    try:
+        pair_key = srv.canonical_pair_key("mud", "stone")
+        hit = conn.execute(
+            "SELECT * FROM vein_hits WHERE device_id='dev-wf1' "
+            "AND cycle_id=? AND pair_key=?",
+            (cycle["cycle_id"], pair_key),
+        ).fetchone()
+        assert hit is not None
+        # world-first increments cycle world_finds
+        wf = conn.execute(
+            "SELECT world_finds FROM vein_cycles WHERE cycle_id=?",
+            (cycle["cycle_id"],),
+        ).fetchone()["world_finds"]
+        assert wf == 1
+        # legacy weekly counter is NOT written by /discover anymore
+        legacy = conn.execute("SELECT COUNT(*) AS c FROM legacy_vein_hits").fetchone()["c"]
+        assert legacy == 0
+    finally:
+        conn.close()
