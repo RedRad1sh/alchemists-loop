@@ -1397,6 +1397,94 @@ def _score_vein(conn: sqlite3.Connection, week: str, tag: str, day: str,
     return {"tag": tag, "points": VEIN_POINTS, "streak": streak}
 
 
+def _score_vein_cycle(conn: sqlite3.Connection, cycle: dict, tag: str,
+                      pair_key: str, device_id: str, nick: str,
+                      is_world_first: bool) -> dict | None:
+    """Transactional vein scorer for cycle-based model.
+
+    Returns {points, streak_added, streak_count, cap_reached} or None if
+    tag doesn't match or pair already hit this cycle.
+
+    Must be called inside a transaction that also commits the discover/find.
+    """
+    active_tags = {cycle["tag1"]}
+    if cycle["tag2"]:
+        active_tags.add(cycle["tag2"])
+    if tag not in active_tags:
+        return None
+
+    cycle_id = cycle["cycle_id"]
+
+    # Anti-farm: pair already scored this cycle?
+    existing = conn.execute(
+        "SELECT 1 FROM vein_hits WHERE device_id=? AND cycle_id=? AND pair_key=?",
+        (device_id, cycle_id, pair_key),
+    ).fetchone()
+    if existing:
+        return None
+
+    # Record hit
+    conn.execute(
+        "INSERT INTO vein_hits (device_id, cycle_id, pair_key, hit_at) VALUES (?, ?, ?, ?)",
+        (device_id, cycle_id, pair_key, _now_iso()),
+    )
+
+    # Points: world-first=2, personal=1
+    points = 2 if is_world_first else 1
+
+    # Day points (existing vein_points channel)
+    day = _today()
+    if device_id:
+        _add_vein_points(conn, day, device_id, nick, points)
+
+    # Increment world_finds if world-first
+    if is_world_first:
+        conn.execute(
+            "UPDATE vein_cycles SET world_finds = world_finds + 1 WHERE cycle_id = ?",
+            (cycle_id,),
+        )
+
+    # Streak logic
+    streak_added = False
+    cap_reached = False
+    streak_row = conn.execute(
+        "SELECT count, cap_claimed FROM vein_streaks WHERE device_id=? AND cycle_id=?",
+        (device_id, cycle_id),
+    ).fetchone()
+    cur_count = streak_row["count"] if streak_row else 0
+    cap_claimed = bool(streak_row["cap_claimed"]) if streak_row else False
+
+    if not cap_claimed:
+        if is_world_first:
+            streak_added = True
+        else:
+            streak_added = random.random() < VEIN_STREAK_CHANCE
+
+        if streak_added:
+            cur_count += 1
+
+        if cur_count >= VEIN_STREAK_CAP:
+            cap_reached = True
+            cap_claimed = True
+            cur_count = 0  # reset count, but cap_claimed stays
+
+    conn.execute(
+        """INSERT INTO vein_streaks (device_id, cycle_id, count, last_hit_at, cap_claimed)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(device_id, cycle_id) DO UPDATE SET
+             count = excluded.count, last_hit_at = excluded.last_hit_at,
+             cap_claimed = excluded.cap_claimed""",
+        (device_id, cycle_id, cur_count, _now_iso(), int(cap_claimed)),
+    )
+
+    return {
+        "points": points,
+        "streak_added": streak_added,
+        "streak_count": cur_count,
+        "cap_reached": cap_reached,
+    }
+
+
 # API-endpoints
 # ---------------------------------------------------------------------------
 
