@@ -748,6 +748,12 @@ def init_db():
             processed_at TEXT NOT NULL,
             PRIMARY KEY (device_id, idempotency_key)
         )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS vein_streaks (
+            device_id TEXT NOT NULL, cycle_id TEXT NOT NULL,
+            count INTEGER NOT NULL DEFAULT 0, last_hit_at TEXT,
+            cap_claimed INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (device_id, cycle_id)
+        )""")
         # Migration: old vein_hits(week, device_id) → legacy_vein_hits
         # New vein_hits uses (device_id, cycle_id, pair_key) for anti-farm.
         old_vh_cols = {r["name"] for r in conn.execute("PRAGMA table_info(vein_hits)").fetchall()}

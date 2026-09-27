@@ -293,6 +293,16 @@ CREATE TABLE IF NOT EXISTS vein_pour_log (
     PRIMARY KEY (device_id, idempotency_key)
 );
 
+-- Streak per cycle. cap_claimed prevents infinite reward farming after cap reset.
+CREATE TABLE IF NOT EXISTS vein_streaks (
+    device_id TEXT NOT NULL,
+    cycle_id TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    last_hit_at TEXT,
+    cap_claimed INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (device_id, cycle_id)
+);
+
 -- Журнал платёжных чеков (T22, /api/receipt/verify). Сырой токен магазина здесь
 -- НЕ хранится: receipt_hash = SHA-256 от токена (тот же отпечаток, что у ключа
 -- клиентского журнала идемпотентности). device_id фиксирует, какому устройству

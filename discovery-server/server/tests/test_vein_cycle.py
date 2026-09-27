@@ -69,3 +69,12 @@ def test_new_vein_hits_schema(fresh_unit_db):
     # Old columns should not exist in new table
     # (legacy_vein_hits holds old data separately)
     conn.close()
+
+
+def test_vein_streaks_table_with_cap_claimed(fresh_unit_db):
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(vein_streaks)").fetchall()}
+    assert cols >= {"device_id", "cycle_id", "count", "last_hit_at", "cap_claimed"}
+    conn.close()
