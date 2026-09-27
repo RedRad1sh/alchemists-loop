@@ -251,8 +251,54 @@ def test_closed_transition_after_spread_duration(fresh_unit_db):
     )
     assert cursor.rowcount == 1
     conn.commit()
+    # Guard check: re-run must match NOTHING (state is 'closed' now).
+    # Without `AND state='spread'` this UPDATE would re-stamp ended_at.
+    again = conn.execute(
+        "UPDATE vein_cycles SET state='closed', ended_at=? WHERE cycle_id=? AND state='spread'",
+        (srv._now_iso(), cycle["cycle_id"]),
+    )
+    assert again.rowcount == 0
+    conn.commit()
     # New active cycle should be creatable
     new_cycle = srv._ensure_active_cycle(conn)
     assert new_cycle["cycle_id"] != cycle["cycle_id"]
     assert new_cycle["state"] == "active"
+    conn.close()
+
+
+def test_spread_cas_loss_rereads_winner_tag2(fresh_unit_db, monkeypatch):
+    """CAS-loss (state changed between re-read and UPDATE) must not clobber
+    the winner's tag2 — _maybe_spread_cycle falls back to re-reading it."""
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cycle = srv._ensure_active_cycle(conn)
+    conn.execute(
+        "UPDATE vein_cycles SET world_finds=? WHERE cycle_id=?",
+        (cycle["spread_threshold"], cycle["cycle_id"]),
+    )
+    conn.commit()
+
+    real_pick = srv._cycle_pick
+
+    def racing_pick(c, exclude=None):
+        # Between the function's re-read and its CAS UPDATE another writer
+        # transitions the row — our UPDATE must then hit rowcount == 0.
+        other = sqlite3.connect(srv.DB_PATH)
+        other.execute(
+            "UPDATE vein_cycles SET state='spread', tag2='racer-tag', spread_at=? "
+            "WHERE cycle_id=? AND state='active'",
+            (srv._now_iso(), cycle["cycle_id"]),
+        )
+        other.commit()
+        other.close()
+        return real_pick(c, exclude=exclude)
+
+    monkeypatch.setattr(srv, "_cycle_pick", racing_pick)
+    srv._maybe_spread_cycle(conn, cycle)
+    assert cycle["tag2"] == "racer-tag"  # fallback re-read, not our picked tag
+    row = conn.execute(
+        "SELECT * FROM vein_cycles WHERE cycle_id=?", (cycle["cycle_id"],)
+    ).fetchone()
+    assert row["tag2"] == "racer-tag"  # winner's value intact
     conn.close()
