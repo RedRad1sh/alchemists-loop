@@ -19,7 +19,7 @@ func _ready() -> void:
 		add_child(p)
 		_players.append(p)
 	_music_player = AudioStreamPlayer.new()
-	_music_player.volume_db = -14.0 + linear_to_db(maxf(music_volume, 0.001))
+	_music_player.volume_db = -6.0 + linear_to_db(maxf(music_volume, 0.001))
 	add_child(_music_player)
 	_music_player.stream = _build_music()
 	if music_on:
@@ -221,4 +221,4 @@ func set_sfx_volume(v: float) -> void:
 
 func set_music_volume(v: float) -> void:
 	music_volume = clampf(v, 0.0, 1.0)
-	_music_player.volume_db = -14.0 + linear_to_db(maxf(music_volume, 0.001))
+	_music_player.volume_db = -6.0 + linear_to_db(maxf(music_volume, 0.001))

@@ -652,8 +652,12 @@ func _rebuild_decor_popup() -> void:
 			btn.text = "Поставить"
 			btn.pressed.connect(_buy_furniture.bind(_decor_cat_open, item_id))
 		else:
-			btn.text = "%d ⚡" % int(it["cost"])
+			var cost := int(it["cost"])
+			btn.text = "%d ⚡" % cost
 			btn.pressed.connect(_buy_furniture.bind(_decor_cat_open, item_id))
+			# Отключаем кнопку, если эфира недостаточно — игрок видит серую кнопку
+			if g._engine._available_ether() < cost:
+				btn.disabled = true
 		card.add_child(btn)
 
 
