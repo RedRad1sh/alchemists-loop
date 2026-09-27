@@ -1003,8 +1003,10 @@ func _build_ui() -> void:
 	ether_row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	ether_row.add_theme_constant_override("separation", 8)
 	root.add_child(ether_row)
-	_engine._ether_label = _label("", 17)
+	_engine._ether_label = _label("", 14)
 	_engine._ether_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_engine._ether_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_engine._ether_label.clip_text = true
 	ether_row.add_child(_engine._ether_label)
 	var home_btn := _small_button("Дом", Vector2(82, 34), 2)
 	home_btn.tooltip_text = "Дом Светика: построй домик, обставь его, смени тему и ауру"
