@@ -1458,30 +1458,6 @@ def _maybe_spread_cycle(conn: sqlite3.Connection, cycle: dict) -> None:
         cycle["spread_at"] = now
 
 
-def _score_vein(conn: sqlite3.Connection, week: str, tag: str, day: str,
-                device_id: str, nick: str, today=None):
-    """Legacy scorer — uses legacy_vein_hits. Will be replaced by _score_vein_cycle."""
-    tag1, tag2, spread = _vein_state(conn, week, today)
-    active = {tag1} | ({tag2} if spread else set())
-    if tag not in active:
-        return None
-    conn.execute(
-        """INSERT INTO legacy_vein_hits (week, device_id, count, streaks) VALUES (?, ?, 1, 0)
-           ON CONFLICT(week, device_id) DO UPDATE SET count = count + 1""",
-        (week, device_id),
-    )
-    streak = False
-    cur = conn.execute("SELECT streaks FROM legacy_vein_hits WHERE week = ? AND device_id = ?",
-                       (week, device_id)).fetchone()["streaks"]
-    if cur < VEIN_STREAK_CAP and random.random() < VEIN_STREAK_CHANCE:
-        conn.execute("UPDATE legacy_vein_hits SET streaks = streaks + 1 WHERE week = ? AND device_id = ?",
-                     (week, device_id))
-        streak = True
-    if device_id:
-        _add_vein_points(conn, day, device_id, nick, VEIN_POINTS)
-    return {"tag": tag, "points": VEIN_POINTS, "streak": streak}
-
-
 def _score_vein_cycle(conn: sqlite3.Connection, cycle: dict, tag: str,
                       pair_key: str, device_id: str, nick: str,
                       is_world_first: bool) -> dict | None:
@@ -3913,6 +3889,9 @@ def week_status(device_id: str = Query("", max_length=128)):
         my_hits = 0
         my_streaks = 0
         if device_id:
+            # Legacy-only read: legacy_vein_hits больше НЕ пишется (vein-скоринг
+            # переехал на цикл-модель vein_hits/vein_streaks), но неделя до
+            # миграции здесь всё ещё показывается игрокам (backward compat).
             r = conn.execute("SELECT count, streaks FROM legacy_vein_hits WHERE week = ? AND device_id = ?",
                              (week, device_id)).fetchone()
             if r:

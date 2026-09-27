@@ -160,22 +160,10 @@ class TestVein:
                 "SELECT COUNT(*) FROM legacy_vein_hits").fetchone()[0] == 0
             db.close()
 
-    def test_streak_cap(self, tmp_path, monkeypatch):
-        import sqlite3
-        c = _client_for(tmp_path, monkeypatch)
-        with c:
-            st = c.get("/api/week/status", params={"device_id": "dev-s"}).json()
-            tag1 = st["vein"]["tag1"]
-            monkeypatch.setattr(srv.random, "random", lambda: 0.0)  # прожилка всегда
-            db = sqlite3.connect(str(tmp_path / "week.db"))
-            db.row_factory = sqlite3.Row
-            for _ in range(10):
-                srv._score_vein(db, st["week"], tag1, "2026-09-12", "dev-s", "Жила")
-            db.commit()
-            n = db.execute("SELECT streaks FROM legacy_vein_hits WHERE device_id='dev-s'").fetchone()[0]
-            hits = db.execute("SELECT count FROM legacy_vein_hits WHERE device_id='dev-s'").fetchone()[0]
-            db.close()
-            assert (hits, n) == (10, 5)
+        # test_streak_cap удалён (Task 11): legacy _score_vein больше нет;
+        # cap-поведение живого цикла покрыто
+        # tests/test_vein_streak.py::test_streak_cap_reached_after_five +
+        # test_no_streak_after_cap_claimed.
 
 
 class TestFair:
