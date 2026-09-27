@@ -35,6 +35,12 @@ def test_pour_idempotent(fresh_unit_db):
     # UI-only ceremony: never scores points → no points field in the response.
     assert "points" not in r1
     assert "points" not in r2
+    conn = sqlite3.connect(srv.DB_PATH)
+    n = conn.execute(
+        "SELECT COUNT(*) FROM vein_pour_log WHERE device_id='dev-pour2'"
+    ).fetchone()[0]
+    conn.close()
+    assert n == 1  # replay must not insert a second row
 
 
 def test_pour_different_devices_independent(fresh_unit_db):
