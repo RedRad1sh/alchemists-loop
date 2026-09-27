@@ -1285,12 +1285,19 @@ static func run(g: Game) -> void:
 		and String(g._shop._status.text).contains("повтори удаление"))
 	# Ретрай в той же сессии: повторный нажим берёт device_id из маркера (не из
 	# уже стёртой локальной идентичности), ничего не перетирает второй раз и не
-	# дёргает сеть при выключенном net.
+	# дёргает сеть при выключенном net. Сеть меряем не размером очереди: в
+	# селфтесте base_url пуст, поэтому enqueue-нутый запрос слился бы синхронно и
+	# очередь осталась бы пуста. Считаем фактические dispatch'и — сигнал
+	# account_delete_result приходит только если DELETE реально уходил в Net.
 	var _i8_status_p := String(g._shop._status.text)
+	var _i8_sends := [0]
+	var _i8_probe := func(_res: Dictionary) -> void: _i8_sends[0] += 1
+	Net.account_delete_result.connect(_i8_probe)
 	g._shop._delete_data()
+	Net.account_delete_result.disconnect(_i8_probe)
 	Selftest.check("i8 re-press retries by saved id without wiping again",
 		String(g._shop._status.text) != _i8_status_p
-		and g._online._device_id == "" and Net._queue.is_empty()
+		and g._online._device_id == "" and _i8_sends[0] == 0
 		and UserData.get_account_delete_pending() == "i8-dev/1"
 		and not g._shop._delete_armed and not FileAccess.file_exists(g.SAVE_PATH))
 	# Startup-ретрай (main.gd зовёт его в net-блоке) обязан послать DELETE ровно

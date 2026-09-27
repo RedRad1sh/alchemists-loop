@@ -255,6 +255,11 @@ static func run(g: Game) -> void:
 	var u11_ether_overflow := g._engine.ether_overflow
 	var u11_circle_disc := g._retention._circle_disc
 	var u11_circle_disc_day := g._retention._circle_disc_day
+	# Попап первооткрытия — тоже затрагиваемое состояние: мир-ветки зовут
+	# main.gd::_show_discovery_popup, и без возврата он висел бы на следующей
+	# сюите (её canary чистого стека модалок ловил именно его).
+	var u11_popup := g._popup.visible
+	var u11_popup_dim := g._popup_dim.visible
 	g._online._pending_requests.clear()
 	# (1) «enqueue-перехват»: пока X ждёт ответа, Y слот не перезахватывает;
 	# поздний ответ X применяет награду строго своей паре.
@@ -381,6 +386,10 @@ static func run(g: Game) -> void:
 	g._engine.ether_overflow = u11_ether_overflow
 	g._retention._circle_disc = u11_circle_disc
 	g._retention._circle_disc_day = u11_circle_disc_day
+	# Возврат модалки. Мутация этих двух строк — «esc stack was clean on entry» в
+	# suite_journal_misc: без них открытое «НОВЫЙ РЕЦЕПТ!» доживает до её canary.
+	g._popup.visible = u11_popup
+	g._popup_dim.visible = u11_popup_dim
 	g._engine._experiment_pending_pair.clear()
 	for u11_raw_e in u11_exp_pair:
 		g._engine._experiment_pending_pair.append(String(u11_raw_e))
@@ -437,14 +446,21 @@ static func run(g: Game) -> void:
 	Selftest.check("u13 claim window releases on ok reply", g._resonance._res_claim_at == 0
 		and g._engine.ether + g._engine.ether_overflow == u13_ether + u13_overflow)
 	# тап «Забрать» без мира: окно не взведено (гейт стоит после check'ов связи),
-	# очередь Net пуста — офлайн-тап не съедает 15 с и не порождает запрос
+	# запрос не порождается. Размер очереди Net тут ничего не доказывает: в
+	# селфтесте base_url пуст (герметичный прогон), и enqueue-нутый запрос слился
+	# бы синхронно — очередь осталась бы пуста. Считаем фактические dispatch'и:
+	# echoes_claim_result эмитится только если трата действительно ушла в Net.
 	g._resonance._res_claim_at = 0
 	g._resonance._res_balance = 5
 	g._online._net_enabled = false
-	var u13_queue0 := Net._queue.size()
+	var u13_claims := [0]
+	var u13_probe := func(_res: Dictionary) -> void: u13_claims[0] += 1
+	Net.echoes_claim_result.connect(u13_probe)
 	g._resonance._claim_echoes()
+	Net.echoes_claim_result.disconnect(u13_probe)
 	Selftest.check("u13 offline claim neither arms nor sends", g._resonance._res_claim_at == 0
-		and Net._queue.size() == u13_queue0 and Net._inflight.is_empty()
+		and u13_claims[0] == 0
+		and String(Net._inflight.get("kind", "")) != "echoes_claim"
 		and g._resonance._res_balance == 5)
 	# restore: состояние резонанса и эфира — как до блока
 	g._resonance._res_claim_at = u13_claim_at
