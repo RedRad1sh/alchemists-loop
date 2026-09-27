@@ -251,6 +251,20 @@ CREATE TABLE IF NOT EXISTS vein_hits (
     PRIMARY KEY (week, device_id)
 );
 
+-- Цикл жилы (замена ISO-недели для vein-механики). State machine:
+-- active → spread (world_finds >= threshold OR 14 days) → closed (3 days after spread)
+CREATE TABLE IF NOT EXISTS vein_cycles (
+    cycle_id TEXT PRIMARY KEY,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    spread_at TEXT,
+    tag1 TEXT NOT NULL,
+    tag2 TEXT,
+    state TEXT NOT NULL DEFAULT 'active',
+    spread_threshold INT NOT NULL,
+    world_finds INT NOT NULL DEFAULT 0
+);
+
 -- Журнал платёжных чеков (T22, /api/receipt/verify). Сырой токен магазина здесь
 -- НЕ хранится: receipt_hash = SHA-256 от токена (тот же отпечаток, что у ключа
 -- клиентского журнала идемпотентности). device_id фиксирует, какому устройству

@@ -1,0 +1,39 @@
+import sqlite3
+import server as srv  # noqa: import triggers module-level constants
+
+
+def test_vein_cycles_table_exists(fresh_unit_db):
+    """vein_cycles table created by init_db."""
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(vein_cycles)").fetchall()}
+    assert cols >= {"cycle_id", "started_at", "ended_at", "spread_at",
+                     "tag1", "tag2", "state", "spread_threshold", "world_finds"}
+    conn.close()
+
+
+def test_ensure_active_cycle_creates_row(fresh_unit_db):
+    """_ensure_active_cycle creates a cycle when none exists."""
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cycle = srv._ensure_active_cycle(conn)
+    assert cycle["state"] == "active"
+    assert cycle["tag1"] != ""
+    assert cycle["tag2"] is None
+    assert cycle["world_finds"] == 0
+    assert cycle["spread_at"] is None
+    assert cycle["ended_at"] is None
+    conn.close()
+
+
+def test_ensure_active_cycle_returns_existing(fresh_unit_db):
+    """_ensure_active_cycle returns existing active cycle without creating duplicate."""
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    c1 = srv._ensure_active_cycle(conn)
+    c2 = srv._ensure_active_cycle(conn)
+    assert c1["cycle_id"] == c2["cycle_id"]
+    conn.close()

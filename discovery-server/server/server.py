@@ -1288,6 +1288,57 @@ def _add_vein_points(conn: sqlite3.Connection, day: str, device_id: str, nick: s
     )
 
 
+VEIN_SPREAD_THRESHOLD = 20
+VEIN_MAX_CYCLE_DAYS = 14
+VEIN_SPREAD_DURATION = 3
+
+
+def _cycle_pick(conn: sqlite3.Connection, exclude: list[str] | None = None) -> str:
+    """Pick a tag for a new cycle, excluding tags from last 2 cycles + explicit excludes."""
+    tags = _week_tags(conn)
+    recent = conn.execute(
+        "SELECT tag1, tag2 FROM vein_cycles ORDER BY started_at DESC LIMIT 2"
+    ).fetchall()
+    excluded = set(exclude or [])
+    for row in recent:
+        if row["tag1"]:
+            excluded.add(row["tag1"])
+        if row["tag2"]:
+            excluded.add(row["tag2"])
+    candidates = [t for t in tags if t not in excluded]
+    if not candidates:
+        candidates = tags  # fallback if all excluded
+    import hashlib as _hl
+    salt = f"cycle_{len(conn.execute('SELECT 1 FROM vein_cycles').fetchall())}"
+    i = int(_hl.sha256(salt.encode()).hexdigest(), 16) % len(candidates)
+    return candidates[i]
+
+
+def _ensure_active_cycle(conn: sqlite3.Connection) -> dict:
+    """Ensure an active cycle exists. Creates one if none is active or spread.
+    Returns the current active/spread cycle as a dict."""
+    row = conn.execute(
+        "SELECT * FROM vein_cycles WHERE state IN ('active', 'spread') "
+        "ORDER BY started_at DESC LIMIT 1"
+    ).fetchone()
+    if row:
+        return dict(row)
+    tag1 = _cycle_pick(conn)
+    cycle_id = f"vc:{int(time.time())}"
+    now = _now_iso()
+    conn.execute(
+        "INSERT INTO vein_cycles (cycle_id, started_at, tag1, state, spread_threshold) "
+        "VALUES (?, ?, ?, 'active', ?)",
+        (cycle_id, now, tag1, VEIN_SPREAD_THRESHOLD),
+    )
+    return {
+        "cycle_id": cycle_id, "started_at": now, "ended_at": None,
+        "spread_at": None, "tag1": tag1, "tag2": None,
+        "state": "active", "spread_threshold": VEIN_SPREAD_THRESHOLD,
+        "world_finds": 0,
+    }
+
+
 def _score_vein(conn: sqlite3.Connection, week: str, tag: str, day: str,
                 device_id: str, nick: str, today=None):
     """Находка в жиле: +очки дня (vein-канал), счётчик, бросок прожилки.
