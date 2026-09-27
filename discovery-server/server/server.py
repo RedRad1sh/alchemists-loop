@@ -654,6 +654,17 @@ class VeinPourResponse(BaseModel):
     already_poured: bool = False
 
 
+class CycleStatusResponse(BaseModel):
+    ok: bool
+    cycle_id: str = ""
+    tag1: str = ""
+    tag2: Optional[str] = None
+    state: str = ""
+    world_finds: int = 0
+    my_points: int = 0
+    my_streak: int = 0
+
+
 # ---------------------------------------------------------------------------
 # Работа с БД
 # ---------------------------------------------------------------------------
@@ -1385,7 +1396,10 @@ def _ensure_active_cycle(conn: sqlite3.Connection) -> dict:
     if row:
         return dict(row)
     tag1 = _cycle_pick(conn)
-    cycle_id = f"vc:{int(time.time())}"
+    # uuid-суффикс: цикл может быть закрыт и пересоздан в ту же секунду
+    # (например, в /api/vein/cycle/status expiry-переходе) — чистый unix-ts
+    # дал бы коллизию PRIMARY KEY.
+    cycle_id = f"vc:{int(time.time())}-{uuid.uuid4().hex[:6]}"
     now = _now_iso()
     conn.execute(
         "INSERT INTO vein_cycles (cycle_id, started_at, tag1, state, spread_threshold) "
@@ -2983,6 +2997,86 @@ def vein_pour(req: VeinPourRequest):
     except sqlite3.IntegrityError:
         # Race: another request inserted same key
         return VeinPourResponse(ok=True, already_poured=True)
+    finally:
+        conn.close()
+
+@app.get("/api/vein/cycle/status", response_model=CycleStatusResponse)
+def vein_cycle_status(device_id: str = Query("", max_length=128)):
+    """Cycle status for vein. Independent from /api/week/status (Fair).
+
+    Lazy-creates the current cycle and drives the spread->closed expiry
+    (VEIN_SPREAD_DURATION days after spread_at), then returns the FRESH
+    active cycle. Sync `def` (T29): threadpool, close in finally; коммит
+    только там, где _ensure_active_cycle что-то вставил (read-only путь
+    остаётся без записи).
+    """
+    conn = get_db()
+
+    def _ensure_committed() -> dict:
+        # _ensure_active_cycle INSERT не коммитит (коммит на вызывающем):
+        # детектируем факт создания, чтобы повторные GET отдавали тот же
+        # цикл, а не пересоздавали его на каждом запросе.
+        had_cycle = conn.execute(
+            "SELECT 1 FROM vein_cycles WHERE state IN ('active', 'spread') LIMIT 1"
+        ).fetchone() is not None
+        c = _ensure_active_cycle(conn)
+        if not had_cycle:
+            conn.commit()
+        return c
+
+    try:
+        cycle = _ensure_committed()
+        # Expiry: только spread с выставленным spread_at.
+        if cycle["state"] == "spread" and cycle["spread_at"]:
+            spread_date = date.fromisoformat(cycle["spread_at"][:10])
+            if (_today_date() - spread_date).days >= VEIN_SPREAD_DURATION:
+                cursor = conn.execute(
+                    "UPDATE vein_cycles SET state='closed', ended_at=? "
+                    "WHERE cycle_id=? AND state='spread'",
+                    (_now_iso(), cycle["cycle_id"]),
+                )
+                if cursor.rowcount == 1:
+                    # CAS выигран: закрытие + создание свежего цикла — в один
+                    # коммит (cycle_id с uuid-суффиксом не коллизируют в секунду
+                    # закрытия).
+                    cycle = _ensure_active_cycle(conn)
+                    conn.commit()
+                else:
+                    # CAS проигран: ряд уже перевёл другой запрос — перечитываем.
+                    row = conn.execute(
+                        "SELECT * FROM vein_cycles WHERE cycle_id=?",
+                        (cycle["cycle_id"],),
+                    ).fetchone()
+                    cycle = dict(row)
+                    if cycle["state"] not in ("active", "spread"):
+                        cycle = _ensure_committed()
+
+        my_points = 0
+        my_streak = 0
+        if device_id:
+            # Сумма очков по всем дням этого цикла (vein_points.day >= дата старта).
+            pts_row = conn.execute(
+                "SELECT COALESCE(SUM(points), 0) AS total FROM vein_points "
+                "WHERE device_id=? AND day >= date(?)",
+                (device_id, cycle["started_at"][:10]),
+            ).fetchone()
+            my_points = pts_row["total"] if pts_row else 0
+            streak_row = conn.execute(
+                "SELECT count FROM vein_streaks WHERE device_id=? AND cycle_id=?",
+                (device_id, cycle["cycle_id"]),
+            ).fetchone()
+            my_streak = streak_row["count"] if streak_row else 0
+
+        return CycleStatusResponse(
+            ok=True,
+            cycle_id=cycle["cycle_id"],
+            tag1=cycle["tag1"],
+            tag2=cycle["tag2"],
+            state=cycle["state"],
+            world_finds=cycle["world_finds"],
+            my_points=my_points,
+            my_streak=my_streak,
+        )
     finally:
         conn.close()
 
