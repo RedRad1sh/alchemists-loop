@@ -2976,7 +2976,7 @@ def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
             conn.execute(f"DELETE FROM {table} WHERE device_id = ?", (device_id,))
         conn.execute("DELETE FROM players WHERE device_id = ?", (device_id,))
         conn.commit()
-        return {"ok": True, "deleted": True}
+        return {"ok": True, "deleted": True, "device_id": device_id}
     finally:
         conn.close()
 

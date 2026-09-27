@@ -777,7 +777,10 @@ func _retry_pending_account_delete(net: Object = null) -> void:
 
 func _on_account_delete_result(result: Dictionary) -> void:
 	if result.get("ok", false) == true:
-		UserData.clear_account_delete_pending()
+		var pending := UserData.get_account_delete_pending()
+		var deleted_id := String(result.get("device_id", ""))
+		if deleted_id == "" or deleted_id == pending:
+			UserData.clear_account_delete_pending()
 
 func _on_net_world_result(result: Dictionary) -> void:
 	if result.get("ok", false) != true:
