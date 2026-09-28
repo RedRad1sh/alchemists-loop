@@ -7,6 +7,7 @@ Type=simple
 User=deploy
 WorkingDirectory=/opt/alchemists-loop/discovery-server/server
 Environment="PATH=/home/deploy/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="ALCHEMY_DB_PATH=/var/lib/alchemists-loop/discoveries.db"
 EnvironmentFile=/opt/alchemists-loop/discovery-server/server/.env
 ExecStart=/usr/bin/python3 /opt/alchemists-loop/discovery-server/server/server.py
 Restart=always
@@ -19,7 +20,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/alchemists-loop/discovery-server/server
+ReadWritePaths=/var/lib/alchemists-loop
 
 [Install]
 WantedBy=multi-user.target
