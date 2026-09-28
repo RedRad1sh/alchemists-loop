@@ -128,7 +128,7 @@ static func run(g: Game) -> void:
 			valid = false
 		keys[g._pair_key(a, b)] = true
 	Selftest.check("recipes valid", valid)
-	Selftest.check("recipes unique 53", g.RECIPES.size() == 53 and keys.size() == 53)
+	Selftest.check("recipes unique", g.RECIPES.size() == 105 and keys.size() == g.RECIPES.size())
 	Selftest.check("find steam", String(g._online._find_recipe("water", "fire").get("out", "") ) == "steam")
 	Selftest.check("find empty", g._online._find_recipe("fire", "fire").is_empty())
 
