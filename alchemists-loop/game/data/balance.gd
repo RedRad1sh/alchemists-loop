@@ -83,6 +83,17 @@ const CIRCLE_GOALS := [
 	{"key": "deep",   "title": "Глубокий синтез", "layers": [5, 99], "pts": 3,
 		"desc": "Медленно, но высоко ценится"},
 ]
+# §2.2: объединённая шкала ранга «Огонёк очага» — порог→уровень, титул, символ
+const CIRCLE_RANKS := [
+	{"level": 1, "kind": "дней",  "threshold": 7,   "title": "Искра",    "shape": "dot",      "color": "#ffe08a"},
+	{"level": 2, "kind": "дней",  "threshold": 30,  "title": "Уголёк",   "shape": "circle",   "color": "#e88a3c"},
+	{"level": 3, "kind": "очков", "threshold": 50,  "title": "Тлеющий",  "shape": "triangle", "color": "#e05252"},
+	{"level": 4, "kind": "дней",  "threshold": 100, "title": "Полено",   "shape": "square",   "color": "#a03028"},
+	{"level": 5, "kind": "очков", "threshold": 150, "title": "Горящий",  "shape": "diamond",  "color": "#ff6a3c"},
+	{"level": 6, "kind": "дней",  "threshold": 365, "title": "Сердце",   "shape": "star",     "color": "#ffd21f"},
+	{"level": 7, "kind": "очков", "threshold": 500, "title": "Пламенный", "shape": "flame",   "color": "#fff4d6"},
+]
+const CIRCLE_DECOR_REWARDS := {30: "fireplace_ember", 100: "fireplace_log", 365: "fireplace_heart"}
 # недельный слой (v30): жила даёт очки + прожилки (+1 кап, кап 5/нед. на сервере)
 const FAIR_REGEN_EACH := 0.05  # сильная недельная награда: +0.05 регена/с за закрытый котёл (вклад ≥3)
 const FAIR_REGEN_CAP := 0.5    # потолок суммарного регена ярмарок

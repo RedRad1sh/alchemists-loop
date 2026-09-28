@@ -256,12 +256,37 @@ func _circle_mile_bonus_text(kind: String, m: int) -> String:
 	return " и ".join(parts) if not parts.is_empty() else "Светик в восторге!"
 
 
+func _circle_rank_level() -> int:
+	# §2.2: max из двух треков (дни И очки) — активный идёт вперёд по очкам
+	var lvl := 0
+	for rk in Game.CIRCLE_RANKS:
+		var have := _circle_days.size() if String(rk["kind"]) == "дней" else _circle_pts_total
+		if have >= int(rk["threshold"]):
+			lvl = maxi(lvl, int(rk["level"]))
+	return lvl
+
+
 func _circle_celebrate_mile(kind: String, m: int) -> void:
 	var bonus := _circle_mile_bonus_text(kind, m)
 	g._engine.status_text = "Веха Дневного круга: %d %s! %s" % [m, kind, bonus]
 	g._hub._log_event("Веха круга: %d %s (%s)" % [m, kind, bonus])
 	g._spirit._companion_react("milestone", str(m))
 	Sfx.stage_up()
+	# план 2 §2.2: титул + эксклюзивный декор на том же переходе (идемпотентно)
+	var rank := {}
+	for rk in Game.CIRCLE_RANKS:
+		if String(rk["kind"]) == kind and int(rk["threshold"]) == m:
+			rank = rk
+	if not rank.is_empty():
+		var title := String(rank["title"])
+		if not _unlocked_titles.has(title):
+			_unlocked_titles.append(title)
+		if _circle_rank_level() >= int(rank["level"]):
+			_active_title = title
+		Analytics.track("circle_rank_up", {"rank_name": title, "days": _circle_days.size(),
+			"points": _circle_pts_total})
+		if kind == "дней" and Game.CIRCLE_DECOR_REWARDS.has(m):
+			g._home._own_item("fireplace", String(Game.CIRCLE_DECOR_REWARDS[m]))
 	g._saves._save_game()
 	_refresh_circle_page()
 	g._engine._refresh()
@@ -298,6 +323,15 @@ func _circle_flame() -> String:
 	if _circle_run >= 1:
 		return "✦"
 	return "·"
+
+
+func _circle_rank_title(lvl: int) -> String:
+	if lvl < 1:
+		return "Новичок"
+	for rk in Game.CIRCLE_RANKS:
+		if int(rk["level"]) == lvl:
+			return String(rk["title"])
+	return "Новичок"
 
 
 func _build_circle_page(container: VBoxContainer) -> void:
@@ -340,6 +374,17 @@ func _refresh_circle_page() -> void:
 	for child in _circle_list.get_children():
 		_circle_list.remove_child(child)
 		child.queue_free()
+	# §2.2: символ-ранг + титул — первой строкой страницы
+	var rank_row := HBoxContainer.new()
+	rank_row.name = "CircleRankRow"
+	rank_row.add_theme_constant_override("separation", 10)
+	var sym := CircleRankSymbol.new()
+	sym.setup(_circle_rank_level())
+	rank_row.add_child(sym)
+	var rtxt := g._label(_circle_rank_title(_circle_rank_level()), 14)
+	rtxt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	rank_row.add_child(rtxt)
+	_circle_list.add_child(rank_row)
 	# очаг: полешко раз в день
 	var hearth := HBoxContainer.new()
 	hearth.add_theme_constant_override("separation", 8)

@@ -250,7 +250,7 @@ static func run(g: Game) -> void:
 	# ---------- T8: ранг ----------
 	var sv_days := g._retention._circle_days.duplicate(true)
 	var sv_pts2 := g._retention._circle_pts_total
-	var sv_titles := g._retention._unlocked_titles.duplicate(true)
+	var sv_titles8 := g._retention._unlocked_titles.duplicate(true)
 	var sv_act2 := g._retention._active_title
 	g._retention._circle_days = []
 	g._retention._circle_pts_total = 0
@@ -283,5 +283,11 @@ static func run(g: Game) -> void:
 		l0 and l3 and mono and l7 and t1 and idem and own and shop_ok)
 	g._retention._circle_days = sv_days
 	g._retention._circle_pts_total = sv_pts2
-	g._retention._unlocked_titles = sv_titles
+	g._retention._unlocked_titles = sv_titles8
 	g._retention._active_title = sv_act2
+
+	# ---------- T9: swipe-предикат ----------
+	Selftest.check("swipe closes only strong downward drag",
+		UiGestures.swipe_closes(Vector2(0, 120)) and UiGestures.swipe_closes(Vector2(30, 100))
+		and not UiGestures.swipe_closes(Vector2(0, 60)) and not UiGestures.swipe_closes(Vector2(150, 90))
+		and not UiGestures.swipe_closes(Vector2(0, -120)))

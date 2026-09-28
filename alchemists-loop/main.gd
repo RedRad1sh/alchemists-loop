@@ -88,6 +88,8 @@ const VEIN_STREAK_CAP := Balance.VEIN_STREAK_CAP
 const VEIN_STREAK_REWARD := Balance.VEIN_STREAK_REWARD
 const VEIN_POINTS_WORLD := Balance.VEIN_POINTS_WORLD
 const CIRCLE_GOALS := Balance.CIRCLE_GOALS
+const CIRCLE_RANKS := Balance.CIRCLE_RANKS
+const CIRCLE_DECOR_REWARDS := Balance.CIRCLE_DECOR_REWARDS
 const WORLD_PAGE_SIZE := Balance.WORLD_PAGE_SIZE
 const PRESTIGE_MIN := Balance.PRESTIGE_MIN
 const OFFLINE_MIN_SEC := Balance.OFFLINE_MIN_SEC
@@ -1504,6 +1506,7 @@ func _build_popup() -> void:
 	close.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	close.pressed.connect(_hide_popup)
 	actions.add_child(close)
+	card.gui_input.connect(_on_popup_card_input)
 	_popup = center
 
 func _show_challenge_win_popup(item_id: String, target_name: String, a: String, b: String, first: bool = false) -> void:
@@ -1550,6 +1553,25 @@ func _hide_popup() -> void:
 	_popup_dim.visible = false
 	_popup.visible = false
 	Sfx.click()
+
+var _popup_swipe_start := Vector2.ZERO
+
+func _on_popup_card_input(ev: InputEvent) -> void:
+	if ev is InputEventMouseButton:
+		var mb := ev as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			if mb.pressed:
+				_popup_swipe_start = mb.position
+			elif UiGestures.swipe_closes(mb.position - _popup_swipe_start):
+				_hide_popup()
+	elif ev is InputEventScreenTouch:
+		var st := ev as InputEventScreenTouch
+		if st.pressed:
+			_popup_swipe_start = st.position
+		elif UiGestures.swipe_closes(st.position - _popup_swipe_start):
+			_hide_popup()
+	# touch-ветка — guarded-untested: headless-прогон не эмулирует ScreenTouch;
+	# предикат общий и покрыт кейсом swipe-предиката.
 
 func _on_brew_btn_pressed() -> void:
 	# §2.1: модалка режимов — только когда лунки собраны и варка вообще возможна;

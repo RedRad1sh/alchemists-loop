@@ -557,6 +557,9 @@ func _buy_furniture(cat_id: String, variant_id: String) -> void:
 		g._engine.status_text = "Сначала построй домик Светика."
 		Sfx.error()
 		return
+	# §1.4: reward-декор (Круг §2.2) не продаётся — только β-выдача
+	if bool(_decor_item(cat_id, variant_id).get("reward", false)):
+		return
 	if _decor_current(cat_id) == variant_id:
 		return
 	if _decor_owned(cat_id, variant_id):
@@ -616,6 +619,8 @@ func _rebuild_decor_popup() -> void:
 		_decor_list.remove_child(child)
 		child.queue_free()
 	for it in items:
+		if bool(it.get("reward", false)):
+			continue  # награда Круга не продаётся (§1.4)
 		var item_id := String(it["id"])
 		var cur := _decor_current(_decor_cat_open) == item_id
 		var owned := _decor_owned(_decor_cat_open, item_id)
@@ -903,6 +908,8 @@ func _next_locked_variant(cat_id: String) -> String:
 	var items: Array = (_decor_cat(cat_id).get("items", []) as Array).duplicate(true)
 	items.sort_custom(func(x, y) -> bool: return int(x["cost"]) < int(y["cost"]))
 	for it in items:
+		if bool(it.get("reward", false)):
+			continue
 		var iid := String(it["id"])
 		if not _decor_owned(cat_id, iid):
 			return iid
