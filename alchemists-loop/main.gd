@@ -579,6 +579,7 @@ func _ready() -> void:
 	# План 2 (жила/круг): connects вне _net_enabled-блока — хендлеры сами
 	# гейтят offline/ok, а ST эмитит сигналы напрямую (suite_vein_circle).
 	Net.cycle_result.connect(_retention._on_net_cycle_result)
+	Net.vein_find_result.connect(_retention._on_net_vein_find_result)
 	_init_new_game()
 	_saves._load_game()
 	_build_ui()

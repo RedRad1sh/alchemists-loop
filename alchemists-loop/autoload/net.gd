@@ -54,8 +54,8 @@ signal fair_claim_result(result: Dictionary)
 signal receipt_verify_result(result: Dictionary)
 signal account_export_result(result: Dictionary)
 signal account_delete_result(result: Dictionary)
-signal vein_find_result(result: Dictionary)
-signal vein_pour_result(result: Dictionary)
+signal vein_find_result(pair_key: String, result: Dictionary)
+signal vein_pour_result(find_id: String, result: Dictionary)
 signal cycle_result(result: Dictionary)
 signal error(message: String)
 
@@ -230,13 +230,13 @@ func fair_claim(device_id: String) -> void:
 # VeinPourResponse / CycleStatusResponse (server.py).
 func vein_find(device_id: String, pair_key: String, tag: String, cycle_id: String) -> void:
 	_enqueue({
-		"kind": "vein_find", "path": "/vein/find",
+		"kind": "vein_find", "path": "/vein/find", "pair_key": pair_key,
 		"body": {"device_id": device_id, "pair_key": pair_key, "tag": tag, "cycle_id": cycle_id},
 	})
 
 func vein_pour(device_id: String, idempotency_key: String) -> void:
 	_enqueue({
-		"kind": "vein_pour", "path": "/vein/pour",
+		"kind": "vein_pour", "path": "/vein/pour", "find_id": idempotency_key,
 		"body": {"device_id": device_id, "idempotency_key": idempotency_key},
 	})
 
@@ -439,8 +439,8 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 		"receipt_verify":
 			receipt_verify_result.emit(parsed)
 		"vein_find":
-			vein_find_result.emit(parsed)
+			vein_find_result.emit(String(req.get("pair_key", "")), parsed)
 		"vein_pour":
-			vein_pour_result.emit(parsed)
+			vein_pour_result.emit(String(req.get("find_id", "")), parsed)
 		"cycle":
 			cycle_result.emit(parsed)

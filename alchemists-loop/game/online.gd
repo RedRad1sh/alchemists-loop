@@ -229,6 +229,14 @@ func _find_recipe(a: String, b: String) -> Dictionary:
 		if g._pair_key(String(recipe["a"]), String(recipe["b"])) == key:
 			return recipe
 	return {}
+func _is_server_pair(a: String, b: String) -> bool:
+	# план 2: personal find возможен только для пары, которую сервер уже знает
+	var key := g._pair_key(a, b)
+	for sr in _server_recipes:
+		if g._pair_key(String(sr.get("a", "")), String(sr.get("b", ""))) == key:
+			return true
+	return false
+
 func _run_netbrew(a: String, b: String) -> void:
 	"""Отладка интеграции: прогнать пару через сеть как неизвестную."""
 	# U11: dev-хук (--netbrew=) — запись pending ставится напрямую, в том
@@ -565,6 +573,10 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 			# перед тем же инкрементом — значения совпадают.
 			var first_open := not g._engine.inventory.has(slug)
 			var first_milestones: Array = _grant_local_acquisition(slug)
+			if status == "known":
+				# §3.3.1: пара известна серверу, но клиент её ещё не регистрировал
+				# как личную — маршрутизируем в /api/vein/find.
+				g._retention._vein_report_pair(a, b, slug)
 			var author := g._clean_str(disc.get("author", _net_nick))
 			_server_authors[slug] = author
 			if status == "created" and not reused:
@@ -610,6 +622,7 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 				g._present_popup(slug, sub2, "НОВЫЙ РЕЦЕПТ!", rr["color"])
 			if status == "created" and not reused:
 				g._retention._discover_vein_bonus(result)
+				g._retention._vein_add_from_discover(pair_key, slug, result.get("vein", {}))
 	elif status == "not_combinable":
 		if is_experiment:
 			g._engine._experiment_failed(a, b)
@@ -636,6 +649,9 @@ func _apply_server_element(d) -> String:
 	var color := String(dd.get("color", "#8899aa"))
 	if slug == "" or name == "":
 		return ""
+	var tag := g._clean_str(dd.get("tag", ""))
+	if slug != "" and tag != "":
+		_server_tag[slug] = tag
 	if not color.begins_with("#"):
 		color = "#8899aa"
 	var glyph := String(dd.get("glyph", ""))

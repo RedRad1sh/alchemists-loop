@@ -484,6 +484,101 @@ func _vein_sync_pending() -> void:
 			Net.vein_find(g._online._device_id, String(f["pair_key"]), String(f["tag"]), cyc)
 
 
+func _vein_find_exists(cycle_id: String, pair_key: String) -> bool:
+	for f in _vein_finds:
+		if typeof(f) == TYPE_DICTIONARY and String(f.get("cycle_id", "")) == cycle_id \
+				and String(f.get("pair_key", "")) == pair_key:
+			return true
+	return false
+
+
+func _vein_find_entry(pair_key: String) -> Dictionary:
+	for f in _vein_finds:
+		if typeof(f) == TYPE_DICTIONARY and String(f.get("pair_key", "")) == pair_key:
+			return f
+	return {}
+
+
+func _vein_report_pair(a: String, b: String, out: String) -> void:
+	# §3.3.1: personal find рождается только для пары из серверной книги, тег
+	# которой активен в текущем цикле; anti-farm — одна пара на цикл (R2: без
+	# кэша цикла find не заводится).
+	if out == "" or not g._online._is_server_pair(a, b):
+		return
+	var cyc := String(_cycle_cache.get("cycle_id", ""))
+	var tag := String(g._online._server_tag.get(out, ""))
+	if cyc == "" or tag == "":
+		return
+	if tag != String(_cycle_cache.get("tag1", "")) and tag != String(_cycle_cache.get("tag2", "")):
+		return
+	var pk := g._pair_key(a, b)
+	if _vein_find_exists(cyc, pk):
+		return
+	_vein_finds.append({"id": "%s-%d-%s" % [cyc, int(Time.get_unix_time_from_system()), pk],
+		"tag": tag, "points": 1, "found_at": int(Time.get_unix_time_from_system()),
+		"pair_key": pk, "cycle_id": cyc, "status": "pending_server", "server_response": {}})
+	g._saves._save_game()
+	_vein_sync_pending()
+	_refresh_week_page()
+
+
+func _vein_add_from_discover(pair_key: String, out: String, vein: Dictionary) -> void:
+	# world-first: сервер уже начислил очки в /discover — капля сразу registered
+	if typeof(vein) != TYPE_DICTIONARY or vein.is_empty() or out == "":
+		return
+	var cyc := String(_cycle_cache.get("cycle_id", ""))
+	var tag := String(vein.get("tag", ""))
+	if tag == "":
+		tag = String(g._online._server_tag.get(out, ""))
+	if cyc == "" or tag == "" or _vein_find_exists(cyc, pair_key):
+		return
+	_vein_finds.append({"id": "wf-%d-%s" % [int(Time.get_unix_time_from_system()), pair_key],
+		"tag": tag, "points": int(vein.get("points", Game.VEIN_POINTS_WORLD)),
+		"found_at": int(Time.get_unix_time_from_system()), "pair_key": pair_key,
+		"cycle_id": cyc, "status": "registered", "server_response": vein})
+	g._saves._save_game()
+	_refresh_week_page()
+
+
+func _on_net_vein_find_result(pair_key: String, result: Dictionary) -> void:
+	if result.get("offline", false) == true:
+		return
+	var f := _vein_find_entry(pair_key)
+	if f.is_empty():
+		return
+	if result.get("ok", false) != true:
+		var err := String(result.get("error", ""))
+		if err == "cycle_mismatch":
+			# R2: пересоздаём find в актуальном цикле сервера
+			var new_cyc := String(result.get("cycle_id", ""))
+			if new_cyc == "":
+				new_cyc = String(_cycle_cache.get("cycle_id", ""))
+			f["cycle_id"] = new_cyc
+			f["id"] = "%s-%d-%s" % [new_cyc, int(Time.get_unix_time_from_system()), pair_key]
+			f["status"] = "pending_server"
+			f["points"] = 0
+			_vein_sync_pending()
+		else:
+			_vein_finds.erase(f)  # unknown_pair / tag_mismatch — снимаем
+		g._saves._save_game()
+		_refresh_week_page()
+		return
+	f["status"] = "registered"
+	f["server_response"] = result
+	f["points"] = int(result.get("points", 1))
+	Analytics.track("vein_personal_find", {"tag": String(f["tag"]),
+		"points": int(result.get("points", 1)), "streak_roll": bool(result.get("streak_added", false)),
+		"cycle_id": String(f["cycle_id"])})
+	if bool(result.get("cap_reached", false)) and int(f.get("cap_paid", 0)) == 0:
+		f["cap_paid"] = 1
+		g._engine._grant_ether(Game.VEIN_STREAK_REWARD, "vein_streak_cap")
+		Analytics.track("vein_streak_cap", {"cycle_id": String(f["cycle_id"]),
+			"reward": Game.VEIN_STREAK_REWARD})
+		g._engine.status_text = "Прожилка дошла до капа! +%d ⚡" % Game.VEIN_STREAK_REWARD
+	g._saves._save_game()
+	_refresh_week_page()
+
+
 func _week_fair() -> Dictionary:
 	var f = _week_cache.get("fair", {})
 	return f if typeof(f) == TYPE_DICTIONARY else {}
