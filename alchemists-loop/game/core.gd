@@ -1145,9 +1145,8 @@ func _auto_craft(item_id: String) -> void:
 		var frontier_rows: Array = frontier.get("frontier", [])
 		if not frontier_rows.is_empty():
 			var f: Dictionary = frontier_rows[0]
-			status_text = "Производство остановлен на неизвестном узле: %s + %s. Открой Эксперимент." % [
+			status_text = "Нужно открыть: %s + %s (через Эксперимент)" % [
 				g._online._item_name(String(f.get("a", ""))), g._online._item_name(String(f.get("b", "")))]
-			g._pages._focus_experiment(String(f.get("a", "")), String(f.get("b", "")))
 		else:
 			status_text = "Автоварка: %s" % String(plan.get("reason", "невозможно"))
 		Sfx.error()
