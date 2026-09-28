@@ -70,6 +70,10 @@ const CIRCLE_DAY_REGEN := {30: 0.05}              # +к регену за вех
 const CIRCLE_PTS_MILES := [50, 150, 500]         # вехи вечных очков цели дня
 const CIRCLE_PTS_CAP := {50: 3, 500: 5}          # +к капу за вехи очков
 const CIRCLE_PTS_REGEN := {150: 0.03}            # +к регену за вехи очков
+# план 2 (жила): cap прожилки за цикл, награда за cap, очки world-first (отображение)
+const VEIN_STREAK_CAP := 5
+const VEIN_STREAK_REWARD := 25
+const VEIN_POINTS_WORLD := 2
 # недельный слой (v30): жила даёт очки + прожилки (+1 кап, кап 5/нед. на сервере)
 const FAIR_REGEN_EACH := 0.05  # сильная недельная награда: +0.05 регена/с за закрытый котёл (вклад ≥3)
 const FAIR_REGEN_CAP := 0.5    # потолок суммарного регена ярмарок

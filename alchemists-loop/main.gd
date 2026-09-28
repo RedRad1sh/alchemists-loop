@@ -84,6 +84,9 @@ const CANDIDATE_COOLDOWN := Balance.CANDIDATE_COOLDOWN
 const NET_NICK := Balance.NET_NICK
 const CHALLENGE_REWARD := Balance.CHALLENGE_REWARD
 const CIRCLE_LOCAL_POINTS := Balance.CIRCLE_LOCAL_POINTS
+const VEIN_STREAK_CAP := Balance.VEIN_STREAK_CAP
+const VEIN_STREAK_REWARD := Balance.VEIN_STREAK_REWARD
+const VEIN_POINTS_WORLD := Balance.VEIN_POINTS_WORLD
 const WORLD_PAGE_SIZE := Balance.WORLD_PAGE_SIZE
 const PRESTIGE_MIN := Balance.PRESTIGE_MIN
 const OFFLINE_MIN_SEC := Balance.OFFLINE_MIN_SEC
@@ -567,11 +570,15 @@ func _ready() -> void:
 		Net.fair_brew_result.connect(_retention._on_net_fair_brew_result)
 		Net.fair_claim_result.connect(_retention._on_net_fair_claim_result)
 		Net.week_status(_online._device_id)
+		Net.cycle_status(_online._device_id)
 		# #8: доводка удаления аккаунта. Хендлер чистит маркер при ok; ретрай
 		# поднимает незавершённое удаление прошлой сессии (маркер переживает
 		# вайп). В селфтесте блок не выполняется: _net_enabled = not _selftest.
 		Net.account_delete_result.connect(_online._on_account_delete_result)
 		_online._retry_pending_account_delete()
+	# План 2 (жила/круг): connects вне _net_enabled-блока — хендлеры сами
+	# гейтят offline/ok, а ST эмитит сигналы напрямую (suite_vein_circle).
+	Net.cycle_result.connect(_retention._on_net_cycle_result)
 	_init_new_game()
 	_saves._load_game()
 	_build_ui()

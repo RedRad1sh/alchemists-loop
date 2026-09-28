@@ -663,6 +663,10 @@ class CycleStatusResponse(BaseModel):
     world_finds: int = 0
     my_points: int = 0
     my_streak: int = 0
+    # план 2 R5 (аддитивно): начало цикла и порог — клиенту нужны для
+    # telemetry vein_cycle_spread (reason/duration_days).
+    started_at: str = ""
+    spread_threshold: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -3114,6 +3118,8 @@ def vein_cycle_status(device_id: str = Query("", max_length=128)):
             world_finds=cycle["world_finds"],
             my_points=my_points,
             my_streak=my_streak,
+            started_at=cycle["started_at"],
+            spread_threshold=int(cycle["spread_threshold"]),
         )
     finally:
         conn.close()

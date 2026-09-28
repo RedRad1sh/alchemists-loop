@@ -73,3 +73,30 @@ static func run(g: Game) -> void:
 	g._retention._active_title = sv_active
 	g._retention._vein_finds = sv_finds
 	g._retention._cycle_cache = sv_cycle
+
+	# ---------- T3: cycle cache ----------
+	var sv_cycle2: Dictionary = g._retention._cycle_cache.duplicate(true)
+	g._retention._cycle_cache = {}
+	Net.cycle_result.emit({"ok": true, "cycle_id": "vc:A", "tag1": "Туман", "tag2": "",
+		"state": "active", "world_finds": 3, "my_points": 2, "my_streak": 1,
+		"started_at": "2026-09-20T00:00:00", "spread_threshold": 12})
+	var cached := String(g._retention._cycle_cache.get("cycle_id", "")) == "vc:A"
+	# spread-переход: прежний active → новый spread; клиент это переживает
+	Net.cycle_result.emit({"ok": true, "cycle_id": "vc:A", "tag1": "Туман", "tag2": "Мрак",
+		"state": "spread", "world_finds": 12, "my_points": 2, "my_streak": 1,
+		"started_at": "2026-09-20T00:00:00", "spread_threshold": 12})
+	var spread_ok := String(g._retention._cycle_cache.get("state", "")) == "spread"
+	# смена цикла: старые registered-капли становятся auto_applied (R1)
+	g._retention._vein_finds = [{"id": "f9", "tag": "Туман", "points": 1, "found_at": 1,
+		"pair_key": "a|b", "cycle_id": "vc:A", "status": "registered", "server_response": {}}]
+	Net.cycle_result.emit({"ok": true, "cycle_id": "vc:B", "tag1": "Мрак", "tag2": "",
+		"state": "active", "world_finds": 0, "my_points": 0, "my_streak": 0,
+		"started_at": "2026-09-27T00:00:00", "spread_threshold": 12})
+	var autoed := String((g._retention._vein_finds[0] as Dictionary)["status"]) == "auto_applied"
+	# offline-ответ кэш не трогает
+	Net.cycle_result.emit({"ok": false, "offline": true})
+	var untouched := String(g._retention._cycle_cache.get("cycle_id", "")) == "vc:B"
+	g._retention._cycle_cache = sv_cycle2
+	g._retention._vein_finds = []
+	Selftest.check("cycle cache + spread + auto_applied on rollover + offline-safe",
+		cached and spread_ok and autoed and untouched)

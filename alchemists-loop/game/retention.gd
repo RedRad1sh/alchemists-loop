@@ -37,6 +37,7 @@ var _cycle_cache: Dictionary = {}
 var _vein_finds: Array = []
 var _unlocked_titles: Array = []
 var _active_title := ""
+var _cycle_prev_state := ""
 
 func _init(game: Game) -> void:
 	g = game
@@ -409,6 +410,7 @@ func _fetch_week() -> void:
 		_refresh_week_page()
 		return
 	Net.week_status(g._online._device_id)
+	_fetch_cycle()
 
 
 func _on_net_week_result(result: Dictionary) -> void:
@@ -425,6 +427,61 @@ func _on_net_week_result(result: Dictionary) -> void:
 func _week_vein() -> Dictionary:
 	var v = _week_cache.get("vein", {})
 	return v if typeof(v) == TYPE_DICTIONARY else {}
+
+# ---------- план 2: цикл жилы ----------
+
+func _fetch_cycle() -> void:
+	if not g._online._net_enabled or g._online._device_id == "":
+		return
+	if not Net.is_available():
+		return
+	Net.cycle_status(g._online._device_id)
+
+
+func _on_net_cycle_result(result: Dictionary) -> void:
+	if result.get("offline", false) == true or result.get("ok", false) != true:
+		return
+	var prev_id := String(_cycle_cache.get("cycle_id", ""))
+	_cycle_cache = result
+	if String(result.get("state", "")) == "spread" and _cycle_prev_state != "spread":
+		# R5: reason — порог достигнут или max_days; duration — от started_at до сегодня
+		var wf := int(result.get("world_finds", 0))
+		var thr := int(result.get("spread_threshold", 0))
+		var dur := 0
+		var sa := String(result.get("started_at", ""))
+		if sa.length() >= 10:
+			dur = maxi(0, int((Time.get_unix_time_from_system() - float(
+				Time.get_unix_time_from_datetime_string(sa))) / 86400.0))
+		Analytics.track("vein_cycle_spread", {"reason": "threshold" if wf >= thr else "max_days",
+			"world_finds": wf, "duration_days": dur})
+	_cycle_prev_state = String(result.get("state", ""))
+	if prev_id != "" and String(result.get("cycle_id", "")) != prev_id:
+		# R1: закрытие старого цикла — невлитые капли его становятся auto_applied
+		var autoed := 0
+		for f in _vein_finds:
+			if typeof(f) == TYPE_DICTIONARY and String(f.get("cycle_id", "")) == prev_id \
+					and String(f.get("status", "")) == "registered":
+				f["status"] = "auto_applied"
+				autoed += 1
+				Analytics.track("vein_pour", {"tag": String(f.get("tag", "")), "manual": false})
+		Analytics.track("vein_cycle_closed", {"auto_applied_count": autoed,
+			"total_points": int(_cycle_cache.get("my_points", 0))})
+		_vein_sync_pending()
+	g._saves._save_game()
+	_refresh_week_page()
+
+
+func _vein_sync_pending() -> void:
+	if not Net.is_available() or g._online._device_id == "":
+		return
+	var cyc := String(_cycle_cache.get("cycle_id", ""))
+	if cyc == "":
+		return
+	for f in _vein_finds:
+		if typeof(f) != TYPE_DICTIONARY:
+			continue
+		if String(f.get("status", "")) == "pending_server" and String(f.get("cycle_id", "")) == cyc:
+			Net.vein_find(g._online._device_id, String(f["pair_key"]), String(f["tag"]), cyc)
 
 
 func _week_fair() -> Dictionary:
@@ -612,12 +669,20 @@ func _refresh_week_page() -> void:
 		return
 	_week_head.text = "Неделя %s" % g._clean_str(_week_cache.get("week", "?"))
 	var v := _week_vein()
+	if not _cycle_cache.is_empty():
+		v = {"tag1": _cycle_cache.get("tag1", ""), "tag2": _cycle_cache.get("tag2", ""),
+			"spread": String(_cycle_cache.get("state", "")) == "spread",
+			"my_hits": _cycle_cache.get("my_points", 0), "my_streaks": _cycle_cache.get("my_streak", 0),
+			"streak_cap": Game.VEIN_STREAK_CAP}
 	var vtitle := "Жила: «%s»" % g._clean_str(v.get("tag1", "?"))
 	if bool(v.get("spread", false)):
 		vtitle += " + «%s» (туман расползся)" % g._clean_str(v.get("tag2", "?"))
 	var vt := g._label(vtitle + (" · ждёт связи с миром" if _fair_offline_available() else ""), 14)
 	vt.add_theme_color_override("font_color", Color(0.55, 0.95, 0.9))
 	_week_list.add_child(vt)
+	if not _cycle_cache.is_empty():
+		vt.text += " · туман: %s · миров находок %d/%d" % [String(_cycle_cache.get("state", "?")),
+			int(_cycle_cache.get("world_finds", 0)), int(_cycle_cache.get("spread_threshold", 0))]
 	_week_list.add_child(g._label("Твоих находок в жиле: %d · прожилки: %d/%d · +кап от жилы: %d" % [
 		int(v.get("my_hits", 0)), int(v.get("my_streaks", 0)),
 		int(v.get("streak_cap", 5)), _vein_cap_total], 13))

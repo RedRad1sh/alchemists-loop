@@ -101,6 +101,8 @@ def test_cycle_status_endpoint(fresh_unit_db):
     assert data["state"] == "active"
     assert "my_points" in data
     assert "my_streak" in data
+    # план 2 R5: клиенту нужны начало цикла и порог для telemetry-поле reason
+    assert data["started_at"][:10] and data["spread_threshold"] >= 1
     # auto_applied should NOT be in response (client-side only)
     assert "pending_auto_applied" not in data
 
