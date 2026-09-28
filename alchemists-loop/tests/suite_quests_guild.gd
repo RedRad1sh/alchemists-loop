@@ -3,6 +3,9 @@ class_name SuiteQuestsGuild
 # задания/достижения/комплекты/заказы/престиж (оп B1).
 
 static func run(g: Game) -> void:
+	# Герметичность: ST-сейв на диске может нести quests_done из прошлого прогона
+	# (boot грузит его до u20-wipe), а _init_new_game квесты намеренно не трогает.
+	g._guild._quests_done.clear()
 	# задания Светика
 	Selftest.check("quest chain data", Game.SPIRIT_QUESTS.size() >= 10)
 	var st_steam := int(g._guild._quest_brew.get("steam", 0))

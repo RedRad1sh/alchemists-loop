@@ -1061,6 +1061,7 @@ func _build_color_picker() -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.visible = false
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.z_index = 21
 	g.add_child(root)
 	_color_picker = root
 	var dim := ColorRect.new()
@@ -1141,6 +1142,7 @@ func _build_house_popup() -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.visible = false
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.z_index = 21
 	g.add_child(root)
 	_house_popup = root
 	var dim := ColorRect.new()
