@@ -249,6 +249,44 @@ func _circle_check_pts_miles() -> void:
 		_circle_celebrate_mile("очков", int(Game.CIRCLE_PTS_MILES[miles - 1]))
 
 
+# Migration: grant titles and fireplace rewards for milestones already passed in old saves
+func _circle_migrate_missed_milestones() -> void:
+	# Day milestones
+	for i in range(_circle_mdays):
+		if i >= Game.CIRCLE_DAY_MILES.size():
+			break
+		var m := int(Game.CIRCLE_DAY_MILES[i])
+		var rank := {}
+		for rk in Game.CIRCLE_RANKS:
+			if String(rk["kind"]) == "дней" and int(rk["threshold"]) == m:
+				rank = rk
+				break
+		if not rank.is_empty():
+			var title := String(rank["title"])
+			if not _unlocked_titles.has(title):
+				_unlocked_titles.append(title)
+			if _circle_rank_level() >= int(rank["level"]):
+				_active_title = title
+			if Game.CIRCLE_DECOR_REWARDS.has(m):
+				g._home._own_item("fireplace", String(Game.CIRCLE_DECOR_REWARDS[m]))
+	# Points milestones
+	for i in range(_circle_mpts):
+		if i >= Game.CIRCLE_PTS_MILES.size():
+			break
+		var m := int(Game.CIRCLE_PTS_MILES[i])
+		var rank := {}
+		for rk in Game.CIRCLE_RANKS:
+			if String(rk["kind"]) == "очков" and int(rk["threshold"]) == m:
+				rank = rk
+				break
+		if not rank.is_empty():
+			var title := String(rank["title"])
+			if not _unlocked_titles.has(title):
+				_unlocked_titles.append(title)
+			if _circle_rank_level() >= int(rank["level"]):
+				_active_title = title
+
+
 func _circle_mile_bonus(kind: String, m: int) -> Array:
 	# [кап, реген, аура?]
 	if kind == "дней":
@@ -578,10 +616,17 @@ func _vein_find_exists(cycle_id: String, pair_key: String) -> bool:
 	return false
 
 
-func _vein_find_entry(pair_key: String) -> Dictionary:
+func _vein_find_entry(pair_key: String, cycle_id: String = "") -> Dictionary:
 	for f in _vein_finds:
-		if typeof(f) == TYPE_DICTIONARY and String(f.get("pair_key", "")) == pair_key:
-			return f
+		if typeof(f) != TYPE_DICTIONARY:
+			continue
+		if String(f.get("pair_key", "")) != pair_key:
+			continue
+		if cycle_id != "" and String(f.get("cycle_id", "")) != cycle_id:
+			continue
+		if cycle_id == "" and String(f.get("status", "")) != "pending_server":
+			continue
+		return f
 	return {}
 
 

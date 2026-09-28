@@ -2940,7 +2940,7 @@ def vein_find(req: VeinFindRequest):
             if spread_row:
                 cycle = dict(spread_row)
             else:
-                return VeinFindResponse(ok=False, error="cycle_mismatch")
+                return VeinFindResponse(ok=False, error="cycle_mismatch", cycle_id=cycle["cycle_id"])
 
         # Pair must be known to the server (recipe + its output element)
         recipe = conn.execute(
@@ -2982,10 +2982,30 @@ def vein_find(req: VeinFindRequest):
                 cycle_id=cycle["cycle_id"],
             )
 
+        # Check if this personal discovery already exists (anti-farm: one per device globally)
+        existing_discovery = conn.execute(
+            "SELECT 1 FROM personal_discoveries WHERE device_id=? AND pair_key=?",
+            (req.device_id, req.pair_key),
+        ).fetchone()
+        if existing_discovery:
+            # Already claimed this pair as personal find in some previous cycle
+            # Return success but don't score again
+            streak_row = conn.execute(
+                "SELECT count, cap_claimed FROM vein_streaks WHERE device_id=? AND cycle_id=?",
+                (req.device_id, cycle["cycle_id"]),
+            ).fetchone()
+            return VeinFindResponse(
+                ok=True, points=0,
+                streak_added=False,
+                streak_count=streak_row["count"] if streak_row else 0,
+                cap_reached=bool(streak_row["cap_claimed"]) if streak_row else False,
+                cycle_id=cycle["cycle_id"],
+            )
+
         # Register personal discovery (PK device_id+pair_key — глобальный:
-        # INSERT OR IGNORE, повтор в новом цикле не дублирует строку)
+        # один раз на устройство, не повторяется в новых циклах)
         conn.execute(
-            "INSERT OR IGNORE INTO personal_discoveries (device_id, pair_key, discovered_at) "
+            "INSERT INTO personal_discoveries (device_id, pair_key, discovered_at) "
             "VALUES (?, ?, ?)",
             (req.device_id, req.pair_key, _now_iso()),
         )

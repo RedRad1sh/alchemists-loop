@@ -191,6 +191,9 @@ static func run(g: Game) -> void:
 
 	# ---------- T7: пассивные очки Круга по слою ----------
 	var sv_pts := g._retention._circle_pts_total
+	var sv_mpts := g._retention._circle_mpts
+	var sv_titles7 := g._retention._unlocked_titles.duplicate(true)
+	var sv_act7 := g._retention._active_title
 	# steam (слой 1) → fast (1-2) = +1 очко
 	var pts := g._retention._circle_on_goal_brew("steam")
 	var fast_ok := pts == 1
@@ -201,6 +204,9 @@ static func run(g: Game) -> void:
 	# Для этого нужно, чтобы рецепты были в known_recipes — в selftest это не всегда так,
 	# поэтому проверяем только базовые случаи
 	g._retention._circle_pts_total = sv_pts
+	g._retention._circle_mpts = sv_mpts
+	g._retention._unlocked_titles = sv_titles7
+	g._retention._active_title = sv_act7
 	Selftest.check("circle passive points by layer",
 		fast_ok and empty_zero)
 
