@@ -16,6 +16,8 @@ jobs:
   deploy:
     name: Deploy discovery-server to VPS
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
       - name: Checkout code
