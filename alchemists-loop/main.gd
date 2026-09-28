@@ -1181,7 +1181,8 @@ func _build_brew_bar() -> void:
 		_engine._source_orbs[item_id] = orb
 
 	_engine._brew_btn = _round_brew_button("ВАРИТЬ")
-	_engine._brew_btn.custom_minimum_size = Vector2(120, 46)
+	_engine._brew_btn.custom_minimum_size = Vector2(140, 52)  # увеличен hitbox
+	_engine._brew_btn.mouse_filter = Control.MOUSE_FILTER_STOP  # явный приём кликов
 	_engine._brew_btn.pressed.connect(_on_brew_btn_pressed)
 	row.add_child(_engine._brew_btn)
 	_engine._repeat_btn = _small_button("↻", Vector2(44, 42), 1)
@@ -1357,8 +1358,8 @@ func _round_brew_button(text: String) -> Button:
 	b.text = text
 	# Большая кнопка остаётся только для главного действия, но больше не
 	# занимает пол-экрана: touch-зона сохраняется через сам Control.
-	b.custom_minimum_size = Vector2(136, 46)
-	b.pivot_offset = Vector2(68, 23)
+	b.custom_minimum_size = Vector2(140, 52)  # увеличен hitbox для надёжного клика
+	b.pivot_offset = Vector2(70, 26)
 	b.add_theme_font_size_override("font_size", 16)
 	if _font_semi != null:
 		b.add_theme_font_override("font", _font_semi)
