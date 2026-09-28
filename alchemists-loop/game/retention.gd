@@ -32,6 +32,11 @@ var _fair_local_brews: Array = []
 var _fair_off_claim_week := ""
 var _week_head: Label = null
 var _week_list: VBoxContainer = null
+# план 2: цикл жилы, pending finds, титулы ранга
+var _cycle_cache: Dictionary = {}
+var _vein_finds: Array = []
+var _unlocked_titles: Array = []
+var _active_title := ""
 
 func _init(game: Game) -> void:
 	g = game

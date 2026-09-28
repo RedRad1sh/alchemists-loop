@@ -32,6 +32,7 @@ var _challenge_avatar: Avatar = null
 var _server_layers: Dictionary = {}
 var _server_elements: Dictionary = {}
 var _server_recipes: Array = []
+var _server_tag: Dictionary = {}   # slug → тег природы (для /api/vein/find)
 var _rating_list: VBoxContainer = null
 var _rating_status: Label = null
 var _rating_me: Label = null

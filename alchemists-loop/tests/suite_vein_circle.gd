@@ -42,3 +42,34 @@ static func run(g: Game) -> void:
 	Net.vein_pour("d1", "k1")
 	Net.cycle_status("d1")
 	Selftest.check("net vein calls drain offline", Net._queue.is_empty() and Net._inflight.is_empty())
+
+	# ---------- T2: сейв round-trip ----------
+	var sv_titles := g._retention._unlocked_titles.duplicate(true)
+	var sv_active := g._retention._active_title
+	var sv_finds: Array = g._retention._vein_finds.duplicate(true)
+	var sv_cycle: Dictionary = g._retention._cycle_cache.duplicate(true)
+	g._retention._unlocked_titles.clear()
+	g._retention._unlocked_titles.append("Искра")
+	g._retention._active_title = "Искра"
+	g._retention._vein_finds.clear()
+	g._retention._vein_finds.append({"id": "f1", "tag": "Туман", "points": 1, "found_at": 123,
+		"pair_key": "earth|fire", "cycle_id": "vc:1", "status": "pending_server", "server_response": {}})
+	g._retention._cycle_cache = {"cycle_id": "vc:1", "tag1": "Туман", "state": "active", "world_finds": 0}
+	g._online._server_tag["fog"] = "Туман"
+	g._saves._save_game()
+	g._retention._unlocked_titles.clear()
+	g._retention._active_title = ""
+	g._retention._vein_finds.clear()
+	g._retention._cycle_cache = {}
+	g._online._server_tag.clear()
+	g._saves._load_game()
+	Selftest.check("save roundtrip vein titles+finds+cycle+tags",
+		g._retention._unlocked_titles.has("Искра") and g._retention._active_title == "Искра"
+		and g._retention._vein_finds.size() == 1
+		and String((g._retention._vein_finds[0] as Dictionary)["id"]) == "f1"
+		and String(g._retention._cycle_cache.get("cycle_id", "")) == "vc:1"
+		and String(g._online._server_tag.get("fog", "")) == "Туман")
+	g._retention._unlocked_titles = sv_titles
+	g._retention._active_title = sv_active
+	g._retention._vein_finds = sv_finds
+	g._retention._cycle_cache = sv_cycle
