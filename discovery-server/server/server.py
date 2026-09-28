@@ -708,6 +708,24 @@ def init_db():
     """Инициализация БД: создать таблицы и загрузить стартовый граф веществ."""
     conn = get_db()
     try:
+        # Heal ДО schema.sql: частичный UNIQUE-индекс в схеме упал бы на
+        # БД, созданной Pre-F2-кодом с двумя открытыми циклами (гонка
+        # _ensure_active_cycle). schema.sql выполняется executescript-ом,
+        # где IntegrityError перехватить нельзя построчно.
+        has_cycles = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vein_cycles'"
+        ).fetchone()
+        if has_cycles:
+            open_cycles = conn.execute(
+                "SELECT cycle_id FROM vein_cycles "
+                "WHERE state IN ('active', 'spread') ORDER BY started_at DESC"
+            ).fetchall()
+            if len(open_cycles) > 1:
+                conn.execute(
+                    "UPDATE vein_cycles SET state='closed', ended_at=? "
+                    "WHERE state IN ('active', 'spread') AND cycle_id != ?",
+                    (_now_iso(), open_cycles[0]["cycle_id"]),
+                )
         # Выполняем schema.sql (только DDL)
         schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
         if os.path.exists(schema_path):
@@ -795,10 +813,30 @@ def init_db():
         # F2 (по конвенции init_db для старых БД, дубль см. в schema.sql):
         # частичный UNIQUE — не более одного открытого (active/spread) цикла.
         # Константа-ключ: все подходящие строки делят один ключ индекса.
-        conn.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS ux_vein_cycles_one_open "
-            "ON vein_cycles(1) WHERE state IN ('active', 'spread')"
-        )
+        # Heal: БД, созданная кодом этой ветки ДО появления индекса, может
+        # содержать два открытых цикла (гонка _ensure_active_cycle) —
+        # иначе CREATE INDEX уронит весь init_db. Оставляем новнейший,
+        # прочее закрываем.
+        try:
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_vein_cycles_one_open "
+                "ON vein_cycles(1) WHERE state IN ('active', 'spread')"
+            )
+        except sqlite3.IntegrityError:
+            newest = conn.execute(
+                "SELECT cycle_id FROM vein_cycles "
+                "WHERE state IN ('active', 'spread') "
+                "ORDER BY started_at DESC LIMIT 1"
+            ).fetchone()
+            conn.execute(
+                "UPDATE vein_cycles SET state='closed', ended_at=? "
+                "WHERE state IN ('active', 'spread') AND cycle_id != ?",
+                (_now_iso(), newest["cycle_id"]),
+            )
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_vein_cycles_one_open "
+                "ON vein_cycles(1) WHERE state IN ('active', 'spread')"
+            )
         # Migration: old vein_hits(week, device_id) → legacy_vein_hits
         # New vein_hits uses (device_id, cycle_id, pair_key) for anti-farm.
         old_vh_cols = {r["name"] for r in conn.execute("PRAGMA table_info(vein_hits)").fetchall()}

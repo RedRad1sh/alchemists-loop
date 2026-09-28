@@ -415,3 +415,43 @@ def test_ensure_active_cycle_race_returns_winner(fresh_unit_db, monkeypatch):
     again = srv._ensure_active_cycle(conn)
     assert again["cycle_id"] == "vc:race-winner"
     conn.close()
+
+
+def test_init_db_heals_duplicate_open_cycles(fresh_unit_db):
+    """init_db на БД без индекса с двумя открытыми циклами (наследие гонки
+    Pre-F2-кода) — лечит, а не крашится: новнейший остаётся, older закрыт,
+    индекс пересоздан."""
+    srv.init_db()
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    _close_all_open_cycles(conn)
+    conn.execute("DROP INDEX ux_vein_cycles_one_open")
+    conn.execute(
+        "INSERT INTO vein_cycles (cycle_id, started_at, tag1, state, spread_threshold) "
+        "VALUES ('vc:heal-old', '2000-01-01T00:00:00', 'iron', 'active', 20)"
+    )
+    conn.execute(
+        "INSERT INTO vein_cycles (cycle_id, started_at, tag1, state, spread_threshold) "
+        "VALUES ('vc:heal-new', ?, 'fire', 'spread', 20)",
+        (srv._now_iso(),),
+    )
+    conn.commit()
+    conn.close()
+
+    srv.init_db()  # без heal здесь был бы sqlite3.IntegrityError
+
+    conn = sqlite3.connect(srv.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    open_rows = conn.execute(
+        "SELECT * FROM vein_cycles WHERE state IN ('active', 'spread')"
+    ).fetchall()
+    assert len(open_rows) == 1
+    assert open_rows[0]["cycle_id"] == "vc:heal-new"
+    old = conn.execute(
+        "SELECT state, ended_at FROM vein_cycles WHERE cycle_id='vc:heal-old'"
+    ).fetchone()
+    assert old["state"] == "closed"
+    assert old["ended_at"] is not None
+    idx_names = {r["name"] for r in conn.execute("PRAGMA index_list(vein_cycles)")}
+    assert "ux_vein_cycles_one_open" in idx_names
+    conn.close()
