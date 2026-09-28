@@ -216,3 +216,72 @@ static func run(g: Game) -> void:
 	Selftest.check("goal pools cover all known non-base pairs", total == known_nonbase)
 	# z-лестница модалки цели (инвариант модалов >=20)
 	Selftest.check("goal modal z ladder", GoalPicker.DIM_Z >= 20 and GoalPicker.CENTER_Z >= 20)
+
+	# ---------- T7: очки цели ----------
+	var sv_pts := g._retention._circle_pts_total
+	var sv_goal := g._engine.pending_circle_goal
+	g._engine.pending_circle_goal = "fast"
+	var pts := g._retention._circle_on_goal_brew("steam")
+	var fast_ok := pts == 1
+	# deep-цель на лёгком выходе не платит (по факту слоя, не по заявке)
+	g._engine.pending_circle_goal = "deep"
+	pts = g._retention._circle_on_goal_brew("steam")
+	var deep_zero := pts == 0
+	# пустая заявка (авто/верстак/эксперимент) — 0
+	g._engine.pending_circle_goal = ""
+	pts = g._retention._circle_on_goal_brew("steam")
+	var none_zero := pts == 0
+	# пустой output — 0
+	pts = g._retention._circle_on_goal_brew("")
+	var empty_zero := pts == 0
+	# успешная варка снимает заявку однократно
+	g._engine.pending_circle_goal = "fast"
+	g._engine.inventory["fire"] = 5
+	g._engine.inventory["water"] = 5
+	g._engine.ether = 100
+	g._engine.selected = ["fire", "water"]
+	await g._engine._brew()
+	var cleared := g._engine.pending_circle_goal == ""
+	g._retention._circle_pts_total = sv_pts
+	g._engine.pending_circle_goal = sv_goal
+	Selftest.check("circle goal points by actual layer",
+		fast_ok and deep_zero and none_zero and empty_zero and cleared)
+
+	# ---------- T8: ранг ----------
+	var sv_days := g._retention._circle_days.duplicate(true)
+	var sv_pts2 := g._retention._circle_pts_total
+	var sv_titles := g._retention._unlocked_titles.duplicate(true)
+	var sv_act2 := g._retention._active_title
+	g._retention._circle_days = []
+	g._retention._circle_pts_total = 0
+	var l0 := g._retention._circle_rank_level() == 0
+	g._retention._circle_pts_total = 60
+	# 60 очков → уровень 3 («Тлеющий», порог 50), даже если дней 0
+	var l3 := g._retention._circle_rank_level() == 3
+	g._retention._circle_days.resize(30)
+	# 30 дней → уровень 2; очки выше → ранг не падает
+	var mono := g._retention._circle_rank_level() == 3
+	g._retention._circle_days.resize(365)
+	g._retention._circle_pts_total = 500
+	var l7 := g._retention._circle_rank_level() == 7
+	# выдача титулов идемпотентна: повторный celebrate не дублирует
+	g._retention._unlocked_titles.clear()
+	g._retention._circle_celebrate_mile("очков", 50)
+	var t1 := g._retention._unlocked_titles.has("Тлеющий")
+	g._retention._circle_celebrate_mile("очков", 50)
+	var idem := g._retention._unlocked_titles.count("Тлеющий") == 1
+	# декор за 30 дней выдаётся через β-путь и не продаётся
+	g._retention._circle_celebrate_mile("дней", 30)
+	var own := (g._home.house_owned.get("fireplace", []) as Array).has("fireplace_ember")
+	var shop_ok := true
+	for c in Game.DECOR:
+		if String(c["id"]) == "fireplace":
+			for it in (c.get("items", []) as Array):
+				if bool(it.get("reward", false)) and int(it.get("cost", 0)) > 0:
+					shop_ok = false
+	Selftest.check("rank formula + titles idempotent + decor reward",
+		l0 and l3 and mono and l7 and t1 and idem and own and shop_ok)
+	g._retention._circle_days = sv_days
+	g._retention._circle_pts_total = sv_pts2
+	g._retention._unlocked_titles = sv_titles
+	g._retention._active_title = sv_act2

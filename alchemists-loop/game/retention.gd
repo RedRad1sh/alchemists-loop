@@ -157,6 +157,27 @@ func _circle_on_local_brew(output: String) -> void:
 		_refresh_circle_page()
 
 
+func _circle_on_goal_brew(output: String) -> int:
+	# §2.4: очки за цель начисляются ПОСЛЕ успешной варки и по ФАКТИЧЕСКОМУ
+	# слою результата; пустая заявка (авто/верстак/эксперимент) не платит.
+	var goal_key := g._engine.pending_circle_goal
+	if goal_key == "" or output == "":
+		return 0
+	var l := g._engine._layer_of(output)
+	for gm in Game.CIRCLE_GOALS:
+		var lo := int((gm["layers"] as Array)[0])
+		var hi := int((gm["layers"] as Array)[1])
+		if String(gm["key"]) == goal_key and l >= lo and l <= hi:
+			var pts := int(gm["pts"])
+			_circle_pts_total += pts
+			_circle_check_pts_miles()
+			if not g._selftest:
+				g._saves._save_game()
+				_refresh_circle_page()
+			return pts
+	return 0
+
+
 func _circle_disc_done() -> bool:
 	return _circle_disc_day == _circle_today() and _circle_disc >= Game.CIRCLE_DISC_GOAL
 

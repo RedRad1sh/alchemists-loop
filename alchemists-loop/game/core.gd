@@ -1521,5 +1521,10 @@ func _commit_brew(a: String, b: String) -> Dictionary:
 	# план 2 §3.3.1: варка серверно-известной пары = личное открытие (офлайн —
 	# уйдёт в pending_server, онлайн — зарегистрируется сразу).
 	g._retention._vein_report_pair(a, b, output)
+	# §2.4: очки цели — по факту успеха и фактического слоя; заявка снимается
+	# только здесь (отмена/провал не платят и не сгорают молча — она сбросится
+	# следующим успешным путём или новой модалкой).
+	g._retention._circle_on_goal_brew(output)
+	pending_circle_goal = ""
 	Analytics.track("combine_try", {"left": a, "right": b, "result": "new" if newly_learned else "known", "output": output, "source": "recipe"})
 	return {"failed": false, "output": output, "newly_learned": newly_learned, "milestones": milestones}
