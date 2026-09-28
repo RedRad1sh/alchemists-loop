@@ -186,3 +186,33 @@ static func run(g: Game) -> void:
 	g._retention._vein_finds = sv_finds5
 	Selftest.check("pour: manual flow + idempotency + offline + render",
 		still and poured and nochange and off and renders)
+
+	# ---------- T6: фильтр пар по цели ----------
+	for goal in Game.CIRCLE_GOALS:
+		var key := String(goal["key"])
+		var lo := int((goal["layers"] as Array)[0])
+		var hi := int((goal["layers"] as Array)[1])
+		var pairs := g._engine._goal_pairs_for(key)
+		var in_range := true
+		for p in pairs:
+			var l := g._engine._layer_of(String(p["out"]))
+			if l < lo or l > hi:
+				in_range = false
+		var known_all := true
+		for p in pairs:
+			if not g._engine.known_recipes.has(g._pair_key(String(p["a"]), String(p["b"]))):
+				known_all = false
+		Selftest.check("goal pool %s filtered" % key, in_range and known_all)
+	var total := 0
+	for goal in Game.CIRCLE_GOALS:
+		total += g._engine._goal_pairs_for(String(goal["key"])).size()
+	var known_nonbase := 0
+	for r in g.RECIPES:
+		var k2 := g._pair_key(String(r["a"]), String(r["b"]))
+		if g._engine.known_recipes.has(k2):
+			var l2 := g._engine._layer_of(String(r["out"]))
+			if l2 >= 1:
+				known_nonbase += 1
+	Selftest.check("goal pools cover all known non-base pairs", total == known_nonbase)
+	# z-лестница модалки цели (инвариант модалов >=20)
+	Selftest.check("goal modal z ladder", GoalPicker.DIM_Z >= 20 and GoalPicker.CENTER_Z >= 20)

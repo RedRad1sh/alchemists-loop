@@ -87,6 +87,7 @@ const CIRCLE_LOCAL_POINTS := Balance.CIRCLE_LOCAL_POINTS
 const VEIN_STREAK_CAP := Balance.VEIN_STREAK_CAP
 const VEIN_STREAK_REWARD := Balance.VEIN_STREAK_REWARD
 const VEIN_POINTS_WORLD := Balance.VEIN_POINTS_WORLD
+const CIRCLE_GOALS := Balance.CIRCLE_GOALS
 const WORLD_PAGE_SIZE := Balance.WORLD_PAGE_SIZE
 const PRESTIGE_MIN := Balance.PRESTIGE_MIN
 const OFFLINE_MIN_SEC := Balance.OFFLINE_MIN_SEC
@@ -358,6 +359,7 @@ var _tabs_ref: TabContainer
 var _ui_ready := false
 var _source_col: HBoxContainer
 var _popup: Control
+var _goal_picker: GoalPicker = null
 var _popup_dim: ColorRect = null
 var _popup_orb: ElementOrb
 var _popup_title: Label
@@ -530,6 +532,10 @@ func _ready() -> void:
 			_demo_harness._action_circle = true
 		elif a == "--action=week":
 			_demo_harness._action_week = true
+		elif a == "--action=goal":
+			_demo_harness._action_goal = true
+		elif a == "--action=goals":
+			_demo_harness._action_goals = true
 	for a in args:
 		if a.begins_with("--shot="):
 			_demo_harness._shot_path = a.substr("--shot=".length())
@@ -748,6 +754,24 @@ func _ready() -> void:
 		_pages._select_mode("week")
 		_retention._refresh_week_page()
 		_engine._refresh()
+	if _demo_harness._demo and _demo_harness._action_goal:
+		# кадр модалки выбора цели: собираем пару и открываем режимный экран
+		if _tabs_ref != null:
+			_tabs_ref.current_tab = 0
+		_engine.ether = 100
+		_engine.selected.clear()
+		_engine._place_into_slot("fire", "A")
+		_engine._place_into_slot("water", "B")
+		_on_brew_btn_pressed()
+	if _demo_harness._demo and _demo_harness._action_goals:
+		if _tabs_ref != null:
+			_tabs_ref.current_tab = 0
+		_engine.ether = 100
+		_engine.selected.clear()
+		_engine._place_into_slot("fire", "A")
+		_engine._place_into_slot("water", "B")
+		_on_brew_btn_pressed()
+		_goal_picker.open_goals()
 	if _demo_harness._demo and _demo_harness._action_settings:
 		_hub._open_settings()
 	if _demo_harness._demo and _demo_harness._action_journal:
@@ -1158,7 +1182,7 @@ func _build_brew_bar() -> void:
 
 	_engine._brew_btn = _round_brew_button("ВАРИТЬ")
 	_engine._brew_btn.custom_minimum_size = Vector2(120, 46)
-	_engine._brew_btn.pressed.connect(_engine._brew)
+	_engine._brew_btn.pressed.connect(_on_brew_btn_pressed)
 	row.add_child(_engine._brew_btn)
 	_engine._repeat_btn = _small_button("↻", Vector2(44, 42), 1)
 	_engine._repeat_btn.tooltip_text = "Повторить последнюю пару"
@@ -1526,6 +1550,17 @@ func _hide_popup() -> void:
 	_popup_dim.visible = false
 	_popup.visible = false
 	Sfx.click()
+
+func _on_brew_btn_pressed() -> void:
+	# §2.1: модалка режимов — только когда лунки собраны и варка вообще возможна;
+	# иначе — штатные статус-сообщения _brew про недобор/эфир.
+	if _goal_picker == null:
+		_goal_picker = GoalPicker.new(self)
+		_goal_picker.build()
+	if _engine.selected.size() == 2 and _engine._can_brew() and not _engine.brewing:
+		_goal_picker.open_mode()
+		return
+	_engine._brew()
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Esc закрывает верхний попап

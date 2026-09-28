@@ -492,6 +492,12 @@ func _fit_experiment_overlay() -> void:
 	_set_experiment_picker_field_chrome()
 
 
+func _show_experiment_drawer() -> void:
+	if _experiment_drawer == null or _experiment_drawer.visible:
+		return
+	_toggle_experiment_drawer()
+
+
 func _toggle_experiment_drawer() -> void:
 	if _experiment_drawer == null:
 		return

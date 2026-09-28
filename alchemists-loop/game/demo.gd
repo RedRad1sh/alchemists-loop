@@ -7,6 +7,8 @@ var g: Game
 
 var _action_circle := false
 var _action_week := false
+var _action_goal := false
+var _action_goals := false
 var _shot_path := ""
 var _shot_tab := -1
 var _shot_frame := 0
