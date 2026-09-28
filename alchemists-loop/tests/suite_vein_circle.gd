@@ -1,0 +1,44 @@
+extends RefCounted
+class_name SuiteVeinCircle
+# План 2 (Круг+Жила, клиент): net-endpoint'ы, cycle-кэш, personal finds,
+# капли/pour, выбор цели, ранг-символ, swipe. Герметично: Net в ST всегда
+# дренируется в offline (Global Constraints), поэтому сборка запросов меряет
+# _build_request (шаблон suite_resonance_net.gd:72-80), а обработчики —
+# прямые эмиссии сигналов.
+
+static func run(g: Game) -> void:
+	# ---------- T1: request shapes ----------
+	var b_find := Net._build_request({"kind": "vein_find", "path": "/vein/find",
+		"body": {"device_id": "d1", "pair_key": "earth|fire", "tag": "Туман", "cycle_id": "vc:1"}})
+	Selftest.check("net vein_find route", String(b_find["url"]).ends_with("/vein/find")
+		and int(b_find["method"]) == HTTPClient.METHOD_POST)
+	var b_pour := Net._build_request({"kind": "vein_pour", "path": "/vein/pour",
+		"body": {"device_id": "d1", "idempotency_key": "k1"}})
+	Selftest.check("net vein_pour route", String(b_pour["url"]).ends_with("/vein/pour")
+		and int(b_pour["method"]) == HTTPClient.METHOD_POST)
+	var b_cycle := Net._build_request({"kind": "cycle", "path": "/vein/cycle/status?device_id=d1"})
+	Selftest.check("net cycle route GET", String(b_cycle["url"]).ends_with("/vein/cycle/status?device_id=d1")
+		and int(b_cycle["method"]) == HTTPClient.METHOD_GET)
+	# ---------- T1: dispatch -> сигналы ----------
+	var seen_find: Array = []
+	var cb_find := func(r: Dictionary) -> void: seen_find.append(r)
+	Net.vein_find_result.connect(cb_find)
+	Net._dispatch({"kind": "vein_find"}, {"ok": true, "points": 1, "cap_reached": false})
+	var seen_pour: Array = []
+	var cb_pour := func(r: Dictionary) -> void: seen_pour.append(r)
+	Net.vein_pour_result.connect(cb_pour)
+	Net._dispatch({"kind": "vein_pour"}, {"ok": true, "already_poured": true})
+	var seen_cycle: Array = []
+	var cb_cycle := func(r: Dictionary) -> void: seen_cycle.append(r)
+	Net.cycle_result.connect(cb_cycle)
+	Net._dispatch({"kind": "cycle"}, {"ok": true, "cycle_id": "vc:2", "state": "active"})
+	Net.vein_find_result.disconnect(cb_find)
+	Net.vein_pour_result.disconnect(cb_pour)
+	Net.cycle_result.disconnect(cb_cycle)
+	Selftest.check("net vein dispatch trio", seen_find.size() == 1 and seen_pour.size() == 1
+		and seen_cycle.size() == 1 and String((seen_cycle[0] as Dictionary)["cycle_id"]) == "vc:2")
+	# ---------- T1: вызовы не падают, дренируются в offline ----------
+	Net.vein_find("d1", "earth|fire", "Туман", "vc:1")
+	Net.vein_pour("d1", "k1")
+	Net.cycle_status("d1")
+	Selftest.check("net vein calls drain offline", Net._queue.is_empty() and Net._inflight.is_empty())
