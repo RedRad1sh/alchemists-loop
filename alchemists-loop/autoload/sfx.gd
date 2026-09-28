@@ -1,13 +1,12 @@
 extends Node
-# Весь звук — процедурный, ни одного аудиофайла.
-# SFX: синтез осцилляторов в WAV при старте. Музыка: мягкий эмбиент-луп (Am–F–C–G).
 
 const SR := 22050
 const TAU := 6.283185307
+const UI_DB := -12.0
 
 var music_on := true
-var sfx_volume := 1.0   # 0..1, мастер-громкость эффектов
-var music_volume := 1.0 # 0..1, громкость эмбиента
+var sfx_volume := 1.0
+var music_volume := 1.0
 var _music_player: AudioStreamPlayer
 var _players: Array[AudioStreamPlayer] = []
 var _rr := 0
@@ -19,13 +18,11 @@ func _ready() -> void:
 		add_child(p)
 		_players.append(p)
 	_music_player = AudioStreamPlayer.new()
-	_music_player.volume_db = -14.0 + linear_to_db(maxf(music_volume, 0.001))
+	_music_player.volume_db = linear_to_db(maxf(music_volume, 0.001))
 	add_child(_music_player)
 	_music_player.stream = _build_music()
 	if music_on:
 		_music_player.play()
-
-# ---------- низкоуровневый синтез ----------
 
 func _make_wav(samples: PackedFloat32Array, loop: bool = false) -> AudioStreamWAV:
 	var bytes := PackedByteArray()
@@ -101,13 +98,14 @@ func _play(samples: PackedFloat32Array, vol_db: float = 0.0) -> void:
 	p.stream = _make_wav(samples)
 	p.play()
 
-# ---------- публичные звуки ----------
+func _play_ui(samples: PackedFloat32Array, vol_db: float = 0.0) -> void:
+	_play(samples, vol_db + UI_DB)
 
 func bubble() -> void:
-	_play(_sweep(randf_range(300.0, 640.0), randf_range(160.0, 320.0), 0.08, 0.5))
+	_play_ui(_sweep(randf_range(300.0, 640.0), randf_range(160.0, 320.0), 0.08, 0.5))
 
 func click() -> void:
-	_play(_tone(1250.0, 0.035, 0.18, false))
+	_play_ui(_tone(1250.0, 0.035, 0.18, false))
 
 func divide() -> void:
 	var a := _sweep(220.0, 520.0, 0.22, 0.5)
@@ -118,7 +116,7 @@ func morph() -> void:
 	_play(_sweep(300.0, 900.0, 0.5, 0.3))
 
 func draft_open() -> void:
-	_play(_mix([_tone(440.0, 0.16, 0.22), _tone(660.0, 0.2, 0.18)]))
+	_play_ui(_mix([_tone(440.0, 0.16, 0.22), _tone(660.0, 0.2, 0.18)]))
 
 func legendary() -> void:
 	var parts: Array = []
@@ -126,20 +124,15 @@ func legendary() -> void:
 		parts.append(_tone(f, 0.28, 0.2))
 	_play(_mix(parts), -2.0)
 
-
 func discovery() -> void:
-	# тихий звон открытия вещества/рецепта: два «колокольчика»
 	var a := _bell(784.0, 0.8, 0.12)
 	var b := _bell(1174.7, 1.0, 0.09)
 	_play(_mix([a, b]), -3.0)
 
-
 func mystic() -> void:
-	# мистический звук события мира: восходящее сияние + мерцание высоких
 	var rise := _sweep(330.0, 990.0, 1.4, 0.10)
 	var shimmer := _shimmer()
 	_play(_mix([rise, shimmer]), -2.0)
-
 
 func _bell(freq: float, dur: float, vol: float) -> PackedFloat32Array:
 	var n := int(dur * SR)
@@ -153,7 +146,6 @@ func _bell(freq: float, dur: float, vol: float) -> PackedFloat32Array:
 		v += 0.2 * sin(TAU * freq * 2.99 * t) * (1.0 - t / dur)
 		out[i] = v * env * vol
 	return out
-
 
 func _shimmer() -> PackedFloat32Array:
 	var dur := 1.6
@@ -175,23 +167,21 @@ func stage_up() -> void:
 	_play(_mix(parts), -2.0)
 
 func pet() -> void:
-	_play(_sweep(700.0, 1400.0, 0.12, 0.3))
+	_play_ui(_sweep(700.0, 1400.0, 0.12, 0.3))
 
 func error() -> void:
-	_play(_tone(170.0, 0.14, 0.3, false))
-
-# ---------- фоновая музыка (эмбиент, Am–F–C–G) ----------
+	_play_ui(_tone(170.0, 0.14, 0.3, false))
 
 func _build_music() -> AudioStreamWAV:
-	var secs := 16.0
+	var secs := 24.0
 	var n := int(secs * SR)
 	var out := PackedFloat32Array()
 	out.resize(n)
 	var chords := [
-		[110.0, 130.81, 164.81],   # A2 C3 E3 (Am)
-		[87.31, 110.0, 130.81],    # F2 A2 C3 (F)
-		[130.81, 164.81, 196.0],   # C3 E3 G3 (C)
-		[98.0, 123.47, 146.83]     # G2 B2 D3 (G)
+		[110.0, 130.81, 164.81, 220.0],
+		[87.31, 130.81, 174.61, 261.63],
+		[130.81, 164.81, 196.0, 261.63],
+		[98.0, 146.83, 196.0, 246.94]
 	]
 	var chord_len := int(secs / 4.0 * SR)
 	for ci in 4:
@@ -199,13 +189,14 @@ func _build_music() -> AudioStreamWAV:
 		for i in chord_len:
 			var t := float(i) / SR
 			var seg := float(i) / float(chord_len)
-			var env: float = minf(seg * 6.0, 1.0) * minf((1.0 - seg) * 6.0 + 0.15, 1.0)
-			env = maxf(env, 0.0)
+			var env := pow(sin(PI * seg), 1.2)
 			var v := 0.0
 			for f in freqs:
-				v += sin(TAU * f * t) * 0.55
-				v += sin(TAU * f * 2.0 * t) * 0.12
-			out[ci * chord_len + i] = v * env * 0.055
+				v += sin(TAU * f * t) * 0.45
+				v += sin(TAU * (f * 1.008) * t) * 0.18
+				v += sin(TAU * (f * 0.992) * t) * 0.18
+				v += sin(TAU * f * 2.0 * t) * 0.1
+			out[ci * chord_len + i] = v * env * 0.12
 	return _make_wav(out, true)
 
 func toggle_music() -> bool:
@@ -221,4 +212,4 @@ func set_sfx_volume(v: float) -> void:
 
 func set_music_volume(v: float) -> void:
 	music_volume = clampf(v, 0.0, 1.0)
-	_music_player.volume_db = -14.0 + linear_to_db(maxf(music_volume, 0.001))
+	_music_player.volume_db = 1.0 + linear_to_db(maxf(music_volume, 0.001))

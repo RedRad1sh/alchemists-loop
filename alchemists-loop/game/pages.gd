@@ -105,6 +105,7 @@ func _add_lab_reagent_cell(item_id: String) -> void:
 	cell.add_child(cell_content)
 	var orb := g._make_orb(item_id, 28)
 	orb.count = 0
+	orb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	orb.tapped.connect(g._engine._on_item_tapped.bind(item_id))
 	orb.drag_started.connect(g._engine._on_orb_drag_started.bind(item_id))
 	orb.drag_ended.connect(g._engine._on_orb_drag_ended.bind(item_id))
@@ -208,8 +209,11 @@ func _build_lab(page: VBoxContainer) -> void:
 	grid.add_theme_constant_override("v_separation", 6)
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	page.add_child(grid)
+	# Добавляем только элементы, которые игрок уже открыл (есть в inventory)
 	for raw_id in g.ITEMS:
-		_add_lab_reagent_cell(String(raw_id))
+		var item_id := String(raw_id)
+		if g._engine.inventory.has(item_id):
+			_add_lab_reagent_cell(item_id)
 
 	# отступ под закреплённую панель «ВАРИТЬ»
 	var bottom_pad := Control.new()

@@ -51,10 +51,12 @@ func _build_shop_popup() -> void:
 	_dim.name = "ShopDim"
 	_dim.color = Color(0, 0, 0, 0.62)
 	_dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_dim.z_index = 20
 	_dim.visible = false
 	g.add_child(_dim)
 	_popup = CenterContainer.new()
 	_popup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_popup.z_index = 21
 	_popup.visible = false
 	g.add_child(_popup)
 	var card := PanelContainer.new()
