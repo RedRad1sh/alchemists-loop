@@ -643,11 +643,13 @@ func _build_return_popup() -> void:
 	dim.name = "ReturnDim"
 	dim.color = Color(0, 0, 0, 0.6)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.z_index = 20
 	dim.visible = false
 	g.add_child(dim)
 	_return_dim = dim
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.z_index = 21
 	center.visible = false
 	g.add_child(center)
 	_return_popup = center

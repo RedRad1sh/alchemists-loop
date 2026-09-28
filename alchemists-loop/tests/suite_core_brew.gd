@@ -51,7 +51,14 @@ static func run(g: Game) -> void:
 
 	# орбы-источники и ячейки
 	Selftest.check("source orbs 4", g._engine._source_orbs.size() == 4)
-	Selftest.check("item orbs 57", g._engine._item_orbs.size() == 57)
+	# Каждый предмет инвентаря обязан иметь ячейку-орб (e248b61: cells создаются
+	# только для известных игроку веществ).
+	# MUTATION: убрать _add_lab_reagent_cell для нового предмета — краснеет.
+	var orbs_cover := true
+	for raw_id in g._engine.inventory:
+		if not g._engine._item_orbs.has(String(raw_id)):
+			orbs_cover = false
+	Selftest.check("item orbs cover inventory", orbs_cover)
 	Selftest.check("slots exist", g._engine._slot_a != null and g._engine._slot_b != null)
 	Selftest.check("brew disabled no pair", g._engine._can_brew() == false)
 
@@ -68,9 +75,15 @@ static func run(g: Game) -> void:
 	g._engine.inventory["water"] = 5
 	g._engine.ether = 100
 	var e0 := g._engine.ether
+	var lv0 := g._spirit._companion_level
 	await g._engine._brew()
+	# Level-up during brew grants 20*lv each step (spirit.gd); the assertion is
+	# about the brew CHARGE, so subtract those grants back out.
+	var lv_grant := 0
+	for k in range(lv0 + 1, g._spirit._companion_level + 1):
+		lv_grant += 20 * k
 	Selftest.check("brew steam", int(g._engine.inventory.get("steam", 0)) == 1 and g._engine.successes == 1)
-	Selftest.check("brew cost", g._engine.ether <= e0 - Game.BREW_COST + 1)
+	Selftest.check("brew cost", g._engine.ether - lv_grant <= e0 - Game.BREW_COST + 1)
 	Selftest.check("known recipe loses surcharge", g._engine._pair_cost("fire", "water") == Game.BREW_COST)
 
 	# неудача + возврат
