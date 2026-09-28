@@ -670,31 +670,7 @@ func _collect(item_id: String, silent := false) -> void:
 	Analytics.track("tap_source", {"element": item_id, "amount": gained})
 	g._saves._save_game()
 
-var pending_circle_goal := ""
-
-func _goal_pairs_for(goal_key: String) -> Array:
-	# §2.1: пул = известные игроку пары, у которых слой выхода в диапазоне цели
-	var goal := {}
-	for gm in Game.CIRCLE_GOALS:
-		if String(gm["key"]) == goal_key:
-			goal = gm
-	if goal.is_empty():
-		return []
-	var lo := int((goal["layers"] as Array)[0])
-	var hi := int((goal["layers"] as Array)[1])
-	var out: Array = []
-	for r in g.RECIPES:
-		var key := g._pair_key(String(r["a"]), String(r["b"]))
-		if not known_recipes.has(key):
-			continue
-		var l := _layer_of(String(r["out"]))
-		if l >= lo and l <= hi:
-			out.append({"a": String(r["a"]), "b": String(r["b"]), "out": String(r["out"]), "layer": l})
-	out.sort_custom(func(x, y):
-		if int(x["layer"]) != int(y["layer"]):
-			return int(x["layer"]) < int(y["layer"])
-		return String(x["out"]) < String(y["out"]))
-	return out
+var _brew_epoch := 0  # инкрементируется при старте варки; отменяет зависшие async-пути
 
 func _can_brew() -> bool:
 	# U9 (T11): верстак — тоже потребляющая трасса, ручная варка с ним не совмещается.
@@ -1525,6 +1501,5 @@ func _commit_brew(a: String, b: String) -> Dictionary:
 	# только здесь (отмена/провал не платят и не сгорают молча — она сбросится
 	# следующим успешным путём или новой модалкой).
 	g._retention._circle_on_goal_brew(output)
-	pending_circle_goal = ""
 	Analytics.track("combine_try", {"left": a, "right": b, "result": "new" if newly_learned else "known", "output": output, "source": "recipe"})
 	return {"failed": false, "output": output, "newly_learned": newly_learned, "milestones": milestones}

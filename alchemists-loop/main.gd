@@ -361,7 +361,6 @@ var _tabs_ref: TabContainer
 var _ui_ready := false
 var _source_col: HBoxContainer
 var _popup: Control
-var _goal_picker: GoalPicker = null
 var _popup_dim: ColorRect = null
 var _popup_orb: ElementOrb
 var _popup_title: Label
@@ -773,7 +772,6 @@ func _ready() -> void:
 		_engine._place_into_slot("fire", "A")
 		_engine._place_into_slot("water", "B")
 		_on_brew_btn_pressed()
-		_goal_picker.open_goals()
 	if _demo_harness._demo and _demo_harness._action_settings:
 		_hub._open_settings()
 	if _demo_harness._demo and _demo_harness._action_journal:
@@ -1574,14 +1572,6 @@ func _on_popup_card_input(ev: InputEvent) -> void:
 	# предикат общий и покрыт кейсом swipe-предиката.
 
 func _on_brew_btn_pressed() -> void:
-	# §2.1: модалка режимов — только когда лунки собраны и варка вообще возможна;
-	# иначе — штатные статус-сообщения _brew про недобор/эфир.
-	if _goal_picker == null:
-		_goal_picker = GoalPicker.new(self)
-		_goal_picker.build()
-	if _engine.selected.size() == 2 and _engine._can_brew() and not _engine.brewing:
-		_goal_picker.open_mode()
-		return
 	_engine._brew()
 
 func _unhandled_input(event: InputEvent) -> void:

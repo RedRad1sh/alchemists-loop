@@ -38,6 +38,7 @@ var _vein_finds: Array = []
 var _unlocked_titles: Array = []
 var _active_title := ""
 var _cycle_prev_state := ""
+var _circle_intro_shown := false
 
 func _init(game: Game) -> void:
 	g = game
@@ -158,24 +159,35 @@ func _circle_on_local_brew(output: String) -> void:
 
 
 func _circle_on_goal_brew(output: String) -> int:
-	# §2.4: очки за цель начисляются ПОСЛЕ успешной варки и по ФАКТИЧЕСКОМУ
-	# слою результата; пустая заявка (авто/верстак/эксперимент) не платит.
-	var goal_key := g._engine.pending_circle_goal
-	if goal_key == "" or output == "":
+	# §2.4: очки Круга начисляются ПОСЛЕ успешной варки по ФАКТИЧЕСКОМУ слою результата.
+	# Цель определяется автоматически (без модалки): fast/middle/deep по слою выхода.
+	if output == "":
 		return 0
 	var l := g._engine._layer_of(output)
 	for gm in Game.CIRCLE_GOALS:
 		var lo := int((gm["layers"] as Array)[0])
 		var hi := int((gm["layers"] as Array)[1])
-		if String(gm["key"]) == goal_key and l >= lo and l <= hi:
+		if l >= lo and l <= hi:
 			var pts := int(gm["pts"])
 			_circle_pts_total += pts
 			_circle_check_pts_miles()
 			if not g._selftest:
 				g._saves._save_game()
 				_refresh_circle_page()
+				# Тост "+N очка Круга"
+				_show_circle_toast("+%d очка Круга" % pts)
 			return pts
 	return 0
+
+
+func _show_circle_toast(text: String) -> void:
+	# Тост "+N очка Круга" — показывается на 3 сек над котлом
+	if g._engine.status_text != "":
+		return  # не перекрываем другие статусы
+	g._engine.status_text = text
+	await g.get_tree().create_timer(3.0).timeout
+	if g._engine.status_text == text:
+		g._engine.status_text = ""
 
 
 func _circle_disc_done() -> bool:
@@ -374,6 +386,14 @@ func _refresh_circle_page() -> void:
 	for child in _circle_list.get_children():
 		_circle_list.remove_child(child)
 		child.queue_free()
+	# Баннер при первом открытии страницы Круга
+	if not _circle_intro_shown and not g._selftest:
+		_circle_intro_shown = true
+		g._saves._save_game()
+		var intro := g._label("Варь рецепты — получай очки Круга. Чем глубже слой, тем больше очков.", 12)
+		intro.add_theme_color_override("font_color", Color(1.0, 0.85, 0.42))
+		intro.autowrap_mode = TextServer.AUTOWRAP_WORD
+		_circle_list.add_child(intro)
 	# §2.2: символ-ранг + титул — первой строкой страницы
 	var rank_row := HBoxContainer.new()
 	rank_row.name = "CircleRankRow"

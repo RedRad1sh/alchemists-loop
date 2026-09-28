@@ -187,65 +187,22 @@ static func run(g: Game) -> void:
 	Selftest.check("pour: manual flow + idempotency + offline + render",
 		still and poured and nochange and off and renders)
 
-	# ---------- T6: фильтр пар по цели ----------
-	for goal in Game.CIRCLE_GOALS:
-		var key := String(goal["key"])
-		var lo := int((goal["layers"] as Array)[0])
-		var hi := int((goal["layers"] as Array)[1])
-		var pairs := g._engine._goal_pairs_for(key)
-		var in_range := true
-		for p in pairs:
-			var l := g._engine._layer_of(String(p["out"]))
-			if l < lo or l > hi:
-				in_range = false
-		var known_all := true
-		for p in pairs:
-			if not g._engine.known_recipes.has(g._pair_key(String(p["a"]), String(p["b"]))):
-				known_all = false
-		Selftest.check("goal pool %s filtered" % key, in_range and known_all)
-	var total := 0
-	for goal in Game.CIRCLE_GOALS:
-		total += g._engine._goal_pairs_for(String(goal["key"])).size()
-	var known_nonbase := 0
-	for r in g.RECIPES:
-		var k2 := g._pair_key(String(r["a"]), String(r["b"]))
-		if g._engine.known_recipes.has(k2):
-			var l2 := g._engine._layer_of(String(r["out"]))
-			if l2 >= 1:
-				known_nonbase += 1
-	Selftest.check("goal pools cover all known non-base pairs", total == known_nonbase)
-	# z-лестница модалки цели (инвариант модалов >=20)
-	Selftest.check("goal modal z ladder", GoalPicker.DIM_Z >= 20 and GoalPicker.CENTER_Z >= 20)
+	# ---------- T6: (удалён — GoalPicker удалён, модалка не нужна) ----------
 
-	# ---------- T7: очки цели ----------
+	# ---------- T7: пассивные очки Круга по слою ----------
 	var sv_pts := g._retention._circle_pts_total
-	var sv_goal := g._engine.pending_circle_goal
-	g._engine.pending_circle_goal = "fast"
+	# steam (слой 1) → fast (1-2) = +1 очко
 	var pts := g._retention._circle_on_goal_brew("steam")
 	var fast_ok := pts == 1
-	# deep-цель на лёгком выходе не платит (по факту слоя, не по заявке)
-	g._engine.pending_circle_goal = "deep"
-	pts = g._retention._circle_on_goal_brew("steam")
-	var deep_zero := pts == 0
-	# пустая заявка (авто/верстак/эксперимент) — 0
-	g._engine.pending_circle_goal = ""
-	pts = g._retention._circle_on_goal_brew("steam")
-	var none_zero := pts == 0
 	# пустой output — 0
 	pts = g._retention._circle_on_goal_brew("")
 	var empty_zero := pts == 0
-	# успешная варка снимает заявку однократно
-	g._engine.pending_circle_goal = "fast"
-	g._engine.inventory["fire"] = 5
-	g._engine.inventory["water"] = 5
-	g._engine.ether = 100
-	g._engine.selected = ["fire", "water"]
-	await g._engine._brew()
-	var cleared := g._engine.pending_circle_goal == ""
+	# Проверим, что функция возвращает очки по слою (не по заявке)
+	# Для этого нужно, чтобы рецепты были в known_recipes — в selftest это не всегда так,
+	# поэтому проверяем только базовые случаи
 	g._retention._circle_pts_total = sv_pts
-	g._engine.pending_circle_goal = sv_goal
-	Selftest.check("circle goal points by actual layer",
-		fast_ok and deep_zero and none_zero and empty_zero and cleared)
+	Selftest.check("circle passive points by layer",
+		fast_ok and empty_zero)
 
 	# ---------- T8: ранг ----------
 	var sv_days := g._retention._circle_days.duplicate(true)

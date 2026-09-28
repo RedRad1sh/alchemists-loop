@@ -130,6 +130,7 @@ func _save_game() -> void:
 		"vein_pending_finds": g._retention._vein_finds,
 		"unlocked_titles": g._retention._unlocked_titles,
 		"active_title": g._retention._active_title,
+		"circle_intro_shown": g._retention._circle_intro_shown,
 		"server_tags": g._online._server_tag,
 		"fair_regen_total": g._retention._fair_regen_total,
 		"fair_local_week": g._retention._fair_local_week,
@@ -410,6 +411,7 @@ func _load_game() -> void:
 		for t in data["unlocked_titles"]:
 			g._retention._unlocked_titles.append(String(t))
 	g._retention._active_title = String(data.get("active_title", ""))
+	g._retention._circle_intro_shown = bool(data.get("circle_intro_shown", false))
 	g._online._server_tag.clear()
 	if data.get("server_tags") is Dictionary:
 		for k in data["server_tags"]:
