@@ -151,3 +151,38 @@ static func run(g: Game) -> void:
 	g._online._server_recipes = sv_sr
 	Selftest.check("personal find: route/dedup/tag/cap-grant/mismatch-recreate/drop",
 		pf1 and pf2 and pf3 and pf4 and reg and remade and dropped)
+
+	# ---------- T5: pour ----------
+	var sv_cycle5: Dictionary = g._retention._cycle_cache.duplicate(true)
+	var sv_finds5: Array = g._retention._vein_finds.duplicate(true)
+	g._retention._cycle_cache = {"cycle_id": "vc:P", "tag1": "Туман", "state": "active"}
+	g._retention._vein_finds = [{"id": "p1", "tag": "Туман", "points": 1, "found_at": 1,
+		"pair_key": "a|b", "cycle_id": "vc:P", "status": "registered", "server_response": {}}]
+	g._retention._vein_pour("p1")
+	var still := String((g._retention._vein_finds[0] as Dictionary)["status"]) == "registered"
+	Net.vein_pour_result.emit("p1", {"ok": true, "already_poured": false})
+	var poured := String((g._retention._vein_finds[0] as Dictionary)["status"]) == "poured"
+	# повторный pour залитой капли — no-op, ответ идемпотентен
+	g._retention._vein_pour("p1")
+	Net.vein_pour_result.emit("p1", {"ok": true, "already_poured": true})
+	var nochange := String((g._retention._vein_finds[0] as Dictionary)["status"]) == "poured"
+	# offline-ответ не переводит
+	g._retention._vein_finds[0]["status"] = "registered"
+	Net.vein_pour_result.emit("p1", {"ok": false, "offline": true})
+	var off := String((g._retention._vein_finds[0] as Dictionary)["status"]) == "registered"
+	# rendering: ряды капель по числу записей текущего цикла
+	var sv_week5: Dictionary = g._retention._week_cache.duplicate(true)
+	g._retention._week_cache = {"week": "2026-W40", "vein": {"tag1": "Туман", "spread": false,
+		"my_hits": 1, "my_streaks": 0, "streak_cap": 5}, "fair": {}}
+	var host5 := VBoxContainer.new()
+	g._retention._build_week_page(host5)
+	var drop_rows := 0
+	for c in g._retention._week_list.get_children():
+		if String(c.name).begins_with("VeinDropRow"):
+			drop_rows += 1
+	var renders := drop_rows == 1
+	g._retention._week_cache = sv_week5
+	g._retention._cycle_cache = sv_cycle5
+	g._retention._vein_finds = sv_finds5
+	Selftest.check("pour: manual flow + idempotency + offline + render",
+		still and poured and nochange and off and renders)

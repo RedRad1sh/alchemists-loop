@@ -580,6 +580,7 @@ func _ready() -> void:
 	# гейтят offline/ok, а ST эмитит сигналы напрямую (suite_vein_circle).
 	Net.cycle_result.connect(_retention._on_net_cycle_result)
 	Net.vein_find_result.connect(_retention._on_net_vein_find_result)
+	Net.vein_pour_result.connect(_retention._on_net_vein_pour_result)
 	_init_new_game()
 	_saves._load_game()
 	_build_ui()
@@ -721,6 +722,12 @@ func _ready() -> void:
 		_engine._refresh()
 	if _demo_harness._demo and _demo_harness._action_circle:
 		_retention._inject_circle_demo()
+		# страница «Круг» открывается с 20 веществ — демо-доливка до гейта
+		for cid in ITEMS.keys():
+			if _engine.inventory.size() >= 22:
+				break
+			if not _engine.inventory.has(String(cid)):
+				_engine.inventory[String(cid)] = 1
 		if _tabs_ref != null:
 			_tabs_ref.current_tab = 5
 		_pages._ensure_modes()
@@ -729,6 +736,12 @@ func _ready() -> void:
 		_engine._refresh()
 	if _demo_harness._demo and _demo_harness._action_week:
 		_retention._inject_week_demo()
+		# страница «Неделя» открывается с 30 веществ — демо-доливка до гейта
+		for wid in ITEMS.keys():
+			if _engine.inventory.size() >= 32:
+				break
+			if not _engine.inventory.has(String(wid)):
+				_engine.inventory[String(wid)] = 1
 		if _tabs_ref != null:
 			_tabs_ref.current_tab = 5
 		_pages._ensure_modes()

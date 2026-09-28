@@ -579,6 +579,40 @@ func _on_net_vein_find_result(pair_key: String, result: Dictionary) -> void:
 	_refresh_week_page()
 
 
+func _vein_tag_slug(tag: String) -> String:
+	# тег → любое вещество с этим тегом (для цвета капли); "" если нет
+	for slug in g._online._server_tag:
+		if String(g._online._server_tag[slug]) == tag:
+			return String(slug)
+	return ""
+
+
+func _vein_pour(find_id: String) -> void:
+	if not Net.is_available() or g._online._device_id == "":
+		g._engine.status_text = "Вливание ждёт связи с миром."
+		Sfx.error()
+		return
+	for f in _vein_finds:
+		if typeof(f) == TYPE_DICTIONARY and String(f.get("id", "")) == find_id:
+			if String(f.get("status", "")) != "registered":
+				return
+			Net.vein_pour(g._online._device_id, find_id)
+			return
+
+
+func _on_net_vein_pour_result(find_id: String, result: Dictionary) -> void:
+	if result.get("ok", false) != true:
+		return
+	for f in _vein_finds:
+		if typeof(f) == TYPE_DICTIONARY and String(f.get("id", "")) == find_id:
+			if String(f.get("status", "")) == "registered":
+				f["status"] = "poured"
+				Analytics.track("vein_pour", {"tag": String(f.get("tag", "")), "manual": true})
+			break
+	g._saves._save_game()
+	_refresh_week_page()
+
+
 func _week_fair() -> Dictionary:
 	var f = _week_cache.get("fair", {})
 	return f if typeof(f) == TYPE_DICTIONARY else {}
@@ -781,6 +815,39 @@ func _refresh_week_page() -> void:
 	_week_list.add_child(g._label("Твоих находок в жиле: %d · прожилки: %d/%d · +кап от жилы: %d" % [
 		int(v.get("my_hits", 0)), int(v.get("my_streaks", 0)),
 		int(v.get("streak_cap", 5)), _vein_cap_total], 13))
+	# капли жилы (план 2): по одной на find текущего цикла (R1/R3)
+	var cyc_now := String(_cycle_cache.get("cycle_id", ""))
+	for f in _vein_finds:
+		if typeof(f) != TYPE_DICTIONARY:
+			continue
+		if cyc_now != "" and String(f.get("cycle_id", "")) != cyc_now:
+			continue
+		var st := String(f.get("status", ""))
+		var out_slug := _vein_tag_slug(String(f.get("tag", "")))
+		var row := HBoxContainer.new()
+		row.name = "VeinDropRow"
+		row.add_theme_constant_override("separation", 8)
+		var drop := VeinDrop.new()
+		drop.setup(g._item_colors.get(out_slug, Color(0.6, 0.75, 0.9)), st)
+		row.add_child(drop)
+		var fl := g._label("", 13)
+		var who := "мировая" if String(f.get("id", "")).begins_with("wf-") else "личная"
+		match st:
+			"pending_server":
+				fl.text = "%s · «%s» · %d очк. — Ждёт связи" % [who, String(f.get("tag", "")), int(f.get("points", 1))]
+			"registered":
+				fl.text = "%s · «%s» · %d очк." % [who, String(f.get("tag", "")), int(f.get("points", 1))]
+			_:
+				fl.text = "%s · «%s» — влита ✓" % [who, String(f.get("tag", ""))]
+		fl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		fl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		row.add_child(fl)
+		if st == "registered":
+			var pb := g._small_button("Влить", Vector2(96, 40), 2)
+			pb.pressed.connect(_vein_pour.bind(String(f["id"])))
+			row.add_child(pb)
+		_week_list.add_child(row)
 	var f := _week_fair()
 	var ft := g._label("Ярмарка: котёл «%s»" % g._clean_str(f.get("tag", "?")), 14)
 	ft.add_theme_color_override("font_color", Color(1.0, 0.85, 0.42))
@@ -827,3 +894,12 @@ func _inject_week_demo() -> void:
 	_vein_cap_total = 4
 	_fair_regen_total = 0.05
 	_week_offline = false
+	_cycle_cache = {"cycle_id": "vc:demo", "tag1": "Свет", "state": "spread", "world_finds": 9,
+		"my_points": 4, "my_streak": 2, "spread_threshold": 12, "started_at": "2026-09-20T00:00:00"}
+	_vein_finds = [
+		{"id": "wf-vc:demo", "tag": "Свет", "points": 2, "found_at": 0, "pair_key": "a|b",
+			"cycle_id": "vc:demo", "status": "registered", "server_response": {}},
+		{"id": "p-vc:demo", "tag": "Тьма", "points": 1, "found_at": 0, "pair_key": "c|d",
+			"cycle_id": "vc:demo", "status": "pending_server", "server_response": {}},
+		{"id": "wf-done", "tag": "Свет", "points": 2, "found_at": 0, "pair_key": "e|f",
+			"cycle_id": "vc:demo", "status": "poured", "server_response": {}}]
