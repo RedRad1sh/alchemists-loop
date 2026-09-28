@@ -897,7 +897,7 @@ func _refresh_week_page() -> void:
 		drop.setup(g._item_colors.get(out_slug, Color(0.6, 0.75, 0.9)), st)
 		row.add_child(drop)
 		var fl := g._label("", 13)
-		var who := "мировая" if String(f.get("id", "")).begins_with("wf-") else "личная"
+		var who := "Открытие мира" if String(f.get("id", "")).begins_with("wf-") else "Твоё открытие"
 		match st:
 			"pending_server":
 				fl.text = "%s · «%s» · %d очк. — Ждёт связи" % [who, String(f.get("tag", "")), int(f.get("points", 1))]

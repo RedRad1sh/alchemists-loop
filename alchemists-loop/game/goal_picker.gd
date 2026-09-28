@@ -43,7 +43,7 @@ func is_open() -> bool:
 
 func open_mode() -> void:
 	_clear()
-	_title("Варка: как варируем?")
+	_title("Цель варки")
 	var b1 := g._small_button("По рецепту", Vector2(0, 46), 1)
 	b1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b1.pressed.connect(open_goals)
@@ -65,7 +65,7 @@ func open_goals() -> void:
 		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tb.disabled = pool.is_empty()
 		if pool.is_empty():
-			var hint := g._label("Нет доступных пар этого слоя", 11)
+			var hint := g._label("Нет пар такой глубины", 11)
 			hint.add_theme_color_override("font_color", Color(0.62, 0.74, 0.82))
 			row.add_child(tb)
 			row.add_child(hint)
