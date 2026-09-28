@@ -84,6 +84,12 @@ const CANDIDATE_COOLDOWN := Balance.CANDIDATE_COOLDOWN
 const NET_NICK := Balance.NET_NICK
 const CHALLENGE_REWARD := Balance.CHALLENGE_REWARD
 const CIRCLE_LOCAL_POINTS := Balance.CIRCLE_LOCAL_POINTS
+const VEIN_STREAK_CAP := Balance.VEIN_STREAK_CAP
+const VEIN_STREAK_REWARD := Balance.VEIN_STREAK_REWARD
+const VEIN_POINTS_WORLD := Balance.VEIN_POINTS_WORLD
+const CIRCLE_GOALS := Balance.CIRCLE_GOALS
+const CIRCLE_RANKS := Balance.CIRCLE_RANKS
+const CIRCLE_DECOR_REWARDS := Balance.CIRCLE_DECOR_REWARDS
 const WORLD_PAGE_SIZE := Balance.WORLD_PAGE_SIZE
 const PRESTIGE_MIN := Balance.PRESTIGE_MIN
 const OFFLINE_MIN_SEC := Balance.OFFLINE_MIN_SEC
@@ -527,6 +533,10 @@ func _ready() -> void:
 			_demo_harness._action_circle = true
 		elif a == "--action=week":
 			_demo_harness._action_week = true
+		elif a == "--action=goal":
+			_demo_harness._action_goal = true
+		elif a == "--action=goals":
+			_demo_harness._action_goals = true
 	for a in args:
 		if a.begins_with("--shot="):
 			_demo_harness._shot_path = a.substr("--shot=".length())
@@ -567,11 +577,17 @@ func _ready() -> void:
 		Net.fair_brew_result.connect(_retention._on_net_fair_brew_result)
 		Net.fair_claim_result.connect(_retention._on_net_fair_claim_result)
 		Net.week_status(_online._device_id)
+		Net.cycle_status(_online._device_id)
 		# #8: доводка удаления аккаунта. Хендлер чистит маркер при ok; ретрай
 		# поднимает незавершённое удаление прошлой сессии (маркер переживает
 		# вайп). В селфтесте блок не выполняется: _net_enabled = not _selftest.
 		Net.account_delete_result.connect(_online._on_account_delete_result)
 		_online._retry_pending_account_delete()
+	# План 2 (жила/круг): connects вне _net_enabled-блока — хендлеры сами
+	# гейтят offline/ok, а ST эмитит сигналы напрямую (suite_vein_circle).
+	Net.cycle_result.connect(_retention._on_net_cycle_result)
+	Net.vein_find_result.connect(_retention._on_net_vein_find_result)
+	Net.vein_pour_result.connect(_retention._on_net_vein_pour_result)
 	_init_new_game()
 	_saves._load_game()
 	_build_ui()
@@ -713,6 +729,12 @@ func _ready() -> void:
 		_engine._refresh()
 	if _demo_harness._demo and _demo_harness._action_circle:
 		_retention._inject_circle_demo()
+		# страница «Круг» открывается с 20 веществ — демо-доливка до гейта
+		for cid in ITEMS.keys():
+			if _engine.inventory.size() >= 22:
+				break
+			if not _engine.inventory.has(String(cid)):
+				_engine.inventory[String(cid)] = 1
 		if _tabs_ref != null:
 			_tabs_ref.current_tab = 5
 		_pages._ensure_modes()
@@ -721,12 +743,35 @@ func _ready() -> void:
 		_engine._refresh()
 	if _demo_harness._demo and _demo_harness._action_week:
 		_retention._inject_week_demo()
+		# страница «Неделя» открывается с 30 веществ — демо-доливка до гейта
+		for wid in ITEMS.keys():
+			if _engine.inventory.size() >= 32:
+				break
+			if not _engine.inventory.has(String(wid)):
+				_engine.inventory[String(wid)] = 1
 		if _tabs_ref != null:
 			_tabs_ref.current_tab = 5
 		_pages._ensure_modes()
 		_pages._select_mode("week")
 		_retention._refresh_week_page()
 		_engine._refresh()
+	if _demo_harness._demo and _demo_harness._action_goal:
+		# кадр модалки выбора цели: собираем пару и открываем режимный экран
+		if _tabs_ref != null:
+			_tabs_ref.current_tab = 0
+		_engine.ether = 100
+		_engine.selected.clear()
+		_engine._place_into_slot("fire", "A")
+		_engine._place_into_slot("water", "B")
+		_on_brew_btn_pressed()
+	if _demo_harness._demo and _demo_harness._action_goals:
+		if _tabs_ref != null:
+			_tabs_ref.current_tab = 0
+		_engine.ether = 100
+		_engine.selected.clear()
+		_engine._place_into_slot("fire", "A")
+		_engine._place_into_slot("water", "B")
+		_on_brew_btn_pressed()
 	if _demo_harness._demo and _demo_harness._action_settings:
 		_hub._open_settings()
 	if _demo_harness._demo and _demo_harness._action_journal:
@@ -1136,8 +1181,9 @@ func _build_brew_bar() -> void:
 		_engine._source_orbs[item_id] = orb
 
 	_engine._brew_btn = _round_brew_button("ВАРИТЬ")
-	_engine._brew_btn.custom_minimum_size = Vector2(120, 46)
-	_engine._brew_btn.pressed.connect(_engine._brew)
+	_engine._brew_btn.custom_minimum_size = Vector2(140, 52)  # увеличен hitbox
+	_engine._brew_btn.mouse_filter = Control.MOUSE_FILTER_STOP  # явный приём кликов
+	_engine._brew_btn.pressed.connect(_on_brew_btn_pressed)
 	row.add_child(_engine._brew_btn)
 	_engine._repeat_btn = _small_button("↻", Vector2(44, 42), 1)
 	_engine._repeat_btn.tooltip_text = "Повторить последнюю пару"
@@ -1312,8 +1358,8 @@ func _round_brew_button(text: String) -> Button:
 	b.text = text
 	# Большая кнопка остаётся только для главного действия, но больше не
 	# занимает пол-экрана: touch-зона сохраняется через сам Control.
-	b.custom_minimum_size = Vector2(136, 46)
-	b.pivot_offset = Vector2(68, 23)
+	b.custom_minimum_size = Vector2(140, 52)  # увеличен hitbox для надёжного клика
+	b.pivot_offset = Vector2(70, 26)
 	b.add_theme_font_size_override("font_size", 16)
 	if _font_semi != null:
 		b.add_theme_font_override("font", _font_semi)
@@ -1459,6 +1505,7 @@ func _build_popup() -> void:
 	close.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	close.pressed.connect(_hide_popup)
 	actions.add_child(close)
+	card.gui_input.connect(_on_popup_card_input)
 	_popup = center
 
 func _show_challenge_win_popup(item_id: String, target_name: String, a: String, b: String, first: bool = false) -> void:
@@ -1505,6 +1552,28 @@ func _hide_popup() -> void:
 	_popup_dim.visible = false
 	_popup.visible = false
 	Sfx.click()
+
+var _popup_swipe_start := Vector2.ZERO
+
+func _on_popup_card_input(ev: InputEvent) -> void:
+	if ev is InputEventMouseButton:
+		var mb := ev as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			if mb.pressed:
+				_popup_swipe_start = mb.position
+			elif UiGestures.swipe_closes(mb.position - _popup_swipe_start):
+				_hide_popup()
+	elif ev is InputEventScreenTouch:
+		var st := ev as InputEventScreenTouch
+		if st.pressed:
+			_popup_swipe_start = st.position
+		elif UiGestures.swipe_closes(st.position - _popup_swipe_start):
+			_hide_popup()
+	# touch-ветка — guarded-untested: headless-прогон не эмулирует ScreenTouch;
+	# предикат общий и покрыт кейсом swipe-предиката.
+
+func _on_brew_btn_pressed() -> void:
+	_engine._brew()
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Esc закрывает верхний попап

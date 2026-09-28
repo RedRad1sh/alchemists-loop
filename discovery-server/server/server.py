@@ -324,7 +324,7 @@ class DiscoverResponse(BaseModel):
     status: str = "created"  # created | known | not_combinable | unavailable
     message: str
     challenge: Optional[dict] = None  # состояние ежедневной цели: {won, first, target_name}
-    vein: Optional[dict] = None  # бонус жилы: {tag, points, streak} | None
+    vein: Optional[dict] = None  # бонус жилы: {points, streak_added, streak_count, cap_reached} | None
 
 class EventData(BaseModel):
     pair_key: str
@@ -627,6 +627,48 @@ class ReceiptVerifyResponse(BaseModel):
     receipt_hash: str = ""  # SHA-256 токена: клиент сверяет ответ со своим запросом
 
 
+class VeinFindRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    pair_key: str = Field(..., min_length=1, max_length=256)
+    tag: str = Field(..., min_length=1, max_length=64)
+    cycle_id: str = Field(..., min_length=1, max_length=128)
+
+
+class VeinFindResponse(BaseModel):
+    ok: bool
+    points: int = 0
+    streak_added: bool = False
+    streak_count: int = 0
+    cap_reached: bool = False
+    cycle_id: str = ""
+    error: str = ""
+
+
+class VeinPourRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    idempotency_key: str = Field(..., min_length=1, max_length=256)
+
+
+class VeinPourResponse(BaseModel):
+    ok: bool
+    already_poured: bool = False
+
+
+class CycleStatusResponse(BaseModel):
+    ok: bool
+    cycle_id: str = ""
+    tag1: str = ""
+    tag2: Optional[str] = None
+    state: str = ""
+    world_finds: int = 0
+    my_points: int = 0
+    my_streak: int = 0
+    # план 2 R5 (аддитивно): начало цикла и порог — клиенту нужны для
+    # telemetry vein_cycle_spread (reason/duration_days).
+    started_at: str = ""
+    spread_threshold: int = 0
+
+
 # ---------------------------------------------------------------------------
 # Работа с БД
 # ---------------------------------------------------------------------------
@@ -670,6 +712,24 @@ def init_db():
     """Инициализация БД: создать таблицы и загрузить стартовый граф веществ."""
     conn = get_db()
     try:
+        # Heal ДО schema.sql: частичный UNIQUE-индекс в схеме упал бы на
+        # БД, созданной Pre-F2-кодом с двумя открытыми циклами (гонка
+        # _ensure_active_cycle). schema.sql выполняется executescript-ом,
+        # где IntegrityError перехватить нельзя построчно.
+        has_cycles = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vein_cycles'"
+        ).fetchone()
+        if has_cycles:
+            open_cycles = conn.execute(
+                "SELECT cycle_id FROM vein_cycles "
+                "WHERE state IN ('active', 'spread') ORDER BY started_at DESC"
+            ).fetchall()
+            if len(open_cycles) > 1:
+                conn.execute(
+                    "UPDATE vein_cycles SET state='closed', ended_at=? "
+                    "WHERE state IN ('active', 'spread') AND cycle_id != ?",
+                    (_now_iso(), open_cycles[0]["cycle_id"]),
+                )
         # Выполняем schema.sql (только DDL)
         schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
         if os.path.exists(schema_path):
@@ -736,6 +796,67 @@ def init_db():
                    PRIMARY KEY (day, device_id)
                )"""
         )
+        conn.execute("""CREATE TABLE IF NOT EXISTS personal_discoveries (
+            device_id TEXT NOT NULL,
+            pair_key TEXT NOT NULL,
+            discovered_at TEXT NOT NULL,
+            PRIMARY KEY (device_id, pair_key)
+        )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS vein_pour_log (
+            device_id TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            processed_at TEXT NOT NULL,
+            PRIMARY KEY (device_id, idempotency_key)
+        )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS vein_streaks (
+            device_id TEXT NOT NULL, cycle_id TEXT NOT NULL,
+            count INTEGER NOT NULL DEFAULT 0, last_hit_at TEXT,
+            cap_claimed INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (device_id, cycle_id)
+        )""")
+        # F2 (по конвенции init_db для старых БД, дубль см. в schema.sql):
+        # частичный UNIQUE — не более одного открытого (active/spread) цикла.
+        # Константа-ключ: все подходящие строки делят один ключ индекса.
+        # Heal: БД, созданная кодом этой ветки ДО появления индекса, может
+        # содержать два открытых цикла (гонка _ensure_active_cycle) —
+        # иначе CREATE INDEX уронит весь init_db. Оставляем новнейший,
+        # прочее закрываем.
+        try:
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_vein_cycles_one_open "
+                "ON vein_cycles(1) WHERE state IN ('active', 'spread')"
+            )
+        except sqlite3.IntegrityError:
+            newest = conn.execute(
+                "SELECT cycle_id FROM vein_cycles "
+                "WHERE state IN ('active', 'spread') "
+                "ORDER BY started_at DESC LIMIT 1"
+            ).fetchone()
+            conn.execute(
+                "UPDATE vein_cycles SET state='closed', ended_at=? "
+                "WHERE state IN ('active', 'spread') AND cycle_id != ?",
+                (_now_iso(), newest["cycle_id"]),
+            )
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_vein_cycles_one_open "
+                "ON vein_cycles(1) WHERE state IN ('active', 'spread')"
+            )
+        # Migration: old vein_hits(week, device_id) → legacy_vein_hits
+        # New vein_hits uses (device_id, cycle_id, pair_key) for anti-farm.
+        old_vh_cols = {r["name"] for r in conn.execute("PRAGMA table_info(vein_hits)").fetchall()}
+        if "week" in old_vh_cols and "cycle_id" not in old_vh_cols:
+            conn.execute("""CREATE TABLE IF NOT EXISTS legacy_vein_hits (
+                week TEXT NOT NULL, device_id TEXT NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0, streaks INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (week, device_id)
+            )""")
+            conn.execute("INSERT OR IGNORE INTO legacy_vein_hits SELECT * FROM vein_hits")
+            conn.execute("DROP TABLE vein_hits")
+            conn.execute("""CREATE TABLE vein_hits (
+                device_id TEXT NOT NULL, cycle_id TEXT NOT NULL, pair_key TEXT NOT NULL,
+                hit_at TEXT NOT NULL,
+                PRIMARY KEY (device_id, cycle_id, pair_key)
+            )""")
         scols = {r["name"] for r in conn.execute("PRAGMA table_info(challenge_scores)").fetchall()}
         if "completed_at" not in scols:
             conn.execute("ALTER TABLE challenge_scores ADD COLUMN completed_at TEXT")
@@ -1288,29 +1409,207 @@ def _add_vein_points(conn: sqlite3.Connection, day: str, device_id: str, nick: s
     )
 
 
-def _score_vein(conn: sqlite3.Connection, week: str, tag: str, day: str,
-                device_id: str, nick: str, today=None):
-    """Находка в жиле: +очки дня (vein-канал), счётчик, бросок прожилки.
-    None — мимо жилы."""
-    tag1, tag2, spread = _vein_state(conn, week, today)
-    active = {tag1} | ({tag2} if spread else set())
-    if tag not in active:
-        return None
-    conn.execute(
-        """INSERT INTO vein_hits (week, device_id, count, streaks) VALUES (?, ?, 1, 0)
-           ON CONFLICT(week, device_id) DO UPDATE SET count = count + 1""",
-        (week, device_id),
+VEIN_SPREAD_THRESHOLD = 20
+VEIN_MAX_CYCLE_DAYS = 14
+VEIN_SPREAD_DURATION = 3
+
+
+def _cycle_pick(conn: sqlite3.Connection, exclude: list[str] | None = None) -> str:
+    """Pick a tag for a new cycle, excluding tags from last 2 cycles + explicit excludes."""
+    tags = _week_tags(conn)
+    recent = conn.execute(
+        "SELECT tag1, tag2 FROM vein_cycles ORDER BY started_at DESC LIMIT 2"
+    ).fetchall()
+    excluded = set(exclude or [])
+    for row in recent:
+        if row["tag1"]:
+            excluded.add(row["tag1"])
+        if row["tag2"]:
+            excluded.add(row["tag2"])
+    candidates = [t for t in tags if t not in excluded]
+    if not candidates:
+        candidates = tags  # fallback if all excluded
+    import hashlib as _hl
+    salt = f"cycle_{len(conn.execute('SELECT 1 FROM vein_cycles').fetchall())}"
+    i = int(_hl.sha256(salt.encode()).hexdigest(), 16) % len(candidates)
+    return candidates[i]
+
+
+def _ensure_active_cycle(conn: sqlite3.Connection) -> dict:
+    """Ensure an active cycle exists. Creates one if none is active or spread.
+    Returns the current active/spread cycle as a dict."""
+    row = conn.execute(
+        "SELECT * FROM vein_cycles WHERE state IN ('active', 'spread') "
+        "ORDER BY started_at DESC LIMIT 1"
+    ).fetchone()
+    if row:
+        return dict(row)
+    tag1 = _cycle_pick(conn)
+    # uuid-суффикс: цикл может быть закрыт и пересоздан в ту же секунду
+    # (например, в /api/vein/cycle/status expiry-переходе) — чистый unix-ts
+    # дал бы коллизию PRIMARY KEY.
+    cycle_id = f"vc:{int(time.time())}-{uuid.uuid4().hex[:6]}"
+    now = _now_iso()
+    try:
+        conn.execute(
+            "INSERT INTO vein_cycles (cycle_id, started_at, tag1, state, spread_threshold) "
+            "VALUES (?, ?, ?, 'active', ?)",
+            (cycle_id, now, tag1, VEIN_SPREAD_THRESHOLD),
+        )
+    except sqlite3.IntegrityError:
+        # F2 (гонка): ux_vein_cycles_one_open — между пустым SELECT выше и
+        # этим INSERT конкурент успел создать (и закоммитить) открытый цикл.
+        # Возвращаем его ряд в той же dict-форме, что и обычный путь.
+        row = conn.execute(
+            "SELECT * FROM vein_cycles WHERE state IN ('active', 'spread') "
+            "ORDER BY started_at DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            raise
+        return dict(row)
+    return {
+        "cycle_id": cycle_id, "started_at": now, "ended_at": None,
+        "spread_at": None, "tag1": tag1, "tag2": None,
+        "state": "active", "spread_threshold": VEIN_SPREAD_THRESHOLD,
+        "world_finds": 0,
+    }
+
+
+def _maybe_spread_cycle(conn: sqlite3.Connection, cycle: dict) -> None:
+    """CAS transition active→spread if threshold reached or max days elapsed.
+
+    Re-читает строку цикла из БД: инкремент world_finds, сделанный
+    _score_vein_cycle в ЭТОМ ЖЕ соединении/транзакции, виден только так
+    (снимка-аргумент устарел). Мутит переданный dict, чтобы вызывающий
+    увидел свежий state/tag2.
+    """
+    fresh = conn.execute(
+        "SELECT * FROM vein_cycles WHERE cycle_id = ?", (cycle["cycle_id"],)
+    ).fetchone()
+    if fresh is None:
+        return
+    cycle.update(dict(fresh))
+    if cycle["state"] != "active":
+        return
+    started = date.fromisoformat(cycle["started_at"][:10])
+    days_elapsed = (_today_date() - started).days
+    needs_spread = (
+        cycle["world_finds"] >= cycle["spread_threshold"]
+        or days_elapsed >= VEIN_MAX_CYCLE_DAYS
     )
-    streak = False
-    cur = conn.execute("SELECT streaks FROM vein_hits WHERE week = ? AND device_id = ?",
-                       (week, device_id)).fetchone()["streaks"]
-    if cur < VEIN_STREAK_CAP and random.random() < VEIN_STREAK_CHANCE:
-        conn.execute("UPDATE vein_hits SET streaks = streaks + 1 WHERE week = ? AND device_id = ?",
-                     (week, device_id))
-        streak = True
+    if not needs_spread:
+        return
+    tag2 = _cycle_pick(conn, exclude=[cycle["tag1"]])
+    now = _now_iso()
+    cursor = conn.execute(
+        "UPDATE vein_cycles SET state='spread', tag2 = ?, spread_at = ? "
+        "WHERE cycle_id = ? AND state='active'",
+        (tag2, now, cycle["cycle_id"]),
+    )
+    if cursor.rowcount == 0:
+        # Другой запрос уже перевёл цикл: перечитать tag2, state не трогаем.
+        updated = conn.execute(
+            "SELECT tag2 FROM vein_cycles WHERE cycle_id = ?", (cycle["cycle_id"],)
+        ).fetchone()
+        if updated:
+            cycle["tag2"] = updated["tag2"]
+    else:
+        cycle["tag2"] = tag2
+        cycle["state"] = "spread"
+        cycle["spread_at"] = now
+
+
+def _score_vein_cycle(conn: sqlite3.Connection, cycle: dict, tag: str,
+                      pair_key: str, device_id: str, nick: str,
+                      is_world_first: bool) -> dict | None:
+    """Transactional vein scorer for cycle-based model.
+
+    Returns {points, streak_added, streak_count, cap_reached} or None if
+    tag doesn't match or pair already hit this cycle.
+
+    Must be called inside a transaction that also commits the discover/find.
+    """
+    active_tags = {cycle["tag1"]}
+    if cycle["tag2"]:
+        active_tags.add(cycle["tag2"])
+    if tag not in active_tags:
+        return None
+
+    cycle_id = cycle["cycle_id"]
+
+    # Anti-farm: pair already scored this cycle?
+    existing = conn.execute(
+        "SELECT 1 FROM vein_hits WHERE device_id=? AND cycle_id=? AND pair_key=?",
+        (device_id, cycle_id, pair_key),
+    ).fetchone()
+    if existing:
+        return None
+
+    # Record hit
+    conn.execute(
+        "INSERT INTO vein_hits (device_id, cycle_id, pair_key, hit_at) VALUES (?, ?, ?, ?)",
+        (device_id, cycle_id, pair_key, _now_iso()),
+    )
+
+    # Points: world-first=VEIN_POINTS, personal=1
+    points = VEIN_POINTS if is_world_first else 1  # личные находки: всегда 1 (спека §3.1)
+
+    # Day points (existing vein_points channel)
+    day = _today()
     if device_id:
-        _add_vein_points(conn, day, device_id, nick, VEIN_POINTS)
-    return {"tag": tag, "points": VEIN_POINTS, "streak": streak}
+        _add_vein_points(conn, day, device_id, nick, points)
+
+    # Increment world_finds if world-first
+    if is_world_first:
+        conn.execute(
+            "UPDATE vein_cycles SET world_finds = world_finds + 1 WHERE cycle_id = ?",
+            (cycle_id,),
+        )
+
+    # Streak logic
+    streak_added = False
+    cap_reached = False
+    streak_row = conn.execute(
+        "SELECT count, cap_claimed FROM vein_streaks WHERE device_id=? AND cycle_id=?",
+        (device_id, cycle_id),
+    ).fetchone()
+    cur_count = streak_row["count"] if streak_row else 0
+    cap_claimed = bool(streak_row["cap_claimed"]) if streak_row else False
+
+    if not cap_claimed:
+        if is_world_first:
+            streak_added = True
+        else:
+            streak_added = random.random() < VEIN_STREAK_CHANCE
+            if not streak_added:
+                # §3.1.2: при неудачном roll streak сбрасывается в 0. Reset
+                # только здесь — на проигрышном ролле scoring-находки;
+                # wrong-tag/anti-farm ранние выходы (§6 п.4) не трогают streak.
+                cur_count = 0
+
+        if streak_added:
+            cur_count += 1
+
+        if cur_count >= VEIN_STREAK_CAP:
+            cap_reached = True
+            cap_claimed = True
+            cur_count = 0  # reset count, but cap_claimed stays
+
+    conn.execute(
+        """INSERT INTO vein_streaks (device_id, cycle_id, count, last_hit_at, cap_claimed)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(device_id, cycle_id) DO UPDATE SET
+             count = excluded.count, last_hit_at = excluded.last_hit_at,
+             cap_claimed = excluded.cap_claimed""",
+        (device_id, cycle_id, cur_count, _now_iso(), int(cap_claimed)),
+    )
+
+    return {
+        "points": points,
+        "streak_added": streak_added,
+        "streak_count": cur_count,
+        "cap_reached": cap_reached,
+    }
 
 
 # API-endpoints
@@ -2558,9 +2857,15 @@ def discover(req: DiscoverRequest):
             )
             # ежедневная личная цель дня
             challenge_info = _score_challenge(conn, req.a, req.b, nick, req.device_id)
-            # туманная жила: находка с тегом недели → +очки и бросок прожилки
-            vein_info = _score_vein(conn, _week_key(), discovery.tag or "", _today(),
-                                    req.device_id, nick)
+            # туманная жила: находка с тегом цикла → +очки и бросок прожилки
+            # (T6: цикл-скорер вместо недельного; reused-ветка наград не даёт)
+            cycle = _ensure_active_cycle(conn)
+            vein_info = _score_vein_cycle(
+                conn, cycle, discovery.tag or "", pair_key,
+                req.device_id, nick, is_world_first=True,
+            )
+            # порог/возраст цикла → активный цикл переходит в spread
+            _maybe_spread_cycle(conn, cycle)
             conn.commit()
             return DiscoverResponse(
                 ok=True, status="created", discovery=discovery, already_known=False,
@@ -2603,6 +2908,219 @@ def discover(req: DiscoverRequest):
             # time.time()). Могилы state='resolved' не копятся (T08.2).
             _release_pair_lock(conn, pair_key, owner)
 
+    finally:
+        conn.close()
+
+@app.post("/api/vein/find", response_model=VeinFindResponse)
+def vein_find(req: VeinFindRequest):
+    """Register a personal find: pair exists in server recipes but not in
+    personal_discoveries for this device. Scores +1 point, 10% streak roll.
+
+    T04/T29 форма: sync def (threadpool), commit в конце успешного пути,
+    rollback по исключению, close в finally (как /api/discover).
+    """
+    conn = get_db()
+    try:
+        # Личное нахождение не несёт игрового ника: для известного устройства
+        # _upsert_player возвращает хранящийся ник (переданный игнорируется),
+        # новое устройство заводится с дефолтом клиента («Алхимик», унификация
+        # при коллизии — внутри _upsert_player). Пустая строка тут недопустима:
+        # clean_nick("") упал бы в 400 на первом же запросе нового устройства.
+        nick = _upsert_player(conn, "Алхимик", req.device_id)
+        conn.commit()
+
+        # Validate cycle_id matches current active/spread
+        cycle = _ensure_active_cycle(conn)
+        if req.cycle_id != cycle["cycle_id"]:
+            # Check if it matches a spread cycle still active
+            spread_row = conn.execute(
+                "SELECT * FROM vein_cycles WHERE cycle_id=? AND state='spread'",
+                (req.cycle_id,),
+            ).fetchone()
+            if spread_row:
+                cycle = dict(spread_row)
+            else:
+                return VeinFindResponse(ok=False, error="cycle_mismatch")
+
+        # Pair must be known to the server (recipe + its output element)
+        recipe = conn.execute(
+            "SELECT out_id FROM recipes WHERE pair_key=?", (req.pair_key,)
+        ).fetchone()
+        if not recipe:
+            return VeinFindResponse(ok=False, error="unknown_pair")
+        elem = conn.execute(
+            "SELECT tag FROM elements WHERE id=?", (recipe["out_id"],)
+        ).fetchone()
+        if not elem:
+            return VeinFindResponse(ok=False, error="unknown_element")
+        if elem["tag"] != req.tag:
+            return VeinFindResponse(ok=False, error="tag_mismatch")
+
+        # Check tag is active in cycle
+        active_tags = {cycle["tag1"]}
+        if cycle["tag2"]:
+            active_tags.add(cycle["tag2"])
+        if req.tag not in active_tags:
+            return VeinFindResponse(ok=False, error="tag_mismatch")
+
+        # Idempotency: already scored this (device, cycle, pair)?
+        existing_hit = conn.execute(
+            "SELECT 1 FROM vein_hits WHERE device_id=? AND cycle_id=? AND pair_key=?",
+            (req.device_id, cycle["cycle_id"], req.pair_key),
+        ).fetchone()
+        if existing_hit:
+            # Return original result from vein_streaks
+            streak_row = conn.execute(
+                "SELECT count, cap_claimed FROM vein_streaks WHERE device_id=? AND cycle_id=?",
+                (req.device_id, cycle["cycle_id"]),
+            ).fetchone()
+            return VeinFindResponse(
+                ok=True, points=1,
+                streak_added=False,
+                streak_count=streak_row["count"] if streak_row else 0,
+                cap_reached=bool(streak_row["cap_claimed"]) if streak_row else False,
+                cycle_id=cycle["cycle_id"],
+            )
+
+        # Register personal discovery (PK device_id+pair_key — глобальный:
+        # INSERT OR IGNORE, повтор в новом цикле не дублирует строку)
+        conn.execute(
+            "INSERT OR IGNORE INTO personal_discoveries (device_id, pair_key, discovered_at) "
+            "VALUES (?, ?, ?)",
+            (req.device_id, req.pair_key, _now_iso()),
+        )
+
+        # Score
+        result = _score_vein_cycle(
+            conn, cycle, req.tag, req.pair_key,
+            req.device_id, nick, is_world_first=False,
+        )
+        if result is None:
+            conn.rollback()
+            return VeinFindResponse(ok=False, error="scoring_failed")
+
+        # Check cycle spread transition (state у dict-а после CAS-loss не
+        # перечитывается — endpoint дальше cycle не использует)
+        _maybe_spread_cycle(conn, cycle)
+
+        conn.commit()
+        return VeinFindResponse(
+            ok=True,
+            points=result["points"],
+            streak_added=result["streak_added"],
+            streak_count=result["streak_count"],
+            cap_reached=result["cap_reached"],
+            cycle_id=cycle["cycle_id"],
+        )
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+@app.post("/api/vein/pour", response_model=VeinPourResponse)
+def vein_pour(req: VeinPourRequest):
+    """UI-only ceremony. Records pour in vein_pour_log for idempotency.
+    Never scores points."""
+    conn = get_db()
+    try:
+        existing = conn.execute(
+            "SELECT 1 FROM vein_pour_log WHERE device_id=? AND idempotency_key=?",
+            (req.device_id, req.idempotency_key),
+        ).fetchone()
+        if existing:
+            return VeinPourResponse(ok=True, already_poured=True)
+        conn.execute(
+            "INSERT INTO vein_pour_log (device_id, idempotency_key, processed_at) VALUES (?, ?, ?)",
+            (req.device_id, req.idempotency_key, _now_iso()),
+        )
+        conn.commit()
+        return VeinPourResponse(ok=True, already_poured=False)
+    except sqlite3.IntegrityError:
+        # Race: another request inserted same key
+        return VeinPourResponse(ok=True, already_poured=True)
+    finally:
+        conn.close()
+
+@app.get("/api/vein/cycle/status", response_model=CycleStatusResponse)
+def vein_cycle_status(device_id: str = Query("", max_length=128)):
+    """Cycle status for vein. Independent from /api/week/status (Fair).
+
+    Lazy-creates the current cycle and drives the spread->closed expiry
+    (VEIN_SPREAD_DURATION days after spread_at), then returns the FRESH
+    active cycle. Sync `def` (T29): threadpool, close in finally; коммит
+    только там, где _ensure_active_cycle что-то вставил (read-only путь
+    остаётся без записи).
+    """
+    conn = get_db()
+
+    def _ensure_committed() -> dict:
+        # _ensure_active_cycle INSERT не коммитит (коммит на вызывающем):
+        # детектируем факт создания, чтобы повторные GET отдавали тот же
+        # цикл, а не пересоздавали его на каждом запросе.
+        had_cycle = conn.execute(
+            "SELECT 1 FROM vein_cycles WHERE state IN ('active', 'spread') LIMIT 1"
+        ).fetchone() is not None
+        c = _ensure_active_cycle(conn)
+        if not had_cycle:
+            conn.commit()
+        return c
+
+    try:
+        cycle = _ensure_committed()
+        # Expiry: только spread с выставленным spread_at.
+        if cycle["state"] == "spread" and cycle["spread_at"]:
+            spread_date = date.fromisoformat(cycle["spread_at"][:10])
+            if (_today_date() - spread_date).days >= VEIN_SPREAD_DURATION:
+                cursor = conn.execute(
+                    "UPDATE vein_cycles SET state='closed', ended_at=? "
+                    "WHERE cycle_id=? AND state='spread'",
+                    (_now_iso(), cycle["cycle_id"]),
+                )
+                if cursor.rowcount == 1:
+                    # CAS выигран: закрытие + создание свежего цикла — в один
+                    # коммит (cycle_id с uuid-суффиксом не коллизируют в секунду
+                    # закрытия).
+                    cycle = _ensure_active_cycle(conn)
+                    conn.commit()
+                else:
+                    # CAS проигран: ряд уже перевёл другой запрос — перечитываем.
+                    row = conn.execute(
+                        "SELECT * FROM vein_cycles WHERE cycle_id=?",
+                        (cycle["cycle_id"],),
+                    ).fetchone()
+                    cycle = dict(row)
+                    if cycle["state"] not in ("active", "spread"):
+                        cycle = _ensure_committed()
+
+        my_points = 0
+        my_streak = 0
+        if device_id:
+            # Сумма очков по всем дням этого цикла (vein_points.day >= дата старта).
+            pts_row = conn.execute(
+                "SELECT COALESCE(SUM(points), 0) AS total FROM vein_points "
+                "WHERE device_id=? AND day >= date(?)",
+                (device_id, cycle["started_at"][:10]),
+            ).fetchone()
+            my_points = pts_row["total"] if pts_row else 0
+            streak_row = conn.execute(
+                "SELECT count FROM vein_streaks WHERE device_id=? AND cycle_id=?",
+                (device_id, cycle["cycle_id"]),
+            ).fetchone()
+            my_streak = streak_row["count"] if streak_row else 0
+
+        return CycleStatusResponse(
+            ok=True,
+            cycle_id=cycle["cycle_id"],
+            tag1=cycle["tag1"],
+            tag2=cycle["tag2"],
+            state=cycle["state"],
+            world_finds=cycle["world_finds"],
+            my_points=my_points,
+            my_streak=my_streak,
+            started_at=cycle["started_at"],
+            spread_threshold=int(cycle["spread_threshold"]),
+        )
     finally:
         conn.close()
 
@@ -2971,7 +3489,10 @@ def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
         )
         for table in [
             "echoes", "letters", "challenge_scores", "vein_points", "atlas_solves",
-            "fair_pairs", "fair_contrib", "fair_claims", "vein_hits",
+            "fair_pairs", "fair_contrib", "fair_claims", "vein_hits", "legacy_vein_hits",
+            # F3 (приватность): цикл-модель жилы добавила свои таблицы —
+            # личные находки, прожилки и журнал вливаний тоже чистим.
+            "personal_discoveries", "vein_streaks", "vein_pour_log",
         ]:
             conn.execute(f"DELETE FROM {table} WHERE device_id = ?", (device_id,))
         conn.execute("DELETE FROM players WHERE device_id = ?", (device_id,))
@@ -3439,7 +3960,10 @@ def week_status(device_id: str = Query("", max_length=128)):
         my_hits = 0
         my_streaks = 0
         if device_id:
-            r = conn.execute("SELECT count, streaks FROM vein_hits WHERE week = ? AND device_id = ?",
+            # Legacy-only read: legacy_vein_hits больше НЕ пишется (vein-скоринг
+            # переехал на цикл-модель vein_hits/vein_streaks), но неделя до
+            # миграции здесь всё ещё показывается игрокам (backward compat).
+            r = conn.execute("SELECT count, streaks FROM legacy_vein_hits WHERE week = ? AND device_id = ?",
                              (week, device_id)).fetchone()
             if r:
                 my_hits, my_streaks = r["count"], r["streaks"]

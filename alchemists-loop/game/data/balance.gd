@@ -70,6 +70,30 @@ const CIRCLE_DAY_REGEN := {30: 0.05}              # +к регену за вех
 const CIRCLE_PTS_MILES := [50, 150, 500]         # вехи вечных очков цели дня
 const CIRCLE_PTS_CAP := {50: 3, 500: 5}          # +к капу за вехи очков
 const CIRCLE_PTS_REGEN := {150: 0.03}            # +к регену за вехи очков
+# план 2 (жила): cap прожилки за цикл, награда за cap, очки world-first (отображение)
+const VEIN_STREAK_CAP := 5
+const VEIN_STREAK_REWARD := 25
+const VEIN_POINTS_WORLD := 2
+# план 2 §2.1: цели варки — фильтр пула известных пар по слою выхода
+const CIRCLE_GOALS := [
+	{"key": "fast",   "title": "Быстрая проба", "layers": [1, 2],  "pts": 1,
+		"desc": "Лёгкая варка, быстрый прогресс"},
+	{"key": "middle", "title": "Средний путь",  "layers": [3, 4],  "pts": 2,
+		"desc": "Баланс скорости и ценности"},
+	{"key": "deep",   "title": "Глубокий синтез", "layers": [5, 99], "pts": 3,
+		"desc": "Медленно, но высоко ценится"},
+]
+# §2.2: объединённая шкала ранга «Огонёк очага» — порог→уровень, титул, символ
+const CIRCLE_RANKS := [
+	{"level": 1, "kind": "дней",  "threshold": 7,   "title": "Искра",    "shape": "dot",      "color": "#ffe08a"},
+	{"level": 2, "kind": "дней",  "threshold": 30,  "title": "Уголёк",   "shape": "circle",   "color": "#e88a3c"},
+	{"level": 3, "kind": "очков", "threshold": 50,  "title": "Тлеющий",  "shape": "triangle", "color": "#e05252"},
+	{"level": 4, "kind": "дней",  "threshold": 100, "title": "Полено",   "shape": "square",   "color": "#a03028"},
+	{"level": 5, "kind": "очков", "threshold": 150, "title": "Горящий",  "shape": "diamond",  "color": "#ff6a3c"},
+	{"level": 6, "kind": "дней",  "threshold": 365, "title": "Сердце",   "shape": "star",     "color": "#ffd21f"},
+	{"level": 7, "kind": "очков", "threshold": 500, "title": "Пламенный", "shape": "flame",   "color": "#fff4d6"},
+]
+const CIRCLE_DECOR_REWARDS := {30: "fireplace_ember", 100: "fireplace_log", 365: "fireplace_heart"}
 # недельный слой (v30): жила даёт очки + прожилки (+1 кап, кап 5/нед. на сервере)
 const FAIR_REGEN_EACH := 0.05  # сильная недельная награда: +0.05 регена/с за закрытый котёл (вклад ≥3)
 const FAIR_REGEN_CAP := 0.5    # потолок суммарного регена ярмарок

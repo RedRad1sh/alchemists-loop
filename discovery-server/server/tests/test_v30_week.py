@@ -127,43 +127,43 @@ class TestVein:
         import sqlite3
         c = _client_for(tmp_path, monkeypatch)
         with c:
-            st = c.get("/api/week/status", params={"device_id": "dev-v"}).json()
-            tag1 = st["vein"]["tag1"]
-            # подменяем генератор под тег жилы
-            monkeypatch.setattr(srv, "get_llm", lambda: _FakeGen("Жилистый", tag1))
+            # T6: /discover скорит жилу по АКТИВНОМУ ЦИКЛУ, не по неделе
+            db = sqlite3.connect(str(tmp_path / "week.db"))
+            db.row_factory = sqlite3.Row
+            cycle = srv._ensure_active_cycle(db)
+            db.commit()
+            # подменяем генератор под тег цикла
+            monkeypatch.setattr(srv, "get_llm", lambda: _FakeGen("Жилистый", cycle["tag1"]))
             r = c.post("/api/discover", json={
                 "a": "mud", "b": "stone", "nick": "Жила",
                 "device_id": "dev-v"}).json()
             assert r["status"] == "created"
-            assert r["vein"] is not None and r["vein"]["points"] == 2
+            v = r["vein"]
+            assert v is not None and v["points"] == 2
+            assert v["streak_added"] is True and v["streak_count"] == 1
+            assert v["cap_reached"] is False
             # U6/T05: vein-очки — отдельный канал vein_points (не challenge)
-            db = sqlite3.connect(str(tmp_path / "week.db"))
             pts = db.execute(
                 "SELECT points FROM vein_points WHERE device_id='dev-v'").fetchone()
             assert pts and pts[0] >= 2
             cs = db.execute(
                 "SELECT points FROM challenge_scores WHERE device_id='dev-v'").fetchone()
             assert cs is None or cs[0] < 2  # сюда жила больше не льётся
+            # hit привязан к циклу: cycle_id + pair_key в vein_hits
+            pk = srv.canonical_pair_key("mud", "stone")
+            hit = db.execute(
+                "SELECT * FROM vein_hits WHERE device_id='dev-v' AND cycle_id=? AND pair_key=?",
+                (cycle["cycle_id"], pk)).fetchone()
+            assert hit is not None
+            # legacy-неделя /discover больше не пишется (my_hits не растёт)
+            assert db.execute(
+                "SELECT COUNT(*) FROM legacy_vein_hits").fetchone()[0] == 0
             db.close()
-            st2 = c.get("/api/week/status", params={"device_id": "dev-v"}).json()
-            assert st2["vein"]["my_hits"] == 1
 
-    def test_streak_cap(self, tmp_path, monkeypatch):
-        import sqlite3
-        c = _client_for(tmp_path, monkeypatch)
-        with c:
-            st = c.get("/api/week/status", params={"device_id": "dev-s"}).json()
-            tag1 = st["vein"]["tag1"]
-            monkeypatch.setattr(srv.random, "random", lambda: 0.0)  # прожилка всегда
-            db = sqlite3.connect(str(tmp_path / "week.db"))
-            db.row_factory = sqlite3.Row
-            for _ in range(10):
-                srv._score_vein(db, st["week"], tag1, "2026-09-12", "dev-s", "Жила")
-            db.commit()
-            n = db.execute("SELECT streaks FROM vein_hits WHERE device_id='dev-s'").fetchone()[0]
-            hits = db.execute("SELECT count FROM vein_hits WHERE device_id='dev-s'").fetchone()[0]
-            db.close()
-            assert (hits, n) == (10, 5)
+        # test_streak_cap удалён (Task 11): legacy _score_vein больше нет;
+        # cap-поведение живого цикла покрыто
+        # tests/test_vein_streak.py::test_streak_cap_reached_after_five +
+        # test_no_streak_after_cap_claimed.
 
 
 class TestFair:

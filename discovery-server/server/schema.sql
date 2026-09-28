@@ -242,13 +242,74 @@ CREATE TABLE IF NOT EXISTS fair_claims (
     kind TEXT NOT NULL,
     PRIMARY KEY (week, device_id)
 );
--- Находки устройства в жиле недели (счётчик + прожилки с капом 5/неделю)
+-- Anti-farm per cycle: одна пара даёт очки жилы только раз за цикл.
+-- Старая схема (week, device_id) мигрируется в legacy_vein_hits.
 CREATE TABLE IF NOT EXISTS vein_hits (
+    device_id TEXT NOT NULL,
+    cycle_id TEXT NOT NULL,
+    pair_key TEXT NOT NULL,
+    hit_at TEXT NOT NULL,
+    PRIMARY KEY (device_id, cycle_id, pair_key)
+);
+
+-- Legacy vein_hits (weekly counter). Read-only after migration.
+CREATE TABLE IF NOT EXISTS legacy_vein_hits (
     week TEXT NOT NULL,
     device_id TEXT NOT NULL,
     count INTEGER NOT NULL DEFAULT 0,
     streaks INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (week, device_id)
+);
+
+-- Цикл жилы (замена ISO-недели для vein-механики). State machine:
+-- active → spread (world_finds >= threshold OR 14 days) → closed (3 days after spread)
+CREATE TABLE IF NOT EXISTS vein_cycles (
+    cycle_id TEXT PRIMARY KEY,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    spread_at TEXT,
+    tag1 TEXT NOT NULL,
+    tag2 TEXT,
+    state TEXT NOT NULL DEFAULT 'active',
+    spread_threshold INT NOT NULL,
+    world_finds INT NOT NULL DEFAULT 0
+);
+
+-- Финальное ревью (F2): не более ОДНОГО открытого цикла на уровне БД.
+-- uuid-суффикс cycle_id снял случайную PK-защиту, и два конкурентных
+-- _ensure_active_cycle могли создать по open-циклу. Частичный UNIQUE по
+-- константе-ключу: под предикат попадает только state IN ('active','spread'),
+-- все такие строки получают один ключ индекса → вторая вставка —
+-- IntegrityError. Закрытые циклы (state='closed') индекс не видит.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_vein_cycles_one_open ON vein_cycles(1)
+    WHERE state IN ('active', 'spread');
+
+-- Личные открытия: глобальная таблица (не привязана к циклу).
+-- PK (device_id, pair_key) — одна пара на устройство за всю историю.
+CREATE TABLE IF NOT EXISTS personal_discoveries (
+    device_id TEXT NOT NULL,
+    pair_key TEXT NOT NULL,
+    discovered_at TEXT NOT NULL,
+    PRIMARY KEY (device_id, pair_key)
+);
+
+-- Журнал церемоний вливания (UI-only). Идемпотентность по (device_id, idempotency_key).
+-- TTL 90 дней; cleanup вне этого плана.
+CREATE TABLE IF NOT EXISTS vein_pour_log (
+    device_id TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    processed_at TEXT NOT NULL,
+    PRIMARY KEY (device_id, idempotency_key)
+);
+
+-- Streak per cycle. cap_claimed prevents infinite reward farming after cap reset.
+CREATE TABLE IF NOT EXISTS vein_streaks (
+    device_id TEXT NOT NULL,
+    cycle_id TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    last_hit_at TEXT,
+    cap_claimed INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (device_id, cycle_id)
 );
 
 -- Журнал платёжных чеков (T22, /api/receipt/verify). Сырой токен магазина здесь

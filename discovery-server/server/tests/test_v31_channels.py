@@ -120,12 +120,16 @@ class TestChannels:
         c = _client_for(tmp_path, monkeypatch, gen)
         db = str(tmp_path / "channels.db")
         with c:
-            week = c.get("/api/week/status", params={"device_id": "dev-c"}).json()
-            tag1 = week["vein"]["tag1"]
+            # T6: /discover скорит жилу по активному циклу — тег берём из цикла
+            conn = sqlite3.connect(db)
+            conn.row_factory = sqlite3.Row
+            cycle = srv._ensure_active_cycle(conn)
+            conn.commit()
+            conn.close()
             target = c.get("/api/challenge", params={"device_id": "dev-c"}).json()["target"]
 
             # 1) попадание в жилу: vein-очки есть, challenge-канала нет
-            gen.tag = tag1
+            gen.tag = cycle["tag1"]
             a, b = _unknown_pair(db, avoid={target}, used=set())
             r1 = c.post("/api/discover", json={
                 "a": a, "b": b, "nick": "Жилец", "device_id": "dev-c"}).json()

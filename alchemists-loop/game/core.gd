@@ -670,6 +670,8 @@ func _collect(item_id: String, silent := false) -> void:
 	Analytics.track("tap_source", {"element": item_id, "amount": gained})
 	g._saves._save_game()
 
+var _brew_epoch := 0  # инкрементируется при старте варки; отменяет зависшие async-пути
+
 func _can_brew() -> bool:
 	# U9 (T11): верстак — тоже потребляющая трасса, ручная варка с ним не совмещается.
 	if brewing or g._pages._bench_busy or selected.size() != 2:
@@ -1143,9 +1145,8 @@ func _auto_craft(item_id: String) -> void:
 		var frontier_rows: Array = frontier.get("frontier", [])
 		if not frontier_rows.is_empty():
 			var f: Dictionary = frontier_rows[0]
-			status_text = "Производство остановлен на неизвестном узле: %s + %s. Открой Эксперимент." % [
+			status_text = "Нужно открыть: %s + %s (через Эксперимент)" % [
 				g._online._item_name(String(f.get("a", ""))), g._online._item_name(String(f.get("b", "")))]
-			g._pages._focus_experiment(String(f.get("a", "")), String(f.get("b", "")))
 		else:
 			status_text = "Автоварка: %s" % String(plan.get("reason", "невозможно"))
 		Sfx.error()
@@ -1492,5 +1493,12 @@ func _commit_brew(a: String, b: String) -> Dictionary:
 	g._guild._quest_on_brew(output)
 	g._retention._fair_report_brew(a, b)
 	g._retention._fair_on_brew(output)
+	# план 2 §3.3.1: варка серверно-известной пары = личное открытие (офлайн —
+	# уйдёт в pending_server, онлайн — зарегистрируется сразу).
+	g._retention._vein_report_pair(a, b, output)
+	# §2.4: очки цели — по факту успеха и фактического слоя; заявка снимается
+	# только здесь (отмена/провал не платят и не сгорают молча — она сбросится
+	# следующим успешным путём или новой модалкой).
+	g._retention._circle_on_goal_brew(output)
 	Analytics.track("combine_try", {"left": a, "right": b, "result": "new" if newly_learned else "known", "output": output, "source": "recipe"})
 	return {"failed": false, "output": output, "newly_learned": newly_learned, "milestones": milestones}

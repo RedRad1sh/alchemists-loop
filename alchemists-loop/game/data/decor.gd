@@ -127,6 +127,10 @@ const DECOR := [
 		{"id": "fireplace_5", "label": "Кирпичный", "tint": "#7f4e3c", "cost": 375},
 		{"id": "fireplace_6", "label": "Современный", "tint": "#8a5641", "cost": 390},
 		{"id": "fireplace_7", "label": "Деревенский", "tint": "#945e46", "cost": 405},
+		# §2.2: эксклюзивные награды Круга — не продаются (reward), выдаются β-путём
+		{"id": "fireplace_ember", "label": "Уголёк очага", "tint": "#d2691e", "cost": 0, "reward": true},
+		{"id": "fireplace_log", "label": "Полено очага", "tint": "#8b4513", "cost": 0, "reward": true},
+		{"id": "fireplace_heart", "label": "Сердце очага", "tint": "#ffd700", "cost": 0, "reward": true},
 		{"id": "fireplace_8", "label": "С порталом", "tint": "#9e664b", "cost": 420},
 		{"id": "fireplace_9", "label": "Величественный", "tint": "#a96e50", "cost": 435},
 	]},
