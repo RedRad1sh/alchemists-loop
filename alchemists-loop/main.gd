@@ -1668,12 +1668,14 @@ func _build_confirm() -> void:
 	dim.name = "ConfirmDim"
 	dim.color = Color(0, 0, 0, 0.55)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.z_index = 20
 	dim.visible = false
 	add_child(dim)
 	_confirm_dim = dim
 
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.z_index = 21
 	center.visible = false
 	add_child(center)
 	_confirm = center

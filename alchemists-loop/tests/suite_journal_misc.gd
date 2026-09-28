@@ -98,6 +98,40 @@ static func run(g: Game) -> void:
 	Selftest.check("companion levels", g._spirit._companion_level_for(0) == 1 and g._spirit._companion_level_for(15) == 2
 		and g._spirit._companion_level_for(35) == 3 and g._spirit._companion_level_for(70) == 4)
 
+	# ---------- z-order модалов: ни один модал не рисуется под персистентным UI ----------
+	# Инвариант: dim/center каждого модала >= 20 — слой выше самого высокого
+	# персистентного элемента («окно выбора» лаборатории, pages.gd z=2).
+	# Исключение — диалог Светики (8/9): по замыслу ниже попапа открытия (20/21)
+	# и QTE (12), но выше drawer; отдельная проверка ниже.
+	# MUTATION: удали любой z_index = 20/21 в билдерах hub/progress/shop/saves/
+	# retort/home/main — первый кейс краснеет.
+	var _z_modal := true
+	for _pair in [
+		[g._saves._return_dim, g._saves._return_popup],
+		[g._retort._retort_dim, g._retort._retort_popup],
+		[g._shop._consent_dim, g._shop._consent_popup],
+		[g._shop._dim, g._shop._popup],
+		[g._confirm_dim, g._confirm],
+		[g._hub._up_dim, g._hub._up_popup],
+		[g._hub._profile_dim, g._hub._profile_popup],
+		[g._hub._journal_dim, g._hub._journal_popup],
+		[g._hub._settings_dim, g._hub._settings_popup],
+		[g._hub._craftable_dim, g._hub._craftable_popup],
+		[g._hub._prestige_dim, g._hub._prestige_popup],
+		[g._progress_ui._prog_dim, g._progress_ui._prog_popup],
+	]:
+		if _pair[0] == null or _pair[1] == null:
+			_z_modal = false
+		elif int(_pair[0].z_index) < 20 or int(_pair[1].z_index) < 20:
+			_z_modal = false
+	for _root in [g._home._color_picker, g._home._house_popup]:
+		if _root == null or int(_root.z_index) < 20:
+			_z_modal = false
+	Selftest.check("all modal popups render above persistent UI (z>=20)", _z_modal)
+	Selftest.check("companion dialog above drawer layer",
+		g._spirit._companion_dim != null and g._spirit._companion_dlg != null
+		and int(g._spirit._companion_dim.z_index) > 2 and int(g._spirit._companion_dlg.z_index) > 2)
+
 	# ---------- T19: Esc/«Назад» — закрытие верхнего модала + условный handled ----------
 
 	# снимок всего, что трогает этот блок

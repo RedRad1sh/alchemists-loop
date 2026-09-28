@@ -109,10 +109,12 @@ func _build_consent_popup() -> void:
 	_consent_dim.name = "ConsentDim"
 	_consent_dim.color = Color(0, 0, 0, 0.74)
 	_consent_dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_consent_dim.z_index = 20
 	_consent_dim.visible = false
 	g.add_child(_consent_dim)
 	_consent_popup = CenterContainer.new()
 	_consent_popup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_consent_popup.z_index = 21
 	_consent_popup.visible = false
 	g.add_child(_consent_popup)
 	var card := PanelContainer.new()
