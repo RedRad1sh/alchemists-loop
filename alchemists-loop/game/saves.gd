@@ -412,6 +412,8 @@ func _load_game() -> void:
 			g._retention._unlocked_titles.append(String(t))
 	g._retention._active_title = String(data.get("active_title", ""))
 	g._retention._circle_intro_shown = bool(data.get("circle_intro_shown", false))
+	# Migration: grant titles and fireplace rewards for milestones already passed
+	g._retention._circle_migrate_missed_milestones()
 	g._online._server_tag.clear()
 	if data.get("server_tags") is Dictionary:
 		for k in data["server_tags"]:

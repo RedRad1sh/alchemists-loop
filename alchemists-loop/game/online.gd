@@ -622,7 +622,9 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 				g._present_popup(slug, sub2, "НОВЫЙ РЕЦЕПТ!", rr["color"])
 			if status == "created" and not reused:
 				g._retention._discover_vein_bonus(result)
-				g._retention._vein_add_from_discover(pair_key, slug, result.get("vein", {}))
+				var vein_data = result.get("vein")
+				if typeof(vein_data) == TYPE_DICTIONARY:
+					g._retention._vein_add_from_discover(pair_key, slug, vein_data)
 	elif status == "not_combinable":
 		if is_experiment:
 			g._engine._experiment_failed(a, b)

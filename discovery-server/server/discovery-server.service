@@ -1,0 +1,25 @@
+[Unit]
+Description=Alchemists Loop Discovery Server
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/opt/alchemists-loop/discovery-server/server
+Environment="PATH=/home/deploy/.local/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/opt/alchemists-loop/discovery-server/server/.env
+ExecStart=/usr/bin/python3 /opt/alchemists-loop/discovery-server/server/server.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/alchemists-loop/discovery-server/server
+
+[Install]
+WantedBy=multi-user.target
