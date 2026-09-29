@@ -421,6 +421,7 @@ var _set_rows: VBoxContainer = null
 var _feed_list: VBoxContainer = null
 
 var _spirit: Spirit  # Светик (R9)
+var _admin: AdminConsole  # админ-консоль (~)
 var _inv_grid: GridContainer = null
 
 func _boot_snapshot_text(path: String) -> String:
@@ -457,6 +458,7 @@ func _ready() -> void:
 	_shop = Shop.new(self)
 	_online = Online.new(self)
 	_spirit = Spirit.new(self)
+	_admin = AdminConsole.new(self)
 	_saves = Saves.new(self)
 	Monetization.bind_game(self)
 	# Прогон selftest не эмитит онбординг-аналитику: это не сессия реального
@@ -821,6 +823,13 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# get_tree().quit() разбирает дерево, а движок ещё несколько кадров зовёт
+	# _process: все модули-члены уже обнулены, и каждый такой кадр печатает
+	# «Invalid call ... in base 'Nil'» в user://logs (7 застрявших прогонов
+	# накатали 6,7 ГБ за ночь). _demo_harness назначается последним из модулей
+	# в _parse_args, поэтому null = «кадр после разбора», а не «до старта игры».
+	if _demo_harness == null:
+		return
 	_time += delta
 	if not _selftest:
 		_online._tick_netexperiment()
@@ -1576,9 +1585,24 @@ func _on_brew_btn_pressed() -> void:
 	_engine._brew()
 
 func _unhandled_input(event: InputEvent) -> void:
+	# ~ (тильда) — toggle админ-консоли
+	if _handle_tilde(event):
+		get_viewport().set_input_as_handled()
+		return
 	# Esc закрывает верхний попап
 	if _handle_esc(event):
 		get_viewport().set_input_as_handled()
+
+func _handle_tilde(event: InputEvent) -> bool:
+	if not (event is InputEventKey):
+		return false
+	var ke := event as InputEventKey
+	if not ke.pressed or ke.keycode != KEY_QUOTELEFT:
+		return false
+	if _admin != null:
+		_admin.toggle()
+		Sfx.click()
+	return true
 
 # Предикат ESC и сам уход собраны в одну булеву функцию: «потреблять или нет»
 # наблюдаемо из selftest (наблюдаемость самого set_input_as_handled в headless
@@ -1596,6 +1620,10 @@ func _handle_esc(event: InputEvent) -> bool:
 # Возвращает true, если что-то закрыто/потреблено — только тогда Esc считается
 # обработанным; иначе событие уходит дальше (обычный выход из игры).
 func _close_top_modal() -> bool:
+	if _admin != null and _admin.is_visible():
+		_admin.close()
+		Sfx.click()
+		return true
 	if _engine._auto:
 		_engine._auto_cancel = true
 		_engine.status_text = "Автоварка: остановлю после текущего шага…"
@@ -1688,6 +1716,8 @@ func _close_top_modal() -> bool:
 # Предикат из tests/suite_journal_misc.gd переиспользовать нельзя (он тестовый),
 # поэтому у продакшена свой, проверяемый из selftest напрямую.
 func _modal_open_for_ads() -> bool:
+	if _admin != null and _admin.is_visible():
+		return true
 	if _engine._auto:
 		return true
 	if _engine.brewing:
