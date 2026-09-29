@@ -91,6 +91,7 @@ var _press_layout: Dictionary = {}   # раскладка в момент зах
 var _tx_cache: Dictionary = {}  # item_id -> Texture2D (кэш)
 var _content_cache: Dictionary = {}  # item_id -> непрозрачная часть PNG в пикселях
 var _fx: Dictionary = {}  # fx-имя -> Texture2D (кэш)
+var _hearts: Array = []  # сердечки при тапе на Светика
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP if editable else Control.MOUSE_FILTER_IGNORE
@@ -113,6 +114,29 @@ func set_editable(value: bool) -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP if editable else Control.MOUSE_FILTER_IGNORE
 
 
+func _spirit_pos() -> Vector2:
+	var w: float = size.x
+	var h: float = size.y
+	var bob: float = sin(_phase * 1.6) * 5.0
+	return Vector2(w * 0.50 + sin(_phase * 0.7) * w * 0.18, h * 0.40 + bob)
+
+
+func spawn_hearts(count: int = 3) -> void:
+	var c := _spirit_pos()
+	for i in count:
+		var angle := randf_range(-PI * 0.6, -PI * 0.4)
+		var speed := randf_range(40.0, 70.0)
+		_hearts.append({
+			"pos": Vector2(c.x + randf_range(-10, 10), c.y - 10),
+			"vel": Vector2(cos(angle) * speed * 0.3, sin(angle) * speed),
+			"life": 0.0,
+			"max_life": randf_range(0.8, 1.2),
+			"size": randf_range(6.0, 10.0),
+		})
+	set_process(true)
+	queue_redraw()
+
+
 func _gui_input(event: InputEvent) -> void:
 	if not editable or not house_built or solo_item != "":
 		return
@@ -120,6 +144,11 @@ func _gui_input(event: InputEvent) -> void:
 		if event.button_index != MOUSE_BUTTON_LEFT:
 			return
 		if event.pressed:
+			# Тап по Светику — сердечки
+			var sp := _spirit_pos()
+			if event.position.distance_to(sp) < 35.0:
+				spawn_hearts(3)
+				return
 			var hit := _hit_decor(event.position)
 			if not hit.is_empty():
 				_drag_cat = String(hit["cat"])
@@ -461,12 +490,23 @@ func _process(delta: float) -> void:
 		return
 	_phase += delta
 	_redraw_clock += delta
+	# Animate hearts
+	var alive_hearts := []
+	for h in _hearts:
+		h["life"] += delta
+		if h["life"] < h["max_life"]:
+			h["pos"] += h["vel"] * delta
+			h["vel"].y -= 20.0 * delta
+			alive_hearts.append(h)
+	_hearts = alive_hearts
 	# Кадры режем до ~30 к/с: фаза копится по delta, поэтому анимация
 	# остаётся синхронной по времени, а `_draw` всей процедурной комнаты
 	# вызывается реже. 30 FPS достаточно для плавного полёта Светика.
 	if _redraw_clock >= 0.033:
 		_redraw_clock = 0.0
 		queue_redraw()
+	if _hearts.is_empty() and not (animate and is_visible_in_tree()):
+		set_process(false)
 
 
 # ---------- примитивы ----------
@@ -560,6 +600,25 @@ func _draw_spirit(w: float, h: float) -> void:
 	var tw: float = spirit_tex.get_width() * sc
 	var th: float = spirit_tex.get_height() * sc
 	draw_texture_rect(spirit_tex, Rect2(sx - tw * 0.5, sy - th * 0.5, tw, th), false)
+	# Draw hearts
+	for hrt in _hearts:
+		var t: float = hrt["life"] / hrt["max_life"]
+		var alpha: float = 1.0 - t
+		var sz: float = hrt["size"] * (1.0 - t * 0.3)
+		_draw_heart(hrt["pos"], sz, Color(1.0, 0.4, 0.5, alpha))
+
+
+func _draw_heart(pos: Vector2, sz: float, col: Color) -> void:
+	var half := sz * 0.5
+	var top := PackedVector2Array([
+		pos + Vector2(0, -half * 0.3),
+		pos + Vector2(-half, -half),
+		pos + Vector2(-half * 0.3, -half * 0.2),
+		pos + Vector2(0, half * 0.5),
+		pos + Vector2(half * 0.3, -half * 0.2),
+		pos + Vector2(half, -half),
+	])
+	draw_colored_polygon(top, col)
 
 
 # ---------- обстановка ----------
