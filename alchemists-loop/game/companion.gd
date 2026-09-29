@@ -36,6 +36,8 @@ var _bubble_label: Label = null
 var _bubble_ttl := 0.0
 var _bubble_allowed := true
 
+var _hearts: Array = []  # [{pos, vel, life, max_life, size}]
+
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -110,6 +112,22 @@ func set_bubble_allowed(allowed: bool) -> void:
 			_bubble.visible = false
 
 
+func spawn_hearts(count: int = 3) -> void:
+	var c := size * 0.5
+	for i in count:
+		var angle := randf_range(-PI * 0.6, -PI * 0.4)
+		var speed := randf_range(40.0, 70.0)
+		_hearts.append({
+			"pos": Vector2(c.x + randf_range(-10, 10), c.y - 10),
+			"vel": Vector2(cos(angle) * speed * 0.3, sin(angle) * speed),
+			"life": 0.0,
+			"max_life": randf_range(0.8, 1.2),
+			"size": randf_range(6.0, 10.0),
+		})
+	set_process(true)
+	queue_redraw()
+
+
 func say(text: String, mood: String = "idle") -> void:
 	if text.strip_edges() == "":
 		return
@@ -170,9 +188,19 @@ func _process(delta: float) -> void:
 		_bubble_ttl -= delta
 		if _bubble_ttl <= 0.0 and _bubble != null:
 			_bubble.visible = false
+	# Animate hearts
+	var alive_hearts := []
+	for h in _hearts:
+		h["life"] += delta
+		if h["life"] < h["max_life"]:
+			h["pos"] += h["vel"] * delta
+			h["vel"].y -= 20.0 * delta  # gravity
+			alive_hearts.append(h)
+			needs_redraw = true
+	_hearts = alive_hearts
 	if needs_redraw:
 		queue_redraw()
-	if not _shake and _override_left <= 0.0 and _bubble_ttl <= 0.0:
+	if not _shake and _override_left <= 0.0 and _bubble_ttl <= 0.0 and _hearts.is_empty():
 		set_process(false)
 
 func _current_texture() -> Texture2D:
@@ -204,6 +232,25 @@ func _draw() -> void:
 	else:
 		_draw_fallback(c, breath)
 	draw_circle(Vector2(c.x, c.y + _bob), 15.0 * breath, Color(1, 1, 1, 0.04))
+	# Draw hearts
+	for h in _hearts:
+		var t: float = h["life"] / h["max_life"]
+		var alpha: float = 1.0 - t
+		var sz: float = h["size"] * (1.0 - t * 0.3)
+		_draw_heart(h["pos"], sz, Color(1.0, 0.4, 0.5, alpha))
+
+
+func _draw_heart(pos: Vector2, sz: float, col: Color) -> void:
+	var half := sz * 0.5
+	var top := PackedVector2Array([
+		pos + Vector2(0, -half * 0.3),
+		pos + Vector2(-half, -half),
+		pos + Vector2(-half * 0.3, -half * 0.2),
+		pos + Vector2(0, half * 0.5),
+		pos + Vector2(half * 0.3, -half * 0.2),
+		pos + Vector2(half, -half),
+	])
+	draw_colored_polygon(top, col)
 
 
 func _draw_house(c: Vector2) -> void:
@@ -242,4 +289,5 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed \
 			and event.button_index == MOUSE_BUTTON_LEFT:
 		tapped.emit()
+		spawn_hearts(3)
 		accept_event()
