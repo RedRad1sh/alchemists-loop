@@ -145,7 +145,7 @@ func _cmd_unlock(parts: Array) -> void:
 	if not found:
 		var keys := []
 		for m in _g.MODES:
-			keys.append(m["key"])
+			keys.append(str(m["key"]))
 		_log_text("[color=red]Unknown mode: %s. Available: %s[/color]" % [mode_key, ", ".join(keys)])
 		return
 	var inv_count := _g._engine.inventory.size()
@@ -155,11 +155,11 @@ func _cmd_unlock(parts: Array) -> void:
 		var min_items: int = m.get("min_items", 0)
 		if inv_count < min_items:
 			var needed := min_items - inv_count
+			var base_items := ["fire", "water", "earth", "air"]
 			for i in needed:
-				var fake_id := "_admin_%d" % i
-				if not _g._engine.inventory.has(fake_id):
-					_g._engine.inventory[fake_id] = 1
-			_log_text("Unlocked %s (added %d dummy items)" % [mode_key, needed])
+				var item_id: String = base_items[i % base_items.size()]
+				_g._engine.inventory[item_id] = _g._engine.inventory.get(item_id, 0) + 1
+			_log_text("Unlocked %s (added %d base items)" % [mode_key, needed])
 		else:
 			_log_text("Mode %s already unlocked by item count" % mode_key)
 		break
