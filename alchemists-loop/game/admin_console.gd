@@ -6,7 +6,7 @@ class_name AdminConsole
 
 var _g: Game
 var _dim: ColorRect
-var _panel: PanelContainer
+var _center: CenterContainer
 var _input: LineEdit
 var _log: RichTextLabel
 var _visible := false
@@ -29,7 +29,7 @@ func _build_ui() -> void:
 	center.z_index = 51
 	center.visible = false
 	_g.add_child(center)
-	_panel = center
+	_center = center
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 8)
@@ -78,7 +78,7 @@ func _build_ui() -> void:
 func toggle() -> void:
 	_visible = !_visible
 	_dim.visible = _visible
-	_panel.visible = _visible
+	_center.visible = _visible
 	if _visible:
 		_input.grab_focus()
 	else:
@@ -90,7 +90,7 @@ func is_visible() -> bool:
 func close() -> void:
 	_visible = false
 	_dim.visible = false
-	_panel.visible = false
+	_center.visible = false
 	_input.release_focus()
 
 func _on_command(text: String) -> void:
@@ -122,7 +122,7 @@ func _cmd_add(parts: Array) -> void:
 	if parts.size() < 2:
 		_log_text("[color=red]Usage: add <element_id>[/color]")
 		return
-	var eid := parts[1]
+	var eid: String = str(parts[1])
 	var count := 1
 	if parts.size() >= 3:
 		count = maxi(int(parts[2]), 1)
@@ -136,7 +136,7 @@ func _cmd_unlock(parts: Array) -> void:
 	if parts.size() < 2:
 		_log_text("[color=red]Usage: unlock <mode_key>[/color]")
 		return
-	var mode_key := parts[1]
+	var mode_key: String = str(parts[1])
 	var found := false
 	for m in _g.MODES:
 		if m["key"] == mode_key:
