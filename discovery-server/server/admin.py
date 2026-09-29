@@ -64,7 +64,7 @@ def setup_admin(app, get_db):
         if _check_auth(username, password):
             session_id = secrets.token_urlsafe(32)
             _sessions[session_id] = time.time()
-            response = RedirectResponse("/admin", status_code=302)
+            response = RedirectResponse("/admin", status_code=303)
             response.set_cookie(COOKIE_NAME, session_id, max_age=COOKIE_MAX_AGE, httponly=True)
             return response
         return templates.TemplateResponse(
@@ -85,6 +85,11 @@ def setup_admin(app, get_db):
     def admin_index(request: Request):
         return RedirectResponse("/admin/players", status_code=302)
 
+    @app.post("/admin")
+    @_require_auth
+    def admin_index_post(request: Request):
+        return RedirectResponse("/admin/players", status_code=303)
+
     @app.get("/admin/players", response_class=HTMLResponse)
     @_require_auth
     def admin_players(request: Request, q: str = "", offset: int = 0, limit: int = 50):
@@ -94,9 +99,9 @@ def setup_admin(app, get_db):
                 players = conn.execute(
                     """
                     SELECT p.nick, p.device_id, p.created_at,
-                           COUNT(ec.id) as discovery_count
+                           COUNT(r.id) as discovery_count
                     FROM players p
-                    LEFT JOIN echoes ec ON ec.device_id = p.device_id AND ec.element_id IS NOT NULL
+                    LEFT JOIN recipes r ON r.discoverer_device = p.device_id
                     WHERE p.nick LIKE ? OR p.device_id LIKE ?
                     GROUP BY p.device_id
                     ORDER BY p.created_at DESC
@@ -112,9 +117,9 @@ def setup_admin(app, get_db):
                 players = conn.execute(
                     """
                     SELECT p.nick, p.device_id, p.created_at,
-                           COUNT(ec.id) as discovery_count
+                           COUNT(r.id) as discovery_count
                     FROM players p
-                    LEFT JOIN echoes ec ON ec.device_id = p.device_id AND ec.element_id IS NOT NULL
+                    LEFT JOIN recipes r ON r.discoverer_device = p.device_id
                     GROUP BY p.device_id
                     ORDER BY p.created_at DESC
                     LIMIT ? OFFSET ?
@@ -139,9 +144,9 @@ def setup_admin(app, get_db):
                     """
                     SELECT e.*, r.a, r.b
                     FROM elements e
-                    LEFT JOIN recipes r ON r.element_id = e.id
+                    LEFT JOIN recipes r ON r.out_id = e.id
                     WHERE e.name LIKE ?
-                    ORDER BY e.layer, e.seq
+                    ORDER BY e.layer, e.id
                     LIMIT 200
                     """,
                     (f"%{q}%",),
@@ -151,8 +156,8 @@ def setup_admin(app, get_db):
                     """
                     SELECT e.*, r.a, r.b
                     FROM elements e
-                    LEFT JOIN recipes r ON r.element_id = e.id
-                    ORDER BY e.layer, e.seq
+                    LEFT JOIN recipes r ON r.out_id = e.id
+                    ORDER BY e.layer, e.id
                     LIMIT 200
                     """,
                 ).fetchall()
