@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Дашборд — Алхимики{% endblock %}
+{% block content %}
+<section>
+    <h2>Статистика</h2>
+    <div class="grid">
+        <article>
+            <h3>Игроки</h3>
+            <p class="stat-number">{{ stats.total_players }}</p>
+            <small>Активных сегодня: {{ stats.active_today }}</small>
+        </article>
+        <article>
+            <h3>Открытия</h3>
+            <p class="stat-number">{{ stats.total_discoveries }}</p>
+            <small>Сегодня: {{ stats.discoveries_today }}</small>
+        </article>
+        <article>
+            <h3>Вещества</h3>
+            <p class="stat-number">{{ stats.total_elements }}</p>
+            <small>Рецептов: {{ stats.total_recipes }}</small>
+        </article>
+        <article>
+            <h3>События</h3>
+            <p class="stat-number">{{ stats.active_events }}</p>
+            <small>Активных</small>
+        </article>
+    </div>
+</section>
+
+<section>
+    <h3>Здоровье сервера</h3>
+    <table>
+        <tr><td>Uptime</td><td>{{ health.uptime }}</td></tr>
+        <tr><td>Размер БД</td><td>{{ health.db_size }}</td></tr>
+        <tr><td>Версия</td><td>{{ health.version }}</td></tr>
+    </table>
+</section>
+
+<section>
+    <h3>Последние открытия</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Вещество</th>
+                <th>Автор</th>
+                <th>Пара</th>
+                <th>Время</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in recent %}
+            <tr>
+                <td><span class="glyph">{{ d.glyph }}</span> {{ d.name }}</td>
+                <td>{{ d.author or '—' }}</td>
+                <td><code>{{ d.a }} + {{ d.b }}</code></td>
+                <td>{{ d.created_at }}</td>
+            </tr>
+            {% endfor %}
+            {% if not recent %}
+            <tr><td colspan="4">Пока нет открытий</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

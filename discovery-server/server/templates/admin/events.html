@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}События — Админ{% endblock %}
+{% block content %}
+<section>
+    <h2>Мировые события</h2>
+    <p>Последние открытия, ставшие мировыми событиями.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Вещество</th>
+                <th>Пара</th>
+                <th>Первооткрыватель</th>
+                <th>Дата</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in events %}
+            <tr>
+                <td>{{ e.out_name }}</td>
+                <td><code>{{ e.a }} + {{ e.b }}</code></td>
+                <td>{{ e.discoverer or '—' }}</td>
+                <td>{{ e.created_at }}</td>
+            </tr>
+            {% endfor %}
+            {% if not events %}
+            <tr><td colspan="4">Нет событий</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h3>Действия</h3>
+    <div class="grid">
+        <form method="post" action="/admin/actions/reset-day">
+            <button type="submit" class="secondary">Сбросить день</button>
+        </form>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Игроки — Админ{% endblock %}
+{% block content %}
+<section>
+    <h2>Игроки</h2>
+    <form method="get" action="/admin/players" class="search-form">
+        <input type="text" name="q" placeholder="Поиск по нику или device_id..." value="{{ query }}">
+        <button type="submit">Найти</button>
+    </form>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Ник</th>
+                <th>Device ID</th>
+                <th>Открытий</th>
+                <th>Регистрация</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in players %}
+            <tr>
+                <td>{{ p.nick }}</td>
+                <td><code>{{ p.device_id[:12] }}...</code></td>
+                <td>{{ p.discovery_count }}</td>
+                <td>{{ p.created_at }}</td>
+            </tr>
+            {% endfor %}
+            {% if not players %}
+            <tr><td colspan="4">Ничего не найдено</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    {% if total > limit %}
+    <nav>
+        <ul>
+            {% if offset > 0 %}
+            <li><a href="?q={{ query }}&offset={{ offset - limit }}&limit={{ limit }}">Назад</a></li>
+            {% endif %}
+            <li>Стр. {{ offset // limit + 1 }} из {{ (total + limit - 1) // limit }}</li>
+            {% if offset + limit < total %}
+            <li><a href="?q={{ query }}&offset={{ offset + limit }}&limit={{ limit }}">Вперёд</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Вещества — Админ{% endblock %}
+{% block content %}
+<section>
+    <h2>Вещества и рецепты</h2>
+    <form method="get" action="/admin/elements" class="search-form">
+        <input type="text" name="q" placeholder="Поиск по названию..." value="{{ query }}">
+        <button type="submit">Найти</button>
+    </form>
+
+    <table>
+        <thead>
+            <tr>
+                <th></th>
+                <th>Название</th>
+                <th>Слаг</th>
+                <th>Слой</th>
+                <th>Категория</th>
+                <th>Рецепт</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in elements %}
+            <tr>
+                <td><span class="glyph">{{ e.glyph }}</span></td>
+                <td>{{ e.name }}</td>
+                <td><code>{{ e.slug }}</code></td>
+                <td>{{ e.layer }}</td>
+                <td>{{ e.category }}</td>
+                <td><code>{{ e.a or '?' }} + {{ e.b or '?' }}</code></td>
+            </tr>
+            {% endfor %}
+            {% if not elements %}
+            <tr><td colspan="6">Ничего не найдено</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}
