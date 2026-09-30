@@ -1,0 +1,99 @@
+[
+  {
+    "id": "first_light",
+    "display_name": "Первый свет",
+    "ingredients": ["sulfur", "starlight", "quicksilver"],
+    "result_type": "planet",
+    "rarity": "epic",
+    "properties": { "planet_type": "terrestrial", "rings": 1, "land_ratio": 0.42 }
+  },
+  {
+    "id": "ash_orbit",
+    "display_name": "Пепельная орбита",
+    "ingredients": ["charcoal", "vitriol", "silver_ash"],
+    "result_type": "planet",
+    "rarity": "uncommon",
+    "properties": { "planet_type": "moon", "rings": 0 }
+  },
+  {
+    "id": "wyrm_born",
+    "display_name": "Рождение wyrm'а",
+    "ingredients": ["wolf_blood", "dragon_scale", "mandrake"],
+    "result_type": "creature",
+    "rarity": "legendary",
+    "properties": { "creature_archetype": "serpent", "head": "horned" }
+  },
+  {
+    "id": "watcher",
+    "display_name": "Смотритель",
+    "ingredients": ["owl_eye", "grimoire", "astrolabe"],
+    "result_type": "creature",
+    "rarity": "rare",
+    "properties": { "creature_archetype": "avian", "head": "beak" }
+  },
+  {
+    "id": "athanor_heart",
+    "display_name": "Сердце атаноры",
+    "ingredients": ["athanor", "sulfur", "blood"],
+    "result_type": "relic",
+    "rarity": "legendary",
+    "properties": { "form": "armillary" }
+  },
+  {
+    "id": "salt_phial",
+    "display_name": "Соляная склянка",
+    "ingredients": ["salt", "distilled"],
+    "result_type": "relic",
+    "rarity": "common",
+    "properties": { "form": "phial" }
+  },
+  {
+    "id": "eye_of_scale",
+    "display_name": "Око весов",
+    "ingredients": ["scale", "gaze", "echo"],
+    "result_type": "abstraction",
+    "rarity": "epic",
+    "properties": { "form": "eye" }
+  },
+  {
+    "id": "void_mandala",
+    "display_name": "Мандала пустоты",
+    "ingredients": ["void_dust", "seal", "triad"],
+    "result_type": "abstraction",
+    "rarity": "mythic",
+    "properties": { "form": "mandala" }
+  },
+  {
+    "id": "rebirth",
+    "display_name": "Перерождение",
+    "ingredients": ["rebirth", "aqua_regia", "hourglass", "bone_dust"],
+    "result_type": "object",
+    "rarity": "mythic",
+    "properties": { "form": "idol" }
+  },
+  {
+    "id": "alembic_dawn",
+    "display_name": "Рассвет в реторте",
+    "ingredients": ["alembic", "rain_water", "key"],
+    "result_type": "object",
+    "rarity": "rare",
+    "properties": { "form": "vessel" }
+  },
+  {
+    "id": "order_sensitive_demo",
+    "display_name": "Порядок важен",
+    "ingredients": ["sulfur", "nitre", "charcoal"],
+    "result_type": "object",
+    "rarity": "uncommon",
+    "order_sensitive": true,
+    "properties": { "form": "gem" }
+  },
+  {
+    "id": "frozen_witness",
+    "display_name": "Мёрзлый свидетель",
+    "ingredients": ["air", "salt", "silver_ash", "void_dust"],
+    "result_type": "planet",
+    "rarity": "mythic",
+    "properties": { "planet_type": "ice", "rings": 2, "land_ratio": 0.55 }
+  }
+]

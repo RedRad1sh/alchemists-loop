@@ -617,17 +617,28 @@ func _vein_find_exists(cycle_id: String, pair_key: String) -> bool:
 
 
 func _vein_find_entry(pair_key: String, cycle_id: String = "") -> Dictionary:
+	# Fix #6: та же пара может жить в _vein_finds дважды — заявка текущего цикла
+	# и уже зарегистрированная запись прошлого цикла. Ответ сервера (цикл здесь не
+	# known) относится к незакрытой заявке, поэтому pending_server приоритетен; без
+	# этого цикла find из прошлого цикла перехватил бы ответ (R2-пересоздание
+	# ушло бы в старый cycle_id). Если pending нет, берём первую запись той же
+	# пары — иначе запоздалый повторный ответ (ok после registered, cycle_mismatch
+	# после register) молча терялся и локальная запись оставалась inconsistent.
+	var fallback := {}
 	for f in _vein_finds:
 		if typeof(f) != TYPE_DICTIONARY:
 			continue
 		if String(f.get("pair_key", "")) != pair_key:
 			continue
-		if cycle_id != "" and String(f.get("cycle_id", "")) != cycle_id:
+		if cycle_id != "":
+			if String(f.get("cycle_id", "")) == cycle_id:
+				return f
 			continue
-		if cycle_id == "" and String(f.get("status", "")) != "pending_server":
-			continue
-		return f
-	return {}
+		if String(f.get("status", "")) == "pending_server":
+			return f
+		if fallback.is_empty():
+			fallback = f
+	return fallback
 
 
 func _vein_report_pair(a: String, b: String, out: String) -> void:

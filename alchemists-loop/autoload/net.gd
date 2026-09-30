@@ -57,6 +57,8 @@ signal account_delete_result(result: Dictionary)
 signal vein_find_result(pair_key: String, result: Dictionary)
 signal vein_pour_result(find_id: String, result: Dictionary)
 signal cycle_result(result: Dictionary)
+signal sigil_daily_result(result: Dictionary)
+signal sigil_craft_result(result: Dictionary)
 signal error(message: String)
 
 var base_url := DEFAULT_BASE
@@ -246,6 +248,17 @@ func cycle_status(device_id: String) -> void:
 		path += "?device_id=" + device_id.uri_encode()
 	_enqueue({"kind": "cycle", "path": path})
 
+# Аркан Сигилов: ежедневные крафты и крафт карточки.
+func sigil_daily(device_id: String) -> void:
+	var path := "/sigil/daily?device_id=" + device_id.uri_encode()
+	_enqueue({"kind": "sigil_daily", "path": path})
+
+func sigil_craft(device_id: String, craft_id: String) -> void:
+	_enqueue({
+		"kind": "sigil_craft", "path": "/sigil/craft",
+		"body": {"device_id": device_id, "craft_id": craft_id},
+	})
+
 # T22: серверная проверка платёжного чека (POST /api/receipt/verify). Ответ —
 # сигнал receipt_verify_result: {"ok", "verified", "status", "reason",
 # "receipt_hash"} либо офлайн-форма {"ok": false, "offline": true}. Сырой токен
@@ -357,9 +370,17 @@ func _on_completed(result: int, response_code: int, _headers: PackedStringArray,
 	var parsed := {}
 	if response_code >= 200 and response_code < 300:
 		parsed = _parse(data)
-		if not parsed.is_empty() and not parsed.has("ok"):
-			parsed["ok"] = true
-		_available = true
+		if parsed.is_empty():
+			# 200 с не-JSON телом — это не наш API, а заглушка/антибот хостинга или
+			# прокси-страница. Раньше эта ветка ставила _available = true и сливала
+			# подписчикам пустой словарь: игра считала сервер здоровым, не уходила в
+			# офлайн и оставалась с предзаполненными статусами навсегда.
+			parsed = {"ok": false, "offline": true, "message": "сервер вернул не-JSON ответ"}
+			_available = false
+		else:
+			if not parsed.has("ok"):
+				parsed["ok"] = true
+			_available = true
 	elif result != HTTPRequest.RESULT_SUCCESS:
 		parsed = {"ok": false, "offline": true, "message": "нет ответа от сервера"}
 		_available = false
@@ -444,3 +465,7 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 			vein_pour_result.emit(String(req.get("find_id", "")), parsed)
 		"cycle":
 			cycle_result.emit(parsed)
+		"sigil_daily":
+			sigil_daily_result.emit(parsed)
+		"sigil_craft":
+			sigil_craft_result.emit(parsed)

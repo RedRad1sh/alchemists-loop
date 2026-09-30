@@ -422,6 +422,8 @@ var _feed_list: VBoxContainer = null
 
 var _spirit: Spirit  # Светик (R9)
 var _admin: AdminConsole  # админ-консоль (~)
+var _sigil: SigilManager  # Аркан Сигилов: карточки рецептов
+var _sigil_coll: ColorRect = null  # модалка коллекции сигилов; != null ⇒ открыта
 var _inv_grid: GridContainer = null
 
 func _boot_snapshot_text(path: String) -> String:
@@ -460,6 +462,10 @@ func _ready() -> void:
 	_spirit = Spirit.new(self)
 	_admin = AdminConsole.new(self)
 	_saves = Saves.new(self)
+	_sigil = SigilManager.new()
+	_sigil.name = "SigilManager"
+	add_child(_sigil)
+	_sigil.set_player_salt(OS.get_unique_id())
 	Monetization.bind_game(self)
 	# Прогон selftest не эмитит онбординг-аналитику: это не сессия реального
 	# пользователя. С U23 (T27) пути уже переведены в _ready автозагрузок, и эти
@@ -533,6 +539,8 @@ func _ready() -> void:
 			_demo_harness._action_brewprofile = true
 		elif a == "--action=circle":
 			_demo_harness._action_circle = true
+		elif a == "--action=sigilcoll":
+			_demo_harness._action_sigilcoll = true
 		elif a == "--action=week":
 			_demo_harness._action_week = true
 		elif a == "--action=goal":
@@ -590,6 +598,11 @@ func _ready() -> void:
 	Net.cycle_result.connect(_retention._on_net_cycle_result)
 	Net.vein_find_result.connect(_retention._on_net_vein_find_result)
 	Net.vein_pour_result.connect(_retention._on_net_vein_pour_result)
+	# Аркан Сигилов
+	Net.sigil_daily_result.connect(_sigil._on_daily_result)
+	Net.sigil_craft_result.connect(_sigil._on_craft_result)
+	_sigil.craft_completed.connect(_on_sigil_craft_completed)
+	_sigil.craft_failed.connect(_on_sigil_craft_failed)
 	_init_new_game()
 	_saves._load_game()
 	_build_ui()
@@ -743,6 +756,8 @@ func _ready() -> void:
 		_pages._select_mode("circle")
 		_retention._refresh_circle_page()
 		_engine._refresh()
+	if _demo_harness._demo and _demo_harness._action_sigilcoll:
+		_demo_seed_sigil_coll()
 	if _demo_harness._demo and _demo_harness._action_week:
 		_retention._inject_week_demo()
 		# страница «Неделя» открывается с 30 веществ — демо-доливка до гейта
@@ -1021,22 +1036,32 @@ func _build_ui() -> void:
 	head.add_child(title)
 	var quests_btn := _small_button("✦", Vector2(46, 36), 2)
 	quests_btn.tooltip_text = "Задания Светика, достижения, комплекты, заказы"
+	quests_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	quests_btn.pressed.connect(_progress_ui._open_progress_popup)
 	head.add_child(quests_btn)
+	var sigil_btn := _square_button("✧", 1)
+	sigil_btn.tooltip_text = "Аркан Сигилов: ежедневные крафты"
+	sigil_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	sigil_btn.pressed.connect(_open_sigil_modal)
+	head.add_child(sigil_btn)
 	_hub._up_btn = _small_button("▲", Vector2(46, 36))
 	_hub._up_btn.tooltip_text = "Улучшения"
+	_hub._up_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_hub._up_btn.pressed.connect(_hub._open_upgrades)
 	head.add_child(_hub._up_btn)
 	_sound_btn = _small_button("♪", Vector2(46, 36))
 	_sound_btn.tooltip_text = "Настройки звука"
+	_sound_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_sound_btn.pressed.connect(_hub._open_settings)
 	head.add_child(_sound_btn)
 	var log_btn := _small_button("Ж", Vector2(46, 36))
 	log_btn.tooltip_text = "Журнал событий"
+	log_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	log_btn.pressed.connect(_hub._open_journal)
 	head.add_child(log_btn)
 	var me_btn := Button.new()
 	me_btn.custom_minimum_size = Vector2(46, 36)
+	me_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	me_btn.tooltip_text = "Профиль: твоё имя и аватар"
 	me_btn.pressed.connect(_hub._open_profile)
 	var mb := _stylebox_9("res://assets/ui/btn_secondary.png", Vector4(14, 12, 14, 12))
@@ -1443,6 +1468,42 @@ func _small_button(text: String, min_size: Vector2, kind: int = 0) -> Button:
 	b.add_theme_color_override("font_hover_color", fg)
 	return b
 
+## Квадратная кнопка для иконок (таро, квесты и т.д.). Фиксированный размер 46x46.
+func _square_button(text: String, kind: int = 0) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = Vector2(46, 46)
+	b.add_theme_font_size_override("font_size", 18)
+	if _font_semi != null:
+		b.add_theme_font_override("font", _font_semi)
+	var tex := "res://assets/ui/btn_secondary.png"
+	if kind == 1:
+		tex = "res://assets/ui/btn_primary.png"
+	elif kind == 2:
+		tex = "res://assets/ui/btn_gold.png"
+	var margins := Vector4(10, 7, 10, 7)
+	var sb := _stylebox_9(tex, margins)
+	var sb_h := _stylebox_9(tex, margins, Color(1.2, 1.22, 1.18, 1))
+	if sb == null:
+		sb = StyleBoxFlat.new()
+		(sb as StyleBoxFlat).bg_color = Color(0.13, 0.17, 0.23, 0.9)
+		(sb as StyleBoxFlat).set_corner_radius_all(8)
+		sb_h = (sb as StyleBoxFlat).duplicate()
+		(sb_h as StyleBoxFlat).bg_color = Color(0.2, 0.26, 0.33, 1)
+	b.add_theme_stylebox_override("normal", sb)
+	b.add_theme_stylebox_override("hover", sb_h)
+	b.add_theme_stylebox_override("pressed", sb_h)
+	b.add_theme_stylebox_override("disabled", sb)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var fg := Color(0.88, 0.94, 0.96)
+	if kind == 2:
+		fg = Color(0.16, 0.12, 0.03)
+	elif kind == 1:
+		fg = Color(0.95, 1.0, 1.0)
+	b.add_theme_color_override("font_color", fg)
+	b.add_theme_color_override("font_hover_color", fg)
+	return b
+
 func _label(text: String, font_size: int = 16) -> Label:
 	var node := Label.new()
 	node.text = text
@@ -1543,6 +1604,19 @@ func _show_discovery_popup(item_id: String, a: String, b: String, milestones: Ar
 	for m in milestones:
 		sub += "\n%s" % _engine._milestone_text(int(m))
 	_present_popup(item_id, sub, "НОВЫЙ РЕЦЕПТ!", r["color"])
+	# Аркан Сигилов: для редких+ предметов генерируем карточку
+	if int(r.get("tier", 0)) >= 2 and _sigil != null:
+		var sigil_rarity := _tier_to_sigil_rarity(int(r.get("tier", 0)))
+		var ingredients := PackedStringArray([a, b])
+		_sigil.show_card_popup(item_id, ingredients, sigil_rarity, &"object", _online._item_name(item_id))
+
+func _tier_to_sigil_rarity(tier: int) -> StringName:
+	match tier:
+		0, 1: return &"common"
+		2: return &"rare"
+		3: return &"epic"
+		4: return &"legendary"
+		_: return &"common"
 
 func _present_popup(item_id: String, subtext: String, title: String = "", title_color: Color = Color(1.0, 0.9, 0.4)) -> void:
 	if title != "":
@@ -1561,6 +1635,712 @@ func _hide_popup() -> void:
 	_popup_dim.visible = false
 	_popup.visible = false
 	Sfx.click()
+
+## Показать карточку Аркана Сигилов. Вызывается из SigilManager после рендера.
+func _show_sigil_card(tex: ImageTexture, item_id: String, display_name: String, rarity: String) -> void:
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.75)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.z_index = 30
+	add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_STOP
+	center.z_index = 31
+	add_child(center)
+
+	var card_panel := PanelContainer.new()
+	card_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.05, 0.05, 0.08, 0.98), 12))
+	center.add_child(card_panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 8)
+	card_panel.add_child(vbox)
+
+	# Название
+	var title_lbl := _label(display_name, 22)
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_lbl.add_theme_color_override("font_color", _rarity_color(rarity))
+	vbox.add_child(title_lbl)
+
+	# Изображение карточки
+	var img_rect := TextureRect.new()
+	img_rect.texture = tex
+	img_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	img_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	img_rect.custom_minimum_size = Vector2(256, 512)
+	img_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	vbox.add_child(img_rect)
+
+	# Редкость
+	var rar_lbl := _label(rarity.to_upper(), 14)
+	rar_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rar_lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	vbox.add_child(rar_lbl)
+
+	# Кнопка закрытия
+	var close_btn := _small_button("Забрать", Vector2(140, 44), 2)
+	close_btn.pressed.connect(func():
+		dim.queue_free()
+		center.queue_free()
+		Sfx.click()
+	)
+	vbox.add_child(close_btn)
+
+	# Анимация появления
+	center.scale = Vector2(0.5, 0.5)
+	var tw := create_tween()
+	tw.tween_property(center, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK)
+
+	# Chrome-эффект для легендарных/мифических
+	if rarity in ["legendary", "mythic"]:
+		var chrome := ColorRect.new()
+		chrome.color = Color(1, 1, 1, 0.15)
+		chrome.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		chrome.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chrome.material = ShaderMaterial.new()
+		chrome.material.shader = load("res://game/sigil/shaders/sigil_chrome.gdshader")
+		center.add_child(chrome)
+		# Пульсация ауры
+		var pulse_tw := create_tween().set_loops()
+		pulse_tw.tween_property(chrome, "modulate:a", 0.3, 1.5)
+		pulse_tw.tween_property(chrome, "modulate:a", 0.1, 1.5)
+		Sfx.legendary()
+	else:
+		Sfx.discovery()
+
+	dim.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and not ev.pressed:
+			dim.queue_free()
+			center.queue_free()
+	)
+
+func _rarity_color(rarity: String) -> Color:
+	match rarity:
+		"common": return Color(0.7, 0.7, 0.7)
+		"uncommon": return Color(0.3, 0.8, 0.4)
+		"rare": return Color(0.3, 0.6, 1.0)
+		"epic": return Color(0.7, 0.3, 1.0)
+		"legendary": return Color(1.0, 0.8, 0.2)
+		"chromatic": return Color(1.0, 0.55, 0.12)
+		"mythic": return Color(1.0, 0.2, 0.3)
+		_: return Color(0.7, 0.7, 0.7)
+
+## Демо-харнес (--action=sigilcoll): меню крафтов дня на локальных данных,
+## без сервера. Превью кругов — настоящий рендер SigilRenderService.
+func _demo_seed_sigil_coll() -> void:
+	var day := Time.get_date_string_from_system()
+	_sigil._daily_day = day
+	_sigil._daily_crafts = [
+		{"id": day + "_demo_0", "rarity": "common", "ether_cost": 50, "llm_name": "",
+			"is_chromatic": false, "ingredients": [
+				{"item_id": "clay", "qty": 12}, {"item_id": "water", "qty": 20},
+				{"item_id": "sand", "qty": 8}]},
+		{"id": day + "_demo_1", "rarity": "epic", "ether_cost": 400, "llm_name": "",
+			"is_chromatic": false, "ingredients": [
+				{"item_id": "metal", "qty": 30}, {"item_id": "fire", "qty": 45},
+				{"item_id": "ice", "qty": 25}, {"item_id": "spark", "qty": 18}]},
+		{"id": day + "_demo_2", "rarity": "legendary", "ether_cost": 800,
+			"llm_name": "Сигил «Горний Зов»", "is_chromatic": false, "ingredients": [
+				{"item_id": "mountain", "qty": 60}, {"item_id": "cloud", "qty": 80},
+				{"item_id": "life", "qty": 40}]},
+	]
+	# Первая карточка доступна, вторая — не хватает металла, третья — далеко
+	_engine.ether = 950
+	for pair in [["clay", 30], ["water", 25], ["sand", 40], ["metal", 10], ["fire", 50],
+			["ice", 30], ["spark", 20], ["mountain", 5], ["cloud", 12], ["life", 0]]:
+		_engine.inventory[str(pair[0])] = int(pair[1])
+	_engine._refresh()
+	_open_sigil_modal()
+
+## Модалка Аркана Сигилов: три крафта дня крупным списком.
+## Превью — настоящий рендер круга (SigilRenderService), а не декоративная
+## рисовка: игрок видит ровно ту картину, которая будет на карточке.
+func _open_sigil_modal() -> void:
+	if _sigil_coll != null or _sigil == null:
+		return
+	Sfx.click()
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.84)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.z_index = 20
+	_sigil_coll = dim
+	add_child(dim)
+	dim.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			_close_sigil_collection()
+	)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		margin.add_theme_constant_override(side, 16)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dim.add_child(margin)
+	var panel := PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.add_theme_stylebox_override("panel", _panel_style(Color(0.055, 0.065, 0.10, 0.99), 18))
+	margin.add_child(panel)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	vbox.add_child(head)
+	var title := _label("АРКАН СИГИЛОВ", 24)
+	title.add_theme_color_override("font_color", Color(0.90, 0.82, 0.56))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var close_btn := _small_button("✕", Vector2(46, 40))
+	close_btn.tooltip_text = "Закрыть"
+	close_btn.pressed.connect(_close_sigil_collection)
+	head.add_child(close_btn)
+	var sub := _label("Три крафта дня — выбери сигил", 14)
+	sub.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
+	vbox.add_child(sub)
+
+	var status := _label("Загружаю крафты…", 15)
+	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	status.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(status)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.visible = false
+	vbox.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 14)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+
+	_sigil.request_daily(_online._device_id)
+	var loaded := await _await_daily_crafts(10.0)
+	if _sigil_coll != dim:
+		return
+	var crafts: Array = _sigil._daily_crafts
+	if not loaded or crafts.is_empty():
+		status.text = "Сервер не ответил.\nКрафты появятся, когда вернётся связь."
+		status.add_theme_color_override("font_color", Color(0.78, 0.58, 0.46))
+		var retry := _small_button("Повторить", Vector2(180, 46), 2)
+		retry.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		retry.pressed.connect(func():
+			_close_sigil_collection()
+			_open_sigil_modal.call_deferred()
+		)
+		vbox.add_child(retry)
+		return
+	status.queue_free()
+	scroll.visible = true
+	var rows: Array = []
+	for craft in crafts:
+		var row := _sigil_craft_row(craft)
+		list.add_child(row)
+		rows.append(row)
+	# Список показываем сразу, картинки дорисовываем по одной: рендер круга
+	# требует кадров, а ждать все три до первого пикселя — значит держать
+	# игрока на пустом экране.
+	for i in rows.size():
+		var tex := await _sigil.preview_texture(crafts[i])
+		if _sigil_coll != dim or tex == null:
+			continue
+		_sigil_fill_preview((rows[i] as Control).get_meta("preview"), tex)
+
+
+## Ждать ежедневные крафты, но не вечно: офлайн не должен вешать меню.
+func _await_daily_crafts(timeout: float) -> bool:
+	var waited := 0.0
+	while _sigil._daily_crafts.is_empty() and waited < timeout:
+		await get_tree().process_frame
+		waited += get_process_delta_time()
+	return not _sigil._daily_crafts.is_empty()
+
+
+## Строка крафта: слева круг, справа всё, что нужно для решения.
+func _sigil_craft_row(craft: Dictionary) -> Control:
+	var rarity := str(craft.get("rarity", "common"))
+	var is_chromatic := bool(craft.get("is_chromatic", false))
+	var ether_cost := int(craft.get("ether_cost", 0))
+	var rc := _rarity_color(rarity)
+	var accent := Color(1.0, 0.55, 0.12) if is_chromatic else rc
+	var shortages := _sigil_shortages(craft)
+	var can_afford := shortages.is_empty() and _engine.ether >= ether_cost
+	var n_ing := int((craft.get("ingredients", []) as Array).size())
+	var title := _sigil_craft_title(craft)
+	# Высота по содержимому: Button не контейнер и сам её не посчитает.
+	var row_h := 107 + 21 * n_ing
+	if not shortages.is_empty():
+		row_h += 24
+		if _sigil_shortage_text(shortages).length() > 48:
+			row_h += 18
+	if title.length() > 24:
+		row_h += 24
+
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(0, maxi(176, row_h))
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.clip_contents = true
+	btn.add_theme_stylebox_override("normal", _sigil_row_style(accent, 0.0))
+	btn.add_theme_stylebox_override("hover", _sigil_row_style(accent, 0.05))
+	btn.add_theme_stylebox_override("pressed", _sigil_row_style(accent, 0.09))
+	btn.add_theme_stylebox_override("disabled", _sigil_row_style(accent, 0.0))
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	if can_afford:
+		btn.pressed.connect(_open_sigil_craft.bind(craft))
+	else:
+		btn.disabled = true
+		btn.modulate = Color(0.68, 0.68, 0.74, 0.92)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(row)
+	# Button не контейнер: без якорей HBox остался бы нулевого размера.
+	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.offset_left = 14
+	row.offset_top = 10
+	row.offset_right = -14
+	row.offset_bottom = -10
+
+	var shot := _sigil_preview_slot(accent, 148)
+	row.add_child(shot)
+	btn.set_meta("preview", shot)
+
+	var info := VBoxContainer.new()
+	info.add_theme_constant_override("separation", 6)
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(info)
+
+	var name_lbl := _label(title, 18)
+	name_lbl.add_theme_color_override("font_color", Color(0.95, 0.93, 0.86))
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_child(name_lbl)
+
+	var badge_row := HBoxContainer.new()
+	badge_row.add_theme_constant_override("separation", 8)
+	info.add_child(badge_row)
+	badge_row.add_child(_sigil_badge(_sigil_rarity_title(rarity), rc))
+	if is_chromatic and rarity != "chromatic":
+		badge_row.add_child(_sigil_badge("ХРОМА", Color(1.0, 0.55, 0.12)))
+
+	for ing in craft.get("ingredients", []):
+		var d := ing as Dictionary
+		info.add_child(_sigil_need_row(str(d.get("item_id", "")), int(d.get("qty", 0))))
+
+	var price := _label("%d эфира" % ether_cost, 15)
+	price.autowrap_mode = TextServer.AUTOWRAP_OFF
+	price.add_theme_color_override("font_color",
+		Color(0.62, 0.85, 0.66) if _engine.ether >= ether_cost else Color(0.92, 0.48, 0.42))
+	info.add_child(price)
+
+	if not shortages.is_empty():
+		var miss := _label(_sigil_shortage_text(shortages), 12)
+		miss.add_theme_color_override("font_color", Color(0.92, 0.56, 0.46))
+		miss.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		info.add_child(miss)
+	return btn
+
+
+## Плейсхолдер превью: рамка в цвет редкости, картинка встанет сюда позже.
+func _sigil_preview_slot(accent: Color, side: int) -> Control:
+	var box := PanelContainer.new()
+	box.custom_minimum_size = Vector2(side, side)
+	box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.clip_contents = true
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.04, 0.045, 0.07, 1.0)
+	sb.border_color = Color(accent.r, accent.g, accent.b, 0.55)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(12)
+	box.add_theme_stylebox_override("panel", sb)
+	var rect := TextureRect.new()
+	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(rect)
+	box.set_meta("rect", rect)
+	var ph := _label("…", 28)
+	ph.name = "Ph"
+	ph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ph.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	ph.add_theme_color_override("font_color", Color(accent.r, accent.g, accent.b, 0.5))
+	ph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(ph)
+	return box
+
+
+func _sigil_fill_preview(box: Control, tex: ImageTexture) -> void:
+	if box == null or not is_instance_valid(box):
+		return
+	var rect: TextureRect = box.get_meta("rect")
+	rect.texture = tex
+	var ph := box.get_node_or_null("Ph")
+	if ph != null:
+		ph.visible = false
+
+
+func _sigil_row_style(accent: Color, lift: float) -> StyleBox:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.075 + accent.r * 0.10 + lift, 0.085 + accent.g * 0.10 + lift,
+		0.12 + accent.b * 0.10 + lift, 1.0)
+	sb.border_color = Color(accent.r, accent.g, accent.b, 0.45 + lift)
+	sb.set_border_width_all(1)
+	sb.border_width_left = 4
+	sb.set_corner_radius_all(14)
+	sb.content_margin_left = 14
+	sb.content_margin_right = 14
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 12
+	return sb
+
+
+func _sigil_badge(text: String, col: Color) -> Control:
+	var b := PanelContainer.new()
+	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(col.r, col.g, col.b, 0.16)
+	sb.border_color = Color(col.r, col.g, col.b, 0.75)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(8)
+	sb.content_margin_left = 9
+	sb.content_margin_right = 9
+	sb.content_margin_top = 3
+	sb.content_margin_bottom = 3
+	b.add_theme_stylebox_override("panel", sb)
+	var l := _label(text, 11)
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	l.add_theme_color_override("font_color", col)
+	b.add_child(l)
+	return b
+
+
+## Строка ингредиента: сколько есть и сколько нужно.
+func _sigil_need_row(elem_id: String, needed: int) -> Control:
+	var have := int(_engine.inventory.get(elem_id, 0))
+	var enough := have >= needed
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 7)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var dot := ColorRect.new()
+	dot.color = _element_color(elem_id)
+	dot.custom_minimum_size = Vector2(10, 10)
+	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(dot)
+	var nm := _label(_online._item_name(elem_id), 13)
+	nm.autowrap_mode = TextServer.AUTOWRAP_OFF
+	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nm.add_theme_color_override("font_color", Color(0.80, 0.82, 0.86))
+	row.add_child(nm)
+	var qty := _label("%d / %d" % [have, needed], 13)
+	qty.autowrap_mode = TextServer.AUTOWRAP_OFF
+	qty.add_theme_color_override("font_color",
+		Color(0.55, 0.86, 0.58) if enough else Color(0.93, 0.50, 0.44))
+	row.add_child(qty)
+	return row
+
+
+func _sigil_shortage_text(shortages: Array) -> String:
+	return "Не хватает: " + ", ".join(shortages)
+
+
+func _sigil_shortages(craft: Dictionary) -> Array:
+	var out: Array = []
+	for ing in craft.get("ingredients", []):
+		var d := ing as Dictionary
+		var elem_id := str(d.get("item_id", ""))
+		var needed := int(d.get("qty", 0))
+		var have := int(_engine.inventory.get(elem_id, 0))
+		if have < needed:
+			out.append("%s (%d/%d)" % [_online._item_name(elem_id), have, needed])
+	return out
+
+
+## Название крафта: LLM-имя, если сервер его прислал, иначе нейтральное.
+func _sigil_craft_title(craft: Dictionary) -> String:
+	var llm_name := str(craft.get("llm_name", ""))
+	if llm_name != "":
+		return llm_name
+	return "Сигил «%s»" % _sigil_rarity_title(str(craft.get("rarity", "common"))).capitalize()
+
+
+func _sigil_rarity_title(rarity: String) -> String:
+	match rarity:
+		"common": return "ОБЫЧНЫЙ"
+		"uncommon": return "НЕОБЫЧНЫЙ"
+		"rare": return "РЕДКИЙ"
+		"epic": return "ЭПИЧЕСКИЙ"
+		"legendary": return "ЛЕГЕНДАРНЫЙ"
+		"chromatic": return "ХРОМАТИЧЕСКИЙ"
+		"mythic": return "МИФИЧЕСКИЙ"
+		_: return rarity.to_upper()
+
+var _sigil_craft_screen: Control = null
+var _sigil_craft_data: Dictionary = {}
+var _sigil_placed: Dictionary = {}  ## element_id -> placed_count
+## Списанные ресурсы до ответа сервера: нужны, чтобы вернуть их при отказе.
+var _sigil_pending_craft: Dictionary = {}
+
+func _open_sigil_craft(craft: Dictionary) -> void:
+	if _sigil_craft_screen != null:
+		return
+	Sfx.click()
+	_sigil_craft_data = craft
+	_sigil_placed = {}
+	# Проверка: все ингредиенты доступны в инвентаре
+	var ingredients: Array = craft.get("ingredients", [])
+	for ing in ingredients:
+		var elem_id := str(ing.get("item_id", ""))
+		var needed := int(ing.get("qty", 0))
+		var have := int(_engine.inventory.get(elem_id, 0))
+		if have < needed:
+			return  # недостаточно ресурсов
+	var ether_cost := int(craft.get("ether_cost", 0))
+	if _engine.ether < ether_cost:
+		return  # недостаточно эфира
+	# Создаём модалку крафта
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.85)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.z_index = 25
+	_sigil_craft_screen = dim
+	add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dim.add_child(center)
+	var panel := PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.add_theme_stylebox_override("panel", _panel_style(Color(0.06, 0.08, 0.12, 0.98), 16))
+	center.add_child(panel)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 12)
+	vbox.custom_minimum_size = Vector2(340, 520)
+	panel.add_child(vbox)
+	# Заголовок
+	var head_row := HBoxContainer.new()
+	vbox.add_child(head_row)
+	var title := _label("ТРАНСМУТАЦИЯ", 18)
+	title.add_theme_color_override("font_color", Color(0.85, 0.78, 0.55))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head_row.add_child(title)
+	var close_btn := _small_button("✕", Vector2(42, 36))
+	close_btn.tooltip_text = "Закрыть"
+	close_btn.pressed.connect(_close_sigil_craft_screen)
+	head_row.add_child(close_btn)
+	# Трансмутационный круг — тот же рендер, что и в меню крафтов
+	var circle_container := CenterContainer.new()
+	circle_container.custom_minimum_size = Vector2(0, 200)
+	vbox.add_child(circle_container)
+	var accent := Color(1.0, 0.55, 0.12) if bool(craft.get("is_chromatic", false)) \
+		else _rarity_color(str(craft.get("rarity", "common")))
+	var circle := _sigil_preview_slot(accent, 180)
+	circle_container.add_child(circle)
+	# Ингредиенты
+	var ing_title := _label("Ингредиенты:", 13)
+	ing_title.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	vbox.add_child(ing_title)
+	var ing_grid := GridContainer.new()
+	ing_grid.columns = 2
+	ing_grid.add_theme_constant_override("h_separation", 8)
+	ing_grid.add_theme_constant_override("v_separation", 6)
+	ing_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(ing_grid)
+	for ing in ingredients:
+		var elem_id := str(ing.get("item_id", ""))
+		var needed := int(ing.get("qty", 0))
+		var row := _sigil_ingredient_row(elem_id, needed)
+		ing_grid.add_child(row)
+	# Кнопка крафта
+	var craft_btn := Button.new()
+	craft_btn.text = "НАЧАТЬ ТРАНСМУТАЦИЮ"
+	craft_btn.custom_minimum_size = Vector2(0, 48)
+	craft_btn.add_theme_font_size_override("font_size", 16)
+	craft_btn.add_theme_stylebox_override("normal", _btn_style(Color(0.2, 0.6, 0.3)))
+	craft_btn.add_theme_stylebox_override("hover", _btn_style(Color(0.25, 0.7, 0.35)))
+	craft_btn.add_theme_stylebox_override("pressed", _btn_style(Color(0.15, 0.5, 0.25)))
+	craft_btn.pressed.connect(_on_sigil_craft_confirmed)
+	vbox.add_child(craft_btn)
+	# Подсказка
+	var hint := _label("Тап по ингредиенту добавляет его в круг", 11)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	vbox.add_child(hint)
+	# Круг дорисовывается, когда рендер готов (из меню он уже в кэше)
+	var tex := await _sigil.preview_texture(craft)
+	if _sigil_craft_screen == dim and tex != null:
+		_sigil_fill_preview(circle, tex)
+
+func _sigil_ingredient_row(elem_id: String, needed: int) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	# Кнопка-ингредиент (тап добавляет в круг)
+	var btn := Button.new()
+	var have := int(_engine.inventory.get(elem_id, 0))
+	var elem_name := _online._item_name(elem_id)
+	btn.text = "%s (%d/%d)" % [elem_name, 0, needed]
+	btn.custom_minimum_size = Vector2(150, 38)
+	btn.add_theme_font_size_override("font_size", 12)
+	var col := _element_color(elem_id)
+	btn.add_theme_stylebox_override("normal", _btn_style(col.darkened(0.3)))
+	btn.add_theme_stylebox_override("hover", _btn_style(col.darkened(0.2)))
+	btn.add_theme_stylebox_override("pressed", _btn_style(col.darkened(0.4)))
+	btn.disabled = have < needed
+	btn.pressed.connect(_on_sigil_ingredient_tapped.bind(elem_id, needed, btn))
+	row.add_child(btn)
+	# Индикатор наличия
+	var have_label := _label("✓%d" % have, 11)
+	have_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5) if have >= needed else Color(0.8, 0.5, 0.5))
+	row.add_child(have_label)
+	return row
+
+func _on_sigil_ingredient_tapped(elem_id: String, needed: int, btn: Button) -> void:
+	var placed := int(_sigil_placed.get(elem_id, 0))
+	if placed >= needed:
+		return
+	_sigil_placed[elem_id] = placed + 1
+	btn.text = "%s (%d/%d)" % [_online._item_name(elem_id), placed + 1, needed]
+	Sfx.click()
+	# Визуальная обратная связь: кнопка "использована"
+	if placed + 1 >= needed:
+		btn.disabled = true
+		btn.modulate = Color(0.6, 0.6, 0.6, 0.7)
+
+func _on_sigil_craft_confirmed() -> void:
+	# Проверяем, все ингредиенты размещены
+	var ingredients: Array = _sigil_craft_data.get("ingredients", [])
+	for ing in ingredients:
+		var elem_id := str(ing.get("item_id", ""))
+		var needed := int(ing.get("qty", 0))
+		var placed := int(_sigil_placed.get(elem_id, 0))
+		if placed < needed:
+			return  # не все ингредиенты размещены
+	# Атомарный крафт: ресурсы списываются сразу (спека: карточка уже у игрока)
+	var ether_cost := int(_sigil_craft_data.get("ether_cost", 0))
+	_engine.ether = max(0, _engine.ether - ether_cost)
+	for ing in ingredients:
+		var elem_id := str(ing.get("item_id", ""))
+		var needed := int(ing.get("qty", 0))
+		var have := int(_engine.inventory.get(elem_id, 0))
+		_engine.inventory[elem_id] = max(0, have - needed)
+	_saves._save_game()
+	# Анимация крафта (упрощённая: вспышка + закрытие)
+	Sfx.discovery()
+	var craft_id := str(_sigil_craft_data.get("id", ""))
+	_sigil_pending_craft = _sigil_craft_data.duplicate(true)
+	_sigil.craft_card(_online._device_id, craft_id)
+	_close_sigil_craft_screen()
+
+
+## Сервер подтвердил крафт: показываем готовую карточку.
+func _on_sigil_craft_completed(craft_id: String, rarity: String, llm_name: String) -> void:
+	_sigil_pending_craft = {}
+	var craft: Dictionary = {"id": craft_id, "rarity": rarity, "llm_name": llm_name,
+		"ingredients": []}
+	for c in _sigil._daily_crafts:
+		if str((c as Dictionary).get("id", "")) == craft_id:
+			craft = c
+			break
+	var img := await _sigil.get_card(craft_id, SigilManager.craft_ingredients(craft),
+		StringName(rarity), &"object", llm_name)
+	if img == null:
+		return
+	_show_sigil_card(ImageTexture.create_from_image(img), craft_id,
+		_sigil_craft_title(craft), rarity)
+
+
+## Сервер отказал: возвращаем списанное, иначе ресурсы сгорают молча.
+func _on_sigil_craft_failed(err: String) -> void:
+	var craft := _sigil_pending_craft
+	_sigil_pending_craft = {}
+	if craft.is_empty():
+		return
+	_engine.ether += int(craft.get("ether_cost", 0))
+	for ing in craft.get("ingredients", []):
+		var d := ing as Dictionary
+		var elem_id := str(d.get("item_id", ""))
+		_engine.inventory[elem_id] = int(_engine.inventory.get(elem_id, 0)) + int(d.get("qty", 0))
+	_saves._save_game()
+	_engine._refresh()
+	_engine.status_text = "Крафт не прошёл (%s) — ресурсы возвращены." % err
+	Sfx.error()
+
+func _close_sigil_craft_screen() -> void:
+	if _sigil_craft_screen == null:
+		return
+	var d := _sigil_craft_screen
+	_sigil_craft_screen = null
+	_sigil_craft_data = {}
+	_sigil_placed = {}
+	d.queue_free()
+	Sfx.click()
+
+func _btn_style(col: Color) -> StyleBox:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = col
+	sb.set_corner_radius_all(6)
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	return sb
+
+func _element_color(elem_id: String) -> Color:
+	return _item_colors.get(elem_id, Color(0.62, 0.66, 0.72))
+
+func _close_sigil_collection() -> void:
+	if _sigil_coll == null:
+		return
+	var d := _sigil_coll
+	_sigil_coll = null
+	d.queue_free()
+	Sfx.click()
+
+func _sigil_thumb(item: Dictionary) -> Control:
+	var id := str(item["id"])
+	var rar := str(item["rarity"])
+	var cell := VBoxContainer.new()
+	cell.add_theme_constant_override("separation", 2)
+	cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(100, 200)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.05, 0.08, 1)
+	sb.border_color = _rarity_color(rar)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(8)
+	b.add_theme_stylebox_override("normal", sb)
+	b.add_theme_stylebox_override("hover", sb)
+	b.add_theme_stylebox_override("pressed", sb)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var rect := TextureRect.new()
+	rect.texture = item["texture"]
+	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(rect)
+	b.pressed.connect(func():
+		_show_sigil_card(item["texture"], id, _online._item_name(id), rar)
+	)
+	cell.add_child(b)
+	var name_lbl := _label(_online._item_name(id), 10)
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.add_theme_color_override("font_color", _rarity_color(rar))
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	name_lbl.clip_text = true
+	cell.add_child(name_lbl)
+	return cell
 
 var _popup_swipe_start := Vector2.ZERO
 
@@ -1620,6 +2400,12 @@ func _handle_esc(event: InputEvent) -> bool:
 # Возвращает true, если что-то закрыто/потреблено — только тогда Esc считается
 # обработанным; иначе событие уходит дальше (обычный выход из игры).
 func _close_top_modal() -> bool:
+	if _sigil_craft_screen != null:
+		_close_sigil_craft_screen()
+		return true
+	if _sigil_coll != null:
+		_close_sigil_collection()
+		return true
 	if _admin != null and _admin.is_visible():
 		_admin.close()
 		Sfx.click()
