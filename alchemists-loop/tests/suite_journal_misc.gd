@@ -1391,6 +1391,18 @@ static func run(g: Game) -> void:
 		and UserData.PURCHASES_PATH == _up0 and UserData._data == _data0 and UserData._processed == _processed0
 		and UserData._granted == _granted0)
 
+	# I-3: кадр после get_tree().quit() приходит в _process на разобранном дереве.
+	# Мутация — снять гейт `if _demo_harness == null: return` в main.gd:_process:
+	# тогда _time += delta успевает исполниться, а вызов обрывается на
+	# _demo_harness._tick_demo(), и кейс краснеет по сдвинутому _time.
+	var _i3_harness := g._demo_harness
+	var _i3_time := g._time
+	g._demo_harness = null
+	g._process(0.5)
+	g._demo_harness = _i3_harness
+	Selftest.check("i3 _process halts on a torn-down tree", g._time == _i3_time
+		and g._demo_harness == _i3_harness)
+
 
 static func _t22_json(path: String) -> Dictionary:
 	# Чтение с диска, а не из памяти: проверка «старая копия журнала удалена из

@@ -149,6 +149,22 @@ static func run(g: Game) -> void:
 	g._retention._vein_finds = sv_finds3
 	g._online._server_tag = sv_tags3
 	g._online._server_recipes = sv_sr
+	# Fix #6 + приоритет заявки: та же пара в двух циклах — ответ должен уйти в
+	# pending-заявку, а не в зарегистрированную запись прошлого цикла, которая
+	# стоит в массиве раньше. Мутация «return f без проверки статуса» (старый код)
+	# красит ve1; мутация «continue когда статус не pending_server» (слишком узкий
+	# фикс) красит ve2 — запоздалый ответ по зарегистрированной паре терялся бы.
+	g._retention._vein_finds = [
+		{"pair_key": "fire|water", "cycle_id": "vc:OLD", "status": "registered"},
+		{"pair_key": "fire|water", "cycle_id": "vc:NEW", "status": "pending_server"}]
+	var ve1 := String(g._retention._vein_find_entry("fire|water")["cycle_id"]) == "vc:NEW"
+	var ve_exact := String(g._retention._vein_find_entry("fire|water", "vc:OLD")["cycle_id"]) == "vc:OLD"
+	g._retention._vein_finds = [{"pair_key": "fire|water", "cycle_id": "vc:OLD", "status": "registered"}]
+	var ve2 := not g._retention._vein_find_entry("fire|water").is_empty()
+	var ve3 := g._retention._vein_find_entry("earth|air").is_empty()
+	g._retention._vein_finds = sv_finds3
+	Selftest.check("vein entry lookup: pending wins, cycle-exact matches, registered fallback",
+		ve1 and ve_exact and ve2 and ve3)
 	Selftest.check("personal find: route/dedup/tag/cap-grant/mismatch-recreate/drop",
 		pf1 and pf2 and pf3 and pf4 and reg and remade and dropped)
 

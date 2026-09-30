@@ -113,8 +113,10 @@ func _on_command(text: String) -> void:
 			_cmd_clear(parts)
 		"force":
 			_cmd_force(parts)
+		"sigil":
+			_cmd_sigil(parts)
 		"help":
-			_log_text("Commands: add <id>, unlock <mode>, set ether <N>, reset day, clear inventory, force circle open")
+			_log_text("Commands: add <id>, unlock <mode>, set ether <N>, reset day, clear inventory, force circle open, sigil rotate|free <0|1|2>")
 		_:
 			_log_text("[color=red]Unknown command: %s[/color]" % parts[0])
 
@@ -202,6 +204,36 @@ func _cmd_force(parts: Array) -> void:
 	_g._engine._experiment_day = ""
 	_g._saves._save_game()
 	_log_text("Circle forced open (day keys cleared)")
+
+func _cmd_sigil(parts: Array) -> void:
+	if parts.size() < 2:
+		_log_text("[color=red]Usage: sigil rotate|free <0|1|2>[/color]")
+		return
+	var sub := str(parts[1])
+	if sub == "rotate":
+		# Принудительная ротация ежедневных крафтов
+		_g._sigil._daily_crafts.clear()
+		_g._sigil._daily_day = ""
+		_g._sigil.request_daily(_g._online._device_id)
+		_log_text("Sigil daily crafts rotated")
+	elif sub == "free":
+		if parts.size() < 3:
+			_log_text("[color=red]Usage: sigil free <0|1|2>[/color]")
+			return
+		var idx := int(parts[2])
+		if idx < 0 or idx > 2:
+			_log_text("[color=red]Index must be 0, 1, or 2[/color]")
+			return
+		var crafts: Array = _g._sigil._daily_crafts
+		if crafts.is_empty() or idx >= crafts.size():
+			_log_text("[color=red]No daily crafts available[/color]")
+			return
+		var craft: Dictionary = crafts[idx]
+		var craft_id := str(craft.get("id", ""))
+		_g._sigil.craft_card(_g._online._device_id, craft_id)
+		_log_text("Free craft: %s (%s)" % [craft_id, craft.get("rarity", "unknown")])
+	else:
+		_log_text("[color=red]Unknown sigil command: %s[/color]" % sub)
 
 func _log_text(msg: String) -> void:
 	_log.append_text(msg + "\n")
