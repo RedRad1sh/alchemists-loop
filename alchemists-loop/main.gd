@@ -425,6 +425,12 @@ var _spirit: Spirit  # Светик (R9)
 var _admin: AdminConsole  # админ-консоль (~)
 var _sigil: SigilManager  # Аркан Сигилов: карточки рецептов
 var _sigil_coll: ColorRect = null  # модалка коллекции сигилов; != null ⇒ открыта
+var _sigil_tab_content: Control = null  # контейнер активной вкладки модалки
+var _sigil_tab: String = "crafts"  # активная вкладка: crafts | collection | sets
+var _sigil_tab_btns: Array = []  # кнопки вкладок; подсветка активной в _sigil_show_tab
+var _sigil_tab_seq := 0  # поколение вкладки: гасит корутины билдеров при переключении
+var _sigil_fullscreen: Control = null  # полноэкранный просмотр карты; != null ⇒ открыт
+var _sigil_render_busy := false  # превью-рендер в полёте: у сервиса один SubViewport, фуллскрин ждёт (T5-M2)
 var _sigil_header_btn: Button  ## кнопка Аркана Сигилов в шапке (иконка-таро)
 var _inv_grid: GridContainer = null
 
@@ -562,6 +568,8 @@ func _ready() -> void:
 			_online._netexperiment_pair = a.substr("--netexperiment=".length())
 		elif a.begins_with("--decor="):
 			_demo_harness._decor_demo_cat = a.substr("--decor=".length())
+		elif a.begins_with("--sigiltab="):
+			_demo_harness._sigil_tab = a.substr("--sigiltab=".length())
 	_online._net_enabled = not _selftest
 	if _online._net_enabled:
 		_online._device_id = _online._load_device_id()
@@ -1796,12 +1804,35 @@ func _demo_seed_sigil_coll() -> void:
 			["ice", 30], ["spark", 20], ["mountain", 5], ["cloud", 12], ["life", 0]]:
 		_engine.inventory[str(pair[0])] = int(pair[1])
 	_engine._refresh()
+	# Демо-коллекция — как в sb6: через _on_collection_result (только память,
+	# без записи на диск), чтобы сетка и хроматика имели содержимое.
+	_sigil._on_collection_result({"ok": true, "cards": {"clay": {"copies": 2,
+		"first_at": "2026-09-28T10:00:00"},
+		"metal": {"copies": 1, "first_at": "2026-09-30T18:30:00"}},
+		"extras": [{"craft_id": "demo_chroma", "rarity": "chromatic",
+			"llm_name": "Хроматический сигил", "crafted_at": "2026-10-01T09:00:00"}],
+		"milestones": {}})
 	_open_sigil_modal()
+	# --sigiltab=collection|fullscreen (sets/set_grid — Task 7): один show_tab
+	# на обе ветки, чтобы вкладку не ребилдить дважды.
+	match _demo_harness._sigil_tab:
+		"collection", "fullscreen":
+			_sigil_show_tab("collection")
+			if _demo_harness._sigil_tab == "fullscreen":
+				var first := ""
+				for k in _sigil._server_collection:
+					first = str(k)
+					break
+				if first != "":
+					_open_sigil_fullscreen(_sigil_catalog_entry(first,
+						_sigil._server_collection[first]))
+		_:
+			pass
 
-## Модалка Аркана Сигилов: три крафта дня крупным списком.
+## Модалка Аркана Сигилов: три вкладки — крафты дня, коллекция, комплекты.
 ## Превью — настоящий рендер круга (SigilRenderService), а не декоративная
 ## рисовка: игрок видит ровно ту картину, которая будет на карточке.
-func _open_sigil_modal() -> void:
+func _open_sigil_modal(start_tab: String = "crafts") -> void:
 	if _sigil_coll != null or _sigil == null:
 		return
 	Sfx.click()
@@ -1834,6 +1865,7 @@ func _open_sigil_modal() -> void:
 	head.add_theme_constant_override("separation", 8)
 	vbox.add_child(head)
 	var title := _label("АРКАН СИГИЛОВ", 24)
+	title.autowrap_mode = TextServer.AUTOWRAP_OFF
 	title.add_theme_color_override("font_color", Color(0.90, 0.82, 0.56))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(title)
@@ -1841,22 +1873,85 @@ func _open_sigil_modal() -> void:
 	close_btn.tooltip_text = "Закрыть"
 	close_btn.pressed.connect(_close_sigil_collection)
 	head.add_child(close_btn)
-	var sub := _label("Три крафта дня — выбери сигил", 14)
-	sub.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
-	vbox.add_child(sub)
 
+	var tabbar := HBoxContainer.new()
+	tabbar.name = "SigilTabBar"
+	tabbar.add_theme_constant_override("separation", 8)
+	vbox.add_child(tabbar)
+	_sigil_tab_btns = []
+	for tab_def in [["crafts", "КРАФТЫ ДНЯ"], ["collection", "КОЛЛЕКЦИЯ"], ["sets", "КОМПЛЕКТЫ"]]:
+		var tb := _small_button(str(tab_def[1]), Vector2(0, 38))
+		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tb.set_meta("tab", str(tab_def[0]))
+		tb.set_meta("sb_idle", tb.get_theme_stylebox("normal"))
+		var sb_act: StyleBox = _stylebox_9("res://assets/ui/btn_gold.png", Vector4(10, 7, 10, 7))
+		if sb_act == null:
+			var fb := StyleBoxFlat.new()
+			fb.bg_color = Color(0.85, 0.72, 0.35, 1.0)
+			fb.set_corner_radius_all(8)
+			sb_act = fb
+		tb.set_meta("sb_active", sb_act)
+		tb.pressed.connect(_sigil_show_tab.bind(str(tab_def[0])))
+		tabbar.add_child(tb)
+		_sigil_tab_btns.append(tb)
+
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(content)
+	_sigil_tab_content = content
+	_sigil_show_tab(start_tab)
+
+
+## Показать вкладку модалки: старое содержимое сносится целиком, билдер
+## строит заново. Поколение _sigil_tab_seq гасит корутины билдеров, чтобы
+## предыдущая вкладка не достраивалась поверх новой после своего await.
+func _sigil_show_tab(tab: String) -> void:
+	if _sigil_coll == null or _sigil_tab_content == null:
+		return
+	if tab != "crafts" and tab != "collection" and tab != "sets":
+		tab = "crafts"
+	_sigil_tab = tab
+	_sigil_tab_seq += 1
+	for c in _sigil_tab_content.get_children():
+		(c as Node).queue_free()
+	for b in _sigil_tab_btns:
+		if b is Button and is_instance_valid(b):
+			var btn := b as Button
+			var active := str(btn.get_meta("tab", "")) == tab
+			var sb: StyleBox = btn.get_meta("sb_active") if active else btn.get_meta("sb_idle")
+			btn.add_theme_stylebox_override("normal", sb)
+			btn.add_theme_stylebox_override("hover", sb)
+			btn.add_theme_stylebox_override("pressed", sb)
+			btn.add_theme_stylebox_override("disabled", sb)
+			var fg := Color(0.16, 0.12, 0.03) if active else Color(0.88, 0.94, 0.96)
+			btn.add_theme_color_override("font_color", fg)
+			btn.add_theme_color_override("font_hover_color", fg)
+	match tab:
+		"collection":
+			_sigil_build_collection_tab(_sigil_tab_content)
+		"sets":
+			_sigil_build_sets_tab(_sigil_tab_content)
+		_:
+			_sigil_build_crafts_tab(_sigil_tab_content)
+
+
+## Вкладка «Крафты дня»: бывшее тело _open_sigil_modal — загрузка и строки.
+func _sigil_build_crafts_tab(container: Control) -> void:
+	var seq := _sigil_tab_seq
+	var dim := _sigil_coll
 	var status := _label("Загружаю крафты…", 15)
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	status.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(status)
+	container.add_child(status)
 
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.visible = false
-	vbox.add_child(scroll)
+	container.add_child(scroll)
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 14)
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1867,7 +1962,7 @@ func _open_sigil_modal() -> void:
 	_sigil.request_collection(_online._device_id)
 	_sigil.request_daily(_online._device_id)
 	var loaded := await _await_daily_crafts(10.0)
-	if _sigil_coll != dim:
+	if seq != _sigil_tab_seq or _sigil_coll != dim or not is_instance_valid(container):
 		return
 	var crafts: Array = _sigil._daily_crafts
 	if not loaded or crafts.is_empty():
@@ -1879,7 +1974,7 @@ func _open_sigil_modal() -> void:
 			_close_sigil_collection()
 			_open_sigil_modal.call_deferred()
 		)
-		vbox.add_child(retry)
+		container.add_child(retry)
 		return
 	status.queue_free()
 	scroll.visible = true
@@ -1892,10 +1987,338 @@ func _open_sigil_modal() -> void:
 	# требует кадров, а ждать все три до первого пикселя — значит держать
 	# игрока на пустом экране.
 	for i in rows.size():
+		_sigil_render_busy = true
 		var tex := await _sigil.preview_texture(crafts[i])
-		if _sigil_coll != dim or tex == null:
+		_sigil_render_busy = false
+		if seq != _sigil_tab_seq or _sigil_coll != dim or tex == null:
 			continue
 		_sigil_fill_preview((rows[i] as Control).get_meta("preview"), tex)
+
+
+## Вкладка «Коллекция»: сетка 4 колонки собранных карт, ниже — отдельная
+## секция хроматики. Порядок ячеек — по каталогу: сеты в порядке catalog_sets,
+## внутри сета — порядок card_ids; карты без сета — в конце.
+func _sigil_build_collection_tab(container: Control) -> void:
+	var seq := _sigil_tab_seq
+	var dim := _sigil_coll
+	var coll: Dictionary = _sigil._server_collection
+	var extras: Array = _sigil.server_extras()
+	if coll.is_empty() and extras.is_empty():
+		var empty := _label("Пока пусто — крафты дня ждут", 16)
+		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		empty.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		empty.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
+		container.add_child(empty)
+		return
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	container.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 16)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+
+	var grid := GridContainer.new()
+	grid.name = "SigilCollGrid"
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	list.add_child(grid)
+
+	var ordered: Array = []
+	var seen := {}
+	for s in _sigil.catalog_sets():
+		for cid in (s as Dictionary).get("card_ids", []):
+			var cs := str(cid)
+			if seen.has(cs):
+				continue
+			seen[cs] = true
+			if coll.has(cs) and not _sigil.card(cs).is_empty():
+				ordered.append(cs)
+	for cid in coll:
+		var cs := str(cid)
+		if not seen.has(cs) and not _sigil.card(cs).is_empty():
+			ordered.append(cs)
+	var pending: Array = []
+	for cs in ordered:
+		var cell := _sigil_collection_cell(_sigil_catalog_entry(cs, coll[cs]))
+		grid.add_child(cell)
+		pending.append([cell, {"card_id": cs}])
+
+	if not extras.is_empty():
+		var section := VBoxContainer.new()
+		section.name = "SigilChromaSection"
+		section.add_theme_constant_override("separation", 8)
+		list.add_child(section)
+		var st := _label("ХРОМАТИКА", 14)
+		st.autowrap_mode = TextServer.AUTOWRAP_OFF
+		st.add_theme_color_override("font_color", Color(1.0, 0.55, 0.12))
+		section.add_child(st)
+		var cgrid := GridContainer.new()
+		cgrid.columns = 4
+		cgrid.add_theme_constant_override("h_separation", 10)
+		cgrid.add_theme_constant_override("v_separation", 10)
+		section.add_child(cgrid)
+		for x in extras:
+			var xe := x as Dictionary
+			var entry := {
+				"card_id": "", "craft_id": str(xe.get("craft_id", "")),
+				"rarity": str(xe.get("rarity", "chromatic")),
+				"name": str(xe.get("llm_name", "")), "set": "",
+				"set_title": "Вне комплектов",
+				"first_at": str(xe.get("crafted_at", "")), "copies": 1,
+			}
+			var ccell := _sigil_collection_cell(entry)
+			cgrid.add_child(ccell)
+			# Ре-рендер невозможен — у extras нет ингредиентов: только дисковый
+			# кэш по craft_id, промах остаётся плейсхолдером «…» из слота.
+			var cimg := _sigil._load_cached_image(str(xe.get("craft_id", "")))
+			if cimg != null:
+				_sigil_fill_preview(ccell.get_meta("preview"),
+					ImageTexture.create_from_image(cimg))
+
+	# Мини-арты дорисовываем по одному, как в списке крафтов: клетки и бейджи
+	# видны сразу, картинки приходят кадром позже.
+	for p in pending:
+		_sigil_render_busy = true
+		var tex := await _sigil.preview_texture(p[1])
+		_sigil_render_busy = false
+		if seq != _sigil_tab_seq or _sigil_coll != dim or tex == null:
+			continue
+		_sigil_fill_preview((p[0] as Control).get_meta("preview"), tex)
+
+
+## Стаб вкладки «Комплекты»: сетки комплектов и клейм строит Task 7.
+func _sigil_build_sets_tab(_container: Control) -> void:
+	pass
+
+
+## Ячейка коллекции: кнопка с плейсхолдером превью, бейдж «×N» в углу при
+## копиях больше одной; тап открывает полноэкранный просмотр.
+func _sigil_collection_cell(entry: Dictionary) -> Control:
+	var rarity := str(entry.get("rarity", "common"))
+	var accent := _rarity_color(rarity)
+	var copies := int(entry.get("copies", 1))
+	var cell := Button.new()
+	cell.custom_minimum_size = Vector2(0, 124)
+	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cell.clip_contents = true
+	cell.add_theme_stylebox_override("normal", _sigil_row_style(accent, 0.0))
+	cell.add_theme_stylebox_override("hover", _sigil_row_style(accent, 0.05))
+	cell.add_theme_stylebox_override("pressed", _sigil_row_style(accent, 0.09))
+	cell.add_theme_stylebox_override("disabled", _sigil_row_style(accent, 0.0))
+	cell.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	cell.pressed.connect(_open_sigil_fullscreen.bind(entry))
+
+	var holder := Control.new()
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cell.add_child(holder)
+	# Button не контейнер: якоря — до ручных офсетов.
+	holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+	holder.offset_left = 8
+	holder.offset_top = 8
+	holder.offset_right = -8
+	holder.offset_bottom = -8
+
+	var shot := _sigil_preview_slot(accent, 96)
+	holder.add_child(shot)
+	shot.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cell.set_meta("preview", shot)
+
+	if copies > 1:
+		var badge := _sigil_badge("×%d" % copies, accent)
+		holder.add_child(badge)
+		badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		var bs: Vector2 = badge.get_combined_minimum_size()
+		badge.offset_left = -(bs.x + 4)
+		badge.offset_top = 4
+		badge.offset_right = -2
+		badge.offset_bottom = 4 + bs.y
+	return cell
+
+
+## Entry полноэкранного просмотра карты каталога: имя/редкость/сет берутся
+## из каталога, дата и копии — из серверной записи коллекции.
+func _sigil_catalog_entry(card_id: String, coll_entry: Dictionary) -> Dictionary:
+	var card := _sigil.card(card_id)
+	if card.is_empty():
+		return {}
+	var set_title := ""
+	for s in _sigil.catalog_sets():
+		if str((s as Dictionary).get("id", "")) == str(card.get("set", "")):
+			set_title = str((s as Dictionary).get("title", ""))
+			break
+	return {
+		"card_id": card_id,
+		"craft_id": "",
+		"rarity": str(card.get("rarity", "common")),
+		"name": str(card.get("fallback_name", "")),
+		"set": str(card.get("set", "")),
+		"set_title": set_title,
+		"first_at": str(coll_entry.get("first_at", "")),
+		"copies": int(coll_entry.get("copies", 1)),
+	}
+
+
+## ISO-дата получения → «ДД.ММ.ГГГГ»: первые 10 символов до «T»,
+## компоненты в обратном порядке.
+func _sigil_date_ru(iso: String) -> String:
+	var day := iso.substr(0, 10).split("T")[0]
+	var p := day.split("-")
+	if p.size() == 3:
+		return "%s.%s.%s" % [p[2], p[1], p[0]]
+	return day
+
+
+## Полноэкранный просмотр карты коллекции — паттерн _show_sigil_card:
+## затемнение + центральная панель. Закрытие: кнопка, тап по фону, свайп
+## длиннее 80 px в любую сторону. Под артом — пустой якорь для lore-блока
+## подпроекта C.
+func _open_sigil_fullscreen(entry: Dictionary) -> void:
+	if entry.is_empty() or _sigil_fullscreen != null or _sigil == null:
+		return
+	Sfx.click()
+	var rarity := str(entry.get("rarity", "common"))
+	var accent := _rarity_color(rarity)
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.z_index = 30
+	add_child(root)
+	_sigil_fullscreen = root
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.75)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _panel_style(Color(0.05, 0.05, 0.08, 0.98), 12))
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 8)
+	panel.add_child(vbox)
+
+	var title_lbl := _label(str(entry.get("name", "")), 22)
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_lbl.add_theme_color_override("font_color", accent)
+	vbox.add_child(title_lbl)
+
+	var art := _sigil_preview_slot(accent, 0)
+	art.custom_minimum_size = Vector2(300, 540)
+	vbox.add_child(art)
+
+	# lore-блок: подпроект C
+	var lore := VBoxContainer.new()
+	lore.add_theme_constant_override("separation", 4)
+	vbox.add_child(lore)
+
+	var rar_lbl := _label(_sigil_rarity_title(rarity), 14)
+	rar_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	rar_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rar_lbl.add_theme_color_override("font_color", accent)
+	vbox.add_child(rar_lbl)
+
+	var set_lbl := _label("Комплект: %s" % str(entry.get("set_title", "")), 13)
+	set_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	set_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	set_lbl.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
+	vbox.add_child(set_lbl)
+
+	var got_lbl := _label("Получена: %s" % _sigil_date_ru(str(entry.get("first_at", ""))), 13)
+	got_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	got_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	got_lbl.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
+	vbox.add_child(got_lbl)
+
+	var copies_lbl := _label("копии: ×%d" % int(entry.get("copies", 1)), 13)
+	copies_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	copies_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	copies_lbl.add_theme_color_override("font_color", Color(0.80, 0.82, 0.86))
+	vbox.add_child(copies_lbl)
+
+	var close_btn := _small_button("✕", Vector2(46, 40))
+	close_btn.name = "SigilFsClose"
+	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close_btn.pressed.connect(_close_sigil_fullscreen)
+	vbox.add_child(close_btn)
+
+	# Тап по фону и свайп в любую сторону закрывают; состояние перетаскивания
+	# живёт в meta у center, чтобы оба обработчика видели одно и то же.
+	center.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT:
+			if ev.pressed:
+				center.set_meta("drag", ev.position)
+			elif center.has_meta("drag"):
+				var from: Vector2 = center.get_meta("drag")
+				center.remove_meta("drag")
+				if (ev.position - from).length() <= 80.0:
+					_close_sigil_fullscreen()
+		elif ev is InputEventMouseMotion and center.has_meta("drag"):
+			var from: Vector2 = center.get_meta("drag")
+			if (ev.position - from).length() > 80.0:
+				center.remove_meta("drag")
+				_close_sigil_fullscreen()
+	)
+	panel.gui_input.connect(func(ev):
+		# Свайп, начавшийся на самой карте, тоже закрывает.
+		if ev is InputEventMouseMotion and center.has_meta("drag"):
+			var from: Vector2 = center.get_meta("drag")
+			if (ev.position - from).length() > 80.0:
+				center.remove_meta("drag")
+				_close_sigil_fullscreen()
+	)
+
+	_sigil_fill_fullscreen_art(art, entry)
+
+
+## Полный арт фуллскрина: для карты каталога — дисковый кэш по card_id, промах
+## рендерится по карточному рецепту с полными опциями (как в get_card) и
+## ложится в кэш; для extras — только дисковый кэш по craft_id, промах
+## остаётся плейсхолдером. Рендер ждёт фоновые превью: у сервиса один
+## SubViewport, параллельные рендеры портят картинки друг друга (хазард T5-M2).
+func _sigil_fill_fullscreen_art(slot: Control, entry: Dictionary) -> void:
+	var fs := _sigil_fullscreen
+	var card_id := str(entry.get("card_id", ""))
+	if card_id == "":
+		var img0 := _sigil._load_cached_image(str(entry.get("craft_id", "")))
+		if img0 != null and _sigil_fullscreen == fs:
+			_sigil_fill_preview(slot, ImageTexture.create_from_image(img0))
+		return
+	var img := _sigil._load_cached_image(card_id)
+	if img == null:
+		var waited := 0.0
+		while _sigil_render_busy and waited < 1.0:
+			await get_tree().process_frame
+			waited += get_process_delta_time()
+		if _sigil_fullscreen != fs or not is_instance_valid(slot):
+			return
+		var recipe := _sigil.card_recipe_for({"card_id": card_id})
+		img = await _sigil._svc.render(recipe, _sigil._options)
+		if img != null and _sigil_fullscreen == fs:
+			_sigil._save_cached_image(card_id, img)
+	if img == null or _sigil_fullscreen != fs or not is_instance_valid(slot):
+		return
+	_sigil_fill_preview(slot, ImageTexture.create_from_image(img))
+
+
+func _close_sigil_fullscreen() -> void:
+	if _sigil_fullscreen == null:
+		return
+	var fs := _sigil_fullscreen
+	_sigil_fullscreen = null
+	fs.queue_free()
+	Sfx.click()
 
 
 ## Ждать ежедневные крафты, но не вечно: офлайн не должен вешать меню.
@@ -2365,6 +2788,8 @@ func _close_sigil_collection() -> void:
 	var d := _sigil_coll
 	_sigil_coll = null
 	d.queue_free()
+	_sigil_tab_content = null
+	_sigil_tab_btns = []
 	Sfx.click()
 
 func _sigil_thumb(item: Dictionary) -> Control:
@@ -2461,6 +2886,9 @@ func _handle_esc(event: InputEvent) -> bool:
 # Возвращает true, если что-то закрыто/потреблено — только тогда Esc считается
 # обработанным; иначе событие уходит дальше (обычный выход из игры).
 func _close_top_modal() -> bool:
+	if _sigil_fullscreen != null:
+		_close_sigil_fullscreen()
+		return true
 	if _sigil_craft_screen != null:
 		_close_sigil_craft_screen()
 		return true

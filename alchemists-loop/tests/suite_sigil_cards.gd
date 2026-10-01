@@ -354,6 +354,122 @@ static func run(g: Game) -> void:
 	_sb5_restore_file(SigilManager.CATALOG_FILE, sb5_cat_snap)
 	_sb5_restore_file(SigilManager.DAILY_CACHE_FILE, sb5_daily_snap)
 
+	# ---- Task 6: вкладки модалки, сетка коллекции, полноэкранный просмотр ----
+	# Сид — как в демо-харнесе: каталог + коллекция через _on_collection_result.
+	# Рендер в headless не зовём: мини-арты ячеек читаются из сеяных PNG кэша
+	# рендера (приём sb5), полный арт фуллскрина — из сеяного дискового кэша карты.
+	var sb6_clay := {"id": "clay", "set": "earth", "rarity": "common", "ether_cost": 50,
+		"recipe": [{"item_id": "clay", "qty": 12}, {"item_id": "water", "qty": 20},
+			{"item_id": "sand", "qty": 8}],
+		"process": "осадок и прессовка", "stage": "nigredo", "fallback_name": "Глина",
+		"object_type": "object", "seed": 90210}
+	var sb6_metal := {"id": "metal", "set": "earth", "rarity": "epic", "ether_cost": 400,
+		"recipe": [{"item_id": "metal", "qty": 30}, {"item_id": "fire", "qty": 45},
+			{"item_id": "ice", "qty": 25}, {"item_id": "spark", "qty": 18}],
+		"process": "плавка и закалка", "stage": "albedo", "fallback_name": "Металл",
+		"object_type": "relic", "seed": 90211}
+	sm.set_catalog([sb6_clay, sb6_metal],
+		[{"id": "earth", "title": "Стихия Земли", "card_ids": ["clay", "metal"]}], "unit-t6")
+	sm._on_collection_result({"ok": true,
+		"cards": {"clay": {"copies": 2, "first_at": "2026-09-28T10:00:00"},
+			"metal": {"copies": 1, "first_at": "2026-09-30T18:30:00"}},
+		"extras": [{"craft_id": "demo_chroma", "rarity": "chromatic",
+			"llm_name": "Хроматический сигил", "crafted_at": "2026-10-01T09:00:00"}],
+		"milestones": {}})
+	# Daily-состояние менеджера обнуляем: вкладка крафтов в сьюте обязана уйти
+	# в офлайн-ветку синхронно, а не строить строки из прод-кэша ежедневки.
+	var sb6_day0 := sm._daily_day
+	var sb6_crafts0: Array = sm._daily_crafts.duplicate(true)
+	var sb6_preview0 := sm._preview_cache.duplicate()
+	var sb6_cat_settled0 := sm.catalog_settled()
+	var sb6_daily_settled0 := sm.daily_settled()
+	sm._daily_day = ""
+	sm._daily_crafts = []
+	var sb6_blank := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+	var sb6_render_paths: Array = []
+	for sb6_cid in ["clay", "metal"]:
+		var sb6_p := sm._svc.cache_path(sm.card_recipe_for({"card_id": sb6_cid}),
+			sm.preview_options())
+		if sb6_blank.save_png(sb6_p) == OK:
+			sb6_render_paths.append(sb6_p)
+	var sb6_disk_path := sm._cached_path("clay")
+	var sb6_disk_snap := _sb5_file_text(sb6_disk_path)
+	sm._save_cached_image("clay", sb6_blank)
+
+	g._open_sigil_modal("crafts")
+	var sb6_bar := g._sigil_coll.find_child("SigilTabBar", true, false) as HBoxContainer
+	var sb6_tabs := 0
+	if sb6_bar != null:
+		for c in sb6_bar.get_children():
+			if c is Button:
+				sb6_tabs += 1
+	var sb6_old := g._sigil_tab_content.get_child(0)
+	g._sigil_show_tab("collection")
+	var sb6_moved := sb6_old.is_queued_for_deletion() and g._sigil_tab == "collection"
+	Selftest.check("sb6 modal builds three tabs",
+		g._sigil_coll != null and sb6_tabs == 3 and g._sigil_tab_content != null
+		and sb6_moved)
+
+	var sb6_grid := g._sigil_tab_content.find_child("SigilCollGrid", true, false) as GridContainer
+	var sb6_badge := false
+	if sb6_grid != null:
+		for l in sb6_grid.find_children("*", "Label", true, false):
+			if (l as Label).text == "×2":
+				sb6_badge = true
+	Selftest.check("sb6 collection grid cells match collection",
+		sb6_grid != null and sb6_grid.get_child_count() == 2 and sb6_badge)
+
+	var sb6_chroma := g._sigil_tab_content.find_child("SigilChromaSection", true, false)
+	var sb6_sep := false
+	if sb6_chroma != null and sb6_grid != null:
+		var sb6_ct := false
+		for l in sb6_chroma.find_children("*", "Label", true, false):
+			if (l as Label).text == "ХРОМАТИКА":
+				sb6_ct = true
+		var sb6_cgrids := sb6_chroma.find_children("*", "GridContainer", true, false)
+		sb6_sep = sb6_ct and sb6_cgrids.size() == 1 \
+			and (sb6_cgrids[0] as GridContainer).get_child_count() == 1 \
+			and not sb6_grid.is_ancestor_of(sb6_chroma)
+	Selftest.check("sb6 chromatic section separate", sb6_sep)
+
+	var sb6_entry: Dictionary = g._sigil_catalog_entry("clay",
+		{"copies": 2, "first_at": "2026-09-28T10:00:00"})
+	g._open_sigil_fullscreen(sb6_entry)
+	var sb6_z := 0
+	var sb6_texts := ""
+	if g._sigil_fullscreen != null:
+		sb6_z = int(g._sigil_fullscreen.z_index)
+		for l in g._sigil_fullscreen.find_children("*", "Label", true, false):
+			sb6_texts += (l as Label).text + "\n"
+	Selftest.check("sb6 fullscreen shows required fields",
+		g._sigil_fullscreen != null and sb6_z >= 20
+		and sb6_texts.contains("Глина") and sb6_texts.contains("ОБЫЧНЫЙ")
+		and sb6_texts.contains("Стихия Земли") and sb6_texts.contains("28.09.2026")
+		and sb6_texts.contains("×2"))
+
+	var sb6_fs := g._sigil_fullscreen
+	var sb6_closed := false
+	if sb6_fs != null:
+		var sb6_close := sb6_fs.find_child("SigilFsClose", true, false) as Button
+		if sb6_close != null:
+			sb6_close.pressed.emit()
+		sb6_closed = g._sigil_fullscreen == null and sb6_fs.is_queued_for_deletion()
+	Selftest.check("sb6 fullscreen closes on close button", sb6_closed)
+
+	g._close_sigil_collection()
+	# Откат: сиды, кэши и daily-состояние — в состояние до блока.
+	sm.set_catalog([], [], "")
+	sm._server_collection = {}
+	sm._server_extras = []
+	sm._daily_day = sb6_day0
+	sm._daily_crafts = sb6_crafts0
+	sm._preview_cache = sb6_preview0
+	sm._catalog_settled = sb6_cat_settled0
+	sm._daily_settled = sb6_daily_settled0
+	for sb6_p in sb6_render_paths:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(sb6_p))
+	_sb5_restore_file(sb6_disk_path, sb6_disk_snap)
+
 
 ## Текст user-файла для снапшота блока sb5: пустая строка = файла не было.
 static func _sb5_file_text(path: String) -> String:

@@ -7,6 +7,7 @@ var g: Game
 
 var _action_circle := false
 var _action_sigilcoll := false
+var _sigil_tab := ""  # --sigiltab=collection|fullscreen|sets|set_grid (T6: collection/fullscreen)
 var _action_week := false
 var _action_goal := false
 var _action_goals := false
