@@ -56,3 +56,9 @@ static func run(g: Game) -> void:
 
 	full.queue_free()
 	circle_only.queue_free()
+
+	# ---- Транспорт: новые сигил-запросы существуют и разводят сигналы ----
+	Selftest.check("net has catalog request", Net.has_method("sigil_catalog"))
+	Selftest.check("net has collection request", Net.has_method("sigil_collection"))
+	Selftest.check("net has catalog signal", Net.has_signal("sigil_catalog_result"))
+	Selftest.check("net has collection signal", Net.has_signal("sigil_collection_result"))

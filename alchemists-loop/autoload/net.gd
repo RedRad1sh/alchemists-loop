@@ -59,6 +59,8 @@ signal vein_pour_result(find_id: String, result: Dictionary)
 signal cycle_result(result: Dictionary)
 signal sigil_daily_result(result: Dictionary)
 signal sigil_craft_result(result: Dictionary)
+signal sigil_catalog_result(result: Dictionary)
+signal sigil_collection_result(result: Dictionary)
 signal error(message: String)
 
 var base_url := DEFAULT_BASE
@@ -257,6 +259,17 @@ func sigil_craft(device_id: String, craft_id: String) -> void:
 	_enqueue({
 		"kind": "sigil_craft", "path": "/sigil/craft",
 		"body": {"device_id": device_id, "craft_id": craft_id},
+	})
+
+## Каталог карт: статический артефакт сервера, device_id не нужен.
+func sigil_catalog() -> void:
+	_enqueue({"kind": "sigil_catalog", "path": "/sigil/catalog"})
+
+## Коллекция игрока: копии карт и внекомплектные крафты.
+func sigil_collection(device_id: String) -> void:
+	_enqueue({
+		"kind": "sigil_collection",
+		"path": "/sigil/collection?device_id=" + device_id.uri_encode(),
 	})
 
 # T22: серверная проверка платёжного чека (POST /api/receipt/verify). Ответ —
@@ -469,3 +482,7 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 			sigil_daily_result.emit(parsed)
 		"sigil_craft":
 			sigil_craft_result.emit(parsed)
+		"sigil_catalog":
+			sigil_catalog_result.emit(parsed)
+		"sigil_collection":
+			sigil_collection_result.emit(parsed)
