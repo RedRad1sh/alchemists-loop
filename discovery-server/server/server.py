@@ -715,6 +715,8 @@ class SigilDailyResponse(BaseModel):
     ok: bool
     day: str = ""
     crafts: list[SigilCraft] = []
+    # Версия каталога на момент выдачи: клиент по ней решает докачку каталога.
+    catalog_version: str = ""
     error: str = ""
 
 
@@ -4658,12 +4660,18 @@ def _collected_card_ids(conn, device_id: str) -> set:
     return {str(r["card_id"]) for r in rows}
 
 
-def _generate_sigil_daily(device_id: str, day: str, collected) -> list[dict]:
+def _generate_sigil_daily(device_id: str, day: str, collected,
+                          extra_slots: int = 0) -> list[dict]:
     """Сгенерировать оффер дня: 3 слота, слот 0 — гарантия несобранной карты.
 
     Per-player seed = sha256(device_id#day)[:8]. Карты берутся из каталога,
     поэтому картинка карты одинакова у всех игроков; соль игрока мешает только
     хроматическую (её card_id пуст).
+
+    extra_slots добавляет обычные каталог-слоты поверх базовых трёх (1 за клейм
+    полного комплекта — tier 25 в sigil_milestones). Кэш sigil_daily per-day:
+    уже сгенерированный оффер дня не пересобирается, поэтому четвёртый слот
+    появляется у игрока только с оффером следующего дня.
     """
     seed_val = int(hashlib.sha256(f"{device_id}#{day}".encode()).hexdigest()[:8], 16)
     rng = random.Random(seed_val)
@@ -4683,7 +4691,8 @@ def _generate_sigil_daily(device_id: str, day: str, collected) -> list[dict]:
         offered.add(card["id"])
         crafts.append(_catalog_craft(card, day, device_id, 0))
 
-    for index in range(1, _SIGIL_SLOTS):
+    # Слоты 1..N: N растёт на extra_slots (4-й слот за клейм комплекта).
+    for index in range(1, _SIGIL_SLOTS + extra_slots):
         # Слоты 1–2 предлагают и собранные карты (дубли — спека: copies++), исключая только предложенные сегодня.
         card = _pick_card(rng, _pick_rarity(rng), frozenset(), offered)
         if card is None:
@@ -4720,7 +4729,16 @@ def _ensure_sigil_daily(conn, device_id: str, day: str) -> list[dict]:
             cached = None
         if _sigil_daily_is_current(cached):
             return cached
-    crafts_data = _generate_sigil_daily(device_id, day, _collected_card_ids(conn, device_id))
+    # 4-й слот оффера — за клейм полного комплекта: строго по claimed-строке
+    # tier 25 в sigil_milestones, не по счётчику карт (один SELECT EXISTS).
+    has_full_set = conn.execute(
+        "SELECT EXISTS(SELECT 1 FROM sigil_milestones WHERE device_id=? AND tier=25)",
+        (device_id,),
+    ).fetchone()[0]
+    crafts_data = _generate_sigil_daily(
+        device_id, day, _collected_card_ids(conn, device_id),
+        extra_slots=1 if has_full_set else 0,
+    )
     conn.execute(
         """INSERT INTO sigil_daily (device_id, day, crafts_json, generated_at)
            VALUES (?, ?, ?, ?)
@@ -4746,7 +4764,8 @@ def sigil_catalog() -> SigilCatalogResponse:
 
 @app.get("/api/sigil/daily", response_model=SigilDailyResponse)
 def sigil_daily(device_id: str = Query("", max_length=128)):
-    """Оффер дня: 3 крафта, слот 0 гарантирует несобранную карту каталога."""
+    """Оффер дня: 3 крафта (плюс 4-й слот за клейм полного комплекта), слот 0
+    гарантирует несобранную карту каталога."""
     if not device_id:
         return SigilDailyResponse(ok=False, error="missing_device_id")
 
@@ -4755,7 +4774,8 @@ def sigil_daily(device_id: str = Query("", max_length=128)):
         today = date.today().isoformat()
         crafts_data = _ensure_sigil_daily(conn, device_id, today)
         return SigilDailyResponse(
-            ok=True, day=today, crafts=[SigilCraft(**c) for c in crafts_data]
+            ok=True, day=today, catalog_version=_sigil_catalog()["version"],
+            crafts=[SigilCraft(**c) for c in crafts_data],
         )
     finally:
         conn.close()
@@ -4790,27 +4810,36 @@ def sigil_craft(req: SigilCraftRequest):
         llm_name = str(craft.get("llm_name", ""))
         is_chromatic = bool(craft.get("is_chromatic", False))
 
-        existing = conn.execute(
-            "SELECT rarity, llm_name, is_chromatic, card_id FROM sigil_crafts"
-            " WHERE device_id=? AND craft_id=?",
-            (req.device_id, req.craft_id),
-        ).fetchone()
-        if existing:
+        # Атомарно (D7, по образцу _ensure_letter/_ensure_atlas): под BEGIN
+        # IMMEDIATE два потока на один (device_id, craft_id) не вставят две
+        # строки; INSERT OR IGNORE, и проигравший гонку (rowcount == 0)
+        # перечитывает чужую строку и отвечает из неё — идемпотентно, без 500.
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO sigil_crafts"
+                " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, crafted_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (req.device_id, req.craft_id, rarity, llm_name,
+                 int(is_chromatic), card_id, _now_iso()),
+            )
+            inserted = cur.rowcount == 1
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        if not inserted:
+            existing = conn.execute(
+                "SELECT rarity, llm_name, is_chromatic, card_id FROM sigil_crafts"
+                " WHERE device_id=? AND craft_id=?",
+                (req.device_id, req.craft_id),
+            ).fetchone()
             return SigilCraftResponse(
                 ok=True, craft_id=req.craft_id,
                 rarity=existing["rarity"], llm_name=existing["llm_name"],
                 is_chromatic=bool(existing["is_chromatic"]),
                 card_id=str(existing["card_id"] or ""),
             )
-
-        conn.execute(
-            "INSERT INTO sigil_crafts"
-            " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, crafted_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (req.device_id, req.craft_id, rarity, llm_name,
-             int(is_chromatic), card_id, _now_iso()),
-        )
-        conn.commit()
 
         return SigilCraftResponse(
             ok=True, craft_id=req.craft_id, rarity=rarity, llm_name=llm_name,

@@ -351,7 +351,10 @@ class TestDailyOffer:
     def test_missing_device_id_rejected(self, tmp_path, monkeypatch):
         client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
         r = client.get("/api/sigil/daily")
-        assert r.json() == {"ok": False, "day": "", "crafts": [], "error": "missing_device_id"}
+        assert r.json() == {
+            "ok": False, "day": "", "crafts": [], "catalog_version": "",
+            "error": "missing_device_id",
+        }
 
     def test_rotate_gives_catalog_cards(self, tmp_path, monkeypatch):
         client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
@@ -361,6 +364,46 @@ class TestDailyOffer:
         assert body["ok"] is True
         assert len(body["crafts"]) == srv._SIGIL_SLOTS
         assert all("card_id" in c for c in body["crafts"])
+
+    def test_daily_response_carries_catalog_version(self, tmp_path, monkeypatch):
+        """Версия каталога едет в daily: клиент по ней решает докачку каталога."""
+        client = _client(_srv(tmp_path, monkeypatch))
+        r = client.get("/api/sigil/daily", params={"device_id": "dev-ver"})
+        assert r.status_code == 200
+        assert r.json()["catalog_version"] == srv._sigil_catalog()["version"]
+
+    def test_daily_fourth_slot_requires_claim(self, tmp_path, monkeypatch):
+        """4-й слот оффера — строго по claimed tier 25, не по счётчику карт.
+
+        Полный комплект без клейма не даёт слота; клейм не пересобирает уже
+        сгенерированный оффер (кэш per-day) — слот приходит со следующего дня.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _client(s)
+        earth = next(x for x in srv._sigil_catalog()["sets"] if x["id"] == "earth")
+        # Игрок A: 25 карт earth (прямые INSERT); сегодняшний оффер — 3 слота.
+        _seed_crafts(s, "dev-a25", [(f"c{i}", cid) for i, cid in enumerate(earth["card_ids"][:25])])
+        assert len(_offer(client, "dev-a25")) == srv._SIGIL_SLOTS
+        r = client.post("/api/sigil/milestone",
+                        json={"device_id": "dev-a25", "set": "earth", "tier": 25})
+        assert r.json() == {"ok": True, "set": "earth", "tier": 25, "claimed": True, "error": ""}
+        # Кэш per-day: клейм не пересобирает сегодняшний оффер.
+        assert len(_offer(client, "dev-a25")) == srv._SIGIL_SLOTS
+        # Ротация дня: четвёртый слот приходит только с оффером следующего дня.
+        class _NextDay(srv.date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 10, 2)
+        monkeypatch.setattr(srv, "date", _NextDay)
+        crafts = _offer(client, "dev-a25")
+        assert len(crafts) == srv._SIGIL_SLOTS + 1
+        # 4-й слот — обычный каталог-крафт, не хроматик.
+        fourth = crafts[3]
+        assert fourth["is_chromatic"] is False
+        assert fourth["card_id"] in srv._sigil_catalog()["by_id"]
+        # Игрок B: те же 25 карт earth, но клейма нет — четвёртого слота нет.
+        _seed_crafts(s, "dev-b25", [(f"c{i}", cid) for i, cid in enumerate(earth["card_ids"][:25])])
+        assert len(_offer(client, "dev-b25")) == srv._SIGIL_SLOTS
 
 
 class TestCraft:
@@ -458,6 +501,45 @@ class TestCraft:
         assert coll["extras"][0]["craft_id"] == chroma["id"]
         assert coll["extras"][0]["rarity"] == "chromatic"
         assert len(coll["cards"]) == len(all_ids)
+
+    def test_craft_replay_after_direct_insert_returns_existing(self, tmp_path, monkeypatch):
+        """Реплей крафта при уже вставленной строке — ветка re-select, без 500.
+
+        card_id оффера ("coal") отличен от card_id прямой вставки ("spark"):
+        ответ обязан прийти из существующей строки, а не из подделанного daily.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _mini(s, tmp_path, monkeypatch)
+        today = srv.date.today().isoformat()
+        forged = [{
+            "id": "replay_0", "card_id": "coal", "set": "fire",
+            "rarity": "common", "ingredients": [], "ether_cost": 40,
+            "process": "", "stage": "nigredo", "object_type": "object",
+            "seed": 0, "fallback_name": "Уголь", "llm_name": "", "is_chromatic": False,
+        }]
+        conn = sqlite3.connect(s.DB_PATH)
+        conn.execute(
+            "INSERT INTO sigil_daily (device_id, day, crafts_json, generated_at)"
+            " VALUES (?, ?, ?, ?)",
+            ("dev-replay", today, json.dumps(forged, ensure_ascii=False), "2026-01-01T00:00:00"),
+        )
+        conn.commit()
+        conn.close()
+        # Прямая INSERT строки (device, craft_id, card_id=X) в sigil_crafts.
+        _seed_crafts(s, "dev-replay", [("replay_0", "spark")])
+        r = client.post("/api/sigil/craft",
+                        json={"device_id": "dev-replay", "craft_id": "replay_0"})
+        assert r.status_code == 200
+        assert r.json() == {
+            "ok": True, "craft_id": "replay_0", "rarity": "common", "llm_name": "",
+            "is_chromatic": False, "card_id": "spark", "error": "",
+        }
+        conn = sqlite3.connect(s.DB_PATH)
+        rows = conn.execute(
+            "SELECT * FROM sigil_crafts WHERE device_id='dev-replay' AND craft_id='replay_0'"
+        ).fetchall()
+        conn.close()
+        assert len(rows) == 1
 
 
 class TestCollection:
