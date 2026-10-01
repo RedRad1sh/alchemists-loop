@@ -859,7 +859,7 @@ func _refresh_return_popup() -> void:
 		elif _return_bench_status == "budget":
 			bench_line += " Дальше — вживую."
 		add.call(bench_line, 14, bright if _return_bench_items > 0 else gold)
-	elif g._pages._bench_on and g._pages._bench_target != "":
+	elif _return_bench_status == "" and g._pages._bench_on and g._pages._bench_target != "":
 		add.call("• Верстак стоял: слишком короткое отсутствие.", 14, dim)
 	if g._retort._retort_any_ready():
 		add.call("• Реторта готова — неси кружку!", 14, gold)
