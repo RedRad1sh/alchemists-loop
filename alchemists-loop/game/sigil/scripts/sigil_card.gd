@@ -92,6 +92,7 @@ func _place_nodes(cr: Rect2) -> void:
 	icon.position = layout.icon_center() - Vector2(icon_d, icon_d) * 0.5
 	icon.size = Vector2(icon_d, icon_d)
 
+	icon.visible = options.show_icon
 	title.visible = options.show_name
 	title.text = options.name_text if options.name_text != "" else String(recipe.display_name)
 	title.add_theme_font_size_override("font_size", options.name_font_size)
@@ -105,8 +106,9 @@ func _refresh() -> void:
 	bg.setup(options, palette, seed_value)
 	aura.setup(options, palette, layout.center, layout.radius, seed_value)
 	circle.setup(layout, palette, options)
-	icon.setup(SigilGeneratorRegistry.get_generator(recipe.result_type), icon_ctx,
-		SigilRng.new(seed_value).fork("icon"), palette.ink, palette.accent)
+	if options.show_icon:
+		icon.setup(SigilGeneratorRegistry.get_generator(recipe.result_type), icon_ctx,
+			SigilRng.new(seed_value).fork("icon"), palette.ink, palette.accent)
 	frame.setup(options, palette, seed_value)
 	queue_redraw()
 

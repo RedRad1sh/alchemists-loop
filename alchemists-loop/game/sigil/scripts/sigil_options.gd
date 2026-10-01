@@ -17,6 +17,9 @@ var frame_style: int = 0
 ## Доля радиуса круга, которую занимает центральный объект. 0.58 — объект
 ## становится главной точкой карточки; ниже 0.45 он теряется в круге.
 var icon_ratio: float = 0.58
+## Центральный объект поверх круга. Превью в меню крафтов рисует круг без
+## объекта: на 280 px иконка превращается в шум. Полноразмерная карта — с ней.
+var show_icon: bool = true
 var pixel_grid: int = 0
 var mode: int = Mode.COMPLETED
 var glyph_rotation: int = GlyphRotation.RADIAL
@@ -44,6 +47,7 @@ static func make(p: Dictionary = {}) -> SigilOptions:
 	o.frame_margin = float(p.get("frame_margin", o.frame_margin))
 	o.frame_style = int(p.get("frame_style", o.frame_style))
 	o.icon_ratio = clampf(float(p.get("icon_ratio", o.icon_ratio)), 0.20, 0.85)
+	o.show_icon = bool(p.get("show_icon", o.show_icon))
 	o.pixel_grid = int(p.get("pixel_grid", 0))
 	o.mode = int(p.get("mode", o.mode))
 	o.glyph_rotation = int(p.get("glyph_rotation", o.glyph_rotation))
@@ -66,6 +70,7 @@ func to_dict() -> Dictionary:
 		"show_name": show_name, "name_text": name_text, "name_font_size": name_font_size,
 		"show_frame": show_frame, "frame_margin": frame_margin, "frame_style": frame_style,
 		"icon_ratio": icon_ratio, "pixel_grid": pixel_grid, "mode": mode,
+		"show_icon": show_icon,
 		"glyph_rotation": glyph_rotation, "ring_count": ring_count, "render_scale": render_scale,
 		"fluid_enabled": fluid_enabled, "fluid_cpu_fallback": fluid_cpu_fallback,
 		"aura_enabled": aura_enabled, "save_png": save_png,
@@ -78,7 +83,7 @@ func cache_salt() -> String:
 		"sc=%d" % render_scale,
 		"nm=%d:%d" % [int(show_name), name_font_size],
 		"fr=%d:%.1f:%d" % [int(show_frame), frame_margin, frame_style],
-		"ic=%.3f:%d" % [icon_ratio, pixel_grid],
+		"ic=%.3f:%d:%d" % [icon_ratio, pixel_grid, int(show_icon)],
 		"md=%d" % mode,
 		"gr=%d" % glyph_rotation,
 		"rc=%d" % ring_count,
