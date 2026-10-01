@@ -2271,8 +2271,16 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 				_close_sigil_fullscreen()
 	)
 	panel.gui_input.connect(func(ev):
-		# Свайп, начавшийся на самой карте, тоже закрывает.
-		if ev is InputEventMouseMotion and center.has_meta("drag"):
+		# Свайп, начавшийся на самой карте, тоже закрывает: панель перехватывает
+		# press (STOP) и держит mouse focus, поэтому drag-meta кормим и отсюда —
+		# тем же значением, что и фон. Релиз без драга снимает meta: тап по карте
+		# не закрывает и не оставляет «висячего» жеста для hover-движений.
+		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT:
+			if ev.pressed:
+				center.set_meta("drag", ev.position)
+			elif center.has_meta("drag"):
+				center.remove_meta("drag")
+		elif ev is InputEventMouseMotion and center.has_meta("drag"):
 			var from: Vector2 = center.get_meta("drag")
 			if (ev.position - from).length() > 80.0:
 				center.remove_meta("drag")
