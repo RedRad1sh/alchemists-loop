@@ -13,21 +13,32 @@ signal collection_changed
 signal daily_crafts_ready(crafts: Array)
 signal craft_completed(craft_id: String, rarity: String, llm_name: String)
 signal craft_failed(error: String)
+signal catalog_ready(cards: Dictionary)
+signal collection_ready(collection: Dictionary)
 
 const CACHE_DIR := "user://sigil_collection"
 const COLLECTION_FILE := "user://sigil_collection.json"
 const DAILY_CACHE_FILE := "user://sigil_daily_cache.json"
+const CATALOG_FILE := "user://sigil_catalog.json"
 ## Сторона квадратного превью для меню крафтов. Меньше 240 — глифы сливаются,
 ## больше — рендер одного превью заметно дороже.
 const PREVIEW_SIZE := 280
 
 var _svc: SigilRenderService
 var _options: SigilOptions
-var _collection: Dictionary = {}  ## recipe_id -> {seed, rarity, discovered_at}
+var _collection: Dictionary = {}  ## craft_id -> {seed, rarity, card_id, discovered_at}
 var _player_salt: String = ""
 var _daily_crafts: Array = []  ## кэш ежедневных крафтов
 var _daily_day: String = ""  ## день кэша
-var _preview_cache: Dictionary = {}  ## craft_id -> ImageTexture
+var _preview_cache: Dictionary = {}  ## key -> ImageTexture
+## Каталог карт: card_id -> словарь карты. Общий для всех игроков.
+var _catalog: Dictionary = {}
+var _catalog_sets: Array = []
+var _catalog_version: String = ""
+## Серверная коллекция: card_id -> {copies, first_at} и внекомплектные крафты.
+var _server_collection: Dictionary = {}
+var _server_extras: Array = []
+var _last_device_id: String = ""
 
 
 func _ready() -> void:
@@ -42,6 +53,7 @@ func _ready() -> void:
 	})
 	_load_collection()
 	_load_daily_cache()
+	_load_catalog_cache()
 
 
 ## Задать соль игрока (device_id или account_id). Вызывается один раз при старте.
@@ -125,23 +137,181 @@ static func craft_ingredients(craft: Dictionary) -> PackedStringArray:
 	return out
 
 
-## Опции квадратного превью: круг целиком, без рамки и подписи.
+## Принять каталог в память. На диск не пишем: кэш — это «последний ответ
+## сервера», его сохраняет только _on_catalog_result.
+func set_catalog(cards: Array, sets: Array, version: String) -> void:
+	_catalog = {}
+	for c in cards:
+		if c is Dictionary and str((c as Dictionary).get("id", "")) != "":
+			_catalog[str((c as Dictionary)["id"])] = c
+	_catalog_sets = []
+	for s in sets:
+		if s is Dictionary:
+			_catalog_sets.append(s)
+	_catalog_version = version
+	catalog_ready.emit(_catalog)
+
+
+func card(card_id: String) -> Dictionary:
+	return _catalog.get(card_id, {})
+
+
+func catalog_size() -> int:
+	return _catalog.size()
+
+
+func catalog_version() -> String:
+	return _catalog_version
+
+
+func catalog_sets() -> Array:
+	return _catalog_sets
+
+
+func request_catalog() -> void:
+	Net.sigil_catalog()
+
+
+func _on_catalog_result(result: Dictionary) -> void:
+	if not result.get("ok", false):
+		return
+	var cards: Array = result.get("cards", [])
+	if cards.is_empty():
+		return
+	set_catalog(cards, result.get("sets", []), str(result.get("version", "")))
+	_save_catalog_cache()
+
+
+func _save_catalog_cache() -> void:
+	var f := FileAccess.open(CATALOG_FILE, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(JSON.stringify({
+		"version": _catalog_version,
+		"sets": _catalog_sets,
+		"cards": _catalog.values(),
+	}, "  "))
+	f.close()
+
+
+func _load_catalog_cache() -> void:
+	if not FileAccess.file_exists(CATALOG_FILE):
+		return
+	var f := FileAccess.open(CATALOG_FILE, FileAccess.READ)
+	if f == null:
+		return
+	var parsed = JSON.parse_string(f.get_as_text())
+	f.close()
+	if parsed is Dictionary:
+		var d := parsed as Dictionary
+		set_catalog(d.get("cards", []), d.get("sets", []), str(d.get("version", "")))
+
+
+## Список id ингредиентов карты каталога (без количеств).
+static func card_ingredients(card: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray()
+	for ing in card.get("recipe", []):
+		out.append(str((ing as Dictionary).get("item_id", "")))
+	return out
+
+
+## Рецепт карты каталога. Seed приходит с сервера и НЕ солится: картинка карты
+## общая для всех игроков — иначе коллекция и витрина показывали бы разные
+## круги для одной и той же карты.
+func make_card_recipe(card: Dictionary) -> SigilRecipe:
+	var r := SigilRecipe.new()
+	r.id = StringName(str(card.get("id", "")))
+	r.ingredients = card_ingredients(card)
+	r.result_type = StringName(str(card.get("object_type", "object")))
+	r.result_id = StringName(str(card.get("id", "")))
+	r.rarity = StringName(str(card.get("rarity", "common")))
+	r.display_name = str(card.get("fallback_name", ""))
+	r.properties = {
+		"set": str(card.get("set", "")),
+		"process": str(card.get("process", "")),
+		"stage": int(card.get("stage", 0)),
+	}
+	var catalog_seed := int(card.get("seed", 0))
+	if catalog_seed > 0:
+		r.seed_override = catalog_seed
+	return r
+
+
+## Рецепт крафта дня: карта каталога, если card_id известен, иначе старый
+## посоленный путь. Хроматическая (card_id пуст) остаётся уникальной per-player.
+func card_recipe_for(craft: Dictionary) -> SigilRecipe:
+	var card_id := str(craft.get("card_id", ""))
+	if card_id != "" and _catalog.has(card_id):
+		return make_card_recipe(_catalog[card_id])
+	return make_craft_recipe(craft)
+
+
+## Серверная коллекция.
+func request_collection(device_id: String) -> void:
+	Net.sigil_collection(device_id)
+
+
+func _on_collection_result(result: Dictionary) -> void:
+	if not result.get("ok", false):
+		return
+	var cards: Dictionary = {}
+	var raw = result.get("cards", {})
+	if raw is Dictionary:
+		for k in (raw as Dictionary):
+			var e = (raw as Dictionary)[k]
+			if e is Dictionary:
+				cards[str(k)] = {
+					"copies": int((e as Dictionary).get("copies", 0)),
+					"first_at": str((e as Dictionary).get("first_at", "")),
+				}
+	_server_collection = cards
+	_server_extras = []
+	for x in result.get("extras", []):
+		if x is Dictionary:
+			_server_extras.append(x)
+	collection_ready.emit(_server_collection)
+
+
+func copies_of(card_id: String) -> int:
+	var e = _server_collection.get(card_id, null)
+	if e is Dictionary:
+		return int((e as Dictionary).get("copies", 0))
+	return 0
+
+
+func has_collected(card_id: String) -> bool:
+	return copies_of(card_id) > 0
+
+
+func server_collection() -> Dictionary:
+	return _server_collection.duplicate(true)
+
+
+func server_extras() -> Array:
+	return _server_extras.duplicate(true)
+
+
+## Опции квадратного превью: круг целиком, без рамки, подписи и объекта.
+## Центральный объект на 280 px превращается в шум, круг остаётся узнаваемым.
 func preview_options() -> SigilOptions:
 	return SigilOptions.make({
 		"card_size": Vector2i(PREVIEW_SIZE, PREVIEW_SIZE),
 		"show_name": false,
 		"show_frame": false,
+		"show_icon": false,
 		"render_scale": 1,
 	})
 
 
 ## Превью круга для меню крафтов — тот же рендер, что и у карточки, только
-## квадратный. Кэш в памяти на сессию + PNG на диске между запусками.
+## квадратный. Ключ кэша — card_id, если он есть: превью карты каталога общее
+## для всех игроков и переиспользуется между днями.
 func preview_texture(craft: Dictionary) -> ImageTexture:
-	var key := str(craft.get("id", ""))
+	var card_id := str(craft.get("card_id", ""))
+	var key := card_id if card_id != "" else str(craft.get("id", ""))
 	if _preview_cache.has(key):
 		return _preview_cache[key]
-	var recipe := make_craft_recipe(craft)
+	var recipe := card_recipe_for(craft)
 	var opts := preview_options()
 	var img: Image = null
 	var path := await _svc.export_cached(recipe, opts)
@@ -255,6 +425,13 @@ func _on_daily_result(result: Dictionary) -> void:
 			"rarity": str(c.get("rarity", "common")),
 			"llm_name": str(c.get("llm_name", "")),
 			"is_chromatic": bool(c.get("is_chromatic", false)),
+			"card_id": str(c.get("card_id", "")),
+			"set": str(c.get("set", "")),
+			"process": str(c.get("process", "")),
+			"stage": int(c.get("stage", 0)),
+			"object_type": str(c.get("object_type", "object")),
+			"seed": int(c.get("seed", 0)),
+			"fallback_name": str(c.get("fallback_name", "")),
 		})
 	_save_daily_cache()
 	daily_crafts_ready.emit(_daily_crafts)
@@ -262,6 +439,7 @@ func _on_daily_result(result: Dictionary) -> void:
 
 ## Крафт карточки: отправить запрос на сервер.
 func craft_card(device_id: String, craft_id: String) -> void:
+	_last_device_id = device_id
 	Net.sigil_craft(device_id, craft_id)
 
 
@@ -273,19 +451,26 @@ func _on_craft_result(result: Dictionary) -> void:
 	var craft_id := str(result.get("craft_id", ""))
 	var rarity := str(result.get("rarity", "common"))
 	var llm_name := str(result.get("llm_name", ""))
-	# Добавляем в коллекцию
+	var card_id := str(result.get("card_id", ""))
 	if not _collection.has(craft_id):
 		var craft := _daily_craft_by_id(craft_id)
 		craft["rarity"] = rarity
 		craft["llm_name"] = llm_name
-		var recipe := make_craft_recipe(craft)
+		if card_id != "":
+			craft["card_id"] = card_id
+		var recipe := card_recipe_for(craft)
 		_collection[craft_id] = {
 			"seed": recipe.compute_seed(),
 			"rarity": rarity,
+			"card_id": card_id,
 			"discovered_at": Time.get_unix_time_from_system(),
 		}
 		_save_collection()
 		collection_changed.emit()
+	# Сервер — источник правды по копиям: без перечитывания счётчик в UI
+	# остался бы вчерашним до следующего запуска.
+	if _last_device_id != "":
+		request_collection(_last_device_id)
 	craft_completed.emit(craft_id, rarity, llm_name)
 
 
@@ -295,7 +480,9 @@ func _daily_craft_by_id(craft_id: String) -> Dictionary:
 		if str((c as Dictionary).get("id", "")) == craft_id:
 			return (c as Dictionary).duplicate(true)
 	return {"id": craft_id, "ingredients": [], "ether_cost": 0,
-		"rarity": "common", "llm_name": "", "is_chromatic": false}
+		"rarity": "common", "llm_name": "", "is_chromatic": false,
+		"card_id": "", "set": "", "process": "", "stage": 0,
+		"object_type": "object", "seed": 0, "fallback_name": ""}
 
 
 ## Кэш ежедневных крафтов на диске (для офлайн-режима).
