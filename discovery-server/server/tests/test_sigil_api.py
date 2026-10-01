@@ -30,37 +30,37 @@ MINI_CATALOG = {
         {
             "id": "spark", "set": "fire", "rarity": "common",
             "recipe": [{"item_id": "fire", "qty": 10}, {"item_id": "air", "qty": 12}],
-            "ether_cost": 40, "process": "искры из воздуха", "stage": 1,
+            "ether_cost": 40, "process": "искры из воздуха", "stage": "nigredo",
             "fallback_name": "Искра", "object_type": "object", "seed": 11,
         },
         {
             "id": "coal", "set": "fire", "rarity": "common",
             "recipe": [{"item_id": "fire", "qty": 14}, {"item_id": "stone", "qty": 9}],
-            "ether_cost": 45, "process": "обугленное дерево", "stage": 2,
+            "ether_cost": 45, "process": "обугленное дерево", "stage": "nigredo",
             "fallback_name": "Уголь", "object_type": "object", "seed": 12,
         },
         {
             "id": "ice", "set": "water", "rarity": "rare",
             "recipe": [{"item_id": "water", "qty": 30}, {"item_id": "air", "qty": 20}],
-            "ether_cost": 160, "process": "застывшая вода", "stage": 2,
+            "ether_cost": 160, "process": "застывшая вода", "stage": "albedo",
             "fallback_name": "Лёд", "object_type": "object", "seed": 33,
         },
         {
             "id": "mist", "set": "water", "rarity": "rare",
             "recipe": [{"item_id": "water", "qty": 24}, {"item_id": "steam", "qty": 18}],
-            "ether_cost": 150, "process": "туман над водой", "stage": 2,
+            "ether_cost": 150, "process": "туман над водой", "stage": "albedo",
             "fallback_name": "Туман", "object_type": "abstraction", "seed": 34,
         },
         {
             "id": "cloud", "set": "air", "rarity": "epic",
             "recipe": [{"item_id": "steam", "qty": 60}, {"item_id": "air", "qty": 70}],
-            "ether_cost": 380, "process": "сгущение пара", "stage": 3,
+            "ether_cost": 380, "process": "сгущение пара", "stage": "citrinitas",
             "fallback_name": "Облако", "object_type": "object", "seed": 44,
         },
         {
             "id": "smoke", "set": "air", "rarity": "epic",
             "recipe": [{"item_id": "fire", "qty": 55}, {"item_id": "plant", "qty": 40}],
-            "ether_cost": 360, "process": "горение травы", "stage": 3,
+            "ether_cost": 360, "process": "горение травы", "stage": "citrinitas",
             "fallback_name": "Дым", "object_type": "abstraction", "seed": 45,
         },
         {
@@ -69,13 +69,13 @@ MINI_CATALOG = {
                 {"item_id": "stone", "qty": 120}, {"item_id": "fire", "qty": 150},
                 {"item_id": "metal", "qty": 90}, {"item_id": "earth", "qty": 200},
             ],
-            "ether_cost": 900, "process": "расплав глубин", "stage": 5,
+            "ether_cost": 900, "process": "расплав глубин", "stage": "rubedo",
             "fallback_name": "Лава", "object_type": "abstraction", "seed": 22,
         },
         {
             "id": "stone", "set": "earth", "rarity": "common",
             "recipe": [{"item_id": "earth", "qty": 8}, {"item_id": "fire", "qty": 6}],
-            "ether_cost": 35, "process": "спекшаяся глина", "stage": 1,
+            "ether_cost": 35, "process": "спекшаяся глина", "stage": "nigredo",
             "fallback_name": "Камень", "object_type": "object", "seed": 55,
         },
     ],
@@ -164,6 +164,54 @@ class TestCatalog:
     def test_catalog_handler_is_sync(self):
         # T29: хендлеры, трогающие БД/диск, обязаны быть sync def.
         assert inspect.iscoroutinefunction(srv.sigil_catalog) is False
+
+
+class TestRealCatalogContract:
+    """Контракт stage по РЕАЛЬНОМУ артефакту data/sigil_catalog.json.
+
+    stage обязан дойти до моделей ответа строкой спек-формы: каталог хранит
+    «nigredo»/«albedo»/…, и int-семантика (int("albedo"), stage: int в
+    SigilCraft/SigilCatalogCard) падает на первой же карте.
+    """
+
+    STAGES = {"nigredo", "albedo", "citrinitas", "rubedo"}
+
+    def test_catalog_craft_survives_all_100_cards(self):
+        data = srv._sigil_catalog()
+        assert len(data["cards"]) == 100
+        assert {str(c.get("stage")) for c in data["cards"]} == self.STAGES
+        for card in data["cards"]:
+            craft = srv._catalog_craft(card, "2026-01-01", "dev-contract", 0)
+            assert craft["stage"] in self.STAGES, card["id"]
+            srv.SigilCraft(**craft)  # модель оффера обязана принять крафт как есть
+
+    def test_catalog_response_model_accepts_real_artifact(self):
+        data = srv._sigil_catalog()
+        body = srv.SigilCatalogResponse(
+            ok=True, version=data["version"], sets=data["sets"], cards=data["cards"]
+        )
+        assert len(body.cards) == 100
+        assert {str(c.stage) for c in body.cards} == self.STAGES
+
+    def test_sigil_endpoints_e2e_on_real_catalog(self, tmp_path, monkeypatch):
+        client = _client(_srv(tmp_path, monkeypatch))
+        r = client.get("/api/sigil/catalog")
+        assert r.status_code == 200
+        assert all(c["stage"] in self.STAGES for c in r.json()["cards"])
+        r = client.get("/api/sigil/daily", params={"device_id": "dev-real"})
+        assert r.status_code == 200
+        crafts = r.json()["crafts"]
+        assert all(
+            c["stage"] in self.STAGES for c in crafts if not c["is_chromatic"]
+        ), crafts
+        r = client.post(
+            "/api/sigil/craft",
+            json={"device_id": "dev-real", "craft_id": crafts[0]["id"]},
+        )
+        assert r.status_code == 200
+        r = client.post("/api/admin/sigil/rotate", params={"device_id": "dev-real"})
+        assert r.status_code == 200
+        assert all(c["stage"] in self.STAGES for c in r.json()["crafts"]), r.json()
 
 
 import sqlite3  # noqa: E402  (нужен _seed_crafts)

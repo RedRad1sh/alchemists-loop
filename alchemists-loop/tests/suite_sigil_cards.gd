@@ -68,7 +68,7 @@ static func run(g: Game) -> void:
 	sm.set_catalog([
 		{"id": "steam", "set": "water", "rarity": "rare", "ether_cost": 150,
 			"recipe": [{"item_id": "fire", "qty": 5}, {"item_id": "water", "qty": 5}],
-			"process": "кипячение", "stage": 2, "fallback_name": "Пар",
+			"process": "sublimatio", "stage": "albedo", "fallback_name": "Пар",
 			"object_type": "object", "seed": 123456789},
 	], [{"id": "water", "title": "Стихия Воды", "card_ids": ["steam"]}], "unit-v1")
 	Selftest.check("catalog stores card", int(sm.card("steam").get("seed", 0)) == 123456789)
@@ -86,6 +86,8 @@ static func run(g: Game) -> void:
 	Selftest.check("card recipe display name", card_recipe.display_name == "Пар")
 	Selftest.check("card recipe keeps set",
 		str(card_recipe.properties.get("set", "")) == "water")
+	Selftest.check("card recipe keeps stage string",
+		str(card_recipe.properties.get("stage", "")) == "albedo")
 
 	# Каталог НЕ солится: картинка карты общая для всех игроков — на этом
 	# держатся коллекция и витрина.

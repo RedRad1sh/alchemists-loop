@@ -703,7 +703,9 @@ class SigilCraft(BaseModel):
     card_id: str = ""
     set: str = ""
     process: str = ""
-    stage: int = 0
+    # Спека: stage — строка («nigredo»/«albedo»/«citrinitas»/«rubedo»), так её
+    # пишет генератор и так её потребует lore-движок подпроекта C.
+    stage: str = ""
     object_type: str = "object"
     seed: int = 0
     fallback_name: str = ""
@@ -762,7 +764,7 @@ class SigilCatalogCard(BaseModel):
     recipe: list[SigilCatalogIngredient] = []
     ether_cost: int = 0
     process: str = ""
-    stage: int = 0
+    stage: str = ""
     fallback_name: str = ""
     object_type: str = "object"
     seed: int = 0
@@ -4586,7 +4588,7 @@ def _catalog_craft(card: dict, day: str, device_id: str, index: int) -> dict:
         "ingredients": [dict(ing) for ing in card.get("recipe", [])],
         "ether_cost": int(card.get("ether_cost", _SIGIL_ETHER_COST.get(card.get("rarity"), 100))),
         "process": card.get("process", ""),
-        "stage": int(card.get("stage", 0)),
+        "stage": card.get("stage", ""),
         "object_type": card.get("object_type", "object"),
         "seed": int(card.get("seed", 0)),
         "fallback_name": card.get("fallback_name", ""),
@@ -4608,7 +4610,7 @@ def _chromatic_craft(rng, day: str, device_id: str, index: int) -> dict:
         "ingredients": [{"item_id": item_id, "qty": rng.randint(lo, hi)} for item_id in chosen],
         "ether_cost": _SIGIL_ETHER_COST["chromatic"],
         "process": "",
-        "stage": 0,
+        "stage": "",
         "object_type": "object",
         "seed": 0,
         "fallback_name": _SIGIL_CHROMATIC_NAME,

@@ -229,7 +229,8 @@ func make_card_recipe(card: Dictionary) -> SigilRecipe:
 	r.properties = {
 		"set": str(card.get("set", "")),
 		"process": str(card.get("process", "")),
-		"stage": int(card.get("stage", 0)),
+		# Спека: stage каталога — строка («nigredo»/«albedo»/…), int-каст ломал бы её.
+		"stage": str(card.get("stage", "")),
 	}
 	var catalog_seed := int(card.get("seed", 0))
 	if catalog_seed > 0:
@@ -428,7 +429,7 @@ func _on_daily_result(result: Dictionary) -> void:
 			"card_id": str(c.get("card_id", "")),
 			"set": str(c.get("set", "")),
 			"process": str(c.get("process", "")),
-			"stage": int(c.get("stage", 0)),
+			"stage": str(c.get("stage", "")),
 			"object_type": str(c.get("object_type", "object")),
 			"seed": int(c.get("seed", 0)),
 			"fallback_name": str(c.get("fallback_name", "")),
@@ -481,7 +482,7 @@ func _daily_craft_by_id(craft_id: String) -> Dictionary:
 			return (c as Dictionary).duplicate(true)
 	return {"id": craft_id, "ingredients": [], "ether_cost": 0,
 		"rarity": "common", "llm_name": "", "is_chromatic": false,
-		"card_id": "", "set": "", "process": "", "stage": 0,
+		"card_id": "", "set": "", "process": "", "stage": "",
 		"object_type": "object", "seed": 0, "fallback_name": ""}
 
 
