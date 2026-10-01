@@ -698,6 +698,15 @@ class SigilCraft(BaseModel):
     rarity: str
     llm_name: str = ""
     is_chromatic: bool = False
+    # Каталог: карта из data/sigil_catalog.json. Пустой card_id = хроматическая
+    # внекомплектная. Все поля с дефолтами — старый crafts_json обязан парситься.
+    card_id: str = ""
+    set: str = ""
+    process: str = ""
+    stage: int = 0
+    object_type: str = "object"
+    seed: int = 0
+    fallback_name: str = ""
 
 
 class SigilDailyResponse(BaseModel):
@@ -907,13 +916,18 @@ def init_db():
             PRIMARY KEY (device_id, day)
         )""")
         # Аркан Сигилов: скрафченные карточки.
+        # card_id — карта каталога; '' = хроматическая внекомплектная.
         conn.execute("""CREATE TABLE IF NOT EXISTS sigil_crafts (
             device_id TEXT NOT NULL, craft_id TEXT NOT NULL,
             rarity TEXT NOT NULL, llm_name TEXT NOT NULL DEFAULT '',
             is_chromatic INTEGER NOT NULL DEFAULT 0,
+            card_id TEXT NOT NULL DEFAULT '',
             crafted_at TEXT NOT NULL,
             PRIMARY KEY (device_id, craft_id)
         )""")
+        sg_cols = {r["name"] for r in conn.execute("PRAGMA table_info(sigil_crafts)").fetchall()}
+        if "card_id" not in sg_cols:
+            conn.execute("ALTER TABLE sigil_crafts ADD COLUMN card_id TEXT NOT NULL DEFAULT ''")
         # F2 (по конвенции init_db для старых БД, дубль см. в schema.sql):
         # частичный UNIQUE — не более одного открытого (active/spread) цикла.
         # Константа-ключ: все подходящие строки делят один ключ индекса.
@@ -4474,90 +4488,190 @@ _SIGIL_BASE_ITEMS = [
 ]
 
 # Редкости и их веса при генерации ежедневных крафтов.
+# Ребаланс: common 60→70, rare 25→20, epic 10→8, legendary 5→4.
+# Каталог назначает редкость карте по глубине рецептурного графа, здесь
+# тянется только «желанная» редкость слота.
 _SIGIL_RARITY_WEIGHTS = [
-    ("common", 60),
-    ("rare", 25),
-    ("epic", 10),
-    ("legendary", 5),
+    ("common", 70),
+    ("rare", 20),
+    ("epic", 8),
+    ("legendary", 4),
 ]
 _SIGIL_CHROMATIC_CHANCE = 0.02  # 2% шанс на хроматическую внекомплектную
 
-# Стоимость эфира по редкости.
+# Стоимость эфира по редкости. Карты каталога несут свою цену (её считает
+# генератор из Task 1), поэтому словарь остаётся источником цены только для
+# хроматической и как fallback. chromatic 1500→1200: она не входит в комплекты,
+# платить за неё больше легендарной смысла нет.
 _SIGIL_ETHER_COST = {
     "common": 50,
     "rare": 150,
     "epic": 400,
     "legendary": 800,
-    "chromatic": 1500,
+    "chromatic": 1200,
 }
 
+_SIGIL_SLOTS = 3
+_SIGIL_CHROMATIC_INGREDIENTS = 4
+_SIGIL_CHROMATIC_QTY = (25, 60)
+_SIGIL_CHROMATIC_NAME = "Хроматический сигил"
 
-def _generate_sigil_daily(device_id: str, day: str) -> list[dict]:
-    """Сгенерировать 3 ежедневных крафта для игрока.
 
-    Per-player seed = hash(device_id + day). Редкости по весам, legendary действительно редкий.
-    Очень маленький шанс на chromatic (внекомплектная).
+def _pick_rarity(rng) -> str:
+    """Взвешенная редкость слота по _SIGIL_RARITY_WEIGHTS."""
+    roll = rng.random() * 100
+    cumulative = 0
+    for rarity, weight in _SIGIL_RARITY_WEIGHTS:
+        cumulative += weight
+        if roll < cumulative:
+            return rarity
+    return _SIGIL_RARITY_WEIGHTS[-1][0]
+
+
+def _pick_card(rng, rarity: str, collected, exclude=frozenset()):
+    """Случайная карта каталога нужной редкости, ещё не собранная. None, если нет."""
+    pool = [
+        c for c in _sigil_catalog()["cards"]
+        if c.get("rarity") == rarity
+        and c["id"] not in collected
+        and c["id"] not in exclude
+    ]
+    if not pool:
+        return None
+    return rng.choice(pool)
+
+
+def _pick_uncollected(rng, collected, exclude=frozenset()):
+    """Любая несобранная карта; редкость тянем, но при пустом бакете смягчаем."""
+    cards = _sigil_catalog()["cards"]
+    pool = [c for c in cards if c["id"] not in collected and c["id"] not in exclude]
+    if not pool:
+        return None
+    card = _pick_card(rng, _pick_rarity(rng), collected, exclude)
+    return card or rng.choice(pool)
+
+
+def _catalog_craft(card: dict, day: str, device_id: str, index: int) -> dict:
+    """Крафт дня из карты каталога. Ингредиенты и цена — дословно из каталога."""
+    return {
+        "id": f"{day}_{device_id[:8]}_{index}",
+        "card_id": card["id"],
+        "set": card.get("set", ""),
+        "rarity": card.get("rarity", "common"),
+        "ingredients": [dict(ing) for ing in card.get("recipe", [])],
+        "ether_cost": int(card.get("ether_cost", _SIGIL_ETHER_COST.get(card.get("rarity"), 100))),
+        "process": card.get("process", ""),
+        "stage": int(card.get("stage", 0)),
+        "object_type": card.get("object_type", "object"),
+        "seed": int(card.get("seed", 0)),
+        "fallback_name": card.get("fallback_name", ""),
+        "llm_name": "",
+        "is_chromatic": False,
+    }
+
+
+def _chromatic_craft(rng, day: str, device_id: str, index: int) -> dict:
+    """Внекомплектная карта: ингредиенты случайные, картинка — по соли игрока."""
+    pool = list(_SIGIL_BASE_ITEMS)
+    chosen = rng.sample(pool, min(_SIGIL_CHROMATIC_INGREDIENTS, len(pool)))
+    lo, hi = _SIGIL_CHROMATIC_QTY
+    return {
+        "id": f"{day}_{device_id[:8]}_{index}",
+        "card_id": "",
+        "set": "",
+        "rarity": "chromatic",
+        "ingredients": [{"item_id": item_id, "qty": rng.randint(lo, hi)} for item_id in chosen],
+        "ether_cost": _SIGIL_ETHER_COST["chromatic"],
+        "process": "",
+        "stage": 0,
+        "object_type": "object",
+        "seed": 0,
+        "fallback_name": _SIGIL_CHROMATIC_NAME,
+        "llm_name": _SIGIL_CHROMATIC_NAME,
+        "is_chromatic": True,
+    }
+
+
+def _collected_card_ids(conn, device_id: str) -> set:
+    rows = conn.execute(
+        "SELECT card_id FROM sigil_crafts WHERE device_id=? AND card_id<>''",
+        (device_id,),
+    ).fetchall()
+    return {str(r["card_id"]) for r in rows}
+
+
+def _generate_sigil_daily(device_id: str, day: str, collected) -> list[dict]:
+    """Сгенерировать оффер дня: 3 слота, слот 0 — гарантия несобранной карты.
+
+    Per-player seed = sha256(device_id#day)[:8]. Карты берутся из каталога,
+    поэтому картинка карты одинакова у всех игроков; соль игрока мешает только
+    хроматическую (её card_id пуст).
     """
     seed_val = int(hashlib.sha256(f"{device_id}#{day}".encode()).hexdigest()[:8], 16)
     rng = random.Random(seed_val)
+    collected = set(collected or ())
 
     crafts = []
+    offered = set()
 
-    for i in range(3):
-        # Взвешенный рандом для всех слотов — legendary действительно редкий
-        r = rng.random() * 100
-        cumulative = 0
-        rarity = "common"
-        for rar, weight in _SIGIL_RARITY_WEIGHTS:
-            cumulative += weight
-            if r < cumulative:
-                rarity = rar
-                break
+    # Слот 0 — гарантия «хотя бы одна несобранная». Хроматическая её не даёт,
+    # поэтому тянем её только явным 2%-броском, а при полном каталоге — наоборот.
+    card = None
+    if rng.random() >= _SIGIL_CHROMATIC_CHANCE:
+        card = _pick_uncollected(rng, collected)
+    if card is None:
+        crafts.append(_chromatic_craft(rng, day, device_id, 0))
+    else:
+        offered.add(card["id"])
+        crafts.append(_catalog_craft(card, day, device_id, 0))
 
-        # Шанс на хроматическую (только для non-legendary слотов)
-        is_chromatic = False
-        if rarity != "legendary" and rng.random() < _SIGIL_CHROMATIC_CHANCE:
-            is_chromatic = True
-            rarity = "chromatic"
-
-        # Генерация ингредиентов: 3-4 типа элементов, с количествами
-        num_types = rng.randint(3, 4)
-        chosen_items = rng.sample(_SIGIL_BASE_ITEMS, min(num_types, len(_SIGIL_BASE_ITEMS)))
-
-        # Количества зависят от редкости
-        if rarity in ("common", "rare"):
-            qty_range = (10, 50)
-        elif rarity == "epic":
-            qty_range = (20, 100)
-        elif rarity == "legendary":
-            qty_range = (50, 200)
-        else:  # chromatic
-            qty_range = (100, 300)
-
-        ingredients = []
-        for item_id in chosen_items:
-            qty = rng.randint(*qty_range)
-            ingredients.append({"item_id": item_id, "qty": qty})
-
-        # LLM-название для legendary и chromatic
-        llm_name = ""
-        if rarity in ("legendary", "chromatic"):
-            # Fallback: генерируем название из элементов
-            # В реальной реализации здесь вызов LLM
-            element_names = [ing["item_id"] for ing in ingredients]
-            llm_name = f"Сигил {'-'.join(element_names[:2]).title()}"
-
-        craft_id = f"{day}_{device_id[:8]}_{i}"
-        crafts.append({
-            "id": craft_id,
-            "ingredients": ingredients,
-            "ether_cost": _SIGIL_ETHER_COST.get(rarity, 100),
-            "rarity": rarity,
-            "llm_name": llm_name,
-            "is_chromatic": is_chromatic,
-        })
+    for index in range(1, _SIGIL_SLOTS):
+        card = _pick_card(rng, _pick_rarity(rng), collected, offered)
+        if card is None:
+            card = _pick_uncollected(rng, collected, offered)
+        if card is None:
+            crafts.append(_chromatic_craft(rng, day, device_id, index))
+            continue
+        offered.add(card["id"])
+        crafts.append(_catalog_craft(card, day, device_id, index))
 
     return crafts
+
+
+def _sigil_daily_is_current(crafts_data) -> bool:
+    """Кэш без card_id/fallback_name устарел: схема оффера изменилась."""
+    if not isinstance(crafts_data, list) or not crafts_data:
+        return False
+    return all(
+        isinstance(c, dict) and "card_id" in c and "fallback_name" in c
+        for c in crafts_data
+    )
+
+
+def _ensure_sigil_daily(conn, device_id: str, day: str) -> list[dict]:
+    """Прочитать оффер дня или создать его. Единственная точка генерации."""
+    row = conn.execute(
+        "SELECT crafts_json FROM sigil_daily WHERE device_id=? AND day=?",
+        (device_id, day),
+    ).fetchone()
+    if row:
+        try:
+            cached = json.loads(row["crafts_json"])
+        except ValueError:
+            cached = None
+        if _sigil_daily_is_current(cached):
+            return cached
+    crafts_data = _generate_sigil_daily(device_id, day, _collected_card_ids(conn, device_id))
+    conn.execute(
+        """INSERT INTO sigil_daily (device_id, day, crafts_json, generated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(device_id, day) DO UPDATE SET
+             crafts_json=excluded.crafts_json,
+             generated_at=excluded.generated_at""",
+        (device_id, day, json.dumps(crafts_data, ensure_ascii=False), _now_iso()),
+    )
+    conn.commit()
+    return crafts_data
 
 
 @app.get("/api/sigil/catalog", response_model=SigilCatalogResponse)
@@ -4573,38 +4687,17 @@ def sigil_catalog() -> SigilCatalogResponse:
 
 @app.get("/api/sigil/daily", response_model=SigilDailyResponse)
 def sigil_daily(device_id: str = Query("", max_length=128)):
-    """Получить 3 ежедневных крафта Аркана Сигилов.
-
-    Per-player: seed = hash(device_id + day). Кэшируется на день.
-    """
+    """Оффер дня: 3 крафта, слот 0 гарантирует несобранную карту каталога."""
     if not device_id:
         return SigilDailyResponse(ok=False, error="missing_device_id")
 
     conn = get_db()
     try:
         today = date.today().isoformat()
-
-        # Проверяем кэш
-        row = conn.execute(
-            "SELECT crafts_json FROM sigil_daily WHERE device_id=? AND day=?",
-            (device_id, today),
-        ).fetchone()
-
-        if row:
-            crafts_data = json.loads(row["crafts_json"])
-            crafts = [SigilCraft(**c) for c in crafts_data]
-            return SigilDailyResponse(ok=True, day=today, crafts=crafts)
-
-        # Генерируем новые
-        crafts_data = _generate_sigil_daily(device_id, today)
-        conn.execute(
-            "INSERT INTO sigil_daily (device_id, day, crafts_json, generated_at) VALUES (?, ?, ?, ?)",
-            (device_id, today, json.dumps(crafts_data), _now_iso()),
+        crafts_data = _ensure_sigil_daily(conn, device_id, today)
+        return SigilDailyResponse(
+            ok=True, day=today, crafts=[SigilCraft(**c) for c in crafts_data]
         )
-        conn.commit()
-
-        crafts = [SigilCraft(**c) for c in crafts_data]
-        return SigilDailyResponse(ok=True, day=today, crafts=crafts)
     finally:
         conn.close()
 
@@ -4669,23 +4762,13 @@ def sigil_craft(req: SigilCraftRequest):
 
 @app.post("/api/admin/sigil/rotate")
 def admin_sigil_rotate(device_id: str = Query("", max_length=128)):
-    """Админ: принудительная ротация ежедневных крафтов.
-
-    Удаляет кэш за сегодня, генерирует новые.
-    """
+    """Админ: принудительная ротация оффера дня."""
     conn = get_db()
     try:
         today = date.today().isoformat()
         conn.execute("DELETE FROM sigil_daily WHERE device_id=? AND day=?", (device_id, today))
         conn.commit()
-
-        crafts_data = _generate_sigil_daily(device_id, today)
-        conn.execute(
-            "INSERT INTO sigil_daily (device_id, day, crafts_json, generated_at) VALUES (?, ?, ?, ?)",
-            (device_id, today, json.dumps(crafts_data), _now_iso()),
-        )
-        conn.commit()
-
+        crafts_data = _ensure_sigil_daily(conn, device_id, today)
         return {"ok": True, "crafts": crafts_data}
     finally:
         conn.close()

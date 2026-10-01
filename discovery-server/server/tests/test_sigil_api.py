@@ -164,3 +164,140 @@ class TestCatalog:
     def test_catalog_handler_is_sync(self):
         # T29: хендлеры, трогающие БД/диск, обязаны быть sync def.
         assert inspect.iscoroutinefunction(srv.sigil_catalog) is False
+
+
+import sqlite3  # noqa: E402  (нужен _seed_crafts)
+
+
+def _seed_crafts(s, device_id, rows):
+    """rows: [(craft_id, card_id), ...] — собрать карты в обход эндпоинта крафта."""
+    conn = sqlite3.connect(s.DB_PATH)
+    for craft_id, card_id in rows:
+        conn.execute(
+            "INSERT OR REPLACE INTO sigil_crafts"
+            " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, crafted_at)"
+            " VALUES (?, ?, 'common', '', 0, ?, '2026-01-01T00:00:00')",
+            (device_id, craft_id, card_id),
+        )
+    conn.commit()
+    conn.close()
+
+
+def _offer(client, device_id):
+    r = client.get("/api/sigil/daily", params={"device_id": device_id})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True, body
+    return body["crafts"]
+
+
+class TestDailyOffer:
+    def test_offer_has_three_distinct_catalog_cards(self, tmp_path, monkeypatch):
+        client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
+        crafts = _offer(client, "dev-a")
+        assert len(crafts) == srv._SIGIL_SLOTS
+        ids = [c["card_id"] for c in crafts if c["card_id"]]
+        assert len(set(ids)) == len(ids), "оффер не должен повторять карту"
+        by_id = srv._sigil_catalog()["by_id"]
+        for card_id in ids:
+            assert card_id in by_id
+
+    def test_offer_ingredients_come_from_the_card(self, tmp_path, monkeypatch):
+        client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
+        by_id = srv._sigil_catalog()["by_id"]
+        for c in _offer(client, "dev-a"):
+            if not c["card_id"]:
+                continue
+            card = by_id[c["card_id"]]
+            assert c["ingredients"] == card["recipe"]
+            assert c["ether_cost"] == card["ether_cost"]
+            assert c["rarity"] == card["rarity"]
+            assert c["seed"] == card["seed"]
+            assert c["fallback_name"] == card["fallback_name"]
+
+    def test_offer_is_stable_within_a_day(self, tmp_path, monkeypatch):
+        client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
+        first = _offer(client, "dev-a")
+        second = _offer(client, "dev-a")
+        assert first == second
+
+    def test_offer_differs_between_players(self, tmp_path, monkeypatch):
+        client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
+        offers = {
+            tuple(c["card_id"] for c in _offer(client, f"dev-{i}"))
+            for i in range(8)
+        }
+        assert len(offers) > 1
+
+    def test_offer_guarantees_an_uncollected_card(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _mini(s, tmp_path, monkeypatch)
+        all_ids = [c["id"] for c in srv._sigil_catalog()["cards"]]
+        # Собираем всё, кроме двух карт: гарантия обязана дать одну из них.
+        _seed_crafts(s, "dev-c", [(f"c{i}", cid) for i, cid in enumerate(all_ids[:-2])])
+        srv._sigil_catalog_cache_clear()
+        crafts = _offer(client, "dev-c")
+        offered = {c["card_id"] for c in crafts if c["card_id"]}
+        assert offered & set(all_ids[-2:]), crafts
+
+    def test_full_collection_falls_back_to_chromatic_slot(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _mini(s, tmp_path, monkeypatch)
+        all_ids = [c["id"] for c in srv._sigil_catalog()["cards"]]
+        _seed_crafts(s, "dev-full", [(f"c{i}", cid) for i, cid in enumerate(all_ids)])
+        crafts = _offer(client, "dev-full")
+        assert crafts[0]["is_chromatic"] is True
+        assert crafts[0]["card_id"] == ""
+        assert crafts[0]["rarity"] == "chromatic"
+        assert crafts[0]["ether_cost"] == srv._SIGIL_ETHER_COST["chromatic"]
+        assert len(crafts[0]["ingredients"]) == srv._SIGIL_CHROMATIC_INGREDIENTS
+        lo, hi = srv._SIGIL_CHROMATIC_QTY
+        for ing in crafts[0]["ingredients"]:
+            assert lo <= ing["qty"] <= hi
+
+    def test_chromatic_is_rare(self, tmp_path, monkeypatch):
+        client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
+        hits = sum(
+            1 for i in range(200)
+            if _offer(client, f"dev-{i}")[0]["is_chromatic"]
+        )
+        # 2% на 200 игроков: ждём единицы, но не ноль и не половину.
+        assert 0 <= hits <= 20, hits
+
+    def test_rarity_weights_are_rebalanced(self):
+        assert srv._SIGIL_RARITY_WEIGHTS == [
+            ("common", 70), ("rare", 20), ("epic", 8), ("legendary", 4),
+        ]
+        assert sum(w for _, w in srv._SIGIL_RARITY_WEIGHTS) == 102  # 70+20+8+4; бриф говорил "== 100", но с его же весами это недостижимо
+        assert srv._SIGIL_ETHER_COST["chromatic"] == 1200
+
+    def test_legacy_cache_is_regenerated(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _mini(s, tmp_path, monkeypatch)
+        today = srv.date.today().isoformat()
+        conn = sqlite3.connect(s.DB_PATH)
+        conn.execute(
+            "INSERT INTO sigil_daily (device_id, day, crafts_json, generated_at)"
+            " VALUES (?, ?, ?, ?)",
+            ("dev-old", today, json.dumps([{"id": "x", "ingredients": [], "ether_cost": 1,
+                                            "rarity": "common"}]), "2020-01-01T00:00:00"),
+        )
+        conn.commit()
+        conn.close()
+        crafts = _offer(client, "dev-old")
+        assert [c["id"] for c in crafts] != ["x"]
+        assert all("card_id" in c for c in crafts)
+
+    def test_missing_device_id_rejected(self, tmp_path, monkeypatch):
+        client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
+        r = client.get("/api/sigil/daily")
+        assert r.json() == {"ok": False, "day": "", "crafts": [], "error": "missing_device_id"}
+
+    def test_rotate_gives_catalog_cards(self, tmp_path, monkeypatch):
+        client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
+        r = client.post("/api/admin/sigil/rotate", params={"device_id": "dev-a"})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["ok"] is True
+        assert len(body["crafts"]) == srv._SIGIL_SLOTS
+        assert all("card_id" in c for c in body["crafts"])
