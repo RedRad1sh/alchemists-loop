@@ -721,6 +721,38 @@ class SigilCraftResponse(BaseModel):
     error: str = ""
 
 
+class SigilCatalogIngredient(BaseModel):
+    item_id: str
+    qty: int
+
+
+class SigilCatalogCard(BaseModel):
+    id: str
+    set: str = ""
+    rarity: str = "common"
+    recipe: list[SigilCatalogIngredient] = []
+    ether_cost: int = 0
+    process: str = ""
+    stage: int = 0
+    fallback_name: str = ""
+    object_type: str = "object"
+    seed: int = 0
+
+
+class SigilCatalogSet(BaseModel):
+    id: str
+    title: str = ""
+    card_ids: list[str] = []
+
+
+class SigilCatalogResponse(BaseModel):
+    ok: bool
+    version: str = ""
+    sets: list[SigilCatalogSet] = []
+    cards: list[SigilCatalogCard] = []
+    error: str = ""
+
+
 # ---------------------------------------------------------------------------
 # Работа с БД
 # ---------------------------------------------------------------------------
@@ -4390,6 +4422,49 @@ def receipt_verify(req: ReceiptVerifyRequest):
 # Аркан Сигилов: ежедневные крафты
 # ---------------------------------------------------------------------------
 
+SIGIL_CATALOG_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "sigil_catalog.json"
+)
+
+# Каталог — статический артефакт репозитория, но его читают на каждый запрос
+# daily/craft, поэтому держим (path, mtime, data) и перечитываем только при
+# смене файла. _sigil_catalog_cache_clear() существует ради тестов.
+_sigil_catalog_cache: tuple = ("", -1.0, {})
+
+
+def _sigil_catalog_cache_clear() -> None:
+    global _sigil_catalog_cache
+    _sigil_catalog_cache = ("", -1.0, {})
+
+
+def _sigil_catalog() -> dict:
+    """{"version", "sets", "cards", "by_id"}; пустая форма при любой ошибке."""
+    global _sigil_catalog_cache
+    path = SIGIL_CATALOG_PATH
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return {"version": "", "sets": [], "cards": [], "by_id": {}}
+    cached_path, cached_mtime, cached = _sigil_catalog_cache
+    if cached_path == path and cached_mtime == mtime and cached:
+        return cached
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            raw = json.load(fh)
+    except (OSError, ValueError):
+        return {"version": "", "sets": [], "cards": [], "by_id": {}}
+    cards = [c for c in raw.get("cards", []) if isinstance(c, dict) and c.get("id")]
+    sets = [s for s in raw.get("sets", []) if isinstance(s, dict) and s.get("id")]
+    data = {
+        "version": str(raw.get("version", "")),
+        "sets": sets,
+        "cards": cards,
+        "by_id": {str(c["id"]): c for c in cards},
+    }
+    _sigil_catalog_cache = (path, mtime, data)
+    return data
+
+
 # Базовый набор элементов для крафтов (100 ITEMS из клиента).
 # Для первой итерации используем подмножество — 20 элементов разной «дальности».
 _SIGIL_BASE_ITEMS = [
@@ -4483,6 +4558,17 @@ def _generate_sigil_daily(device_id: str, day: str) -> list[dict]:
         })
 
     return crafts
+
+
+@app.get("/api/sigil/catalog", response_model=SigilCatalogResponse)
+def sigil_catalog() -> SigilCatalogResponse:
+    """Полный каталог карт: клиент кэширует его по version и не тянет зря."""
+    data = _sigil_catalog()
+    if not data["cards"]:
+        return SigilCatalogResponse(ok=False, error="catalog_empty")
+    return SigilCatalogResponse(
+        ok=True, version=data["version"], sets=data["sets"], cards=data["cards"]
+    )
 
 
 @app.get("/api/sigil/daily", response_model=SigilDailyResponse)
