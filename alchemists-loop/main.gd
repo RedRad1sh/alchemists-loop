@@ -1761,17 +1761,17 @@ func _demo_seed_sigil_coll() -> void:
 		{"id": "clay", "set": "earth", "rarity": "common", "ether_cost": 50,
 			"recipe": [{"item_id": "clay", "qty": 12}, {"item_id": "water", "qty": 20},
 				{"item_id": "sand", "qty": 8}],
-			"process": "осадок и прессовка", "stage": 1, "fallback_name": "Глина",
+			"process": "осадок и прессовка", "stage": "nigredo", "fallback_name": "Глина",
 			"object_type": "object", "seed": 90210},
 		{"id": "metal", "set": "earth", "rarity": "epic", "ether_cost": 400,
 			"recipe": [{"item_id": "metal", "qty": 30}, {"item_id": "fire", "qty": 45},
 				{"item_id": "ice", "qty": 25}, {"item_id": "spark", "qty": 18}],
-			"process": "плавка и закалка", "stage": 4, "fallback_name": "Металл",
+			"process": "плавка и закалка", "stage": "albedo", "fallback_name": "Металл",
 			"object_type": "relic", "seed": 90211},
 		{"id": "mountain", "set": "earth", "rarity": "legendary", "ether_cost": 800,
 			"recipe": [{"item_id": "mountain", "qty": 60}, {"item_id": "cloud", "qty": 80},
 				{"item_id": "life", "qty": 40}],
-			"process": "горный венец", "stage": 6, "fallback_name": "Гора",
+			"process": "горный венец", "stage": "rubedo", "fallback_name": "Гора",
 			"object_type": "planet", "seed": 90212},
 	], [{"id": "earth", "title": "Стихия Земли",
 		"card_ids": ["clay", "metal", "mountain"]}], "demo")
@@ -1899,19 +1899,21 @@ func _open_sigil_modal() -> void:
 
 
 ## Ждать ежедневные крафты, но не вечно: офлайн не должен вешать меню.
+## Settled-флаг гасит ожидание сразу после офлайн-ответа, не по полному таймауту.
 func _await_daily_crafts(timeout: float) -> bool:
 	var waited := 0.0
-	while _sigil._daily_crafts.is_empty() and waited < timeout:
+	while _sigil._daily_crafts.is_empty() and not _sigil.daily_settled() and waited < timeout:
 		await get_tree().process_frame
 		waited += get_process_delta_time()
 	return not _sigil._daily_crafts.is_empty()
 
 
 ## Ждать каталог карт: без него превью меню рисовало бы посоленный fallback
-## вместо общей карты каталога. Тот же приём, что у _await_daily_crafts.
+## вместо общей карты каталога. Тот же приём, что у _await_daily_crafts:
+## settled-флаг выходит из ожидания сразу после офлайн-ответа.
 func _await_catalog(timeout: float) -> bool:
 	var waited := 0.0
-	while _sigil.catalog_size() == 0 and waited < timeout:
+	while _sigil.catalog_size() == 0 and not _sigil.catalog_settled() and waited < timeout:
 		await get_tree().process_frame
 		waited += get_process_delta_time()
 	return _sigil.catalog_size() > 0

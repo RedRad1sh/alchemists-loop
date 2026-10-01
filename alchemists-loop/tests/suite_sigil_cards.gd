@@ -270,3 +270,111 @@ static func run(g: Game) -> void:
 
 	# Откат: не оставляем флаги живому менеджеру (сидирование без записи на диск).
 	sm._on_collection_result({"ok": true, "cards": {}, "extras": []})
+
+	# ---- Task 5: гигиена каталога — settled-флаги (M1), version-гейт (M2),
+	# guard кэша превью (D10) ----
+	# Снапшоты user-кэшей: ok-ответы в проверках ниже пишут их на диск; restore
+	# в конце блока держит прогон герметичным (новых записей не оставляем).
+	var sb5_cat_snap := _sb5_file_text(SigilManager.CATALOG_FILE)
+	var sb5_daily_snap := _sb5_file_text(SigilManager.DAILY_CACHE_FILE)
+	var sb5_day0 := sm._daily_day
+	var sb5_crafts0: Array = sm._daily_crafts.duplicate(true)
+	var sb5_preview0 := sm._preview_cache.duplicate()
+
+	# Офлайн-ответ в ST приходит синхронно внутри request_*, поэтому на время
+	# «запроса в полёте» хендлер отключаем: между отправкой и офлайн-ответом
+	# флаг обязан стоять false, а офлайн-ответ должен гасить его в true.
+	Net.sigil_catalog_result.disconnect(sm._on_catalog_result)
+	sm.request_catalog()
+	var sb5_cat_pending := not sm.catalog_settled()
+	var sb5_daily_pending := not sm.daily_settled()
+	Net.sigil_catalog_result.connect(sm._on_catalog_result)
+	sm._on_catalog_result({"ok": false, "offline": true})
+	sm._on_daily_result({"ok": false, "offline": true})
+	Selftest.check("sb5 catalog settled flips on offline result",
+		sb5_cat_pending and sb5_daily_pending
+		and sm.catalog_settled() and sm.daily_settled())
+
+	# M2: ok-ответ помечает каталог докачанным в этой сессии; повторный
+	# request_catalog — no-op и НЕ сбрасывает settled в false (отправки не было).
+	var sb5_card := {"id": "sb5", "set": "fire", "rarity": "common",
+		"ether_cost": 10, "recipe": [{"item_id": "fire", "qty": 5}],
+		"process": "calcinatio", "stage": "nigredo", "fallback_name": "Проба",
+		"object_type": "object", "seed": 42}
+	sm._on_catalog_result({"ok": true, "cards": [sb5_card], "sets": [],
+		"version": "st-v1"})
+	var sb5_settled_after_ok := sm.catalog_settled()
+	Net.sigil_catalog_result.disconnect(sm._on_catalog_result)
+	sm.request_catalog()
+	var sb5_skipped := sm.catalog_settled()
+	Net.sigil_catalog_result.connect(sm._on_catalog_result)
+	Selftest.check("sb5 request catalog skips when fetched this session",
+		sb5_settled_after_ok and sb5_skipped)
+
+	# Ежедневный ответ с другой версией каталога перевыпускает докачку (спека §1):
+	# fetched_session гасится, request_catalog реально уходит, settled — false.
+	sm.set_catalog([sb5_card], [], "aaaa")
+	Net.sigil_catalog_result.disconnect(sm._on_catalog_result)
+	sm._on_daily_result({"ok": true, "catalog_version": "bbbb", "day": "st-day",
+		"crafts": []})
+	var sb5_refetched := not sm.catalog_settled()
+	Net.sigil_catalog_result.connect(sm._on_catalog_result)
+	Selftest.check("sb5 daily version mismatch refetches", sb5_refetched)
+
+	# D10: card_id, отсутствующий в локальном каталоге, не становится ключом
+	# кэша превью — солёный fallback кэшируется под id крафта. Рендер в headless
+	# не зовём: PNG в кэш рендера кладём сами, export_cached вернёт файл без
+	# единого кадра.
+	var sb5_craft := {"id": "x1", "card_id": "no_such_card", "rarity": "common",
+		"ingredients": [{"item_id": "fire", "qty": 5}], "llm_name": "",
+		"is_chromatic": false}
+	var sb5_path := sm._svc.cache_path(sm.card_recipe_for(sb5_craft),
+		sm.preview_options())
+	var sb5_blank := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+	var sb5_seeded := sb5_blank.save_png(sb5_path) == OK \
+		and FileAccess.file_exists(sb5_path)
+	var sb5_tex: ImageTexture = null
+	if sb5_seeded:
+		sb5_tex = await sm.preview_texture(sb5_craft)
+	Selftest.check("sb5 preview key avoids salted fallback for unknown card",
+		sb5_seeded and sb5_tex != null and sm._preview_cache.has("x1")
+		and not sm._preview_cache.has("no_such_card"))
+
+	# Откат: юнит-каталог, флаги и user-кэши — в состояние до блока. Сидированный
+	# PNG превью — единственная запись блока на диск вне двух JSON-кэшей.
+	if sb5_seeded:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(sb5_path))
+	sm.set_catalog([], [], "")
+	sm._catalog_settled = false
+	sm._catalog_fetched_session = false
+	sm._daily_settled = false
+	sm._daily_day = sb5_day0
+	sm._daily_crafts = sb5_crafts0
+	sm._preview_cache = sb5_preview0
+	_sb5_restore_file(SigilManager.CATALOG_FILE, sb5_cat_snap)
+	_sb5_restore_file(SigilManager.DAILY_CACHE_FILE, sb5_daily_snap)
+
+
+## Текст user-файла для снапшота блока sb5: пустая строка = файла не было.
+static func _sb5_file_text(path: String) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return ""
+	var text := f.get_as_text()
+	f.close()
+	return text
+
+
+## Вернуть user-файл к снапшоту: пустой снимок означает «файла не было» — удаляем.
+static func _sb5_restore_file(path: String, text: String) -> void:
+	if text == "":
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+		return
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(text)
+	f.close()

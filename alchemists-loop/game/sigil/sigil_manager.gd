@@ -45,6 +45,14 @@ var _last_device_id: String = ""
 ## Строго серверные: офлайн-клейм и ошибки ничего не меняют, эффекты не
 ## включаются без серверного подтверждения.
 var _milestones_claimed: Dictionary = {}  ## set_id -> Array[int]
+## M1: «на последний запрос уже пришёл ответ (любой исход)». request_* ставит
+## false только при реальной отправке, хендлер гасит в true на ok/offline/error:
+## офлайн-ожидание в main.gd выходит сразу, а не по полному таймауту.
+var _catalog_settled := false
+var _daily_settled := false
+## M2: каталог уже докачан в этой сессии — повторный request_catalog no-op.
+## Смена catalog_version в daily-ответе сбрасывает флаг и перевыпускает докачку.
+var _catalog_fetched_session := false
 
 
 func _ready() -> void:
@@ -174,13 +182,26 @@ func catalog_sets() -> Array:
 	return _catalog_sets
 
 
+## M1: ответ на последний запрос каталога уже получен (любой исход).
+func catalog_settled() -> bool:
+	return _catalog_settled
+
+
 func request_catalog() -> void:
+	# M2-гейт: каталог этой сессии уже получен — не докачиваем повторно
+	# (смена версии ловится по daily-ответу в _on_daily_result).
+	if _catalog_fetched_session and catalog_size() > 0:
+		return
+	_catalog_settled = false
 	Net.sigil_catalog()
 
 
 func _on_catalog_result(result: Dictionary) -> void:
+	# M1: гасим settled при любом исходе — ok, offline, ошибка.
+	_catalog_settled = true
 	if not result.get("ok", false):
 		return
+	_catalog_fetched_session = true
 	var cards: Array = result.get("cards", [])
 	if cards.is_empty():
 		return
@@ -394,11 +415,13 @@ func preview_options() -> SigilOptions:
 
 
 ## Превью круга для меню крафтов — тот же рендер, что и у карточки, только
-## квадратный. Ключ кэша — card_id, если он есть: превью карты каталога общее
-## для всех игроков и переиспользуется между днями.
+## квадратный. Ключ кэша — card_id, если карта известна локальному каталогу:
+## превью карты каталога общее для всех игроков и переиспользуется между днями.
 func preview_texture(craft: Dictionary) -> ImageTexture:
 	var card_id := str(craft.get("card_id", ""))
-	var key := card_id if card_id != "" else str(craft.get("id", ""))
+	# D10: card_id без карты в каталоге рендерится посоленным fallback-рецептом —
+	# кэшировать такое превью под card_id нельзя, ключом становится id крафта.
+	var key := card_id if (card_id != "" and _catalog.has(card_id)) else str(craft.get("id", ""))
 	if _preview_cache.has(key):
 		return _preview_cache[key]
 	var recipe := card_recipe_for(craft)
@@ -501,19 +524,33 @@ func get_collection_data() -> Dictionary:
 	return _collection.duplicate()
 
 
+## M1: ответ на последний daily-запрос уже получен (любой исход).
+func daily_settled() -> bool:
+	return _daily_settled
+
+
 ## Ежедневные крафты: запросить с сервера.
 func request_daily(device_id: String) -> void:
 	var today := _today_string()
 	if _daily_day == today and not _daily_crafts.is_empty():
 		daily_crafts_ready.emit(_daily_crafts)
 		return
+	_daily_settled = false
 	Net.sigil_daily(device_id)
 
 
 ## Обработать ответ сервера по ежедневным крафтам.
 func _on_daily_result(result: Dictionary) -> void:
+	# M1: гасим settled при любом исходе — ok, offline, ошибка.
+	_daily_settled = true
 	if not result.get("ok", false):
 		return
+	# M2: daily пришёл под новой версией каталога — локальная копия устарела
+	# для card_id этих крафтов, перевыпускаем докачку (спека §1).
+	var srv_ver := str(result.get("catalog_version", ""))
+	if srv_ver != "" and _catalog_version != "" and srv_ver != _catalog_version:
+		_catalog_fetched_session = false
+		request_catalog()
 	_daily_day = str(result.get("day", ""))
 	var crafts_raw: Array = result.get("crafts", [])
 	_daily_crafts = []
