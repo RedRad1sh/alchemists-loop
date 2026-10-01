@@ -39,6 +39,10 @@ var _catalog_version: String = ""
 var _server_collection: Dictionary = {}
 var _server_extras: Array = []
 var _last_device_id: String = ""
+## Майлстоуны, подтверждённые сервером: set_id -> отсортированные тиры.
+## Строго серверные: офлайн-клейм и ошибки ничего не меняют, эффекты не
+## включаются без серверного подтверждения.
+var _milestones_claimed: Dictionary = {}  ## set_id -> Array[int]
 
 
 func _ready() -> void:
@@ -270,6 +274,10 @@ func _on_collection_result(result: Dictionary) -> void:
 	for x in result.get("extras", []):
 		if x is Dictionary:
 			_server_extras.append(x)
+	# Майлстоуны едут тем же ответом. Сервер авторитетен, поэтому отсутствие
+	# ключа — не ошибка, а «ничего не подтверждено»: полное замещение состояния,
+	# а не накопление.
+	_milestones_claimed = _normalize_milestones(result.get("milestones", {}))
 	collection_ready.emit(_server_collection)
 
 
@@ -290,6 +298,57 @@ func server_collection() -> Dictionary:
 
 func server_extras() -> Array:
 	return _server_extras.duplicate(true)
+
+
+## Нормализация сырых майлстоунов (ответ сервера или кэш с диска, где числа
+## приходят float): set_id -> отсортированный Array[int]. Чужие формы — пусто.
+func _normalize_milestones(raw) -> Dictionary:
+	var out: Dictionary = {}
+	if raw is Dictionary:
+		for k in (raw as Dictionary):
+			var tiers: Array = []
+			var v = (raw as Dictionary)[k]
+			if v is Array:
+				for t in v:
+					tiers.append(int(t))
+				tiers.sort()
+			out[str(k)] = tiers
+	return out
+
+
+## Тиры набора, подтверждённые сервером. Копия, не внутренняя ссылка.
+func claimed_tiers(set_id: String) -> Array:
+	var tiers = _milestones_claimed.get(set_id, [])
+	if tiers is Array:
+		return (tiers as Array).duplicate()
+	return []
+
+
+## Клейм майлстоуна набора. Ответ приходит сигналом sigil_milestone_result
+## (коннект в main.gd) в _on_milestone_result.
+func request_milestone_claim(device_id: String, set_id: String, tier: int) -> void:
+	Net.sigil_milestone(device_id, set_id, tier)
+
+
+func _on_milestone_result(result: Dictionary) -> void:
+	# Флаги строго серверные: ok && claimed — единственная ветка, которая
+	# меняет состояние. Офлайн-форма и ошибки (not_enough_cards и т.п.) ничего
+	# не делают — эффекты не включаются без серверного подтверждения.
+	if not result.get("ok", false):
+		return
+	if not result.get("claimed", false):
+		return
+	var set_id := str(result.get("set", ""))
+	var tier := int(result.get("tier", 0))
+	if set_id == "" or tier <= 0:
+		return
+	var tiers: Array = claimed_tiers(set_id)
+	if not tiers.has(tier):
+		tiers.append(tier)
+		tiers.sort()
+	_milestones_claimed[set_id] = tiers
+	_save_collection()
+	collection_changed.emit()
 
 
 ## Опции квадратного превью: круг целиком, без рамки, подписи и объекта.
@@ -354,14 +413,24 @@ func _load_collection() -> void:
 	var parsed = JSON.parse_string(f.get_as_text())
 	f.close()
 	if parsed is Dictionary:
-		_collection = parsed
+		# Флаги майлстоунов лежат в том же кэше (ключ "milestones"); в старых
+		# файлах его нет — это пусто, а не ошибка. Сам ключ из коллекции
+		# убираем: служебное поле, не карточка.
+		var data := parsed as Dictionary
+		_milestones_claimed = _normalize_milestones(data.get("milestones", {}))
+		data.erase("milestones")
+		_collection = data
 
 
 func _save_collection() -> void:
 	var f := FileAccess.open(COLLECTION_FILE, FileAccess.WRITE)
 	if f == null:
 		return
-	f.store_string(JSON.stringify(_collection, "  "))
+	# Флаги майлстоунов едут в том же payload (ключ "milestones"); duplicate,
+	# чтобы не дописать служебный ключ в живую коллекцию.
+	var payload := _collection.duplicate(true)
+	payload["milestones"] = _milestones_claimed.duplicate(true)
+	f.store_string(JSON.stringify(payload, "  "))
 	f.close()
 
 

@@ -61,6 +61,7 @@ signal sigil_daily_result(result: Dictionary)
 signal sigil_craft_result(result: Dictionary)
 signal sigil_catalog_result(result: Dictionary)
 signal sigil_collection_result(result: Dictionary)
+signal sigil_milestone_result(result: Dictionary)
 signal error(message: String)
 
 var base_url := DEFAULT_BASE
@@ -270,6 +271,14 @@ func sigil_collection(device_id: String) -> void:
 	_enqueue({
 		"kind": "sigil_collection",
 		"path": "/sigil/collection?device_id=" + device_id.uri_encode(),
+	})
+
+## Клейм майлстоуна комплекта: POST /api/sigil/milestone. Ключ тела — "set"
+## (серверное поле), GDScript-параметр — set_id (не set).
+func sigil_milestone(device_id: String, set_id: String, tier: int) -> void:
+	_enqueue({
+		"kind": "sigil_milestone", "path": "/sigil/milestone",
+		"body": {"device_id": device_id, "set": set_id, "tier": tier},
 	})
 
 # T22: серверная проверка платёжного чека (POST /api/receipt/verify). Ответ —
@@ -486,3 +495,5 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 			sigil_catalog_result.emit(parsed)
 		"sigil_collection":
 			sigil_collection_result.emit(parsed)
+		"sigil_milestone":
+			sigil_milestone_result.emit(parsed)

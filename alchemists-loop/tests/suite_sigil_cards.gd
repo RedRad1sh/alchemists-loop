@@ -174,3 +174,57 @@ static func run(g: Game) -> void:
 	tiny.queue_redraw()
 	Selftest.check("tarot survives tiny size", tiny.size == Vector2(1, 1))
 	tiny.queue_free()
+
+	# ---- Task 3: майлстоуны — серверные флаги наград и транспорт клейма ----
+	# Ответ коллекции несёт milestones (set -> тиры); отсутствие ключа — не
+	# ошибка, а «сервер ничего не подтвердил»: полное замещение состояния.
+	sm._on_collection_result({"ok": true, "cards": {}, "extras": [],
+		"milestones": {"fire": [3, 6]}})
+	var sb3_from_collection := sm.claimed_tiers("fire") == [3, 6]
+	sm._on_collection_result({"ok": true, "cards": {}, "extras": []})
+	Selftest.check("sb3 milestone flags from collection result",
+		sb3_from_collection and sm.claimed_tiers("fire").is_empty())
+
+	# Клейм: ok && claimed — единственная ветка, меняющая флаги.
+	var sb3_changed := [0]
+	var sb3_changed_cb := func() -> void: sb3_changed[0] += 1
+	sm.collection_changed.connect(sb3_changed_cb)
+	sm._on_milestone_result({"ok": true, "claimed": true, "set": "fire", "tier": 6})
+	sm.collection_changed.disconnect(sb3_changed_cb)
+	var sb3_disk := false
+	var sb3_file := FileAccess.open(SigilManager.COLLECTION_FILE, FileAccess.READ)
+	if sb3_file != null:
+		var sb3_parsed = JSON.parse_string(sb3_file.get_as_text())
+		sb3_file.close()
+		if sb3_parsed is Dictionary:
+			var sb3_ms = (sb3_parsed as Dictionary).get("milestones", null)
+			var sb3_tiers = (sb3_ms as Dictionary).get("fire", []) if sb3_ms is Dictionary else []
+			# JSON отдаёт числа float'ами, а Array.has/== в Godot 4 сравнивает
+			# по хэшу: [6.0].has(6) — false. Сравниваем численно.
+			if sb3_tiers is Array:
+				for t in (sb3_tiers as Array):
+					sb3_disk = sb3_disk or int(t) == 6
+	Selftest.check("sb3 claim ok merges flag and emits",
+		sm.claimed_tiers("fire").has(6) and sb3_changed[0] == 1 and sb3_disk)
+
+	# Офлайн-форма и серверная ошибка флаги не трогают и не эмитят.
+	var sb3_before: Array = sm.claimed_tiers("fire")
+	sm.collection_changed.connect(sb3_changed_cb)
+	sm._on_milestone_result({"ok": false, "offline": true})
+	sm._on_milestone_result({"ok": false, "error": "not_enough_cards"})
+	sm.collection_changed.disconnect(sb3_changed_cb)
+	Selftest.check("sb3 claim offline form changes nothing",
+		sb3_changed[0] == 1 and sm.claimed_tiers("fire") == sb3_before)
+
+	# Флаги переживают roundtrip кэша коллекции.
+	var sb3_snapshot := sm.claimed_tiers("fire")
+	sm._save_collection()
+	sm._milestones_claimed = {}
+	sm._load_collection()
+	Selftest.check("sb3 flags survive cache roundtrip",
+		not sb3_snapshot.is_empty() and sm.claimed_tiers("fire") == sb3_snapshot)
+
+	# Откат: не оставляем флаги и серверную коллекцию живому менеджеру.
+	sm._milestones_claimed = {}
+	sm._server_collection = {}
+	sm._server_extras = []

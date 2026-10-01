@@ -605,6 +605,7 @@ func _ready() -> void:
 	Net.sigil_craft_result.connect(_sigil._on_craft_result)
 	Net.sigil_catalog_result.connect(_sigil._on_catalog_result)
 	Net.sigil_collection_result.connect(_sigil._on_collection_result)
+	Net.sigil_milestone_result.connect(_sigil._on_milestone_result)
 	_sigil.craft_completed.connect(_on_sigil_craft_completed)
 	_sigil.craft_failed.connect(_on_sigil_craft_failed)
 	_init_new_game()
