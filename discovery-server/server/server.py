@@ -4627,7 +4627,8 @@ def _generate_sigil_daily(device_id: str, day: str, collected) -> list[dict]:
         crafts.append(_catalog_craft(card, day, device_id, 0))
 
     for index in range(1, _SIGIL_SLOTS):
-        card = _pick_card(rng, _pick_rarity(rng), collected, offered)
+        # Слоты 1–2 предлагают и собранные карты (дубли — спека: copies++), исключая только предложенные сегодня.
+        card = _pick_card(rng, _pick_rarity(rng), frozenset(), offered)
         if card is None:
             card = _pick_uncollected(rng, collected, offered)
         if card is None:
