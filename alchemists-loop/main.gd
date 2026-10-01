@@ -601,6 +601,8 @@ func _ready() -> void:
 	# Аркан Сигилов
 	Net.sigil_daily_result.connect(_sigil._on_daily_result)
 	Net.sigil_craft_result.connect(_sigil._on_craft_result)
+	Net.sigil_catalog_result.connect(_sigil._on_catalog_result)
+	Net.sigil_collection_result.connect(_sigil._on_collection_result)
 	_sigil.craft_completed.connect(_on_sigil_craft_completed)
 	_sigil.craft_failed.connect(_on_sigil_craft_failed)
 	_init_new_game()
@@ -1733,18 +1735,39 @@ func _rarity_color(rarity: String) -> Color:
 ## без сервера. Превью кругов — настоящий рендер SigilRenderService.
 func _demo_seed_sigil_coll() -> void:
 	var day := Time.get_date_string_from_system()
+	# Демо-каталог: три карты, совпадающие с демо-крафтами ниже. Сервера в
+	# харнесе нет, поэтому каталог задаётся прямо здесь — иначе card_recipe_for
+	# ушёл бы в посоленный fallback и скриншот врал бы про боевой рендер.
+	_sigil.set_catalog([
+		{"id": "clay", "set": "earth", "rarity": "common", "ether_cost": 50,
+			"recipe": [{"item_id": "clay", "qty": 12}, {"item_id": "water", "qty": 20},
+				{"item_id": "sand", "qty": 8}],
+			"process": "осадок и прессовка", "stage": 1, "fallback_name": "Глина",
+			"object_type": "object", "seed": 90210},
+		{"id": "metal", "set": "earth", "rarity": "epic", "ether_cost": 400,
+			"recipe": [{"item_id": "metal", "qty": 30}, {"item_id": "fire", "qty": 45},
+				{"item_id": "ice", "qty": 25}, {"item_id": "spark", "qty": 18}],
+			"process": "плавка и закалка", "stage": 4, "fallback_name": "Металл",
+			"object_type": "relic", "seed": 90211},
+		{"id": "mountain", "set": "earth", "rarity": "legendary", "ether_cost": 800,
+			"recipe": [{"item_id": "mountain", "qty": 60}, {"item_id": "cloud", "qty": 80},
+				{"item_id": "life", "qty": 40}],
+			"process": "горный венец", "stage": 6, "fallback_name": "Гора",
+			"object_type": "planet", "seed": 90212},
+	], [{"id": "earth", "title": "Стихия Земли",
+		"card_ids": ["clay", "metal", "mountain"]}], "demo")
 	_sigil._daily_day = day
 	_sigil._daily_crafts = [
 		{"id": day + "_demo_0", "rarity": "common", "ether_cost": 50, "llm_name": "",
-			"is_chromatic": false, "ingredients": [
+			"is_chromatic": false, "card_id": "clay", "ingredients": [
 				{"item_id": "clay", "qty": 12}, {"item_id": "water", "qty": 20},
 				{"item_id": "sand", "qty": 8}]},
 		{"id": day + "_demo_1", "rarity": "epic", "ether_cost": 400, "llm_name": "",
-			"is_chromatic": false, "ingredients": [
+			"is_chromatic": false, "card_id": "metal", "ingredients": [
 				{"item_id": "metal", "qty": 30}, {"item_id": "fire", "qty": 45},
 				{"item_id": "ice", "qty": 25}, {"item_id": "spark", "qty": 18}]},
 		{"id": day + "_demo_2", "rarity": "legendary", "ether_cost": 800,
-			"llm_name": "Сигил «Горний Зов»", "is_chromatic": false, "ingredients": [
+			"llm_name": "Сигил «Горний Зов»", "is_chromatic": false, "card_id": "mountain", "ingredients": [
 				{"item_id": "mountain", "qty": 60}, {"item_id": "cloud", "qty": 80},
 				{"item_id": "life", "qty": 40}]},
 	]
@@ -1820,6 +1843,9 @@ func _open_sigil_modal() -> void:
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list)
 
+	_sigil.request_catalog()
+	await _await_catalog(10.0)
+	_sigil.request_collection(_online._device_id)
 	_sigil.request_daily(_online._device_id)
 	var loaded := await _await_daily_crafts(10.0)
 	if _sigil_coll != dim:
@@ -1860,6 +1886,16 @@ func _await_daily_crafts(timeout: float) -> bool:
 		await get_tree().process_frame
 		waited += get_process_delta_time()
 	return not _sigil._daily_crafts.is_empty()
+
+
+## Ждать каталог карт: без него превью меню рисовало бы посоленный fallback
+## вместо общей карты каталога. Тот же приём, что у _await_daily_crafts.
+func _await_catalog(timeout: float) -> bool:
+	var waited := 0.0
+	while _sigil.catalog_size() == 0 and waited < timeout:
+		await get_tree().process_frame
+		waited += get_process_delta_time()
+	return _sigil.catalog_size() > 0
 
 
 ## Строка крафта: слева круг, справа всё, что нужно для решения.

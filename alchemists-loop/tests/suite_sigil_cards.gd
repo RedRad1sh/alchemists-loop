@@ -142,3 +142,10 @@ static func run(g: Game) -> void:
 	sm._server_collection = {}
 	sm._server_extras = []
 	Selftest.check("suite cleared catalog", sm.catalog_size() == 0)
+
+	# ---- Проводка: сигналы каталога/коллекции доходят до менеджера ----
+	Selftest.check("catalog result wired",
+		Net.sigil_catalog_result.get_connections().size() >= 1)
+	Selftest.check("collection result wired",
+		Net.sigil_collection_result.get_connections().size() >= 1)
+	Selftest.check("game awaits catalog", g.has_method("_await_catalog"))
