@@ -2159,7 +2159,9 @@ func _open_sigil_craft(craft: Dictionary) -> void:
 		var have := int(_engine.inventory.get(elem_id, 0))
 		if have < needed:
 			return  # недостаточно ресурсов
-	var ether_cost := int(craft.get("ether_cost", 0))
+	# Гейт открытия — по той же скидочной цене, что показана в строке
+	# (ruling T4-fix): на сырой цене клик по кликабельной строке молча выходил.
+	var ether_cost := _sigil.craft_ether_cost(craft)
 	if _engine.ether < ether_cost:
 		return  # недостаточно эфира
 	# Создаём модалку крафта

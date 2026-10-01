@@ -254,6 +254,14 @@ static func run(g: Game) -> void:
 	sb4_cost = sb4_cost and g._engine.ether == sb4_ether + 360 \
 		and g._sigil_pending_craft.is_empty()
 	g._engine.ether = sb4_ether
+	# Гейт открытия модалки — по той же скидочной цене: при эфире 380 (между
+	# 360 и 400) открытие должно состояться; сырая цена молча отсекла бы.
+	g._engine.ether = 380
+	g._open_sigil_craft({"id": "d_o", "set": "fire", "ether_cost": 400,
+		"ingredients": []})
+	sb4_cost = sb4_cost and g._sigil_craft_screen != null
+	g._close_sigil_craft_screen()
+	g._engine.ether = sb4_ether
 	sm._on_collection_result({"ok": true, "cards": {}, "extras": [],
 		"milestones": {"fire": [3]}})
 	sb4_cost = sb4_cost and sm.craft_ether_cost(sb4_craft) == 400
