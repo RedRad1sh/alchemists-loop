@@ -301,3 +301,183 @@ class TestDailyOffer:
         assert body["ok"] is True
         assert len(body["crafts"]) == srv._SIGIL_SLOTS
         assert all("card_id" in c for c in body["crafts"])
+
+
+class TestCraft:
+    def test_craft_records_card_id(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _mini(s, tmp_path, monkeypatch)
+        target = next(c for c in _offer(client, "dev-a") if c["card_id"])
+        r = client.post("/api/sigil/craft",
+                        json={"device_id": "dev-a", "craft_id": target["id"]})
+        assert r.status_code == 200
+        assert r.json() == {
+            "ok": True, "craft_id": target["id"], "rarity": target["rarity"],
+            "llm_name": target["llm_name"], "is_chromatic": False,
+            "card_id": target["card_id"], "error": "",
+        }
+        coll = client.get("/api/sigil/collection", params={"device_id": "dev-a"}).json()
+        entry = coll["cards"][target["card_id"]]
+        assert entry["copies"] == 1
+        assert entry["first_at"] != ""
+
+    def test_recraft_is_idempotent(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _mini(s, tmp_path, monkeypatch)
+        target = next(c for c in _offer(client, "dev-a") if c["card_id"])
+        first = client.post("/api/sigil/craft",
+                            json={"device_id": "dev-a", "craft_id": target["id"]}).json()
+        second = client.post("/api/sigil/craft",
+                             json={"device_id": "dev-a", "craft_id": target["id"]}).json()
+        assert second == first
+        coll = client.get("/api/sigil/collection", params={"device_id": "dev-a"}).json()
+        assert coll["cards"][target["card_id"]]["copies"] == 1
+
+    def test_copies_accumulate(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _mini(s, tmp_path, monkeypatch)
+        target = next(c for c in _offer(client, "dev-a") if c["card_id"])
+        client.post("/api/sigil/craft",
+                    json={"device_id": "dev-a", "craft_id": target["id"]})
+        # Та же карта, другой день (craft_id другой) -> вторая копия.
+        _seed_crafts(s, "dev-a", [("yesterday_0", target["card_id"])])
+        coll = client.get("/api/sigil/collection", params={"device_id": "dev-a"}).json()
+        assert coll["cards"][target["card_id"]]["copies"] == 2
+
+    def test_unknown_craft_rejected(self, tmp_path, monkeypatch):
+        client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
+        r = client.post("/api/sigil/craft", json={"device_id": "dev-a", "craft_id": "nope"})
+        assert r.json() == {
+            "ok": False, "craft_id": "nope", "rarity": "", "llm_name": "",
+            "is_chromatic": False, "card_id": "", "error": "craft_not_found",
+        }
+
+    def test_missing_device_id_rejected(self, tmp_path, monkeypatch):
+        client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
+        r = client.post("/api/sigil/craft", json={"device_id": "", "craft_id": "x"})
+        assert r.status_code == 422  # SigilCraftRequest: min_length=1
+
+    def test_card_outside_catalog_rejected(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _mini(s, tmp_path, monkeypatch)
+        today = srv.date.today().isoformat()
+        forged = [{
+            "id": f"{today}_dev-fake_0", "card_id": "not_a_card", "set": "",
+            "rarity": "legendary", "ingredients": [], "ether_cost": 1,
+            "process": "", "stage": 0, "object_type": "object", "seed": 0,
+            "fallback_name": "Подделка", "llm_name": "", "is_chromatic": False,
+        }]
+        conn = sqlite3.connect(s.DB_PATH)
+        conn.execute(
+            "INSERT INTO sigil_daily (device_id, day, crafts_json, generated_at)"
+            " VALUES (?, ?, ?, ?)",
+            ("dev-fake", today, json.dumps(forged, ensure_ascii=False), "2026-01-01T00:00:00"),
+        )
+        conn.commit()
+        conn.close()
+        r = client.post("/api/sigil/craft",
+                        json={"device_id": "dev-fake", "craft_id": forged[0]["id"]})
+        assert r.json()["error"] == "card_not_in_catalog"
+        coll = client.get("/api/sigil/collection", params={"device_id": "dev-fake"}).json()
+        assert coll["cards"] == {}
+
+    def test_chromatic_craft_goes_to_extras(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _mini(s, tmp_path, monkeypatch)
+        all_ids = [c["id"] for c in srv._sigil_catalog()["cards"]]
+        _seed_crafts(s, "dev-full", [(f"c{i}", cid) for i, cid in enumerate(all_ids)])
+        chroma = _offer(client, "dev-full")[0]
+        assert chroma["is_chromatic"] is True
+        r = client.post("/api/sigil/craft",
+                        json={"device_id": "dev-full", "craft_id": chroma["id"]}).json()
+        assert r["ok"] is True
+        assert r["card_id"] == ""
+        assert r["is_chromatic"] is True
+        coll = client.get("/api/sigil/collection", params={"device_id": "dev-full"}).json()
+        assert len(coll["extras"]) == 1
+        assert coll["extras"][0]["craft_id"] == chroma["id"]
+        assert coll["extras"][0]["rarity"] == "chromatic"
+        assert len(coll["cards"]) == len(all_ids)
+
+
+class TestCollection:
+    def test_missing_device_id_rejected(self, tmp_path, monkeypatch):
+        client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
+        r = client.get("/api/sigil/collection")
+        assert r.json() == {
+            "ok": False, "cards": {}, "extras": [], "error": "missing_device_id",
+        }
+
+    def test_empty_collection(self, tmp_path, monkeypatch):
+        client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
+        r = client.get("/api/sigil/collection", params={"device_id": "dev-none"})
+        assert r.json() == {"ok": True, "cards": {}, "extras": [], "error": ""}
+
+    def test_first_at_is_the_earliest_copy(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _mini(s, tmp_path, monkeypatch)
+        conn = sqlite3.connect(s.DB_PATH)
+        # Вставляем ПОЗДНЮЮ копию первой: порядок чтения обязан чиниться ORDER BY.
+        for craft_id, at in [("b_late", "2026-05-05T00:00:00"),
+                             ("a_early", "2026-01-01T00:00:00")]:
+            conn.execute(
+                "INSERT INTO sigil_crafts"
+                " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, crafted_at)"
+                " VALUES (?, ?, 'common', '', 0, 'spark', ?)",
+                ("dev-t", craft_id, at),
+            )
+        conn.commit()
+        conn.close()
+        coll = client.get("/api/sigil/collection", params={"device_id": "dev-t"}).json()
+        assert coll["cards"]["spark"] == {"copies": 2, "first_at": "2026-01-01T00:00:00"}
+
+
+class TestMigration:
+    def test_legacy_rows_survive_migration(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        legacy = tmp_path / "legacy.db"
+        conn = sqlite3.connect(legacy)
+        conn.execute("""CREATE TABLE sigil_crafts (
+            device_id TEXT NOT NULL, craft_id TEXT NOT NULL,
+            rarity TEXT NOT NULL, llm_name TEXT NOT NULL DEFAULT '',
+            is_chromatic INTEGER NOT NULL DEFAULT 0,
+            crafted_at TEXT NOT NULL,
+            PRIMARY KEY (device_id, craft_id))""")
+        conn.execute(
+            "INSERT INTO sigil_crafts"
+            " (device_id, craft_id, rarity, llm_name, is_chromatic, crafted_at)"
+            " VALUES ('dev-legacy', 'old_1', 'epic', 'Старый', 0, '2026-01-01T00:00:00')")
+        conn.commit()
+        conn.close()
+
+        monkeypatch.setattr(s, "DB_PATH", str(legacy))
+        client = _mini(s, tmp_path, monkeypatch)  # _mini зовёт init_db() -> миграция
+
+        conn = sqlite3.connect(str(legacy))
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(sigil_crafts)")}
+        conn.close()
+        assert "card_id" in cols
+
+        coll = client.get("/api/sigil/collection", params={"device_id": "dev-legacy"}).json()
+        assert coll["ok"] is True
+        assert coll["cards"] == {}
+        # Пустой card_id у legacy-строки -> extras, а не падение.
+        assert len(coll["extras"]) == 1
+        assert coll["extras"][0]["craft_id"] == "old_1"
+        assert coll["extras"][0]["llm_name"] == "Старый"
+
+    def test_card_index_exists(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        _mini(s, tmp_path, monkeypatch)
+        conn = sqlite3.connect(s.DB_PATH)
+        names = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index'")}
+        conn.close()
+        assert "ix_sigil_crafts_card" in names
+
+
+class TestContract:
+    def test_new_handlers_are_sync(self):
+        # T29: хендлеры, трогающие БД, обязаны быть sync def.
+        assert inspect.iscoroutinefunction(srv.sigil_craft) is False
+        assert inspect.iscoroutinefunction(srv.sigil_collection) is False

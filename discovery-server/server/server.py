@@ -727,6 +727,26 @@ class SigilCraftResponse(BaseModel):
     rarity: str = ""
     llm_name: str = ""
     is_chromatic: bool = False
+    card_id: str = ""
+    error: str = ""
+
+
+class SigilCollectionEntry(BaseModel):
+    copies: int = 0
+    first_at: str = ""
+
+
+class SigilCollectionExtra(BaseModel):
+    craft_id: str = ""
+    rarity: str = ""
+    llm_name: str = ""
+    crafted_at: str = ""
+
+
+class SigilCollectionResponse(BaseModel):
+    ok: bool
+    cards: dict[str, SigilCollectionEntry] = {}
+    extras: list[SigilCollectionExtra] = []
     error: str = ""
 
 
@@ -928,6 +948,10 @@ def init_db():
         sg_cols = {r["name"] for r in conn.execute("PRAGMA table_info(sigil_crafts)").fetchall()}
         if "card_id" not in sg_cols:
             conn.execute("ALTER TABLE sigil_crafts ADD COLUMN card_id TEXT NOT NULL DEFAULT ''")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS ix_sigil_crafts_card"
+            " ON sigil_crafts(device_id, card_id)"
+        )
         # F2 (по конвенции init_db для старых БД, дубль см. в schema.sql):
         # частичный UNIQUE — не более одного открытого (active/spread) цикла.
         # Константа-ключ: все подходящие строки делят один ключ индекса.
@@ -4706,60 +4730,102 @@ def sigil_daily(device_id: str = Query("", max_length=128)):
 
 @app.post("/api/sigil/craft", response_model=SigilCraftResponse)
 def sigil_craft(req: SigilCraftRequest):
-    """Скрафтить карточку Аркана Сигилов.
+    """Закрепить карту дня за игроком.
 
-    Проверяет баланс эфира и элементов, резервирует ресурсы, выдаёт карточку.
-    Атомарно: карточка закрепляется в момент запроса.
+    Эфир и элементы списывает клиент: сервер их не хранит. Серверная власть
+    здесь другая — card_id обязан существовать в каталоге, иначе подделанная
+    строка sigil_daily превратилась бы в карту коллекции. Повторный запрос
+    идемпотентен и не плодит копию.
     """
     conn = get_db()
     try:
         today = date.today().isoformat()
-
-        # Получаем ежедневные крафты
-        row = conn.execute(
-            "SELECT crafts_json FROM sigil_daily WHERE device_id=? AND day=?",
-            (req.device_id, today),
-        ).fetchone()
-        if not row:
-            return SigilCraftResponse(ok=False, error="no_daily_crafts")
-
-        crafts_data = json.loads(row["crafts_json"])
-        craft = next((c for c in crafts_data if c["id"] == req.craft_id), None)
+        crafts_data = _ensure_sigil_daily(conn, req.device_id, today)
+        craft = next((c for c in crafts_data if c.get("id") == req.craft_id), None)
         if not craft:
-            return SigilCraftResponse(ok=False, error="craft_not_found")
+            return SigilCraftResponse(
+                ok=False, craft_id=req.craft_id, error="craft_not_found"
+            )
 
-        # Проверяем, не скрафчена ли уже
+        card_id = str(craft.get("card_id", ""))
+        if card_id and card_id not in _sigil_catalog()["by_id"]:
+            return SigilCraftResponse(
+                ok=False, craft_id=req.craft_id, error="card_not_in_catalog"
+            )
+
+        rarity = str(craft.get("rarity", "common"))
+        llm_name = str(craft.get("llm_name", ""))
+        is_chromatic = bool(craft.get("is_chromatic", False))
+
         existing = conn.execute(
-            "SELECT 1 FROM sigil_crafts WHERE device_id=? AND craft_id=?",
+            "SELECT rarity, llm_name, is_chromatic, card_id FROM sigil_crafts"
+            " WHERE device_id=? AND craft_id=?",
             (req.device_id, req.craft_id),
         ).fetchone()
         if existing:
             return SigilCraftResponse(
                 ok=True, craft_id=req.craft_id,
-                rarity=craft["rarity"], llm_name=craft.get("llm_name", ""),
-                is_chromatic=craft.get("is_chromatic", False),
+                rarity=existing["rarity"], llm_name=existing["llm_name"],
+                is_chromatic=bool(existing["is_chromatic"]),
+                card_id=str(existing["card_id"] or ""),
             )
 
-        # TODO: проверка баланса эфира и элементов
-        # Пока пропускаем — калибровка экономики позже
-
-        # Записываем скрафченную карточку
         conn.execute(
-            "INSERT INTO sigil_crafts (device_id, craft_id, rarity, llm_name, is_chromatic, crafted_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (req.device_id, req.craft_id, craft["rarity"], craft.get("llm_name", ""), int(craft.get("is_chromatic", False)), _now_iso()),
+            "INSERT INTO sigil_crafts"
+            " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, crafted_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (req.device_id, req.craft_id, rarity, llm_name,
+             int(is_chromatic), card_id, _now_iso()),
         )
         conn.commit()
 
         return SigilCraftResponse(
-            ok=True, craft_id=req.craft_id,
-            rarity=craft["rarity"], llm_name=craft.get("llm_name", ""),
-            is_chromatic=craft.get("is_chromatic", False),
+            ok=True, craft_id=req.craft_id, rarity=rarity, llm_name=llm_name,
+            is_chromatic=is_chromatic, card_id=card_id,
         )
     except Exception:
         conn.rollback()
         raise
     finally:
         conn.close()
+
+
+@app.get("/api/sigil/collection", response_model=SigilCollectionResponse)
+def sigil_collection(device_id: str = Query("", max_length=128)):
+    """Коллекция игрока: копии карт каталога и внекомплектные (chromatic/legacy).
+
+    Порядок чтения ORDER BY crafted_at ASC обязателен: first_at — самая ранняя
+    копия, а не первая попавшаяся строка.
+    """
+    if not device_id:
+        return SigilCollectionResponse(ok=False, error="missing_device_id")
+
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT craft_id, rarity, llm_name, card_id, crafted_at FROM sigil_crafts"
+            " WHERE device_id=? ORDER BY crafted_at ASC, craft_id ASC",
+            (device_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    cards: dict = {}
+    extras: list = []
+    for row in rows:
+        card_id = str(row["card_id"] or "")
+        if not card_id:
+            extras.append(SigilCollectionExtra(
+                craft_id=row["craft_id"], rarity=row["rarity"],
+                llm_name=row["llm_name"], crafted_at=row["crafted_at"],
+            ))
+            continue
+        entry = cards.get(card_id)
+        if entry is None:
+            cards[card_id] = SigilCollectionEntry(copies=1, first_at=row["crafted_at"])
+        else:
+            entry.copies += 1
+    return SigilCollectionResponse(ok=True, cards=cards, extras=extras)
 
 
 @app.post("/api/admin/sigil/rotate")
@@ -4778,28 +4844,17 @@ def admin_sigil_rotate(device_id: str = Query("", max_length=128)):
 
 @app.post("/api/admin/sigil/free-craft")
 def admin_sigil_free_craft(device_id: str = Query("", max_length=128), craft_index: int = Query(0)):
-    """Админ: бесплатный крафт карточки по индексу (0, 1, 2).
-
-    Для тестирования: выдаёт карточку без проверки ресурсов.
-    """
+    """Админ: бесплатный крафт по индексу слота (без проверки ресурсов)."""
     conn = get_db()
     try:
         today = date.today().isoformat()
-        row = conn.execute(
-            "SELECT crafts_json FROM sigil_daily WHERE device_id=? AND day=?",
-            (device_id, today),
-        ).fetchone()
-        if not row:
-            return {"ok": False, "error": "no_daily_crafts"}
-
-        crafts_data = json.loads(row["crafts_json"])
+        crafts_data = _ensure_sigil_daily(conn, device_id, today)
         if craft_index < 0 or craft_index >= len(crafts_data):
             return {"ok": False, "error": "invalid_index"}
 
         craft = crafts_data[craft_index]
         craft_id = craft["id"]
 
-        # Проверяем, не скрафчена ли уже
         existing = conn.execute(
             "SELECT 1 FROM sigil_crafts WHERE device_id=? AND craft_id=?",
             (device_id, craft_id),
@@ -4807,9 +4862,16 @@ def admin_sigil_free_craft(device_id: str = Query("", max_length=128), craft_ind
         if existing:
             return {"ok": True, "already_crafted": True, "craft": craft}
 
+        card_id = str(craft.get("card_id", ""))
+        if card_id and card_id not in _sigil_catalog()["by_id"]:
+            return {"ok": False, "error": "card_not_in_catalog"}
+
         conn.execute(
-            "INSERT INTO sigil_crafts (device_id, craft_id, rarity, llm_name, is_chromatic, crafted_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (device_id, craft_id, craft["rarity"], craft.get("llm_name", ""), int(craft.get("is_chromatic", False)), _now_iso()),
+            "INSERT INTO sigil_crafts"
+            " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, crafted_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (device_id, craft_id, craft["rarity"], craft.get("llm_name", ""),
+             int(bool(craft.get("is_chromatic", False))), card_id, _now_iso()),
         )
         conn.commit()
 
