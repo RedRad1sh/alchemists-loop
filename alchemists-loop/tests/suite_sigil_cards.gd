@@ -149,3 +149,26 @@ static func run(g: Game) -> void:
 	Selftest.check("collection result wired",
 		Net.sigil_collection_result.get_connections().size() >= 1)
 	Selftest.check("game awaits catalog", g.has_method("_await_catalog"))
+
+	# ---- Кнопка Аркана Сигилов: иконка-таро вместо глифа ----
+	var btn := g._sigil_header_btn
+	Selftest.check("sigil header button exists", btn != null)
+	if btn != null:
+		Selftest.check("sigil header has no text glyph", btn.text == "")
+		Selftest.check("sigil header is 46x46",
+			btn.custom_minimum_size == Vector2(46, 46))
+		var tarot := btn.get_node_or_null("Tarot")
+		Selftest.check("sigil header draws tarot", tarot is TarotIcon)
+		if tarot != null:
+			Selftest.check("tarot ignores mouse",
+				tarot.mouse_filter == Control.MOUSE_FILTER_IGNORE)
+			Selftest.check("tarot fills button",
+				tarot.offset_left == 8.0 and tarot.offset_top == 6.0
+				and tarot.offset_right == -8.0 and tarot.offset_bottom == -6.0)
+	# Иконка обязана рисоваться даже в вырожденном размере (нулевой Control).
+	var tiny := TarotIcon.new()
+	g.add_child(tiny)
+	tiny.size = Vector2(1, 1)
+	tiny.queue_redraw()
+	Selftest.check("tarot survives tiny size", tiny.size == Vector2(1, 1))
+	tiny.queue_free()

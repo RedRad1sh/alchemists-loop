@@ -424,6 +424,7 @@ var _spirit: Spirit  # Светик (R9)
 var _admin: AdminConsole  # админ-консоль (~)
 var _sigil: SigilManager  # Аркан Сигилов: карточки рецептов
 var _sigil_coll: ColorRect = null  # модалка коллекции сигилов; != null ⇒ открыта
+var _sigil_header_btn: Button  ## кнопка Аркана Сигилов в шапке (иконка-таро)
 var _inv_grid: GridContainer = null
 
 func _boot_snapshot_text(path: String) -> String:
@@ -1041,7 +1042,8 @@ func _build_ui() -> void:
 	quests_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	quests_btn.pressed.connect(_progress_ui._open_progress_popup)
 	head.add_child(quests_btn)
-	var sigil_btn := _square_button("✧", 1)
+	var sigil_btn := _tarot_button()
+	_sigil_header_btn = sigil_btn
 	sigil_btn.tooltip_text = "Аркан Сигилов: ежедневные крафты"
 	sigil_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	sigil_btn.pressed.connect(_open_sigil_modal)
@@ -1504,6 +1506,21 @@ func _square_button(text: String, kind: int = 0) -> Button:
 		fg = Color(0.95, 1.0, 1.0)
 	b.add_theme_color_override("font_color", fg)
 	b.add_theme_color_override("font_hover_color", fg)
+	return b
+
+## Кнопка Аркана Сигилов: та же квадратная основа, но вместо глифа — рисованная
+## иконка-таро. Button не Container, поэтому якорь ставится до офсетов.
+func _tarot_button() -> Button:
+	var b := _square_button("", 1)
+	var icon := TarotIcon.new()
+	icon.name = "Tarot"
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(icon)
+	icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon.offset_left = 8.0
+	icon.offset_top = 6.0
+	icon.offset_right = -8.0
+	icon.offset_bottom = -6.0
 	return b
 
 func _label(text: String, font_size: int = 16) -> Label:
