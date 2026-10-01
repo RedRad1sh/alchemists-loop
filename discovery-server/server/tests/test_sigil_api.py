@@ -145,6 +145,18 @@ class TestCatalog:
         r = _client(s).get("/api/sigil/catalog")
         assert r.json()["error"] == "catalog_empty"
 
+    def test_non_dict_catalog_reports_error(self, tmp_path, monkeypatch):
+        """Valid-но-не-объектный JSON (null/[...]) — та же пустая форма."""
+        s = _srv(tmp_path, monkeypatch)
+        path = tmp_path / "weird.json"
+        monkeypatch.setattr(s, "SIGIL_CATALOG_PATH", str(path))
+        for text in ("null", "[]"):
+            path.write_text(text, encoding="utf-8")
+            s._sigil_catalog_cache_clear()
+            r = _client(s).get("/api/sigil/catalog")
+            assert r.status_code == 200, text
+            assert r.json()["error"] == "catalog_empty", text
+
     def test_real_catalog_is_loadable(self):
         data = srv._sigil_catalog()
         assert len(data["cards"]) == 100

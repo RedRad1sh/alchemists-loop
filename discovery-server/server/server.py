@@ -4493,6 +4493,10 @@ def _sigil_catalog() -> dict:
             raw = json.load(fh)
     except (OSError, ValueError):
         return {"version": "", "sets": [], "cards": [], "by_id": {}}
+    if not isinstance(raw, dict):
+        # Валидный JSON вне объекта (null/[...]) ломал бы .get ниже; обещанная
+        # докстрингом пустая форма — та же, что при ошибке чтения.
+        return {"version": "", "sets": [], "cards": [], "by_id": {}}
     cards = [c for c in raw.get("cards", []) if isinstance(c, dict) and c.get("id")]
     sets = [s for s in raw.get("sets", []) if isinstance(s, dict) and s.get("id")]
     data = {

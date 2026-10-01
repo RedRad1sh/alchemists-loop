@@ -93,6 +93,8 @@ def test_card_fields(catalog: dict) -> None:
         assert card["fallback_name"]
         assert card["object_type"]
         assert 0 < card["seed"] < 2 ** 48
+        # R5: seed — чистая функция id (без соли игрока), основа «арт одинаков у всех».
+        assert card["seed"] == int(hashlib.sha256(("sigil-card#" + card["id"]).encode("utf-8")).hexdigest()[:12], 16)
         assert 3 <= len(card["recipe"]) <= 4
         seen: set[str] = set()
         for ing in card["recipe"]:
