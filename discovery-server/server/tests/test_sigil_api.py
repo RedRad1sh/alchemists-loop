@@ -465,13 +465,16 @@ class TestCollection:
         client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
         r = client.get("/api/sigil/collection")
         assert r.json() == {
-            "ok": False, "cards": {}, "extras": [], "error": "missing_device_id",
+            "ok": False, "cards": {}, "extras": [],
+            "milestones": {}, "error": "missing_device_id",
         }
 
     def test_empty_collection(self, tmp_path, monkeypatch):
         client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
         r = client.get("/api/sigil/collection", params={"device_id": "dev-none"})
-        assert r.json() == {"ok": True, "cards": {}, "extras": [], "error": ""}
+        assert r.json() == {
+            "ok": True, "cards": {}, "extras": [], "milestones": {}, "error": "",
+        }
 
     def test_first_at_is_the_earliest_copy(self, tmp_path, monkeypatch):
         s = _srv(tmp_path, monkeypatch)
@@ -536,8 +539,71 @@ class TestMigration:
         assert "ix_sigil_crafts_card" in names
 
 
+class TestMilestones:
+    def test_milestone_claim_threshold_edges(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _client(s)
+        fire = next(x for x in srv._sigil_catalog()["sets"] if x["id"] == "fire")
+        # Ровно порог tier 3 -> клейм проходит.
+        _seed_crafts(s, "dev-edge", [(f"c{i}", cid) for i, cid in enumerate(fire["card_ids"][:3])])
+        r = client.post("/api/sigil/milestone", json={"device_id": "dev-edge", "set": "fire", "tier": 3})
+        assert r.status_code == 200
+        assert r.json() == {"ok": True, "set": "fire", "tier": 3, "claimed": True, "error": ""}
+        # Ниже порога -> not_enough_cards.
+        _seed_crafts(s, "dev-short", [("c0", fire["card_ids"][0]), ("c1", fire["card_ids"][1])])
+        r = client.post("/api/sigil/milestone", json={"device_id": "dev-short", "set": "fire", "tier": 3})
+        assert r.json() == {"ok": False, "set": "fire", "tier": 3, "claimed": False, "error": "not_enough_cards"}
+        # Ровно порог tier 13 -> клейм проходит.
+        _seed_crafts(s, "dev-13", [(f"c{i}", cid) for i, cid in enumerate(fire["card_ids"][:13])])
+        r = client.post("/api/sigil/milestone", json={"device_id": "dev-13", "set": "fire", "tier": 13})
+        assert r.json() == {"ok": True, "set": "fire", "tier": 13, "claimed": True, "error": ""}
+
+    def test_milestone_claim_idempotent(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _client(s)
+        fire = next(x for x in srv._sigil_catalog()["sets"] if x["id"] == "fire")
+        _seed_crafts(s, "dev-idem", [(f"c{i}", cid) for i, cid in enumerate(fire["card_ids"][:3])])
+        first = client.post("/api/sigil/milestone", json={"device_id": "dev-idem", "set": "fire", "tier": 3}).json()
+        assert first["claimed"] is True
+        second = client.post("/api/sigil/milestone", json={"device_id": "dev-idem", "set": "fire", "tier": 3}).json()
+        assert second == {"ok": True, "set": "fire", "tier": 3, "claimed": False, "error": ""}
+        conn = sqlite3.connect(s.DB_PATH)
+        rows = conn.execute("SELECT * FROM sigil_milestones WHERE device_id='dev-idem'").fetchall()
+        conn.close()
+        assert len(rows) == 1
+        coll = client.get("/api/sigil/collection", params={"device_id": "dev-idem"}).json()
+        assert coll["milestones"] == {"fire": [3]}
+
+    def test_milestone_claim_validates_input(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _client(s)
+        # missing_device_id: пустой device_id отклоняет модель (min_length=1).
+        assert client.post("/api/sigil/milestone", json={"device_id": "", "set": "fire", "tier": 3}).status_code == 422
+        # bad_set: набор не из каталога.
+        r = client.post("/api/sigil/milestone", json={"device_id": "dev-x", "set": "nope", "tier": 3})
+        assert r.json()["ok"] is False
+        assert r.json()["error"] == "bad_set"
+        # bad_tier: tier вне SIGIL_MILESTONE_TIERS.
+        for tier in (4, 0, 26):
+            r = client.post("/api/sigil/milestone", json={"device_id": "dev-x", "set": "fire", "tier": tier})
+            assert r.json() == {"ok": False, "set": "fire", "tier": tier, "claimed": False, "error": "bad_tier"}, tier
+
+    def test_milestone_ignores_chromatic(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _client(s)
+        fire = next(x for x in srv._sigil_catalog()["sets"] if x["id"] == "fire")
+        _seed_crafts(s, "dev-chr", [
+            ("c0", fire["card_ids"][0]),
+            ("c1", fire["card_ids"][1]),
+            ("c2", ""),  # хроматическая внекомплектная — в порог не считается
+        ])
+        r = client.post("/api/sigil/milestone", json={"device_id": "dev-chr", "set": "fire", "tier": 3})
+        assert r.json() == {"ok": False, "set": "fire", "tier": 3, "claimed": False, "error": "not_enough_cards"}
+
+
 class TestContract:
     def test_new_handlers_are_sync(self):
         # T29: хендлеры, трогающие БД, обязаны быть sync def.
         assert inspect.iscoroutinefunction(srv.sigil_craft) is False
         assert inspect.iscoroutinefunction(srv.sigil_collection) is False
+        assert inspect.iscoroutinefunction(srv.sigil_milestone) is False

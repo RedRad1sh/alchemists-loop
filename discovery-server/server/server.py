@@ -749,6 +749,22 @@ class SigilCollectionResponse(BaseModel):
     ok: bool
     cards: dict[str, SigilCollectionEntry] = {}
     extras: list[SigilCollectionExtra] = []
+    # Комплектные майлстоуны: set_id -> отсортированные клеймнутые тиры.
+    milestones: dict[str, list[int]] = {}
+    error: str = ""
+
+
+class SigilMilestoneRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    set: str
+    tier: int
+
+
+class SigilMilestoneResponse(BaseModel):
+    ok: bool
+    set: str = ""
+    tier: int = 0
+    claimed: bool = False
     error: str = ""
 
 
@@ -954,6 +970,13 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS ix_sigil_crafts_card"
             " ON sigil_crafts(device_id, card_id)"
         )
+        # Аркан Сигилов: клейм комплектных майлстоунов. Один клейм на
+        # (игрок, комплект, тир); тиры/пороги — SIGIL_MILESTONE_TIERS.
+        conn.execute("""CREATE TABLE IF NOT EXISTS sigil_milestones (
+            device_id TEXT NOT NULL, set_id TEXT NOT NULL,
+            tier INTEGER NOT NULL, claimed_at TEXT NOT NULL,
+            PRIMARY KEY (device_id, set_id, tier)
+        )""")
         # F2 (по конвенции init_db для старых БД, дубль см. в schema.sql):
         # частичный UNIQUE — не более одного открытого (active/spread) цикла.
         # Константа-ключ: все подходящие строки делят один ключ индекса.
@@ -4465,6 +4488,10 @@ def receipt_verify(req: ReceiptVerifyRequest):
 SIGIL_CATALOG_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "data", "sigil_catalog.json"
 )
+# Комплектные майлстоуны: ключ = tier, значение = порог собранных карт
+# комплекта (совпадают; отдельный словарь — чтобы пороги можно было двигать
+# независимо от номера тира).
+SIGIL_MILESTONE_TIERS = {3: 3, 6: 6, 13: 13, 25: 25}
 
 # Каталог — статический артефакт репозитория, но его читают на каждый запрос
 # daily/craft, поэтому держим (path, mtime, data) и перечитываем только при
@@ -4813,6 +4840,11 @@ def sigil_collection(device_id: str = Query("", max_length=128)):
             " WHERE device_id=? ORDER BY crafted_at ASC, craft_id ASC",
             (device_id,),
         ).fetchall()
+        milestone_rows = conn.execute(
+            "SELECT set_id, tier FROM sigil_milestones WHERE device_id=?"
+            " ORDER BY tier ASC",
+            (device_id,),
+        ).fetchall()
     finally:
         conn.close()
 
@@ -4831,7 +4863,63 @@ def sigil_collection(device_id: str = Query("", max_length=128)):
             cards[card_id] = SigilCollectionEntry(copies=1, first_at=row["crafted_at"])
         else:
             entry.copies += 1
-    return SigilCollectionResponse(ok=True, cards=cards, extras=extras)
+
+    milestones: dict = {}
+    for row in milestone_rows:
+        milestones.setdefault(str(row["set_id"]), []).append(int(row["tier"]))
+    return SigilCollectionResponse(
+        ok=True, cards=cards, extras=extras, milestones=milestones
+    )
+
+
+@app.post("/api/sigil/milestone", response_model=SigilMilestoneResponse)
+def sigil_milestone(req: SigilMilestoneRequest):
+    """Клейм майлстоуна комплекта: порог собранных карт сета достигнут.
+
+    Сервер авторитетен: порог считается по уникальным card_id из sigil_crafts,
+    хроматические (card_id='') в комплект не попадают. Повторный клейм того же
+    (set, tier) идемпотентен: ok=true, claimed=false, второй строки в БД нет.
+    """
+    if not req.device_id:
+        return SigilMilestoneResponse(ok=False, error="missing_device_id")
+
+    catalog = _sigil_catalog()
+    set_def = next((s for s in catalog["sets"] if s["id"] == req.set), None)
+    if set_def is None:
+        return SigilMilestoneResponse(
+            ok=False, set=req.set, tier=req.tier, error="bad_set"
+        )
+
+    threshold = SIGIL_MILESTONE_TIERS.get(req.tier)
+    if threshold is None:
+        return SigilMilestoneResponse(
+            ok=False, set=req.set, tier=req.tier, error="bad_tier"
+        )
+
+    conn = get_db()
+    try:
+        collected = _collected_card_ids(conn, req.device_id)
+        owned = len(collected.intersection(set_def["card_ids"]))
+        if owned < threshold:
+            return SigilMilestoneResponse(
+                ok=False, set=req.set, tier=req.tier, error="not_enough_cards"
+            )
+
+        cursor = conn.execute(
+            "INSERT OR IGNORE INTO sigil_milestones"
+            " (device_id, set_id, tier, claimed_at) VALUES (?, ?, ?, ?)",
+            (req.device_id, req.set, req.tier, _now_iso()),
+        )
+        claimed = cursor.rowcount > 0
+        conn.commit()
+        return SigilMilestoneResponse(
+            ok=True, set=req.set, tier=req.tier, claimed=claimed
+        )
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 @app.post("/api/admin/sigil/rotate")
