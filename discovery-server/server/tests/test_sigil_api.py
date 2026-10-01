@@ -390,10 +390,13 @@ class TestDailyOffer:
         # Кэш per-day: клейм не пересобирает сегодняшний оффер.
         assert len(_offer(client, "dev-a25")) == srv._SIGIL_SLOTS
         # Ротация дня: четвёртый слот приходит только с оффером следующего дня.
+        # «Завтра» дёргаем от реального today, не хардкодом — иначе календарная
+        # бомба: в реальный завтрашний день патч даёт день кэша → cache-hit.
+        next_ordinal = srv.date.today().toordinal() + 1
         class _NextDay(srv.date):
             @classmethod
             def today(cls):
-                return cls(2026, 10, 2)
+                return cls.fromordinal(next_ordinal)
         monkeypatch.setattr(srv, "date", _NextDay)
         crafts = _offer(client, "dev-a25")
         assert len(crafts) == srv._SIGIL_SLOTS + 1
