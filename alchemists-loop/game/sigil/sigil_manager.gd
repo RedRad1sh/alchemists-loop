@@ -23,6 +23,8 @@ const CATALOG_FILE := "user://sigil_catalog.json"
 ## Сторона квадратного превью для меню крафтов. Меньше 240 — глифы сливаются,
 ## больше — рендер одного превью заметно дороже.
 const PREVIEW_SIZE := 280
+## Награды комплектов: категория локального вещества -> set_id каталога.
+const SET_OF_CATEGORY := {"огонь": "fire", "вода": "water", "воздух": "air", "земля": "earth"}
 
 var _svc: SigilRenderService
 var _options: SigilOptions
@@ -322,6 +324,34 @@ func claimed_tiers(set_id: String) -> Array:
 	if tiers is Array:
 		return (tiers as Array).duplicate()
 	return []
+
+
+## Награда «3 карты комплекта»: +40 к капу эфира за каждый комплект,
+## у которого сервер подтвердил тир 3.
+func milestone_cap_bonus() -> int:
+	var sets := 0
+	for set_id in _milestones_claimed:
+		if claimed_tiers(str(set_id)).has(3):
+			sets += 1
+	return 40 * sets
+
+
+## Награда «6 карт комплекта»: −10% эфира крафтов этого комплекта.
+## Хроматика (set == "") всегда платит полную цену.
+func craft_ether_cost(craft: Dictionary) -> int:
+	var set_id := str(craft.get("set", ""))
+	if set_id != "" and claimed_tiers(set_id).has(6):
+		return int(round(int(craft.get("ether_cost", 0)) * 0.9))
+	return int(craft.get("ether_cost", 0))
+
+
+## Награда «13 карт комплекта»: верстак варит элементы категории комплекта
+## вдвое быстрее. Неизвестные категория/сет — обычный интервал.
+func bench_interval(item_id: String) -> float:
+	var set_id := str(SET_OF_CATEGORY.get(str(Game.CATEGORY_OF.get(item_id, "")), ""))
+	if set_id != "" and claimed_tiers(set_id).has(13):
+		return Game.BENCH_INTERVAL * 0.5
+	return Game.BENCH_INTERVAL
 
 
 ## Клейм майлстоуна набора. Ответ приходит сигналом sigil_milestone_result

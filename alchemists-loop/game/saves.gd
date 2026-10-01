@@ -525,7 +525,8 @@ func _bench_offline_ticks(elapsed: float) -> int:
 	if elapsed < Game.OFFLINE_MIN_SEC:
 		return 0
 	var eff := minf(elapsed, Game.OFFLINE_CAP_SEC)
-	var ticks := int(floor(eff / Game.BENCH_INTERVAL * Game.BENCH_OFFLINE_FACTOR))
+	var interval: float = g._sigil.bench_interval(g._pages._bench_target)
+	var ticks := int(floor(eff / interval * Game.BENCH_OFFLINE_FACTOR))
 	return mini(ticks, Game.BENCH_OFFLINE_MAX_TICKS)
 
 func _advance_bench_offline(elapsed: float) -> Dictionary:

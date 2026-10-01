@@ -97,3 +97,30 @@ static func run(g: Game) -> void:
 		if String(u38_c).contains("%d с" % int(Game.BENCH_INTERVAL)) and String(u38_c).contains("без потолка"):
 			u38_found += 1
 	Selftest.check("u38 bench poster matches const", u38_found >= 1)
+
+	# ---- Task 4: награда комплекта — верстак вдвое быстрее (тир 13) ----
+	# brick — земля, lava — огонь: флаг земли не должен действовать на огонь,
+	# неизвестный item всегда получает базовый интервал.
+	var sm4 := g._sigil
+	var sb4_interval := sm4.bench_interval("brick") == 40.0 \
+		and sm4.bench_interval("lava") == 40.0 \
+		and sm4.bench_interval("no_such_item") == 40.0
+	sm4._on_collection_result({"ok": true, "cards": {}, "extras": [],
+		"milestones": {"earth": [13]}})
+	sb4_interval = sb4_interval and sm4.bench_interval("brick") == 20.0 \
+		and sm4.bench_interval("lava") == 40.0 \
+		and sm4.bench_interval("no_such_item") == 40.0
+	Selftest.check("sb4 bench interval halves for claimed category", sb4_interval)
+
+	# Офлайн-верстак: при тире 13 земли тот же gap даёт вдвое больше тиков
+	# (паттерн «bench offline caps ticks»: прямой вызов _bench_offline_ticks).
+	# База — без флагов: предыдущая проверка оставила earth [13] засеянным.
+	sm4._on_collection_result({"ok": true, "cards": {}, "extras": []})
+	g._pages._bench_target = "brick"
+	var sb4_base_ticks := g._saves._bench_offline_ticks(160.0)
+	sm4._on_collection_result({"ok": true, "cards": {}, "extras": [],
+		"milestones": {"earth": [13]}})
+	var sb4_offline := sb4_base_ticks == 2 and g._saves._bench_offline_ticks(160.0) == 4
+	sm4._on_collection_result({"ok": true, "cards": {}, "extras": []})
+	g._pages._bench_target = ""
+	Selftest.check("sb4 offline bench uses halved interval", sb4_offline)

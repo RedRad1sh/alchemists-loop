@@ -290,7 +290,7 @@ func _max_ether() -> int:
 	return Game.MAX_ETHER + 50 * _up_lvl("ether_cap") + _collection_cap_bonus() \
 		+ 40 * sage_gold + g._progress_ui._quest_cap_bonus() + g._progress_ui._ach_cap_bonus() + g._resonance._res_cap_bonus() \
 		+ g._retort._essence_cap_bonus() + g._riddles._letter_cap_bonus() + g._riddles._atlas_cap_bonus() + g._retention._circle_cap_bonus() \
-		+ g._retention._vein_cap_total
+		+ g._retention._vein_cap_total + g._sigil.milestone_cap_bonus()
 
 func _ether_rate() -> float:
 	return (Game.BASE_ETHER_REGEN + 0.35 * float(_up_lvl("ether_regen")) + _collection_regen_bonus() \

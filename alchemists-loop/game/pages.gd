@@ -1563,7 +1563,7 @@ func _bench_tick(delta: float) -> void:
 	if _bench_busy or g._engine._auto:
 		return
 	_bench_clock += delta
-	if _bench_clock < Game.BENCH_INTERVAL:
+	if _bench_clock < g._sigil.bench_interval(_bench_target):
 		return
 	_bench_clock = 0.0
 	var plan := g._guild._plan_craft(_bench_target)

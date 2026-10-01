@@ -228,3 +228,28 @@ static func run(g: Game) -> void:
 	sm._milestones_claimed = {}
 	sm._server_collection = {}
 	sm._server_extras = []
+
+	# ---- Task 4: эффекты наград — кап эфира и скидка крафта ----
+	# Кап: +40 за каждый комплект, у которого сервер подтвердил тир 3.
+	sm._on_collection_result({"ok": true, "cards": {}, "extras": [],
+		"milestones": {"fire": [3], "water": [3, 6]}})
+	var sb4_cap := sm.milestone_cap_bonus() == 80
+	sm._on_collection_result({"ok": true, "cards": {}, "extras": [],
+		"milestones": {"fire": [3], "water": [3, 6], "air": [3]}})
+	sb4_cap = sb4_cap and sm.milestone_cap_bonus() == 120
+	Selftest.check("sb4 cap bonus 40 per claimed set", sb4_cap)
+
+	# Скидка: −10% эфира крафтов комплекта с тиром 6; хроматика (set == "")
+	# всегда платит полную цену.
+	sm._on_collection_result({"ok": true, "cards": {}, "extras": [],
+		"milestones": {"fire": [6]}})
+	var sb4_craft := {"set": "fire", "ether_cost": 400}
+	var sb4_cost := sm.craft_ether_cost(sb4_craft) == 360
+	sm._on_collection_result({"ok": true, "cards": {}, "extras": [],
+		"milestones": {"fire": [3]}})
+	sb4_cost = sb4_cost and sm.craft_ether_cost(sb4_craft) == 400
+	sb4_cost = sb4_cost and sm.craft_ether_cost({"set": "", "ether_cost": 1200}) == 1200
+	Selftest.check("sb4 craft cost discount for claimed set", sb4_cost)
+
+	# Откат: не оставляем флаги живому менеджеру (сидирование без записи на диск).
+	sm._on_collection_result({"ok": true, "cards": {}, "extras": []})

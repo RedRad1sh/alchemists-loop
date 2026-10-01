@@ -1921,7 +1921,7 @@ func _await_catalog(timeout: float) -> bool:
 func _sigil_craft_row(craft: Dictionary) -> Control:
 	var rarity := str(craft.get("rarity", "common"))
 	var is_chromatic := bool(craft.get("is_chromatic", false))
-	var ether_cost := int(craft.get("ether_cost", 0))
+	var ether_cost := _sigil.craft_ether_cost(craft)
 	var rc := _rarity_color(rarity)
 	var accent := Color(1.0, 0.55, 0.12) if is_chromatic else rc
 	var shortages := _sigil_shortages(craft)
@@ -2281,7 +2281,7 @@ func _on_sigil_craft_confirmed() -> void:
 		if placed < needed:
 			return  # не все ингредиенты размещены
 	# Атомарный крафт: ресурсы списываются сразу (спека: карточка уже у игрока)
-	var ether_cost := int(_sigil_craft_data.get("ether_cost", 0))
+	var ether_cost := _sigil.craft_ether_cost(_sigil_craft_data)
 	_engine.ether = max(0, _engine.ether - ether_cost)
 	for ing in ingredients:
 		var elem_id := str(ing.get("item_id", ""))
