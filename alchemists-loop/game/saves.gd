@@ -11,6 +11,12 @@ var _return_spring := 0
 var _return_spring_name := ""
 var _return_craft_steps := 0
 var _return_craft_status := ""
+var _return_bench_steps: int = 0
+var _return_bench_items: int = 0
+var _return_bench_status: String = ""
+## Зонд для selftest: разрешает прогнать офлайн-верстак напрямую, минуя
+## _grant_offline (тот в selftest не вызывается вовсе).
+var _saves_bench_probe: bool = false
 var _return_world_new := -1
 var _return_rank_old := -1
 var _return_open := false
@@ -513,6 +519,86 @@ func _spring_offline_gain(elapsed: float) -> int:
 		return 0
 	return mini(int(minf(elapsed, Game.OFFLINE_CAP_SEC) / Game.SPRING_INTERVAL), Game.SPRING_OFFLINE_MAX)
 
+func _bench_offline_ticks(elapsed: float) -> int:
+	# Сколько тиков верстака засчитывается за отсутствие: вполсилы живого темпа
+	# и с потолком, иначе 8 часов простоя дали бы сотни бесплатных варок.
+	if elapsed < Game.OFFLINE_MIN_SEC:
+		return 0
+	var eff := minf(elapsed, Game.OFFLINE_CAP_SEC)
+	var ticks := int(floor(eff / Game.BENCH_INTERVAL * Game.BENCH_OFFLINE_FACTOR))
+	return mini(ticks, Game.BENCH_OFFLINE_MAX_TICKS)
+
+func _advance_bench_offline(elapsed: float) -> Dictionary:
+	# Верстак в фоне. Один проход по ops текущего плана, не больше одного
+	# завершённого маршрута за окно — как у _advance_craft_job_offline:
+	# офлайн не должен обгонять живой темп. Скидка чертежа здесь НЕ применяется
+	# (discount = 1.0): скидка — награда за живой чертёж маршрута, а офлайн и
+	# так идёт вполсилы.
+	_return_bench_steps = 0
+	_return_bench_items = 0
+	_return_bench_status = ""
+	if g._selftest and not _saves_bench_probe:
+		return {}
+	if not g._engine._mode_unlocked("bench"):
+		return {}
+	if not g._pages._bench_on or g._pages._bench_target == "":
+		return {}
+	var ticks := _bench_offline_ticks(elapsed)
+	if ticks <= 0:
+		return {}
+
+	var item_id := g._pages._bench_target
+	var plan := g._guild._plan_craft(item_id)
+	if not bool(plan.get("ok", false)):
+		_return_bench_status = "recipe"
+		return {"steps": 0, "items": 0, "status": _return_bench_status}
+
+	var total := int(plan.get("total", 0))
+	var budget := ticks * maxi(g._engine._stage_ops(), 1)
+	var done := 0
+	var pause := ""
+	for raw_op in plan.get("ops", []):
+		var op: Dictionary = raw_op
+		var a := String(op.get("a", ""))
+		var b := String(op.get("b", ""))
+		for _i in int(op.get("n", 0)):
+			if done >= budget:
+				pause = "budget"
+				break
+			var pair_block := g._engine._production_pair_block(a, b)
+			if pair_block != "":
+				pause = pair_block
+				break
+			var pair_cost := g._engine._pair_cost(a, b, 1.0)
+			if not g._online._has_ingredients(a, b):
+				pause = "ingredients"
+				break
+			if g._engine._available_ether() < pair_cost:
+				pause = "ether"
+				break
+			var result := g._engine._commit_brew(a, b)
+			if bool(result.get("failed", true)):
+				var commit_reason := String(result.get("reason", ""))
+				pause = commit_reason if commit_reason in ["ingredients", "ether"] else "recipe"
+				break
+			done += 1
+		if not pause.is_empty():
+			break
+
+	_return_bench_steps = done
+	if done >= total and total > 0:
+		_return_bench_items = 1
+		_return_bench_status = "complete"
+		g._engine._record_blueprint(item_id, plan)
+	else:
+		_return_bench_status = pause if pause != "" else "budget"
+	if done > 0:
+		Analytics.track("bench_offline", {
+			"target": item_id, "steps": done, "items": _return_bench_items,
+			"status": _return_bench_status, "ticks": ticks,
+		})
+	return {"steps": done, "items": _return_bench_items, "status": _return_bench_status}
+
 func _advance_craft_job_offline(elapsed: float) -> Dictionary:
 	# Offline does not bypass the production operation cap. It advances at most
 	# one resumable stage, preserving the same ingredients, ether costs and
@@ -616,6 +702,7 @@ func _grant_offline() -> void:
 	if not craft_result.is_empty() and int(craft_result.get("steps", 0)) > 0:
 		g._engine.status_text = "Пока тебя не было, Производство продвинулся на %d шаг(а): %s." % [
 			int(craft_result["steps"]), String(craft_result.get("status", ""))]
+	_advance_bench_offline(elapsed)
 	_return_spring = 0
 	_return_spring_name = ""
 	if g._engine.spring_on and g._engine._mode_unlocked("spring"):
@@ -759,6 +846,21 @@ func _refresh_return_popup() -> void:
 		add.call("• Родник капал потихоньку.", 14, dim)
 	else:
 		add.call("• Родник выключен — включи, и он будет капать без тебя.", 14, dim)
+	if _return_bench_steps > 0:
+		var bench_line := "• Верстак в фоне (вполсилы): +%d варок." % _return_bench_steps
+		if _return_bench_items > 0:
+			bench_line += " «%s» готов и записан в чертёж." % g._online._item_name(g._pages._bench_target)
+		elif _return_bench_status == "ether":
+			bench_line += " Пауза: эфир."
+		elif _return_bench_status == "ingredients":
+			bench_line += " Пауза: ингредиенты."
+		elif _return_bench_status == "recipe":
+			bench_line += " Пауза: нужен рецепт."
+		elif _return_bench_status == "budget":
+			bench_line += " Дальше — вживую."
+		add.call(bench_line, 14, bright if _return_bench_items > 0 else gold)
+	elif g._pages._bench_on and g._pages._bench_target != "":
+		add.call("• Верстак стоял: слишком короткое отсутствие.", 14, dim)
 	if g._retort._retort_any_ready():
 		add.call("• Реторта готова — неси кружку!", 14, gold)
 	else:

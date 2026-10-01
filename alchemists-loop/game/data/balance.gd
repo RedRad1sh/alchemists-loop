@@ -104,8 +104,13 @@ const RETURN_GAP := 1800.0       # 30 минут — порог показа с�
 const SPRING_OFFLINE_MAX := 50   # потолок офлайн-накопления Родника (шт.)
 const SPRING_INTERVAL := 6.0
 # Производство remains useful, but it is a paced helper rather than a free second cauldron.
-const BENCH_INTERVAL := 10.0
-const BENCH_LIMIT := 3
+## Верстак: без потолка накопления, зато медленнее. Длинный idle вместо
+## короткого клика — игрок не обязан возвращаться каждые 30 секунд.
+const BENCH_INTERVAL := 40.0
+## Офлайн-верстак идёт вполсилы и не больше 60 тиков за окно (прецедент:
+## SPRING_OFFLINE_MAX = 50). Иначе 8 часов простоя дали бы 720 варок.
+const BENCH_OFFLINE_FACTOR := 0.5
+const BENCH_OFFLINE_MAX_TICKS := 60
 const GIFT_INTERVAL := 120.0
 const EVENT_INTERVAL := 150.0
 const EVENT_WINDOW := 8.0

@@ -1446,7 +1446,7 @@ func _hint_candidates() -> Array:
 
 func _build_bench_page(container: VBoxContainer) -> void:
 	container.add_child(g._label(_mode_hint("bench"), 15))
-	var bench_poster := "Подмастерье: варит выбранное вещество каждые %d с, копит до %d шт. и останавливается. Эфир списывается по обычной цене варки; скидка чертежа применяется." % [int(Game.BENCH_INTERVAL), Game.BENCH_LIMIT]
+	var bench_poster := "Подмастерье: варит выбранное вещество каждые %d с, без потолка накопления. Эфир списывается по обычной цене варки; скидка чертежа применяется." % int(Game.BENCH_INTERVAL)
 	container.add_child(g._label(bench_poster, 12))
 	if _bench_page_labels == null:
 		_bench_page_labels = []
@@ -1566,10 +1566,6 @@ func _bench_tick(delta: float) -> void:
 	if _bench_clock < Game.BENCH_INTERVAL:
 		return
 	_bench_clock = 0.0
-	if int(g._engine.inventory.get(_bench_target, 0)) >= Game.BENCH_LIMIT:
-		g._engine.status_text = "Верстак: «%s» уже накоплен до лимита %d — выбери другое вещество." % [g._online._item_name(_bench_target), Game.BENCH_LIMIT]
-		g._engine._refresh()
-		return
 	var plan := g._guild._plan_craft(_bench_target)
 	if not bool(plan.get("ok", false)):
 		g._engine.status_text = "Верстак ждёт: %s" % String(plan.get("reason", "нет подходящего рецепта"))

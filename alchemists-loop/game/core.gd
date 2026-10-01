@@ -1380,9 +1380,6 @@ func _run_bench_plan(item_id: String, plan: Dictionary) -> bool:
 	# фоновая варка верстака: не трогает котёл и не блокирует игрока
 	if brewing or _auto or g._pages._bench_busy:
 		return false
-	if int(inventory.get(item_id, 0)) >= Game.BENCH_LIMIT:
-		status_text = "Верстак: «%s» уже накоплен до лимита %d — выбери другое вещество." % [g._online._item_name(item_id), Game.BENCH_LIMIT]
-		return false
 	var total := int(plan["total"])
 	var route_discount := Game.BLUEPRINT_DISCOUNT if _blueprints.has(item_id) else 1.0
 	g._pages._bench_busy = true
