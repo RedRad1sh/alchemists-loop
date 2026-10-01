@@ -164,6 +164,37 @@ uvicorn server:app --host 0.0.0.0 --port 8080 --reload
 без `verified: true` товар не выдаётся. Реальные вызовы Google Play Developer API
 / RuStore API помечены `TODO(release)` в `_validate_receipt_with_vendor`.
 
+### GET /api/sigil/catalog
+
+Полный каталог карт Аркана Сигилов (100 карт, 4 комплекта стихий). Статический
+артефакт `data/sigil_catalog.json`, генерируется `alchemists-loop/tools/gen_sigil_catalog.py`.
+
+Ответ: `{"ok", "version", "sets": [{"id","title","card_ids"}], "cards": [{"id","set","rarity","recipe":[{"item_id","qty"}],"ether_cost","process","stage","fallback_name","object_type","seed"}], "error"}`.
+При отсутствии/порче файла — `{"ok": false, "error": "catalog_empty"}`.
+
+### GET /api/sigil/daily?device_id=…
+
+Оффер дня: 3 крафта. Слот 0 гарантирует несобранную карту (если каталог собран
+целиком — хроматическую внекомплектную с шансом 2%). Стабилен в пределах дня,
+per-player seed = `sha256(device_id#day)[:8]`.
+
+Ответ: `{"ok", "day", "crafts": [{"id","card_id","set","rarity","ingredients":[{"item_id","qty"}],"ether_cost","process","stage","object_type","seed","fallback_name","llm_name","is_chromatic"}], "error"}`.
+
+### POST /api/sigil/craft
+
+`{"device_id", "craft_id"}` → закрепить карту за игроком. Эфир и элементы
+списывает **клиент**: сервер их не хранит. Серверная власть — `card_id` обязан
+существовать в каталоге (`card_not_in_catalog`), повторный запрос идемпотентен.
+
+Ответ: `{"ok", "craft_id", "rarity", "llm_name", "is_chromatic", "card_id", "error"}`.
+
+### GET /api/sigil/collection?device_id=…
+
+Коллекция игрока: `cards` — `card_id → {"copies", "first_at"}`, `extras` —
+крафты с пустым `card_id` (хроматические и legacy-строки до миграции).
+
+Ответ: `{"ok", "cards", "extras", "error"}`.
+
 ## Живой мир (лента + цель дня)
 
 - **`GET /api/events?limit=12`** — лента последних первооткрытий мира: кто, что,
