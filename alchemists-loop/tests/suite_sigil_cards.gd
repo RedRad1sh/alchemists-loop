@@ -240,11 +240,20 @@ static func run(g: Game) -> void:
 	Selftest.check("sb4 cap bonus 40 per claimed set", sb4_cap)
 
 	# Скидка: −10% эфира крафтов комплекта с тиром 6; хроматика (set == "")
-	# всегда платит полную цену.
+	# всегда платит полную цену; возврат при отказе — по той же скидочной цене.
 	sm._on_collection_result({"ok": true, "cards": {}, "extras": [],
 		"milestones": {"fire": [6]}})
 	var sb4_craft := {"set": "fire", "ether_cost": 400}
 	var sb4_cost := sm.craft_ether_cost(sb4_craft) == 360
+	# Возврат при отказе крафта идёт через craft_ether_cost, не по сырой цене:
+	# живой хендлер main.gd берёт крафт из _sigil_pending_craft (сейв уходит в ST).
+	var sb4_ether := g._engine.ether
+	g._sigil_pending_craft = {"id": "d_r", "set": "fire", "ether_cost": 400,
+		"ingredients": []}
+	g._on_sigil_craft_failed("offline")
+	sb4_cost = sb4_cost and g._engine.ether == sb4_ether + 360 \
+		and g._sigil_pending_craft.is_empty()
+	g._engine.ether = sb4_ether
 	sm._on_collection_result({"ok": true, "cards": {}, "extras": [],
 		"milestones": {"fire": [3]}})
 	sb4_cost = sb4_cost and sm.craft_ether_cost(sb4_craft) == 400

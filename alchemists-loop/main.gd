@@ -2320,7 +2320,9 @@ func _on_sigil_craft_failed(err: String) -> void:
 	_sigil_pending_craft = {}
 	if craft.is_empty():
 		return
-	_engine.ether += int(craft.get("ether_cost", 0))
+	# Возврат — по той же скидочной цене, что и списание (ruling T4-fix):
+	# «−10% стоимости эфира крафтов этого комплекта» покрывает весь ether-учёт.
+	_engine.ether += _sigil.craft_ether_cost(craft)
 	for ing in craft.get("ingredients", []):
 		var d := ing as Dictionary
 		var elem_id := str(d.get("item_id", ""))
