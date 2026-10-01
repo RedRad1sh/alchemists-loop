@@ -323,15 +323,15 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 	_experiment_drawer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_experiment_drawer.mouse_filter = Control.MOUSE_FILTER_STOP
 	_experiment_drawer.z_index = 2
+	# Одна рамка на поле (UX-17): шторка выбора — полупрозрачный слой БЕЗ
+	# собственного контура, чтобы не получалась «рамка в рамке».
 	var picker_style := StyleBoxFlat.new()
-	picker_style.bg_color = Color(0.025, 0.055, 0.09, 0.44)
-	picker_style.border_color = Color(0.26, 0.62, 0.67, 0.82)
-	picker_style.set_border_width_all(1)
-	picker_style.set_corner_radius_all(18)
-	picker_style.content_margin_left = 10.0
-	picker_style.content_margin_right = 10.0
-	picker_style.content_margin_top = 10.0
-	picker_style.content_margin_bottom = 10.0
+	picker_style.bg_color = DesignTokens.c(DesignTokens.BG0, 0.72)
+	picker_style.set_corner_radius_all(DesignTokens.R_SHEET)
+	picker_style.content_margin_left = 12.0
+	picker_style.content_margin_right = 12.0
+	picker_style.content_margin_top = 12.0
+	picker_style.content_margin_bottom = 12.0
 	_experiment_drawer.add_theme_stylebox_override("panel", picker_style)
 	_experiment_field.add_child(_experiment_drawer)
 	var drawer_col := VBoxContainer.new()
@@ -381,10 +381,19 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 		{"key": "elements", "title": "Стихии", "width": 82.0},
 		{"key": "all", "title": "Все", "width": 56.0},
 	]:
-		var filter_button := g._small_button(String(filter_spec["title"]), Vector2(float(filter_spec["width"]), 44), 0)
-		filter_button.custom_minimum_size.y = 44.0
+		var filter_button := g._small_button(String(filter_spec["title"]), Vector2(float(filter_spec["width"]), 40), 0)
+		filter_button.custom_minimum_size.y = 40.0
 		filter_button.toggle_mode = true
-		filter_button.add_theme_font_size_override("font_size", 12)
+		# чипы-сегменты: активный = accent-soft + accent-текст (UX-19)
+		filter_button.add_theme_stylebox_override("normal", UiStyle.chip(false))
+		filter_button.add_theme_stylebox_override("hover", UiStyle.chip(false))
+		filter_button.add_theme_stylebox_override("pressed", UiStyle.chip(true))
+		filter_button.add_theme_stylebox_override("disabled", UiStyle.chip(false))
+		filter_button.add_theme_stylebox_override("focus", UiStyle.button_focus())
+		filter_button.add_theme_color_override("font_color", DesignTokens.c(DesignTokens.INK2))
+		filter_button.add_theme_color_override("font_hover_color", DesignTokens.c(DesignTokens.INK1))
+		filter_button.add_theme_color_override("font_pressed_color", DesignTokens.c(DesignTokens.ACCENT))
+		filter_button.add_theme_font_size_override("font_size", int(DesignTokens.T_BTN_SM[0]))
 		filter_button.tooltip_text = {
 			"recent": "Недавно использованные и базовые стихии",
 			"hint": "Вещества из оплаченной подсказки Светика",

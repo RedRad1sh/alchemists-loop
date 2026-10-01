@@ -158,17 +158,31 @@ func _draw() -> void:
 	if orb_color.get_luminance() > 0.6:
 		gc = Color(0.09, 0.12, 0.16, 0.85)
 	ElementGlyphs.draw(self, glyph_key if glyph_key != "" else glyph_id, c, r * 0.52, gc)
-	# счётчик: по центру бейджа, с учётом реальной ширины текста
+	# счётчик: пилюля внутри орба снизу по центру (UX-12) — не «наклейка»
+	# поверх контура, а компонент: фон BG3, тонкая линия, SemiBold 11.
 	if count > 0:
-		var f2 := get_theme_default_font()
+		var f2 := UiTheme.font(2)
+		if f2 == null:
+			f2 = get_theme_default_font()
 		var txt := str(count)
-		var fs := 15
+		var fs := 11
 		var ts2 := f2.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
-		# радиус бейджа — по фактической ширине числа, чтобы «12» и «100» не вылезали
-		var br := clampf(ts2.x * 0.5 + 4.5, r * 0.42, r * 0.70)
-		var bc := Vector2(c.x + r * 0.70, c.y + r * 0.70)
-		draw_circle(bc, br, Color(0.03, 0.05, 0.07, 0.92))
-		draw_arc(bc, br, 0, TAU, 24, Color(1, 1, 1, 0.22), 1.5)
+		var bw := ts2.x + 10.0
+		var bh := 15.0
+		var bc := Vector2(c.x, c.y + r * 0.62)
+		var rect := Rect2(bc - Vector2(bw * 0.5, bh * 0.5), Vector2(bw, bh))
+		# скругление пилюли: две дуги по краям + прямоугольник середины
+		var rr := bh * 0.5
+		draw_circle(rect.position + Vector2(rr, rr), rr, Color(0.05, 0.08, 0.11, 0.92))
+		draw_circle(rect.position + Vector2(rect.size.x - rr, rr), rr, Color(0.05, 0.08, 0.11, 0.92))
+		draw_rect(Rect2(rect.position + Vector2(rr, 0), Vector2(rect.size.x - bh, bh)),
+			Color(0.05, 0.08, 0.11, 0.92))
+		draw_arc(rect.position + Vector2(rr, rr), rr, PI * 0.5, PI * 1.5, 16, Color(1, 1, 1, 0.25), 1.0)
+		draw_arc(rect.position + Vector2(rect.size.x - rr, rr), rr, -PI * 0.5, PI * 0.5, 16, Color(1, 1, 1, 0.25), 1.0)
+		draw_line(Vector2(rect.position.x + rr, rect.position.y),
+			Vector2(rect.end.x - rr, rect.position.y), Color(1, 1, 1, 0.25), 1.0)
+		draw_line(Vector2(rect.position.x + rr, rect.end.y),
+			Vector2(rect.end.x - rr, rect.end.y), Color(1, 1, 1, 0.25), 1.0)
 		var asc := f2.get_ascent(fs)
 		var dsc := f2.get_descent(fs)
 		draw_string(f2, bc + Vector2(-ts2.x * 0.5, (asc - dsc) * 0.5), txt,
