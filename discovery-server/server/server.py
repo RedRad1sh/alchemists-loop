@@ -4519,7 +4519,8 @@ _SIGIL_CHROMATIC_NAME = "Хроматический сигил"
 
 def _pick_rarity(rng) -> str:
     """Взвешенная редкость слота по _SIGIL_RARITY_WEIGHTS."""
-    roll = rng.random() * 100
+    # Ролл пропорционален сумме весов: бакеты не обрезаются, legendary получает свои 4/102.
+    roll = rng.random() * sum(w for _, w in _SIGIL_RARITY_WEIGHTS)
     cumulative = 0
     for rarity, weight in _SIGIL_RARITY_WEIGHTS:
         cumulative += weight
