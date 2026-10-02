@@ -360,6 +360,16 @@ func _make_structure_signature(sections: Array) -> String:
 
 
 func _rebuild_regions(sections: Array) -> void:
+	# Disconnect signals from old atoms before freeing them. Without this the
+	# clicked signal's bound callable still references _on_map_node_clicked on
+	# a freed frame, and Godot warns on the next emit.
+	for node_id in _node_by_id:
+		var atom = _node_by_id[node_id]
+		if not is_instance_valid(atom):
+			continue
+		var bound := _on_map_node_clicked.bind(String(node_id))
+		if atom.clicked.is_connected(bound):
+			atom.clicked.disconnect(bound)
 	for child in _region_list.get_children():
 		_region_list.remove_child(child)
 		child.queue_free()
@@ -557,16 +567,21 @@ func _update_map_state(sections: Array) -> void:
 
 
 func _refresh_summary() -> void:
+	if _summary_title == null:
+		return
 	var completed := 0
+	var progress_ui = _game._progress_ui if _game != null else null
+	var resonance = _game._resonance if _game != null else null
 	for raw in Game.ACHIEVEMENTS:
 		if typeof(raw) != TYPE_DICTIONARY:
 			continue
-		if _game._progress_ui._ach_done.has(String(raw.get("id", ""))):
+		if progress_ui != null and progress_ui._ach_done.has(String(raw.get("id", ""))):
 			completed += 1
 	var echo_done := 0
-	for mile in Game.RES_MILES:
-		if _game._resonance._res_done.has(int(mile)):
-			echo_done += 1
+	if resonance != null:
+		for mile in Game.RES_MILES:
+			if resonance._res_done.has(int(mile)):
+				echo_done += 1
 	_summary_title.text = (
 		"Достижения %d/%d  ·  отголоски %d/%d"
 		% [completed, Game.ACHIEVEMENTS.size(), echo_done, Game.RES_MILES.size()]
@@ -596,7 +611,10 @@ func _show_entry_details(entry: Dictionary, node_status: int) -> void:
 		body += "\nЭта ступень откроется после предыдущей в своей ветке."
 	_detail_body.text = body
 	if is_resonance:
-		_detail_reward.text = "Награда: %s" % _game._resonance._res_mile_reward_text(target)
+		if _game != null and _game._resonance != null:
+			_detail_reward.text = "Награда: %s" % _game._resonance._res_mile_reward_text(target)
+		else:
+			_detail_reward.text = "Награда: бонус отголосков"
 	else:
 		var achievement: Dictionary = entry.get("achievement", {})
 		_detail_reward.text = (
@@ -606,14 +624,26 @@ func _show_entry_details(entry: Dictionary, node_status: int) -> void:
 
 
 func _entry_is_done(entry: Dictionary) -> bool:
+	if _game == null:
+		return false
 	if bool(entry.get("is_resonance", false)):
+		if _game._resonance == null:
+			return false
 		return _game._resonance._res_done.has(int(entry.get("param", 0)))
+	if _game._progress_ui == null:
+		return false
 	return _game._progress_ui._ach_done.has(String(entry.get("id", "")))
 
 
 func _entry_progress(entry: Dictionary) -> int:
+	if _game == null:
+		return 0
 	if bool(entry.get("is_resonance", false)):
+		if _game._resonance == null:
+			return 0
 		return _game._resonance._res_total
+	if _game._progress_ui == null:
+		return 0
 	var achievement: Dictionary = entry.get("achievement", {})
 	return _game._progress_ui._ach_progress(achievement)
 
@@ -621,6 +651,8 @@ func _entry_progress(entry: Dictionary) -> int:
 func _entry_requirement(entry: Dictionary) -> String:
 	if bool(entry.get("is_resonance", false)):
 		return "Набери %d повторов чужих веществ" % int(entry.get("param", 1))
+	if _game == null or _game._progress_ui == null:
+		return ""
 	var achievement: Dictionary = entry.get("achievement", {})
 	return _game._progress_ui._ach_requirement(achievement)
 

@@ -122,6 +122,10 @@ func _open_progress_popup() -> void:
 	_prog_tabs.current_tab = 0
 	_prog_dim.visible = true
 	_prog_popup.visible = true
+	# After the popup becomes visible the map's graphs need one more layout
+	# pass so atoms settle into their lanes at the actual rendered width.
+	if _ach_map != null and is_instance_valid(_ach_map):
+		_ach_map.call_deferred("refresh")
 	Sfx.click()
 
 func _rebuild_quest_rows() -> void:

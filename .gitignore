@@ -12,6 +12,6 @@ discovery-server/server/tests/*.db-wal
 discovery-server/server/tests/*.db-shm
 discovery-server/server/tests/*.sqlite
 
-# Godot: генерируемые метаданные импорта/uid (regenerable locally)
-*.import
-*.uid
+# Godot: метаданные импорта .import регенерируются редактором из исходников.
+# .uid-файлы трекаются (force-add до добавления правила); оставляем их в репо
+# для стабильных идентификаторов ресурсов между машинами.
