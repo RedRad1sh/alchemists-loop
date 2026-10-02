@@ -416,6 +416,7 @@ def screen_experiment(mode):
 
 def screen_house(mode):
     tm, mode = mode, "before"
+    hm = tm  # каталог обстановки меняется по режиму ДО/ПОСЛЕ (блок 4)
     img = new_phone()
     C = AFTER if mode == "after" else BEFORE
     top = header(img, tm)
@@ -443,14 +444,14 @@ def screen_house(mode):
     y += 24
     text(img, (26, y), "Коллекция: 12/90 · купленное ставится бесплатно", size=12, color=C["ink2"])
     y += 24
-    if mode == "before":
+    if hm == "before":
         furn = [("home", "Окно · 1/10", "Классическое"), ("map", "Ковёр · 3/10", "Восточный"),
                 ("user", "Стул · 1/10", "Классический"), ("leaf", "Растение · 1/10", "В горшке")]
         for icn, nm, val in furn:
             rrect(img, [26, y, 82, y + 44], 8, fill=(12, 17, 24))
             icon(img, icn, (40, y + 12, 20, 20), (159, 180, 196))
             text(img, (94, y + 22), nm, size=14, color=C["ink1"], anchor="lm")
-            button(img, [W - 172, y, 146, 44], f"{val} ✓", 1, mode, size=14)
+            button(img, [W - 172, y, 146, 44], f"{val} ✓", 1, hm, size=14)
             y += 52
         return img
     # ПОСЛЕ (блок 4 согласован): карточки 2×N, без ценников, чип «куплено: N»
