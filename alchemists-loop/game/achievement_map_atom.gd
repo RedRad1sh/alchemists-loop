@@ -101,14 +101,17 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	custom_minimum_size = Vector2(72.0, 76.0)
 	size = custom_minimum_size
-	pivot_offset = size / 2.0
+	# UI/UX: pivot at glyph center (raised) so scale animation scales from
+	# the circle, not from the geometric center of the whole cell
+	pivot_offset = Vector2(size.x * 0.5, size.y * 0.44)
 	set_process(false)
 
 	_caption_label = Label.new()
 	_caption_label.name = "Milestone"
 	_caption_label.text = caption
-	_caption_label.position = Vector2(0.0, 56.0)
+	_caption_label.position = Vector2(0.0, 58.0)  # UI/UX: pushed below glyph rings
 	_caption_label.size = Vector2(size.x, 18.0)
+	_caption_label.clip_text = true  # UI/UX: prevent text overflow beyond cell
 	_caption_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_caption_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_caption_label.add_theme_font_size_override("font_size", 10)
@@ -119,34 +122,38 @@ func _ready() -> void:
 
 
 func _draw() -> void:
-	super._draw()
-	var center := size / 2.0
+	# UI/UX: draw our own background circle with raised center instead of
+	# super._draw() — the base Atom draws at size/2 which causes the circle
+	# and rings to overlap the caption label at the bottom.
+	var glyph_center := Vector2(size.x * 0.5, size.y * 0.44)
+	draw_circle(glyph_center, get_effective_radius(), color)
+	# Rings and arcs use the raised center so they don't bleed into the caption
 	if map_status == MAP_AVAILABLE:
 		# UI/UX: pulse animation — breathing glow ring
 		var pulse_alpha := 0.5 + 0.3 * sin(_pulse_phase)
 		var pulse_radius := radius + 3.5 + 1.5 * sin(_pulse_phase)
-		draw_arc(center, pulse_radius, 0.0, TAU, 48, Color("#e8c778", pulse_alpha), 2.5, true)
+		draw_arc(glyph_center, pulse_radius, 0.0, TAU, 48, Color("#e8c778", pulse_alpha), 2.5, true)
 		# Secondary outer glow
 		var outer_alpha := 0.15 + 0.1 * sin(_pulse_phase + 1.0)
-		draw_arc(center, radius + 8.0, 0.0, TAU, 48, Color("#e8c778", outer_alpha), 1.5, true)
+		draw_arc(glyph_center, radius + 8.0, 0.0, TAU, 48, Color("#e8c778", outer_alpha), 1.5, true)
 	elif map_status == MAP_UNLOCKED:
-		draw_arc(center, radius + 2.5, 0.0, TAU, 48, Color("#f3ce75"), 2.0, true)
+		draw_arc(glyph_center, radius + 2.5, 0.0, TAU, 48, Color("#f3ce75"), 2.0, true)
 	else:
-		draw_arc(center, radius + 1.0, 0.0, TAU, 48, Color(0.48, 0.57, 0.64, 0.42), 1.0, true)
+		draw_arc(glyph_center, radius + 1.0, 0.0, TAU, 48, Color(0.48, 0.57, 0.64, 0.42), 1.0, true)
 	# UI/UX: progress arc (only show when there's partial progress and not yet unlocked)
 	if progress_ratio > 0.0 and progress_ratio < 1.0 and map_status != MAP_UNLOCKED:
 		var progress_angle := progress_ratio * TAU
 		var progress_color := Color("#4ade80") if map_status == MAP_AVAILABLE else Color("#60a5fa")
 		progress_color.a = 0.85
 		# Draw progress arc starting from top (-PI/2)
-		draw_arc(center, radius + 5.5, -PI / 2.0, -PI / 2.0 + progress_angle, 32, progress_color, 3.0, true)
+		draw_arc(glyph_center, radius + 5.5, -PI / 2.0, -PI / 2.0 + progress_angle, 32, progress_color, 3.0, true)
 	if is_hovered:
-		draw_arc(center, radius + 6.0, 0.0, TAU, 48, Color("#b2eee2"), 1.5, true)
+		draw_arc(glyph_center, radius + 6.0, 0.0, TAU, 48, Color("#b2eee2"), 1.5, true)
 	if map_selected:
-		draw_arc(center, radius + 7.5, 0.0, TAU, 48, Color("#fff0b1"), 2.0, true)
-	Glyphs.draw(self, glyph_key, center, radius * 0.58, glyph_tint)
+		draw_arc(glyph_center, radius + 7.5, 0.0, TAU, 48, Color("#fff0b1"), 2.0, true)
+	Glyphs.draw(self, glyph_key, glyph_center, radius * 0.58, glyph_tint)
 	if map_status == MAP_UNLOCKED:
-		var badge := center + Vector2(radius * 0.72, radius * 0.68)
+		var badge := glyph_center + Vector2(radius * 0.72, radius * 0.68)
 		draw_circle(badge, 6.5, Color("#f3ce75"))
 		draw_line(
 			badge + Vector2(-3.0, 0.0), badge + Vector2(-0.7, 2.5), Color("#2f321f"), 1.8, true
