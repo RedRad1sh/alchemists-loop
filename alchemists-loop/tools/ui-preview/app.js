@@ -126,7 +126,7 @@ function resrow(mode) {
 const TABS = [["flask","Эксперимент"],["cauldron","Лаборатория"],["globe","Мир"],["home","Дом"],["trophy","Рейтинг"],["sliders","Инструменты"]];
 function tabs(mode, active) {
   return `<div class="tabs">${TABS.map(([i, n], k) =>
-    `<span class="tab${k === active ? " on" : ""}">${mode === "after" ? ic(i, 15) : ""}${n}</span>`).join("")}</div>`;
+    `<span class="tab${k === active ? " on" : ""}">${mode === "after" ? ic(i, 14) : ""}${n}</span>`).join("")}</div>`;
 }
 
 /* ---------- экраны ---------- */
