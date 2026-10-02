@@ -8,6 +8,7 @@
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "assets" / "ui" / "icons"
+OUT16 = Path(__file__).resolve().parent.parent / "assets" / "ui" / "icons16"
 
 # name -> список элементов: ("p", d) | ("c", cx, cy, r) | ("dot", cx, cy, r)
 ICONS = {
@@ -50,13 +51,15 @@ ICONS = {
     "play": [("p", "M8 5l11 7-11 7z")],
 }
 
-HEADER = ('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" '
-          'viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" '
-          'stroke-linecap="round" stroke-linejoin="round">')
+def header(px: int) -> str:
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" '
+            'viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" '
+            'stroke-linecap="round" stroke-linejoin="round">') % (px, px)
 
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
+    OUT16.mkdir(parents=True, exist_ok=True)
     for name, elems in sorted(ICONS.items()):
         body = []
         for e in elems:
@@ -67,9 +70,10 @@ def main() -> None:
             else:
                 body.append(f'  <circle cx="{e[1]}" cy="{e[2]}" r="{e[3]}" '
                             f'fill="#FFFFFF" stroke="none"/>')
-        svg = HEADER + "\n" + "\n".join(body) + "\n</svg>\n"
-        (OUT / f"{name}.svg").write_text(svg, encoding="utf-8")
-    print(f"wrote {len(ICONS)} icons -> {OUT}")
+        inner = "\n".join(body)
+        (OUT / f"{name}.svg").write_text(header(24) + "\n" + inner + "\n</svg>\n", encoding="utf-8")
+        (OUT16 / f"{name}.svg").write_text(header(16) + "\n" + inner + "\n</svg>\n", encoding="utf-8")
+    print(f"wrote {len(ICONS)} icons -> {OUT} and {OUT16}")
 
 
 if __name__ == "__main__":

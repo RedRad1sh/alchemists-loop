@@ -114,11 +114,12 @@ body {
 .tab { padding: 9px 12px; font: 400 14px/1 Manrope; color: #cfd8e0; border: 1px solid #2a3648;
   border-bottom: 0; background: #10141c; margin-bottom: -1px; white-space: nowrap; }
 .tab.on { background: #1a212d; color: #fff; border-top: 2px solid #59e0d6; }
-.phone[data-mode="after"] .tabs { gap: 4px; border: 1px solid var(--line); background: #121a24d9;
+.phone[data-mode="after"] .tabs { gap: 2px; border: 1px solid var(--line); background: #121a24d9;
   border-radius: 999px; padding: 3px; }
 .phone[data-mode="after"] .tab { border: 0; background: transparent; border-radius: 999px;
-  padding: 8px 9px; font: 600 12px/1 Manrope; color: var(--ink2);
-  display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  padding: 9px 6px; font: 600 11px/1 Manrope; color: var(--ink2);
+  display: flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; }
+.phone[data-mode="after"] .tab .ic { flex: none; }
 .phone[data-mode="after"] .tab.on { background: #3ad6c62e; color: var(--accent);
   box-shadow: inset 0 0 0 1px #3ad6c6b3; }
 
@@ -271,3 +272,14 @@ body {
 .pill.backlog { background: #7e8d9c26; color: #a9b8c6; box-shadow: inset 0 0 0 1px #7e8d9c55; }
 .screen-tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
 .screen-tabs .seg { border: 1px solid var(--shell-line); border-radius: 999px; }
+
+/* ячейки выбора реагентов — как в текущей игре (4 колонки) */
+.cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.cell { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 9px 2px;
+  background: #0f1f2e94; border: 1px solid #33576bad; border-radius: 12px; }
+.cell .orb { width: 28px; height: 28px; }
+.cell .cn { font-size: 10px; color: #cfd8e0; }
+
+/* автопосадка меню вкладок на 540 px */
+.phone[data-mode="after"] .tabs.tight .tab { font-size: 10px; padding: 9px 5px; }
+.phone[data-mode="after"] .tabs.tighter .tab { font-size: 10px; padding: 9px 4px; gap: 3px; }

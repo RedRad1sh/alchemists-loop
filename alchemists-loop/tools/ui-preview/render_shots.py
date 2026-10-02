@@ -256,16 +256,29 @@ def tabs(img, top, mode, active):
             text(img, (x + tw / 2, y + 17), nm, size=14, color=(255, 255, 255) if i == active else (207, 216, 224), anchor="mm")
             x += tw
         return y + 34 + 8
+    # автоподбор: 6 разделов обязаны поместиться в 540 px целиком
+    d = ImageDraw.Draw(img)
+    chosen = None
+    for fs, pad, isz, gap, hsep in [(11, 6, 16, 4, 2), (11, 5, 15, 3, 2), (10, 5, 15, 3, 2)]:
+        total = 14 + sum(int(isz + gap + d.textlength(nm, font=font(fs, 600)) + pad * 2) + hsep
+                         for _, nm in TABS)
+        if total <= W - 12:
+            chosen = (fs, pad, isz, gap, hsep)
+            break
+    fs, pad, isz, gap, hsep = chosen or (10, 4, 14, 3, 1)
     rrect(img, [12, y, W - 12, y + 38], 999, fill=(18, 26, 36, 217), outline=C["line"])
-    x = 15
+    x = 14.0
     for i, (icn, nm) in enumerate(TABS):
-        tw = int(ImageDraw.Draw(img).textlength(nm, font=font(12, 600))) + 29
+        tl = d.textlength(nm, font=font(fs, 600))
+        tw = int(isz + gap + tl + pad * 2)
         if i == active:
             rrect(img, [x, y + 3, x + tw, y + 35], 999, fill=(58, 214, 198, 46), outline=(58, 214, 198, 179))
-        icon(img, icn, (x + 8, y + 12, 13, 13), C["accent"] if i == active else C["ink2"])
-        text(img, (x + 24, y + 19), nm, size=12, weight=600,
+        cw = isz + gap + tl
+        sx = x + (tw - cw) / 2
+        icon(img, icn, (sx, y + 19 - isz / 2, isz, isz), C["accent"] if i == active else C["ink2"])
+        text(img, (sx + isz + gap, y + 19), nm, size=fs, weight=600,
              color=C["accent"] if i == active else C["ink2"], anchor="lm")
-        x += tw + 3
+        x += tw + hsep
     return y + 38 + 8
 
 
@@ -277,11 +290,12 @@ def panel(img, box, mode, double=False):
 
 
 def screen_lab(mode):
+    tm, mode = mode, "before"
     img = new_phone()
     C = AFTER if mode == "after" else BEFORE
     top = header(img, mode)
     top = resrow(img, top, mode)
-    top = tabs(img, top, mode, 1)
+    top = tabs(img, top, tm, 1)
     panel(img, [12, top, W - 12, H - 190 if mode == "after" else H - 168], mode)
     cy = top + 96
     orb(img, 120, cy, 30, (224, 118, 79), glyph="▲" if mode == "before" else None, mode=mode)
@@ -349,91 +363,63 @@ def screen_lab(mode):
 
 
 def screen_experiment(mode):
+    tm, mode = mode, "before"
     img = new_phone()
-    C = AFTER if mode == "after" else BEFORE
+    C = BEFORE
     top = header(img, mode)
     top = resrow(img, top, mode)
-    top = tabs(img, top, mode, 0)
-    if mode == "before":
-        text(img, (12, top), "ЭКСПЕРИМЕНТ", size=20, weight=800, color=(255, 255, 255))
-        button(img, [W - 12 - 118, top - 4, 118, 36], "Светик · 10 ⚡", 2, mode, size=13)
-    else:
-        text(img, (12, top), "ЭКСПЕРИМЕНТ", size=21, weight=800, color=C["ink1"], tracking=0.4)
-        button(img, [W - 12 - 128, top - 5, 128, 40], "Светик · 10", 2, mode, icon_name="star", size=13)
+    top = tabs(img, top, tm, 0)
+    text(img, (12, top), "ЭКСПЕРИМЕНТ", size=20, weight=800, color=(255, 255, 255))
+    button(img, [W - 12 - 118, top - 4, 118, 36], "Светик · 10 ⚡", 2, mode, size=13)
     top += 34
     text(img, (12, top), "«Вода» в котле · выбери второй реагент.", size=13, color=C["ink2"])
     top += 24
     panel(img, [12, top, W - 12, H - 12], mode, double=True)
     y = top + 14
-    text(img, (26, y), "ВЫБРАТЬ ВТОРОЙ", size=14, weight=700 if mode == "before" else 600, color=C["ink1"])
-    text(img, (W - 120, y + 2), "4 / 11", size=11, color=C["ink3"])
+    text(img, (26, y), "ВЫБРАТЬ ВТОРОЙ", size=14, weight=700, color=C["ink1"])
+    text(img, (W - 116, y + 8), "8 / 11", size=11, color=C["ink3"], anchor="rm")
     button(img, [W - 108, y - 6, 84, 40], "Закрыть", 0, mode)
     y += 34
-    text(img, (26, y), "Первый реагент уже на canvas. Выбери второй —", size=12 if mode == "before" else 13, color=C["ink2"])
-    y += 18
-    text(img, (26, y), "пара уйдёт на серверную проверку.", size=12 if mode == "before" else 13, color=C["ink2"])
-    y += 26
-    if mode == "after":
-        rrect(img, [26, y, W - 26, y + 44], 10, fill=C["bg3"], outline=C["line2"])
-        icon(img, "search", (38, y + 14, 16, 16), C["ink3"])
-        text(img, (62, y + 22), "Найти второй реагент…", size=15, color=C["ink3"])
-    else:
-        rrect(img, [26, y, W - 26, y + 44], 4, fill=(21, 27, 37))
-        text(img, (38, y + 22), "Найти второй реагент…", size=14, color=(109, 120, 131))
+    text(img, (26, y), "Нажми на ячейку — вещество сразу появится на поле.", size=12, color=C["ink2"])
+    y += 24
+    rrect(img, [26, y, W - 26, y + 44], 4, fill=(21, 27, 37))
+    text(img, (38, y + 22), "Найти второй реагент…", size=14, color=(109, 120, 131))
     y += 54
     x = 26
     for i, nm in enumerate(["Недавние", "Светик", "Стихии", "Все"]):
-        tw = int(ImageDraw.Draw(img).textlength(nm, font=font(12 if mode == "before" else 13, 600))) + 28
-        if mode == "after":
-            if i == 0:
-                rrect(img, [x, y, x + tw, y + 40], 999, fill=(58, 214, 198, 46), outline=(58, 214, 198, 179))
-                fg = C["accent"]
-            else:
-                rrect(img, [x, y, x + tw, y + 40], 999, outline=C["line2"])
-                fg = C["ink2"]
+        tw = int(ImageDraw.Draw(img).textlength(nm, font=font(12, 600))) + 28
+        if i == 0:
+            rrect(img, [x, y, x + tw, y + 40], 8, fill=(56, 69, 90))
+            fg = (255, 255, 255)
         else:
-            if i == 0:
-                rrect(img, [x, y, x + tw, y + 40], 8, fill=(56, 69, 90))
-                fg = (255, 255, 255)
-            else:
-                rrect(img, [x, y, x + tw, y + 40], 8, outline=(42, 54, 72))
-                fg = (207, 216, 224)
-        text(img, (x + tw / 2, y + 20), nm, size=12 if mode == "before" else 13, weight=600, color=fg, anchor="mm")
-        x += tw + (5 if mode == "before" else 6)
-    y += 52
-    rows = [((90, 167, 232), "◆", "Вода", "Текучая влага — первостихия. Вода · ID water"),
-            ((206, 232, 239), "≋", "Воздух", "Ветер и небо — первостихия. Воздух · ID air"),
-            ((196, 164, 124), "▲", "Земля", "Почва и камень — первостихия. Земля · ID earth"),
-            ((224, 118, 79), "▲", "Огонь", "Жар и пламя — первостихия. Огонь · ID fire")]
-    rh = 64 if mode == "before" else 72
-    for col, gly, nm, ds in rows:
-        rrect(img, [26, y, W - 26, y + rh], 10 if mode == "before" else 14,
-              fill=(16, 24, 35) if mode == "before" else C["bg2"],
-              outline=(34, 49, 64) if mode == "before" else C["line"])
-        orb(img, 58, y + rh / 2, 22, col, glyph=gly if mode == "before" else None, count=100, mode=mode)
-        text(img, (92, y + (16 if mode == "after" else 14)), nm, size=15, weight=600, color=C["ink1"])
-        text(img, (92, y + (36 if mode == "after" else 34)), ds, size=13 if mode == "after" else 12, color=C["ink2"])
-        if mode == "after":
-            icon(img, "bolt", (W - 96, y + rh / 2 - 7, 13, 13), C["ink2"])
-            text(img, (W - 80, y + rh / 2), "100", size=13, color=C["ink2"], anchor="lm")
-            icon(img, "chevron_right", (W - 46, y + rh / 2 - 8, 16, 16), C["ink3"])
-        else:
-            text(img, (W - 96, y + rh / 2), "⚡100", size=13, color=C["ink2"], anchor="lm")
-            text(img, (W - 40, y + rh / 2), "›", size=16, color=C["ink3"], anchor="mm")
-        y += rh + 8
-    if mode == "before":
-        rrect(img, [W - 232, 66, W - 12, 128], 12, fill=(22, 32, 44, 250), outline=(44, 58, 75))
-        text(img, (W - 220, 84), "Привет! Я — Светик. Давай", size=13, color=(232, 241, 248))
-        text(img, (W - 220, 102), "сварим что-нибудь!", size=13, color=(232, 241, 248))
+            rrect(img, [x, y, x + tw, y + 40], 8, outline=(42, 54, 72))
+            fg = (207, 216, 224)
+        text(img, (x + tw / 2, y + 20), nm, size=12, weight=600, color=fg, anchor="mm")
+        x += tw + 5
+    y += 50
+    # ячейки 4xN — как в текущей игре (GridContainer columns=4)
+    cells = [((90, 167, 232), "Вода"), ((206, 232, 239), "Воздух"), ((196, 164, 124), "Земля"),
+             ((224, 118, 79), "Огонь"), ((168, 232, 255), "Лёд"), ((150, 214, 145), "Росток"),
+             ((221, 208, 162), "Пыль"), ((172, 200, 228), "Туман")]
+    cw = (W - 52 - 18) // 4
+    for i, (col, nm) in enumerate(cells):
+        cx = 26 + (i % 4) * (cw + 6)
+        cy = y + (i // 4) * 74
+        rrect(img, [cx, cy, cx + cw, cy + 66], 12, fill=(15, 31, 46, 148), outline=(51, 87, 107, 173))
+        orb(img, cx + cw / 2, cy + 26, 14, col, mode=mode)
+        text(img, (cx + cw / 2, cy + 50), nm, size=10, color=(207, 216, 224), anchor="mm")
+    y += 2 * 74 + 6
+    text(img, (W / 2, y), "Ячейки 4×N — как в игре, без строк-таблиц.", size=11, color=C["ink3"], anchor="mm")
     return img
 
 
 def screen_house(mode):
+    tm, mode = mode, "before"
     img = new_phone()
     C = AFTER if mode == "after" else BEFORE
     top = header(img, mode)
     top = resrow(img, top, mode)
-    top = tabs(img, top, mode, 3)
+    top = tabs(img, top, tm, 3)
     panel(img, [12, top, W - 12, H - 12], mode)
     y = top + 16
     text(img, (W / 2, y), "ДОМ СВЕТИКА", size=22 if mode == "before" else 21, weight=800,
@@ -477,7 +463,7 @@ def screen_house(mode):
 
 
 def screen_popup(mode):
-    img = screen_lab(mode)
+    img = screen_lab(mode)  # внутри mode станет "before", вкладки — tm
     blend_rect(img, [0, 0, W, H], (0, 0, 0, 158) if mode == "before" else (4, 8, 12, 168))
     cw, ch = 320, 330
     x0, y0 = (W - cw) // 2, (H - ch) // 2 - 20
@@ -523,88 +509,21 @@ def board_icons():
     return img
 
 
-def board_components():
-    img = Image.new("RGBA", (1120, 620), (7, 11, 16, 255))
-    text(img, (24, 26), "Компоненты: ДО (слева) и ПОСЛЕ (справа)", size=24, weight=800, color=(234, 242, 247))
-    for half, mode in ((0, "before"), (1, "after")):
-        C = AFTER if mode == "after" else BEFORE
-        x0 = 24 + half * 548
-        rrect(img, [x0, 70, x0 + 524, 596], 14, fill=(13, 20, 28), outline=(28, 39, 51))
-        text(img, (x0 + 16, 86), "ДО" if mode == "before" else "ПОСЛЕ", size=13, weight=700, color=(126, 141, 156))
-        y = 120
-        button(img, [x0 + 16, y, 120, 38 if mode == "before" else 44], "Вторичная", 0, mode)
-        button(img, [x0 + 148, y, 120, 38 if mode == "before" else 44], "ВАРИТЬ", 1, mode)
-        button(img, [x0 + 280, y, 110, 38 if mode == "before" else 44], "Награда", 2, mode)
-        button(img, [x0 + 402, y, 106, 38 if mode == "before" else 44], "Disabled", 1, mode, disabled=True)
-        y += 64
-        for i, nm in enumerate(["Активный", "Обычный", "Ещё"]):
-            tw = 110
-            x = x0 + 16 + i * (tw + 8)
-            if mode == "after":
-                if i == 0:
-                    rrect(img, [x, y, x + tw, y + 40], 999, fill=(58, 214, 198, 46), outline=(58, 214, 198, 179))
-                    fg = C["accent"]
-                else:
-                    rrect(img, [x, y, x + tw, y + 40], 999, outline=C["line2"])
-                    fg = C["ink2"]
-            else:
-                if i == 0:
-                    rrect(img, [x, y, x + tw, y + 40], 8, fill=(56, 69, 90))
-                    fg = (255, 255, 255)
-                else:
-                    rrect(img, [x, y, x + tw, y + 40], 8, outline=(42, 54, 72))
-                    fg = (207, 216, 224)
-            text(img, (x + tw / 2, y + 20), nm, size=13, weight=600, color=fg, anchor="mm")
-        y += 56
-        if mode == "after":
-            rrect(img, [x0 + 16, y, x0 + 508, y + 44], 10, fill=C["bg3"], outline=C["line2"])
-            icon(img, "search", (x0 + 28, y + 14, 16, 16), C["ink3"])
-            text(img, (x0 + 52, y + 22), "Поиск вещества…", size=15, color=C["ink3"])
-        else:
-            rrect(img, [x0 + 16, y, x0 + 508, y + 44], 4, fill=(21, 27, 37))
-            text(img, (x0 + 28, y + 22), "Поиск вещества…", size=14, color=(109, 120, 131))
-        y += 60
-        rrect(img, [x0 + 16, y, x0 + 508, y + (12 if mode == "before" else 10)], 6,
-              fill=(41, 50, 61) if mode == "before" else C["bg3"])
-        rrect(img, [x0 + 16, y, x0 + 16 + int(492 * 0.42), y + (12 if mode == "before" else 10)], 6,
-              fill=(77, 217, 226) if mode == "before" else C["accent"])
-        y += 30
-        orb(img, x0 + 46, y + 26, 24, (224, 118, 79), glyph="▲" if mode == "before" else None, count=100, mode=mode)
-        orb(img, x0 + 110, y + 26, 24, (90, 167, 232), glyph="◆" if mode == "before" else None, count=7, mode=mode)
-        if mode == "before":
-            rrect(img, [x0 + 150, y + 4, x0 + 196, y + 40], 8, fill=(232, 170, 26))
-            text(img, (x0 + 173, y + 22), "✦", size=14, weight=600, color=(41, 31, 8), anchor="mm")
-            rrect(img, [x0 + 204, y + 4, x0 + 250, y + 40], 8, fill=(40, 53, 73))
-            text(img, (x0 + 227, y + 22), "▲", size=14, weight=600, color=(224, 236, 240), anchor="mm")
-            text(img, (x0 + 240, y + 8), "1", size=11, color=(255, 255, 255))
-        else:
-            rrect(img, [x0 + 150, y + 2, x0 + 194, y + 46], 10, fill=(24, 34, 46, 235), outline=C["line"])
-            icon(img, "star", (x0 + 162, y + 14, 20, 20), C["ink1"])
-            rrect(img, [x0 + 202, y + 2, x0 + 246, y + 46], 10, fill=(24, 34, 46, 235), outline=C["line"])
-            icon(img, "trend_up", (x0 + 214, y + 14, 20, 20), C["ink1"])
-            rrect(img, [x0 + 236, y - 4, x0 + 252, y + 12], 8, fill=C["gold"])
-            text(img, (x0 + 244, y + 4), "1", size=11, weight=600, color=C["gold_ink"], anchor="mm")
-        y += 70
-        if mode == "after":
-            rrect(img, [x0 + 16, y, x0 + 508, y + 40], 999, fill=(18, 26, 36, 217), outline=C["line"])
-            x = x0 + 20
-            for i, (icn, nm) in enumerate(TABS[:3]):
-                tw = 130
-                if i == 0:
-                    rrect(img, [x, y + 4, x + tw, y + 36], 999, fill=(58, 214, 198, 46), outline=(58, 214, 198, 179))
-                icon(img, icn, (x + 12, y + 12, 16, 16), C["accent"] if i == 0 else C["ink2"])
-                text(img, (x + 34, y + 20), nm, size=13, weight=600,
-                     color=C["accent"] if i == 0 else C["ink2"], anchor="lm")
-                x += tw + 4
-        else:
-            x = x0 + 16
-            for i, (_, nm) in enumerate(TABS[:3]):
-                tw = 120
-                rrect(img, [x, y, x + tw, y + 34], 0, fill=(26, 33, 45) if i == 0 else (16, 20, 28), outline=(42, 54, 72))
-                if i == 0:
-                    ImageDraw.Draw(img).rectangle([x, y, x + tw, y + 2], fill=(89, 224, 214))
-                text(img, (x + tw / 2, y + 18), nm, size=14, color=(255, 255, 255) if i == 0 else (207, 216, 224), anchor="mm")
-                x += tw
+def board_tabs():
+    img = Image.new("RGBA", (1160, 360), (7, 11, 16, 255))
+    text(img, (24, 26), "Меню вкладок: ДО (слева) и ПОСЛЕ (справа)", size=24, weight=800, color=(234, 242, 247))
+    text(img, (24, 62), "Пилюля-дорожка, круглое обрамление активной, иконка 16 px + текст 11 px по центру;", size=13, color=(126, 141, 156))
+    text(img, (24, 80), "все 6 разделов внутри 540 px («Инструменты» целиком).", size=13, color=(126, 141, 156))
+    for half, m in ((0, "before"), (1, "after")):
+        x0 = 24 + half * 560
+        rrect(img, [x0, 110, x0 + 548, 336], 14, fill=(13, 20, 28), outline=(28, 39, 51))
+        text(img, (x0 + 16, 126), "ДО" if m == "before" else "ПОСЛЕ", size=13, weight=700, color=(126, 141, 156))
+        sub = Image.new("RGBA", (540, 200), (0, 0, 0, 0))
+        tabs(sub, 20, m, 1)
+        img.paste(sub, (x0 + 4, 150), sub)
+        if m == "after":
+            for i, nm in enumerate(["flask", "cauldron", "globe", "home", "trophy", "sliders"]):
+                icon(img, nm, (x0 + 16 + i * 40, 260, 24, 24), (234, 242, 247))
     return img
 
 
@@ -619,7 +538,7 @@ def main() -> None:
         "screen_house_after": screen_house("after"),
         "screen_popup_after": screen_popup("after"),
         "board_icons": board_icons(),
-        "board_components": board_components(),
+        "board_tabs": board_tabs(),
     }
     for name, img in shots.items():
         img.convert("RGB").save(OUT / f"{name}.png")

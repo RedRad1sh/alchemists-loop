@@ -1081,12 +1081,10 @@ func _build_ui() -> void:
 	tabs.z_index = 0
 	_tabs_ref = tabs
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	tabs.add_theme_stylebox_override("panel", _panel_style(Color(0.10, 0.13, 0.18, 0.35), 14))
-	# Вкладки должны помещаться на portrait-экране целиком: «Эксперимент»
-	# нельзя терять из видимой навигации при переходе в Лабораторию.
-	tabs.add_theme_font_size_override("font_size", 14)
-	tabs.add_theme_constant_override("tab_hseparation", 6)
-	tabs.add_theme_constant_override("tab_vseparation", 4)
+	# Меню вкладок оформляется централизованно (pill-сегмент с иконками,
+	# UiTheme): точечные override здесь убраны, иначе они побьют тему.
+	# Вкладки должны помещаться на portrait-экране целиком: «Инструменты»
+	# нельзя терять из видимой навигации (кегль/отступы подобраны в UiTheme).
 	tabs.tab_changed.connect(_on_tab_changed)
 	root.add_child(tabs)
 
@@ -1123,8 +1121,8 @@ func _build_ui() -> void:
 	# Событие мира — глобальный QTE поверх текущей вкладки, не кнопка в «Мире».
 	_online._build_event_qte()
 	_home._apply_cosmetic()
-	# Дизайн-система «Atheneum»: централизованный Theme + иконки шапки/ресурсов/
-	# вкладок. Одна точка входа, откат = удалить строку (docs/ui-ux/2026-10-01-*).
+	# Меню вкладок «Atheneum» (pill + иконки): единственная оставшаяся точка
+	# подключения редизайна после отката итерации-1 (docs/ui-ux/).
 	UiBootstrap.apply(self)
 	_update_brew_bar_visibility()
 	_spirit._refresh_companion_visible()
@@ -1141,16 +1139,14 @@ func _fit_ui_root_after_layout(host: Control, root: Control) -> void:
 		root.set_size(host.size)
 
 func _build_brew_bar() -> void:
-	# панель «ВАРИТЬ» всегда на экране — независимо от прокрутки страницы.
-	# Геометрия v2 (UX-12…16): ряд источников, затем главное действие в thumb-зоне
-	# рядом с прогрессом, статус отдельной строкой; «Стоп» резервирует место.
+	# панель «ВАРИТЬ» всегда на экране — независимо от прокрутки страницы
 	var bar := PanelContainer.new()
 	bar.name = "BrewBar"
 	bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	bar.offset_left = 10
-	bar.offset_right = -10
-	bar.offset_top = -158
-	bar.offset_bottom = -10
+	bar.offset_left = 12
+	bar.offset_right = -12
+	bar.offset_top = -132
+	bar.offset_bottom = -12
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := _panel_style(Color(0.07, 0.10, 0.15, 0.96), 18)
 	bar.add_theme_stylebox_override("panel", sb)
@@ -1158,26 +1154,26 @@ func _build_brew_bar() -> void:
 	_brew_bar = bar
 
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 6)
+	col.add_theme_constant_override("separation", 4)
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.add_child(col)
 
-	# ряд 1: источники добычи (бейджи-пилюли под орбами, а не поверх)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", 6)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(row)
-	var collect_all_btn := _small_button("Все", Vector2(48, 44))
+
+	var collect_all_btn := _small_button("Все", Vector2(48, 42))
 	collect_all_btn.tooltip_text = "Добыть со всех источников сразу"
 	collect_all_btn.pressed.connect(_engine._collect_all)
 	row.add_child(collect_all_btn)
 	# источники живут в панели: добыча доступна с любого места страницы
 	_source_col = HBoxContainer.new()
-	_source_col.add_theme_constant_override("separation", 8)
+	_source_col.add_theme_constant_override("separation", 6)
 	row.add_child(_source_col)
 	for item_id in BASE_IDS:
-		var orb := _make_orb(item_id, 46)
+		var orb := _make_orb(item_id, 44)
 		orb.tooltip_text = "%s — тапнуть, чтобы добыть" % _online._item_name(item_id)
 		orb.tapped.connect(_engine._on_source_tapped.bind(item_id))
 		orb.drag_started.connect(_engine._on_orb_drag_started.bind(item_id))
@@ -1185,26 +1181,22 @@ func _build_brew_bar() -> void:
 		_source_col.add_child(orb)
 		_engine._source_orbs[item_id] = orb
 
-	# ряд 2: прогресс с подписью + главное действие справа (зона большого пальца)
-	var brew_row := HBoxContainer.new()
-	brew_row.add_theme_constant_override("separation", 10)
-	brew_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(brew_row)
-	var prog_col := VBoxContainer.new()
-	prog_col.add_theme_constant_override("separation", 3)
-	prog_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	prog_col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	prog_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	brew_row.add_child(prog_col)
-	var prog_head := HBoxContainer.new()
-	prog_head.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	prog_col.add_child(prog_head)
-	var prog_lbl := _label("Котёл", 11)
-	prog_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	prog_lbl.add_theme_color_override("font_color", Color(0.45, 0.95, 0.9))
-	prog_head.add_child(prog_lbl)
+	_engine._brew_btn = _round_brew_button("ВАРИТЬ")
+	_engine._brew_btn.custom_minimum_size = Vector2(140, 52)  # увеличен hitbox
+	_engine._brew_btn.mouse_filter = Control.MOUSE_FILTER_STOP  # явный приём кликов
+	_engine._brew_btn.pressed.connect(_on_brew_btn_pressed)
+	row.add_child(_engine._brew_btn)
+	_engine._repeat_btn = _small_button("↻", Vector2(44, 42), 1)
+	_engine._repeat_btn.tooltip_text = "Повторить последнюю пару"
+	_engine._repeat_btn.pressed.connect(_engine._repeat_last)
+	row.add_child(_engine._repeat_btn)
+	_engine._reset_btn = _small_button("✕", Vector2(44, 42))
+	_engine._reset_btn.tooltip_text = "Сбросить ингредиенты из лунок"
+	_engine._reset_btn.pressed.connect(_engine._reset_slots)
+	row.add_child(_engine._reset_btn)
+
 	_engine._progress = ProgressBar.new()
-	_engine._progress.custom_minimum_size = Vector2(0, 10)
+	_engine._progress.custom_minimum_size = Vector2(0, 12)
 	_engine._progress.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_engine._progress.show_percentage = false
 	_engine._progress.max_value = 100
@@ -1218,40 +1210,21 @@ func _build_brew_bar() -> void:
 	pfg.set_corner_radius_all(6)
 	_engine._progress.add_theme_stylebox_override("background", psb)
 	_engine._progress.add_theme_stylebox_override("fill", pfg)
-	prog_col.add_child(_engine._progress)
-	_engine._brew_btn = _round_brew_button("ВАРИТЬ")
-	_engine._brew_btn.custom_minimum_size = Vector2(132, 52)  # увеличен hitbox
-	_engine._brew_btn.mouse_filter = Control.MOUSE_FILTER_STOP  # явный приём кликов
-	_engine._brew_btn.pressed.connect(_on_brew_btn_pressed)
-	brew_row.add_child(_engine._brew_btn)
+	col.add_child(_engine._progress)
 
-	# ряд 3: статус + служебные действия (повтор/сброс/стоп) фиксированных мест
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 8)
-	srow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(srow)
 	_engine._status_label = _label("", 13)
-	_engine._status_label.custom_minimum_size.y = 32
+	_engine._status_label.custom_minimum_size.y = 28
 	_engine._status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_engine._status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_engine._status_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	_engine._status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	srow.add_child(_engine._status_label)
-	_engine._repeat_btn = _small_button("", Vector2(44, 44), 1)
-	UiIcon.into_button(_engine._repeat_btn, "repeat", 18, Color(0.95, 1.0, 1.0))
-	_engine._repeat_btn.tooltip_text = "Повторить последнюю пару"
-	_engine._repeat_btn.pressed.connect(_engine._repeat_last)
-	srow.add_child(_engine._repeat_btn)
-	_engine._reset_btn = _small_button("", Vector2(44, 44))
-	UiIcon.into_button(_engine._reset_btn, "x", 18, Color(0.88, 0.94, 0.96))
-	_engine._reset_btn.tooltip_text = "Сбросить ингредиенты из лунок"
-	_engine._reset_btn.pressed.connect(_engine._reset_slots)
-	srow.add_child(_engine._reset_btn)
-	_engine._auto_stop_btn = _small_button("Стоп", Vector2(76, 44), 1)
+	_engine._auto_stop_btn = _small_button("Стоп", Vector2(76, 40), 1)
 	_engine._auto_stop_btn.tooltip_text = "Остановить этап; промежуточные предметы и задание производства сохранятся"
-	# место резервируется всегда: вне автоварки кнопка disabled, а не скрыта —
-	# статус-строка не прыгает (UX-16)
-	_engine._auto_stop_btn.disabled = true
+	_engine._auto_stop_btn.visible = false
 	_engine._auto_stop_btn.pressed.connect(_engine._stop_auto)
 	srow.add_child(_engine._auto_stop_btn)
 
@@ -1323,9 +1296,6 @@ func _stylebox_9(path: String, m: Vector4, mod: Color = Color(1, 1, 1, 1)) -> St
 	return sb
 
 func _panel_style(bg_col: Color, radius: int) -> StyleBox:
-	# «Atheneum»: поверхности из токенов; Kenney 9-slice — фолбэк при disabled.
-	if UiTheme.enabled:
-		return UiStyle.sheet() if radius >= 18 else UiStyle.card()
 	var sb := _stylebox_9("res://assets/ui/panel.png",
 		Vector4(16, 14, 16, 14), Color(1, 1, 1, bg_col.a))
 	if sb == null:
@@ -1391,18 +1361,9 @@ func _round_brew_button(text: String) -> Button:
 	# занимает пол-экрана: touch-зона сохраняется через сам Control.
 	b.custom_minimum_size = Vector2(140, 52)  # увеличен hitbox для надёжного клика
 	b.pivot_offset = Vector2(70, 26)
-	b.add_theme_font_size_override("font_size", int(DesignTokens.T_BTN[0]))
+	b.add_theme_font_size_override("font_size", 16)
 	if _font_semi != null:
 		b.add_theme_font_override("font", _font_semi)
-	if UiTheme.enabled:
-		for st in ["normal", "hover", "pressed", "disabled"]:
-			b.add_theme_stylebox_override(st, UiStyle.button(1, st))
-		b.add_theme_stylebox_override("focus", UiStyle.button_focus())
-		b.add_theme_color_override("font_color", DesignTokens.c(DesignTokens.ACCENT_INK))
-		b.add_theme_color_override("font_hover_color", DesignTokens.c(DesignTokens.ACCENT_INK))
-		b.add_theme_color_override("font_pressed_color", DesignTokens.c(DesignTokens.ACCENT_INK))
-		b.add_theme_color_override("font_disabled_color", DesignTokens.c(DesignTokens.INK3))
-		return b
 	var brew_margins := Vector4(14, 10, 14, 10)
 	var sb := _stylebox_9("res://assets/ui/btn_primary.png", brew_margins)
 	var sb_h := _stylebox_9("res://assets/ui/btn_primary.png", brew_margins, Color(1.18, 1.18, 1.16, 1))
@@ -1443,24 +1404,9 @@ func _small_button(text: String, min_size: Vector2, kind: int = 0) -> Button:
 	if text.contains("\n"):
 		compact_h = maxf(requested_h, 46.0)
 	b.custom_minimum_size = Vector2(min_size.x, compact_h)
-	b.add_theme_font_size_override("font_size", int(DesignTokens.T_BTN_SM[0]))
+	b.add_theme_font_size_override("font_size", 14)
 	if _font_semi != null:
 		b.add_theme_font_override("font", _font_semi)
-	if UiTheme.enabled:
-		# «Atheneum»: состояния из токенов, контрастные чернила на акцентах
-		for st in ["normal", "hover", "pressed", "disabled"]:
-			b.add_theme_stylebox_override(st, UiStyle.button(kind, st))
-		b.add_theme_stylebox_override("focus", UiStyle.button_focus())
-		var ink := DesignTokens.c(DesignTokens.INK1)
-		if kind == 1:
-			ink = DesignTokens.c(DesignTokens.ACCENT_INK)
-		elif kind == 2:
-			ink = DesignTokens.c(DesignTokens.GOLD_INK)
-		b.add_theme_color_override("font_color", ink)
-		b.add_theme_color_override("font_hover_color", ink)
-		b.add_theme_color_override("font_pressed_color", ink)
-		b.add_theme_color_override("font_disabled_color", DesignTokens.c(DesignTokens.INK3))
-		return b
 	var tex := "res://assets/ui/btn_secondary.png"
 	if kind == 1:
 		tex = "res://assets/ui/btn_primary.png"
@@ -1530,20 +1476,6 @@ func _build_popup() -> void:
 	col.add_theme_constant_override("separation", 10)
 	col.custom_minimum_size = Vector2(280, 0)
 	card.add_child(col)
-
-	# крестик закрытия 44 px в верхнем правом углу (UX-25)
-	var top_row := HBoxContainer.new()
-	top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(top_row)
-	var top_spacer := Control.new()
-	top_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top_row.add_child(top_spacer)
-	var close_x := _small_button("", Vector2(44, 44), 0)
-	UiIcon.into_button(close_x, "x", 18, Color(0.75, 0.83, 0.9))
-	close_x.tooltip_text = "Закрыть"
-	close_x.pressed.connect(_hide_popup)
-	top_row.add_child(close_x)
 
 	_popup_title = _label("НОВЫЙ РЕЦЕПТ!", 24)
 	_popup_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

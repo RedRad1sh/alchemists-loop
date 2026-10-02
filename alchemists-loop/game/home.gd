@@ -11,8 +11,6 @@ var _cosmetic_house := false
 var _theme_btns := {}
 var _aura_btns := {}
 var _house_btn: Button = null
-var _house_done_row: HBoxContainer = null
-var _house_done_lbl: Label = null
 var _furniture_btns := {}
 var _house_view: Control = null
 var _furniture_shop: VBoxContainer = null
@@ -302,15 +300,6 @@ func _build_house_page(page: VBoxContainer) -> void:
 	_house_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_house_btn.pressed.connect(_buy_house)
 	page.add_child(_house_btn)
-	# построенный дом — не disabled-CTA во всю ширину, а инфо-строка (UX-22)
-	_house_done_row = HBoxContainer.new()
-	_house_done_row.add_theme_constant_override("separation", 6)
-	_house_done_row.visible = false
-	_house_done_row.add_child(UiIcon.make("check", 16, DesignTokens.c(DesignTokens.SUCCESS)))
-	_house_done_lbl = g._label("Домик построен — уют виден гостям и в рейтинге.", 13)
-	_house_done_lbl.add_theme_color_override("font_color", DesignTokens.c(DesignTokens.INK2))
-	_house_done_row.add_child(_house_done_lbl)
-	page.add_child(_house_done_row)
 
 	page.add_child(g._label("Обстановка", 14))
 	_collection_lbl = g._label("", 12)
@@ -342,9 +331,7 @@ func _build_house_page(page: VBoxContainer) -> void:
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		row.add_child(lbl)
 		_decor_cat_labels[cid] = lbl
-		# выбор варианта — не «главное действие», а компактная вторичная
-		# кнопка со стрелкой (UX-23)
-		var b := g._small_button("Выбрать", Vector2(112, 40), 0)
+		var b := g._small_button("Выбрать", Vector2(160, 40), 1)
 		b.pressed.connect(_open_decor_shop.bind(cid))
 		row.add_child(b)
 		_decor_cat_btns[cid] = b
@@ -477,13 +464,11 @@ func _refresh_house_page() -> void:
 			_floor_btn.text = "Пол %s" % _cosmetic_floor.to_html(false)
 	if _house_btn != null:
 		if _cosmetic_house:
-			_house_btn.visible = false
+			_house_btn.text = "Домик построен ✓"
+			_house_btn.disabled = true
 		else:
 			_house_btn.text = "Построить домик Светика (−%d ⚡)" % Game.HOUSE_COST
 			_house_btn.disabled = false
-			_house_btn.visible = true
-	if _house_done_row != null:
-		_house_done_row.visible = _cosmetic_house
 	if _furniture_shop != null:
 		_furniture_shop.visible = _cosmetic_house
 	if _collection_lbl != null:
