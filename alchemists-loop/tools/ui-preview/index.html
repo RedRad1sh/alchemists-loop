@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alchemist's Loop — UI-превью для приемки (Atheneum v2)</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-mode="after">
+<header class="topbar">
+  <div class="brand">
+    <span class="ic" data-icon="flask" data-size="20"></span>
+    <b>Alchemist's Loop</b><span class="muted">· UI-превью для приемки · design system «Atheneum» v2</span>
+  </div>
+  <div class="modeswitch" role="group" aria-label="Режим сравнения">
+    <button id="m-before" class="seg">ДО</button>
+    <button id="m-after" class="seg on">ПОСЛЕ</button>
+    <button id="m-both" class="seg">ОБА</button>
+  </div>
+  <div class="meta muted" id="meta-line"></div>
+</header>
+<div class="shell">
+  <nav class="sidebar">
+    <button class="nav on" data-view="screens">Экраны</button>
+    <button class="nav" data-view="icons">Иконки</button>
+    <button class="nav" data-view="tokens">Токены</button>
+    <button class="nav" data-view="components">Компоненты</button>
+    <button class="nav" data-view="checklist">Чек-лист UX</button>
+    <div class="side-note muted">
+      Кадр 540×960 (portrait Android) — 1:1 с viewport игры.
+      «ДО» воспроизводит текущий UI по коду и кадрам previews/*.png.
+    </div>
+  </nav>
+  <main class="content" id="content"></main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
