@@ -13,3 +13,19 @@
 ![Repo size](https://img.shields.io/github/repo-size/RedRad1sh/alchemists-loop)
 
 [![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/RedRad1sh/alchemists-loop?utm_source=oss&utm_medium=github&utm_campaign=RedRad1sh%2Falchemists-loop&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai/RedRad1sh/alchemists-loop)
+
+## UI/UX: итерация-2 (блоки 1–5, по согласованным мокам)
+
+Процесс: мок-кадр блока коммитится в `docs/ui-ux/screenshots/` → согласование →
+изолированный коммит в коде игры → синхронизация превью (`tools/ui-preview/`).
+
+| Блок | Что изменилось | Коммит |
+|---|---|---|
+| 1 · Шапка | иконки сета вместо глифов ✦▲♪Ж, тач 44×44, бейдж-пилюля счётчика, пузырь Светика ниже компаньона | `4010036` |
+| 2 · BrewBar | пилюли счётчиков внутри орбов, порядок ряда Все/орбы/↻/✕/ВАРИТЬ справа, «Стоп» видна всегда (disabled) | `71ab518` |
+| 3 · Попапы | одна кнопка по центру, без крестика (закрытие тапом по фону/карточке), рецептная строка A+B→C, чипы редкости/награды, поля 24 px | `48603da` |
+| 4 · Дом | категории обстановки карточками 2×N без ценников (цены в магазине вариантов), чип «куплено: N» | `31db2d6` |
+| 5 · Мир/Рейтинг | списки карточками, медаль топ-3, чип очков, своя строка закрепом, «Обновить» иконкой 44, цель дня карточкой | `e23ef6a` |
+
+Эксперимент (ячейки 4×N) и меню вкладок/сет иконок итерации-1 — без изменений.
+Мок-борды согласований: `docs/ui-ux/screenshots/block*_variants.png`.
