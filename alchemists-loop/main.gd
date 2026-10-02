@@ -1251,6 +1251,14 @@ func _build_brew_bar() -> void:
 	srow.add_child(_engine._auto_stop_btn)
 
 func _on_tab_changed(index: int) -> void:
+	# UX-32: страница появляется мягким фейдом (0.14 c), без «впрыгивания».
+	var tabs := _tabs_ref
+	if tabs != null:
+		var page := tabs.get_tab_control(index)
+		if page != null:
+			page.modulate.a = 0.0
+			var tw := create_tween()
+			tw.tween_property(page, "modulate:a", 1.0, 0.14)
 	_update_brew_bar_visibility()
 	_spirit._refresh_companion_visible()
 	if index == 2:

@@ -110,7 +110,12 @@ func _build_rating_page(page: VBoxContainer) -> void:
 	# «Обновить» — иконкой 44×40 вместо кнопки во всю ширину.
 	var refresh := g._small_button("", Vector2(44, 40), 1)
 	UiIcon.into_button(refresh, "repeat", 18, Color(0.9, 0.95, 1.0))
-	refresh.pressed.connect(func() -> void: Net.rating(_device_id))
+	# UX-31: loading-состояние сетевой кнопки — disabled на время запроса.
+	refresh.pressed.connect(func() -> void:
+		refresh.disabled = true
+		refresh.tooltip_text = "Обновляю…"
+		Net.rating(_device_id))
+	refresh.name = "RatingRefresh"
 	status_row.add_child(refresh)
 	_rating_list = VBoxContainer.new()
 	_rating_list.add_theme_constant_override("separation", 6)
@@ -126,6 +131,13 @@ func _refresh_rating() -> void:
 
 
 func _on_net_rating_result(result: Dictionary) -> void:
+	var refresh: Button = null
+	for b in g.find_children("RatingRefresh", "Button", true, false):
+		refresh = b as Button
+		break
+	if refresh != null:
+		refresh.disabled = false
+		refresh.tooltip_text = "Обновить рейтинг"
 	if _rating_list == null:
 		return
 	for child in _rating_list.get_children():

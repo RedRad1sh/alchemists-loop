@@ -16,6 +16,11 @@ static func apply(game: Control) -> void:
 	if root == null:
 		return
 	_restyle_header(root)
+	# UX-31: различимый disabled у кнопок (текстуры Kenney без disabled-варианта).
+	if game.get_node_or_null("UiStateTick") == null:
+		var tick := UiStateTick.new()
+		tick.name = "UiStateTick"
+		game.add_child(tick)
 	var tabs := root.get_node_or_null("Tabs") as TabContainer
 	if tabs == null:
 		return
