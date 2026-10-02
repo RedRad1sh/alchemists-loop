@@ -138,6 +138,8 @@ func _open_progress_popup() -> void:
 	# pass so atoms settle into their lanes at the actual rendered width.
 	if _ach_map != null and is_instance_valid(_ach_map):
 		_ach_map.call_deferred("refresh")
+		# UI/UX: smooth scroll to first available achievement after layout
+		_ach_map.call_deferred("scroll_to_first_available")
 	Sfx.click()
 
 func _rebuild_quest_rows() -> void:

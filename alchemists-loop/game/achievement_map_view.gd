@@ -86,12 +86,15 @@ const KIND_GLYPHS := {
 
 var _game: Game
 var _region_list: VBoxContainer
+var _scroll_container: ScrollContainer  # UI/UX: for auto-scroll to first available
 var _summary_title: Label
 var _summary_hint: Label
 var _detail_title: Label
 var _detail_state: Label
 var _detail_body: Label
 var _detail_reward: Label
+var _detail_box: VBoxContainer  # UI/UX: for fade animation on content change
+var _detail_tween: Tween = null
 
 var _node_by_id: Dictionary = {}
 var _entry_by_id: Dictionary = {}
@@ -167,6 +170,7 @@ func _build_layout() -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.mouse_filter = Control.MOUSE_FILTER_STOP
 	column.add_child(scroll)
+	_scroll_container = scroll  # UI/UX: store reference for auto-scroll
 	_region_list = VBoxContainer.new()
 	_region_list.name = "AchievementRegions"
 	_region_list.add_theme_constant_override("separation", 9)
@@ -184,16 +188,25 @@ func _build_layout() -> void:
 	detail_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(detail_panel)
 	var detail_box := VBoxContainer.new()
-	detail_box.add_theme_constant_override("separation", 1)
+	detail_box.add_theme_constant_override("separation", 4)  # UI/UX: better spacing
 	detail_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	detail_panel.add_child(detail_box)
-	_detail_title = _game._label("Выбери знак на карте", 13)
+	_detail_box = detail_box  # UI/UX: store for fade animation
+	# UI/UX: add padding inside detail panel
+	var detail_margin := MarginContainer.new()
+	detail_margin.add_theme_constant_override("margin_left", 12)
+	detail_margin.add_theme_constant_override("margin_right", 12)
+	detail_margin.add_theme_constant_override("margin_top", 10)
+	detail_margin.add_theme_constant_override("margin_bottom", 10)
+	detail_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	detail_panel.add_child(detail_margin)
+	detail_margin.add_child(detail_box)
+	_detail_title = _game._label("Выбери знак на карте", 14)  # UI/UX: slightly larger
 	_detail_title.add_theme_color_override("font_color", Color(0.95, 0.88, 0.68))
 	detail_box.add_child(_detail_title)
-	_detail_state = _game._label("", 10)
+	_detail_state = _game._label("", 11)  # UI/UX: slightly larger
 	_detail_state.add_theme_color_override("font_color", Color(0.60, 0.83, 0.77))
 	detail_box.add_child(_detail_state)
-	_detail_body = _game._label("", 10)
+	_detail_body = _game._label("", 11)  # UI/UX: slightly larger
 	_detail_body.add_theme_color_override("font_color", Color(0.75, 0.81, 0.83))
 	detail_box.add_child(_detail_body)
 	_detail_reward = _game._label("", 10)
@@ -597,6 +610,19 @@ func _show_entry_details(entry: Dictionary, node_status: int) -> void:
 	var target := maxi(1, int(entry.get("param", 1)))
 	var progress := maxi(0, _entry_progress(entry))
 	var done := _entry_is_done(entry)
+	# UI/UX: subtle fade transition when switching details
+	if _detail_box != null:
+		if _detail_tween != null and _detail_tween.is_valid():
+			_detail_tween.kill()
+		_detail_tween = create_tween()
+		_detail_tween.tween_property(_detail_box, "modulate:a", 0.3, 0.08)
+		_detail_tween.tween_callback(_update_detail_content.bind(entry, node_status, is_resonance, target, progress, done))
+		_detail_tween.tween_property(_detail_box, "modulate:a", 1.0, 0.12)
+	else:
+		_update_detail_content(entry, node_status, is_resonance, target, progress, done)
+
+
+func _update_detail_content(entry: Dictionary, node_status: int, is_resonance: bool, target: int, progress: int, done: bool) -> void:
 	_detail_title.text = String(entry.get("title", "Достижение"))
 	if done:
 		_detail_state.text = "ВЫПОЛНЕНО"
@@ -721,3 +747,36 @@ func _on_map_node_clicked(_atom: Atom, node_id: String) -> void:
 	if not entry.is_empty():
 		_show_entry_details(entry, int(_status_by_id.get(node_id, NODE_LOCKED)))
 	Sfx.click()
+
+
+func scroll_to_first_available() -> void:
+	# UI/UX: smooth scroll to the first available achievement so the player
+	# immediately sees what to do next when opening the map
+	if _scroll_container == null or _selected_id.is_empty():
+		return
+	var atom = _node_by_id.get(_selected_id, null)
+	if not is_instance_valid(atom):
+		return
+	# Defer to ensure layout is complete
+	call_deferred("_do_scroll_to_atom", _selected_id)
+
+
+func _do_scroll_to_atom(node_id: String) -> void:
+	var atom = _node_by_id.get(node_id, null)
+	if not is_instance_valid(atom) or _scroll_container == null:
+		return
+	# Calculate the atom's position relative to the scroll container's content
+	var atom_global_pos := atom.global_position
+	var scroll_global_pos := _scroll_container.global_position
+	var relative_y := atom_global_pos.y - scroll_global_pos.y
+	# Scroll to center the atom in the viewport, with some offset for the header
+	var scroll_height := _scroll_container.size.y
+	var target_scroll := relative_y - scroll_height * 0.3  # 30% from top
+	target_scroll = maxf(0.0, target_scroll)
+	# Smooth scroll animation
+	var current_scroll := _scroll_container.scroll_vertical
+	var tween := create_tween()
+	tween.tween_method(
+		func(value: float) -> void: _scroll_container.scroll_vertical = int(value),
+		float(current_scroll), float(target_scroll), 0.4
+	).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
