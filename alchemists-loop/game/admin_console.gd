@@ -230,8 +230,17 @@ func _cmd_sigil(parts: Array) -> void:
 			return
 		var craft: Dictionary = crafts[idx]
 		var craft_id := str(craft.get("id", ""))
+		# Пишем результат ТОЛЬКО после ответа сервера (иначе «добавлено», а
+		# коллекция пуста — офлайн/ошибка). Одноразовые коннекты на сигналы.
 		_g._sigil.craft_card(_g._online._device_id, craft_id)
-		_log_text("Free craft: %s (%s)" % [craft_id, craft.get("rarity", "unknown")])
+		var log := _log
+		var done := func(_cid: String, _rarity: String, _name: String) -> void:
+			log.append_text("Free craft done: %s (%s)\"n" % [_cid, _rarity])
+		var fail := func(err: String) -> void:
+			log.append_text("[color=red]Free craft failed: %s[/color]
+" % err)
+		_g._sigil.craft_completed.connect(done, CONNECT_ONE_SHOT)
+		_g._sigil.craft_failed.connect(fail, CONNECT_ONE_SHOT)
 	else:
 		_log_text("[color=red]Unknown sigil command: %s[/color]" % sub)
 
