@@ -749,6 +749,46 @@ static func run(g: Game) -> void:
 		if (sb8_c as Dictionary).get("callable", Callable()) == sb8_target:
 			sb8_wired = true
 	Selftest.check("sb8 collection change triggers ach update", sb8_wired)
+
+	# ---- Task 5C: lore-блок в полноэкранном просмотре ----
+	# Каталог с картой steam (валидные process/stage/seed) и chroma-extra.
+	var sb9_steam := {"id": "steam", "set": "fire", "rarity": "common", "ether_cost": 50,
+		"recipe": [{"item_id": "water", "qty": 10}, {"item_id": "fire", "qty": 10}],
+		"process": "sublimatio", "stage": "albedo", "fallback_name": "Пар",
+		"object_type": "object", "seed": 123456789}
+	sm.set_catalog([sb9_steam], [{"id": "fire", "title": "Стихия Огня", "card_ids": ["steam"]}], "unit-t9")
+	sm._on_collection_result({"ok": true, "cards": {"steam": {"copies": 1,
+		"first_at": "2026-10-01T09:00:00"}}, "extras": [], "milestones": {}})
+	var sb9_entry: Dictionary = g._sigil_catalog_entry("steam", {"copies": 1, "first_at": "2026-10-01T09:00:00"})
+	g._open_sigil_fullscreen(sb9_entry)
+	var sb9_lore_title := ""
+	var sb9_lore_desc := ""
+	var sb9_lore_warn := ""
+	if g._sigil_fullscreen != null:
+		for l in g._sigil_fullscreen.find_children("SigilLoreTitle", "Label", true, false):
+			sb9_lore_title = str((l as Label).text)
+		for l in g._sigil_fullscreen.find_children("SigilLoreDesc", "Label", true, false):
+			sb9_lore_desc = str((l as Label).text)
+		for l in g._sigil_fullscreen.find_children("SigilLoreWarn", "Label", true, false):
+			sb9_lore_warn = str((l as Label).text)
+	Selftest.check("sb_lore block renders for catalog card",
+		not sb9_lore_title.is_empty() and not sb9_lore_desc.is_empty())
+	g._close_sigil_fullscreen()
+	# extras: карта вне каталога (card_id="") -> entry пустая; попытка открыть
+	# фуллскрин не падает и не рисует lore (пустая entry -> early return).
+	var sb9_chroma: Dictionary = g._sigil_catalog_entry("", {"copies": 1, "first_at": ""})
+	var sb9_no_crash := sb9_chroma.is_empty() and g._sigil_fullscreen == null
+	g._open_sigil_fullscreen(sb9_chroma)
+	Selftest.check("sb_lore extras fullscreen no crash",
+		sb9_no_crash and g._sigil_fullscreen == null)
+	Selftest.check("sb_lore extras fullscreen empty block",
+		g._sigil_fullscreen == null)
+	# откатываем каталог
+	g._close_sigil_collection()
+	sm.set_catalog([], [], "")
+	sm._server_collection = {}
+	sm._server_extras = []
+	sm._milestones_claimed = {}
 	# Откат: сиды — в состояние до блока (дисковых записей нет).
 	sm.set_catalog([], [], "")
 	sm._server_collection = {}

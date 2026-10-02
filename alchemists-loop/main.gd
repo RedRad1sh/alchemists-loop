@@ -1861,13 +1861,16 @@ func _demo_seed_sigil_coll() -> void:
 		"collection", "fullscreen":
 			_sigil_show_tab("collection")
 			if _demo_harness._sigil_tab == "fullscreen":
-				var first := ""
-				for k in _sigil._server_collection:
-					first = str(k)
-					break
-				if first != "":
-					_open_sigil_fullscreen(_sigil_catalog_entry(first,
-						_sigil._server_collection[first]))
+				# Task 5C: для lore-скриншота открываем stone (валидный
+				# process/stage/seed), иначе первую собранную карту.
+				var target := "stone" if _sigil._server_collection.has("stone") else ""
+				if target == "":
+					for k in _sigil._server_collection:
+						target = str(k)
+						break
+				if target != "":
+					_open_sigil_fullscreen(_sigil_catalog_entry(target,
+						_sigil._server_collection[target]))
 		"sets":
 			_sigil_show_tab("sets")
 		"set_grid":
@@ -2680,6 +2683,11 @@ func _sigil_catalog_entry(card_id: String, coll_entry: Dictionary) -> Dictionary
 		"set_title": set_title,
 		"first_at": str(coll_entry.get("first_at", "")),
 		"copies": int(coll_entry.get("copies", 1)),
+		# Task 5C: поля для lore-генератора и будущего подпроекта D.
+		"process": str(card.get("process", "")),
+		"stage": str(card.get("stage", "")),
+		"seed": int(card.get("seed", 0)),
+		"recipe": card.get("recipe", []),
 	}
 
 
@@ -2739,10 +2747,42 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	art.custom_minimum_size = Vector2(300, 540)
 	vbox.add_child(art)
 
-	# lore-блок: подпроект C
+	# lore-блок: подпроект C — детерминированный текст под артом.
 	var lore := VBoxContainer.new()
 	lore.add_theme_constant_override("separation", 4)
 	vbox.add_child(lore)
+	var card_lore := SigilLore.generate({
+		"id": str(entry.get("card_id", "")),
+		"process": str(entry.get("process", "")),
+		"stage": str(entry.get("stage", "")),
+		"seed": int(entry.get("seed", 0)),
+		"recipe": entry.get("recipe", []),
+	})
+	if not card_lore.is_empty():
+		var lt := _label(str(card_lore.get("title", "")), 15)
+		lt.name = "SigilLoreTitle"
+		lt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lt.add_theme_color_override("font_color", Color(0.85, 0.85, 0.90))
+		lore.add_child(lt)
+		var ld := _label(str(card_lore.get("description", "")), 13)
+		ld.name = "SigilLoreDesc"
+		ld.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		ld.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ld.add_theme_color_override("font_color", Color(0.70, 0.72, 0.78))
+		lore.add_child(ld)
+		var le := _label(str(card_lore.get("effect_hint", "")), 12)
+		le.name = "SigilLoreEffect"
+		le.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		le.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		le.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
+		lore.add_child(le)
+		var lw := _label(str(card_lore.get("warning", "")), 12)
+		lw.name = "SigilLoreWarn"
+		lw.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lw.add_theme_color_override("font_color", Color(0.8, 0.45, 0.4))
+		lore.add_child(lw)
 
 	var rar_lbl := _label(_sigil_rarity_title(rarity), 14)
 	rar_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
