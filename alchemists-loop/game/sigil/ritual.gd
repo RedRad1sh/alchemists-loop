@@ -34,8 +34,6 @@ var _busy := false
 var _auto_flip_timer := -1.0
 
 var _circle: Control
-var _card_host: Control  # SubViewportContainer с живой карточкой
-var _lore: Control
 var _hint: Label
 
 
@@ -49,19 +47,15 @@ func set_auto_flip(t: float) -> void:
 	_auto_flip_timer = t
 
 
-## Запустить ритуал для карты.
-func start(p_rarity: String, accent: Color, card_host: Control, p_lore: Control) -> void:
+## Запустить ритуал для карты (оверлей поверх арта, 2-арг).
+func start(p_rarity: String, accent: Color) -> void:
 	_rarity = p_rarity
 	_strength = RARITY_STRENGTH.get(p_rarity, 0.5)
 	_accent = accent
-	_card_host = card_host
-	_lore = p_lore
 	_phase = Phase.SUMMON
 	_t = 0.0
 	_flipped = false
 	_build_effects()
-	_card_host.visible = false  # карта явится в MATERIALIZE
-	_lore.visible = false
 	set_process(true)
 
 
@@ -131,15 +125,10 @@ func _elements(delta: float) -> void:
 	if _t >= 0.8:
 		_phase = Phase.MATERIALIZE
 		_t = 0.0
-		# Карта выплывает из круга
-		_card_host.visible = true
-		_card_host.scale = Vector2(0.2, 0.2)
-		_card_host.pivot_offset = _card_host.size / 2.0
 
 
 func _materialize(delta: float) -> void:
 	var k := minf(_t / 0.5, 1.0)
-	_card_host.scale = Vector2(0.2 + 0.8 * back_f(k), 0.2 + 0.8 * back_f(k))
 	_circle.modulate.a = maxf(0.0, 1.0 - _t / 0.5)
 	if _t >= 0.5:
 		_phase = Phase.DONE
@@ -168,7 +157,7 @@ func flip() -> void:
 	var tw := create_tween()
 	tw.tween_property(self, "scale:x", 0.0, 0.22) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.tween_callback(_swap_sides)
+	tw.tween_callback(func(): pass)
 	tw.tween_property(self, "scale:x", 1.0, 0.22) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_callback(func():
@@ -178,12 +167,7 @@ func flip() -> void:
 		flip_toggled.emit(_flipped))
 
 
-func _swap_sides() -> void:
-	# На середине переворота меняем стороны: карта <-> lore.
-	if _card_host != null:
-		_card_host.visible = _flipped  # после первого тапа карта уходит
-	if _lore != null:
-		_lore.visible = not _flipped
+
 
 
 func _gui_input(event: InputEvent) -> void:

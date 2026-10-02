@@ -392,6 +392,7 @@ var _retort: Retort  # ночная реторта (R6)
 var _riddles: Riddles  # письма Светика + Атлас (оп B2)
 var _retention: Retention  # дневной круг + недельный слой (R2)
 var _demo_harness: Demo  # флаги --action/--shot/--geom + тик съёмки (R14)
+var _demo_flip_timer: Dictionary = {}  # {card, at} — авто-флип для GIF
 # сводка возврата: что случилось, пока игрока не было
 var _saves: Saves  # сейвы + возвращение (R10)
 var _last_rank := 0
@@ -869,6 +870,12 @@ func _process(delta: float) -> void:
 	if _demo_harness == null:
 		return
 	_time += delta
+	# GIF-демо: авто-переворот карточки по таймеру.
+	if not _demo_flip_timer.is_empty() and Time.get_ticks_msec() >= int(_demo_flip_timer.get("at", 0)):
+		var card_flip: Control = _demo_flip_timer.get("card", null)
+		_demo_flip_timer = {}
+		if card_flip != null and is_instance_valid(card_flip):
+			_sigil_flip_card(_tap_event(), card_flip)
 	if not _selftest:
 		_online._tick_netexperiment()
 		_online._tick_pending_experiment()
@@ -1873,10 +1880,11 @@ func _demo_seed_sigil_coll() -> void:
 				if target != "":
 					_open_sigil_fullscreen(_sigil_catalog_entry(target,
 						_sigil._server_collection[target]))
-					# GIF-демо: авто-переворот через 2 с после материализации.
-					var ritual := self.find_child("SigilRitual", true, false)
-					if ritual != null and ritual.has_method("set_auto_flip"):
-						ritual.set_auto_flip(2.0)
+					# GIF-демо: авто-переворот через 2 с (эмуляция тапа по карточке).
+					var flip := self.find_child("SigilCardFlip", true, false)
+					if flip != null:
+						var t0 := Time.get_ticks_msec()
+						_demo_flip_timer = {"card": flip, "at": t0 + 2000}
 		"sets":
 			_sigil_show_tab("sets")
 		"set_grid":
@@ -2752,32 +2760,35 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	# Живая карточка: свой SubViewport + SigilCard (анимированная аура,
 	# искры/фольга — как в sigil_module_v2), вместо статичного PNG.
 	# НЕ используем _svc.preview_into: его viewport уже в дереве сервиса.
-	var live := SubViewportContainer.new()
-	live.custom_minimum_size = Vector2(300, 540)
-	live.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	live.stretch = true
-	vbox.add_child(live)
-	var lv := SubViewport.new()
-	lv.name = "LiveCardViewport"
-	lv.size = Vector2i(300, 540)
-	lv.transparent_bg = true
-	lv.disable_3d = true
-	lv.gui_disable_input = true
-	lv.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR
-	lv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	live.add_child(lv)
-	var lcard := SigilCard.new()
-	lcard.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	lcard.size = Vector2(300, 540)
-	lv.add_child(lcard)
-	var recipe := _sigil.make_card_recipe(_sigil.card(str(entry.get("card_id", ""))))
-	lcard.setup(recipe, _sigil._options)
+	# Переворачиваемая карточка: лицо = арт, оборот = лор.
+	var card_flip := Control.new()
+	card_flip.name = "SigilCardFlip"
+	card_flip.custom_minimum_size = Vector2(300, 540)
+	card_flip.size = Vector2(300, 540)
+	card_flip.mouse_filter = Control.MOUSE_FILTER_STOP
+	card_flip.pivot_offset = Vector2(150, 270)
+	card_flip.set_meta("flipped", false)
+	card_flip.set_meta("busy", false)
+	vbox.add_child(card_flip)
 
-	# lore-блок: оборотная сторона карточки (появляется при перевороте).
-	var lore := VBoxContainer.new()
-	lore.add_theme_constant_override("separation", 4)
+	# Лицо: статичный арт.
+	var art := _sigil_preview_slot(accent, 0)
+	art.name = "SigilFace"
+	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card_flip.add_child(art)
+
+	# Оборот: лор (скролл).
+	var lore := ScrollContainer.new()
+	lore.name = "SigilBack"
+	lore.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	lore.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lore.visible = false
-	vbox.add_child(lore)
+	card_flip.add_child(lore)
+	var lore_v := VBoxContainer.new()
+	lore_v.add_theme_constant_override("separation", 8)
+	lore_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lore.add_child(lore_v)
 	var card_lore := SigilLore.generate({
 		"id": str(entry.get("card_id", "")),
 		"process": str(entry.get("process", "")),
@@ -2786,30 +2797,48 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 		"recipe": entry.get("recipe", []),
 	})
 	if not card_lore.is_empty():
-		var lt := _label(str(card_lore.get("title", "")), 15)
+		var lt := _label(str(card_lore.get("title", "")), 16)
 		lt.name = "SigilLoreTitle"
 		lt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lt.add_theme_color_override("font_color", Color(0.85, 0.85, 0.90))
-		lore.add_child(lt)
+		lore_v.add_child(lt)
 		var ld := _label(str(card_lore.get("description", "")), 13)
 		ld.name = "SigilLoreDesc"
 		ld.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		ld.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		ld.add_theme_color_override("font_color", Color(0.70, 0.72, 0.78))
-		lore.add_child(ld)
+		lore_v.add_child(ld)
 		var le := _label(str(card_lore.get("effect_hint", "")), 12)
 		le.name = "SigilLoreEffect"
 		le.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		le.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		le.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
-		lore.add_child(le)
+		lore_v.add_child(le)
 		var lw := _label(str(card_lore.get("warning", "")), 12)
 		lw.name = "SigilLoreWarn"
 		lw.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lw.add_theme_color_override("font_color", Color(0.8, 0.45, 0.4))
-		lore.add_child(lw)
+		lore_v.add_child(lw)
+
+	# Подсказка переворота.
+	var hint := _label("нажми — перевернуть", 12)
+	hint.name = "SigilFlipHint"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_color_override("font_color", Color(0.75, 0.78, 0.85, 0.9))
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	card_flip.add_child(hint)
+	card_flip.gui_input.connect(_sigil_flip_card.bind(card_flip))
+
+	# Ритуал-оверлей поверх карточки (2-арг).
+	var ritual := SigilRitual.new()
+	ritual.name = "SigilRitual"
+	ritual.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ritual.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card_flip.add_child(ritual)
+	ritual.start(rarity, accent)
 
 	var rar_lbl := _label(_sigil_rarity_title(rarity), 14)
 	rar_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -2834,17 +2863,6 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	copies_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	copies_lbl.add_theme_color_override("font_color", Color(0.80, 0.82, 0.86))
 	vbox.add_child(copies_lbl)
-	# Ритуал: призыв -> стихии -> материализация -> переворот по тапу.
-	# Оверлей поверх живой карточки (центр экрана), а не строка в vbox.
-	var ritual := SigilRitual.new()
-	ritual.name = "SigilRitual"
-	ritual.custom_minimum_size = Vector2(300, 540)
-	ritual.size = Vector2(300, 540)
-	ritual.mouse_filter = Control.MOUSE_FILTER_STOP
-	ritual.pivot_offset = Vector2(150, 270)
-	ritual.set_anchors_preset(Control.PRESET_CENTER)
-	root.add_child(ritual)
-	ritual.start(rarity, accent, live, lore)
 
 	var close_btn := _small_button("✕", Vector2(46, 40))
 	close_btn.name = "SigilFsClose"
@@ -3036,6 +3054,42 @@ func _sigil_craft_row(craft: Dictionary) -> Control:
 
 
 ## Плейсхолдер превью: рамка в цвет редкости, картинка встанет сюда позже.
+## Переворот карточки: лицо <-> оборот (лор) через scale.x-схлоп.
+## Эмуляция тапа (для демо/GIF): один левый клик.
+func _tap_event() -> InputEventMouseButton:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	return ev
+
+
+
+func _sigil_flip_card(ev: InputEvent, card_flip: Control) -> void:
+	if not (ev is InputEventMouseButton):
+		return
+	var mb := ev as InputEventMouseButton
+	if not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if card_flip.get_meta("busy", false):
+		return
+	card_flip.set_meta("busy", true)
+	var flipped: bool = card_flip.get_meta("flipped", false)
+	var face := card_flip.get_node_or_null("SigilFace")
+	var back := card_flip.get_node_or_null("SigilBack")
+	var tw := create_tween()
+	tw.tween_property(card_flip, "scale:x", 0.0, 0.18) 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func():
+		if face != null:
+			face.visible = flipped
+		if back != null:
+			back.visible = not flipped
+		card_flip.set_meta("flipped", not flipped)
+		Sfx.click())
+	tw.tween_property(card_flip, "scale:x", 1.0, 0.18) 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(func():
+		card_flip.set_meta("busy", false))
+
+
 func _sigil_preview_slot(accent: Color, side: int) -> Control:
 	var box := PanelContainer.new()
 	box.custom_minimum_size = Vector2(side, side)
