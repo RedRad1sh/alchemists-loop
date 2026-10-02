@@ -740,5 +740,102 @@ def board_brewbar() -> Image.Image:
     return img
 
 
+
+
+# ================= итерация-2, блок 3: попапы =================
+PP_H = 620
+
+
+def _pp_base() -> Image.Image:
+    img = Image.new("RGBA", (W, PP_H), BEFORE["bg0"] + (255,))
+    img.paste(Image.new("RGBA", (W, PP_H), (0, 0, 0, 158)), (0, 0))  # dim 0.62
+    return img
+
+
+def _pp_card(img, x0, x1, y0, y1):
+    rrect(img, [x0, y0, x1, y1], 20, fill=(23, 33, 48, 247), outline=(48, 62, 80))
+
+
+def pp_before() -> Image.Image:
+    img = _pp_base()
+    _pp_card(img, 70, 470, 90, 540)
+    text(img, (W / 2, 122), "НОВЫЙ РЕЦЕПТ!", size=24, weight=800, color=(255, 230, 107), anchor="mm")
+    orb(img, W / 2, 235, 65, (150, 214, 145), mode="before")
+    lines = ["Вода + Огонь → Пар", "автор: redrad1sh", "«Первый пар в_loop»".replace("_loop", " петле"),
+             "Обычный · награда +12 ⚡", "Коллекция: 12 / 57"]
+    for i, ln in enumerate(lines):
+        text(img, (W / 2, 320 + i * 24), ln, size=16, color=(255, 255, 255) if i == 0 else (196, 205, 214),
+             anchor="mm")
+    bx, bw = 90, 176
+    button(img, [bx, 470, bw, 44], "Забрать", 2, "before", size=14)
+    button(img, [bx + bw + 8, 470, 168, 44], "Закрыть", 0, "before", size=14)
+    return img
+
+
+def _pp_after_head(img, y0):
+    icon(img, "flask", (94, y0 + 20, 22, 22), AFTER["accent"])
+    text(img, (124, y0 + 31), "НОВЫЙ РЕЦЕПТ!", size=20, weight=800, color=AFTER["gold"], tracking=0.3)
+    button(img, [W - 70 - 44, y0 + 10, 44, 44], "", 0, "after", icon_name="x")
+
+
+def _pp_after_body(img, y0):
+    orb(img, W / 2, y0 + 118, 48, (150, 214, 145), mode="after")
+    ry = y0 + 186
+    # рецептная строка: мини-орбы A + B -> C
+    cx = W / 2
+    orb(img, cx - 92, ry + 16, 16, (90, 167, 232), mode="after")
+    text(img, (cx - 66, ry + 16), "+", size=16, weight=700, color=AFTER["ink3"], anchor="mm")
+    orb(img, cx - 40, ry + 16, 16, (224, 118, 79), mode="after")
+    text(img, (cx - 12, ry + 16), "→", size=16, weight=700, color=AFTER["ink3"], anchor="mm")
+    orb(img, cx + 16, ry + 16, 16, (150, 214, 145), mode="after")
+    text(img, (cx + 42, ry + 16), "Пар", size=14, weight=600, color=AFTER["ink1"], anchor="lm")
+    ry += 44
+    rrect(img, [94, ry, 210, ry + 26], 13, fill=(38, 50, 66), outline=AFTER["line"])
+    text(img, (106, ry + 13), "Обычный", size=12, weight=600, color=(168, 232, 168), anchor="lm")
+    rrect(img, [218, ry, 330, ry + 26], 13, fill=(46, 40, 22), outline=(120, 100, 40))
+    text(img, (230, ry + 13), "+12 ⚡ награда", size=12, weight=600, color=AFTER["gold"], anchor="lm")
+    ry += 38
+    text(img, (94, ry), "автор: redrad1sh · «Первый пар в петле»", size=13, color=AFTER["ink2"])
+    return ry
+
+
+def pp_after_a() -> Image.Image:
+    img = _pp_base()
+    _pp_card(img, 70, 470, 80, 540)
+    _pp_after_head(img, 80)
+    ry = _pp_after_body(img, 130)
+    y = 470
+    button(img, [236, y, 104, 44], "Закрыть", 0, "after", size=14)
+    button(img, [348, y, 100, 48], "Забрать", 1, "after", size=15)
+    return img
+
+
+def pp_after_b() -> Image.Image:
+    img = _pp_base()
+    _pp_card(img, 70, 470, 70, 550)
+    _pp_after_head(img, 70)
+    ry = _pp_after_body(img, 120)
+    y = 452
+    button(img, [94, y, 352, 48], "Забрать", 1, "after", size=15)
+    button(img, [94, y + 54, 352, 40], "Закрыть", 0, "after", size=13)
+    return img
+
+
+def board_popups() -> Image.Image:
+    variants = [("ДО · как сейчас: орб 130, простыня текста, равные кнопки", pp_before()),
+                ("ПОСЛЕ A · иконка+✕44, рецептная строка, чипы, действия справа", pp_after_a()),
+                ("ПОСЛЕ B · то же, действия колонкой на всю ширину", pp_after_b())]
+    img = Image.new("RGBA", (W + 40, len(variants) * (PP_H + 64) + 90), (7, 11, 16, 255))
+    text(img, (20, 26), "Блок 3 · Попапы открытий/целей", size=24, weight=800, color=(234, 242, 247))
+    text(img, (20, 62), "Код игры не тронут: это мок-предложения для согласования.",
+         size=13, color=(126, 141, 156))
+    y = 90
+    for caption, sub in variants:
+        text(img, (20, y + 14), caption, size=14, weight=700, color=(169, 184, 198))
+        img.paste(sub, (20, y + 40), sub)
+        y += PP_H + 64
+    return img
+
+
 if __name__ == "__main__":
     main()
