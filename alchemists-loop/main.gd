@@ -423,6 +423,8 @@ var _feed_list: VBoxContainer = null
 
 var _spirit: Spirit  # Светик (R9)
 var _admin: AdminConsole  # админ-консоль (~)
+# Размер комплекта фиксирован генератором каталога (SET_SIZE = 25).
+const SIGIL_SET_SIZE := 25
 var _sigil: SigilManager  # Аркан Сигилов: карточки рецептов
 var _sigil_coll: ColorRect = null  # модалка коллекции сигилов; != null ⇒ открыта
 var _sigil_tab_content: Control = null  # контейнер активной вкладки модалки
@@ -430,6 +432,7 @@ var _sigil_tab: String = "crafts"  # активная вкладка: crafts | c
 var _sigil_tab_btns: Array = []  # кнопки вкладок; подсветка активной в _sigil_show_tab
 var _sigil_tab_seq := 0  # поколение вкладки: гасит корутины билдеров при переключении
 var _sigil_fullscreen: Control = null  # полноэкранный просмотр карты; != null ⇒ открыт
+var _sigil_claim_layer: Control = null  # попап награды клейма майлстоуна; != null ⇒ открыт
 var _sigil_render_busy := false  # превью-рендер в полёте: у сервиса один SubViewport, фуллскрин ждёт (T5-M2)
 var _sigil_header_btn: Button  ## кнопка Аркана Сигилов в шапке (иконка-таро)
 var _inv_grid: GridContainer = null
@@ -614,6 +617,7 @@ func _ready() -> void:
 	Net.sigil_catalog_result.connect(_sigil._on_catalog_result)
 	Net.sigil_collection_result.connect(_sigil._on_collection_result)
 	Net.sigil_milestone_result.connect(_sigil._on_milestone_result)
+	Net.sigil_milestone_result.connect(_on_sigil_milestone_result)
 	_sigil.craft_completed.connect(_on_sigil_craft_completed)
 	_sigil.craft_failed.connect(_on_sigil_craft_failed)
 	_init_new_game()
@@ -1762,8 +1766,10 @@ func _rarity_color(rarity: String) -> Color:
 ## без сервера. Превью кругов — настоящий рендер SigilRenderService.
 func _demo_seed_sigil_coll() -> void:
 	var day := Time.get_date_string_from_system()
-	# Демо-каталог: три карты, совпадающие с демо-крафтами ниже. Сервера в
-	# харнесе нет, поэтому каталог задаётся прямо здесь — иначе card_recipe_for
+	# Демо-каталог: земля доведена до восьми карт, как в брифе Task 7 (к 
+	# clay/metal/mountain добавлены stone/sand/brick/glass/gold: 3–4 ингредиента,
+	# qty 8–60, ether по редкости, stage — строка по спарке process/stage).
+	# Сервера в харнесе нет, каталог задаётся прямо здесь — иначе card_recipe_for
 	# ушёл бы в посоленный fallback и скриншот врал бы про боевой рендер.
 	_sigil.set_catalog([
 		{"id": "clay", "set": "earth", "rarity": "common", "ether_cost": 50,
@@ -1781,8 +1787,32 @@ func _demo_seed_sigil_coll() -> void:
 				{"item_id": "life", "qty": 40}],
 			"process": "горный венец", "stage": "rubedo", "fallback_name": "Гора",
 			"object_type": "planet", "seed": 90212},
-	], [{"id": "earth", "title": "Стихия Земли",
-		"card_ids": ["clay", "metal", "mountain"]}], "demo")
+		{"id": "stone", "set": "earth", "rarity": "common", "ether_cost": 50,
+			"recipe": [{"item_id": "stone", "qty": 20}, {"item_id": "water", "qty": 25},
+				{"item_id": "fire", "qty": 15}],
+			"process": "calcinatio", "stage": "nigredo", "fallback_name": "Камень",
+			"object_type": "object", "seed": 90213},
+		{"id": "sand", "set": "earth", "rarity": "common", "ether_cost": 50,
+			"recipe": [{"item_id": "sand", "qty": 15}, {"item_id": "water", "qty": 30},
+				{"item_id": "air", "qty": 12}],
+			"process": "distillatio", "stage": "albedo", "fallback_name": "Песок",
+			"object_type": "object", "seed": 90214},
+		{"id": "brick", "set": "earth", "rarity": "rare", "ether_cost": 150,
+			"recipe": [{"item_id": "clay", "qty": 25}, {"item_id": "fire", "qty": 35},
+				{"item_id": "water", "qty": 20}],
+			"process": "sublimatio", "stage": "nigredo", "fallback_name": "Кирпич",
+			"object_type": "object", "seed": 90215},
+		{"id": "glass", "set": "earth", "rarity": "rare", "ether_cost": 150,
+			"recipe": [{"item_id": "sand", "qty": 30}, {"item_id": "fire", "qty": 40},
+				{"item_id": "air", "qty": 25}, {"item_id": "water", "qty": 15}],
+			"process": "distillatio", "stage": "albedo", "fallback_name": "Стекло",
+			"object_type": "object", "seed": 90216},
+		{"id": "gold", "set": "earth", "rarity": "epic", "ether_cost": 400,
+			"recipe": [{"item_id": "gold", "qty": 22}, {"item_id": "fire", "qty": 50},
+				{"item_id": "water", "qty": 30}, {"item_id": "stone", "qty": 18}],
+			"process": "coniunctio", "stage": "rubedo", "fallback_name": "Золото",
+			"object_type": "relic", "seed": 90217},
+	], _demo_sigil_sets(), "demo")
 	_sigil._daily_day = day
 	_sigil._daily_crafts = [
 		{"id": day + "_demo_0", "rarity": "common", "ether_cost": 50, "llm_name": "",
@@ -1804,17 +1834,24 @@ func _demo_seed_sigil_coll() -> void:
 			["ice", 30], ["spark", 20], ["mountain", 5], ["cloud", 12], ["life", 0]]:
 		_engine.inventory[str(pair[0])] = int(pair[1])
 	_engine._refresh()
-	# Демо-коллекция — как в sb6: через _on_collection_result (только память,
-	# без записи на диск), чтобы сетка и хроматика имели содержимое.
+	# Демо-коллекция — как в sb6/sb7: через _on_collection_result (только память,
+	# без записи на диск), чтобы сетка, хроматика и комплекты имели содержимое.
+	# Сид Task 7: 7 собранных earth + milestone {earth: [3]} → прогресс 7/25,
+	# точка 3 claimed, 6 claimable, 13/25 тусклые.
 	_sigil._on_collection_result({"ok": true, "cards": {"clay": {"copies": 2,
 		"first_at": "2026-09-28T10:00:00"},
-		"metal": {"copies": 1, "first_at": "2026-09-30T18:30:00"}},
+		"metal": {"copies": 1, "first_at": "2026-09-30T18:30:00"},
+		"mountain": {"copies": 1, "first_at": "2026-10-01T09:15:00"},
+		"stone": {"copies": 1, "first_at": "2026-10-01T10:00:00"},
+		"sand": {"copies": 1, "first_at": "2026-10-01T11:00:00"},
+		"brick": {"copies": 1, "first_at": "2026-10-01T12:00:00"},
+		"glass": {"copies": 1, "first_at": "2026-10-01T13:00:00"}},
 		"extras": [{"craft_id": "demo_chroma", "rarity": "chromatic",
 			"llm_name": "Хроматический сигил", "crafted_at": "2026-10-01T09:00:00"}],
-		"milestones": {}})
+		"milestones": {"earth": [3]}})
 	_open_sigil_modal()
-	# --sigiltab=collection|fullscreen (sets/set_grid — Task 7): один show_tab
-	# на обе ветки, чтобы вкладку не ребилдить дважды.
+	# --sigiltab=collection|fullscreen|sets: один show_tab на ветку, чтобы
+	# вкладку не ребилдить дважды (set_grid/set screen — Task 7b).
 	match _demo_harness._sigil_tab:
 		"collection", "fullscreen":
 			_sigil_show_tab("collection")
@@ -1826,8 +1863,32 @@ func _demo_seed_sigil_coll() -> void:
 				if first != "":
 					_open_sigil_fullscreen(_sigil_catalog_entry(first,
 						_sigil._server_collection[first]))
+		"sets":
+			_sigil_show_tab("sets")
 		_:
 			pass
+
+
+## Наборы демо-каталога: четыре стихии по 25 карт — свои предметы категории
+## первыми, добивка остальными предметами каталога (CATEGORY_OF) до 25.
+func _demo_sigil_sets() -> Array:
+	var all_ids: Array = []
+	for k in CATEGORY_OF:
+		all_ids.append(String(k))
+	var out: Array = []
+	for def in [["fire", "огонь", "Стихия Огня"], ["water", "вода", "Стихия Воды"],
+			["air", "воздух", "Стихия Воздуха"], ["earth", "земля", "Стихия Земли"]]:
+		var ids: Array = []
+		for k in all_ids:
+			if str(CATEGORY_OF[k]) == String(def[1]):
+				ids.append(k)
+		for k in all_ids:
+			if ids.size() >= SIGIL_SET_SIZE:
+				break
+			if not ids.has(k):
+				ids.append(k)
+		out.append({"id": String(def[0]), "title": String(def[2]), "card_ids": ids})
+	return out
 
 ## Модалка Аркана Сигилов: три вкладки — крафты дня, коллекция, комплекты.
 ## Превью — настоящий рендер круга (SigilRenderService), а не декоративная
@@ -2090,9 +2151,260 @@ func _sigil_build_collection_tab(container: Control) -> void:
 		_sigil_fill_preview((p[0] as Control).get_meta("preview"), tex)
 
 
-## Стаб вкладки «Комплекты»: сетки комплектов и клейм строит Task 7.
-func _sigil_build_sets_tab(_container: Control) -> void:
-	pass
+## Вкладка «Комплекты»: панель на каждый комплект каталога — титул из
+## каталога, прогресс «N/25», ProgressBar и ряд точек-майлстоунов 3/6/13/25.
+## Экран комплекта с сеткой карт и силуэтами — Task 7b.
+func _sigil_build_sets_tab(container: Control) -> void:
+	var sets := _sigil.catalog_sets()
+	if sets.is_empty():
+		var empty := _label("Комплекты появятся после загрузки каталога", 16)
+		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		empty.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		empty.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
+		container.add_child(empty)
+		return
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	container.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 14)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+	for s in sets:
+		list.add_child(_sigil_set_panel(s as Dictionary))
+
+
+## Панель комплекта: титул стихии, прогресс «N/25», ProgressBar и ряд из четырёх
+## точек-майлстоунов. Титул и порядок — из catalog_sets(); собранные карты —
+## пересечение _server_collection с card_ids сета (has_collected).
+func _sigil_set_panel(set_def: Dictionary) -> Control:
+	var set_id := str(set_def.get("id", ""))
+	var accent := _sigil_set_accent(set_id)
+	var panel := PanelContainer.new()
+	# Имя уникально по сету: find_children ищет по wildcard, add_child
+	# переименовывает одинаковые имена соседей.
+	panel.name = "SigilSetPanel_" + set_id
+	panel.set_meta("set_id", set_id)
+	panel.add_theme_stylebox_override("panel", _sigil_row_style(accent, 0.0))
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	panel.add_child(box)
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	box.add_child(head)
+	var title := _label(str(set_def.get("title", "")), 17)
+	title.name = "SigilSetTitle"
+	title.autowrap_mode = TextServer.AUTOWRAP_OFF
+	title.add_theme_color_override("font_color", accent)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(title)
+
+	var collected := 0
+	var ids = set_def.get("card_ids", [])
+	if ids is Array:
+		for cid in (ids as Array):
+			if _sigil.has_collected(str(cid)):
+				collected += 1
+	var count := _label("%d/%d" % [collected, SIGIL_SET_SIZE], 14)
+	count.name = "SigilSetCount"
+	count.autowrap_mode = TextServer.AUTOWRAP_OFF
+	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	count.add_theme_color_override("font_color", Color(0.72, 0.74, 0.80))
+	count.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(count)
+
+	var bar := ProgressBar.new()
+	bar.name = "SigilSetProgress"
+	bar.max_value = float(SIGIL_SET_SIZE)
+	bar.value = float(clampi(collected, 0, SIGIL_SET_SIZE))
+	bar.show_percentage = false
+	bar.custom_minimum_size = Vector2(0, 10)
+	var bar_bg := StyleBoxFlat.new()
+	bar_bg.bg_color = Color(0.04, 0.045, 0.07, 1.0)
+	bar_bg.set_corner_radius_all(5)
+	bar_bg.set_border_width_all(1)
+	bar_bg.border_color = Color(accent.r, accent.g, accent.b, 0.3)
+	bar.add_theme_stylebox_override("background", bar_bg)
+	var bar_fill := StyleBoxFlat.new()
+	bar_fill.bg_color = Color(accent.r, accent.g, accent.b, 0.85)
+	bar_fill.set_corner_radius_all(5)
+	bar.add_theme_stylebox_override("fill", bar_fill)
+	box.add_child(bar)
+
+	var dots := HBoxContainer.new()
+	dots.add_theme_constant_override("separation", 10)
+	box.add_child(dots)
+	var claimed := _sigil.claimed_tiers(set_id)
+	for tier in [3, 6, 13, 25]:
+		dots.add_child(_sigil_milestone_dot(set_id, tier, collected, claimed))
+	return panel
+
+
+## Точка-майлстоун комплекта: claimed — приглушённая с отметкой; claimable
+## (N >= порог и не claimed) — золотая, тап шлёт клейм; locked — тусклая.
+func _sigil_milestone_dot(set_id: String, tier: int, collected: int,
+		claimed: Array) -> Button:
+	var is_claimed := claimed.has(tier)
+	var is_claimable := not is_claimed and collected >= tier
+	var state := "claimed" if is_claimed else ("claimable" if is_claimable else "locked")
+	var dot := Button.new()
+	dot.name = "SigilDot" + str(tier)
+	dot.custom_minimum_size = Vector2(34, 34)
+	dot.focus_mode = Control.FOCUS_NONE
+	dot.set_meta("tier", tier)
+	dot.set_meta("set_id", set_id)
+	dot.set_meta("state", state)
+	dot.disabled = not is_claimable
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.055, 0.065, 0.10, 1.0)
+	if is_claimable:
+		sb.border_color = Color(0.90, 0.82, 0.56, 0.95)
+		sb.set_border_width_all(2)
+	else:
+		sb.border_color = Color(0.42, 0.45, 0.52, 0.55 if is_claimed else 0.3)
+		sb.set_border_width_all(1)
+	sb.set_corner_radius_all(17)
+	dot.add_theme_stylebox_override("normal", sb)
+	dot.add_theme_stylebox_override("hover", sb)
+	dot.add_theme_stylebox_override("pressed", sb)
+	dot.add_theme_stylebox_override("disabled", sb)
+	dot.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var num := Label.new()
+	num.text = str(tier)
+	num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	num.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	num.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	num.add_theme_font_size_override("font_size", 12)
+	num.autowrap_mode = TextServer.AUTOWRAP_OFF
+	var fg := Color(0.90, 0.85, 0.62) if is_claimable else Color(0.55, 0.58, 0.66)
+	num.add_theme_color_override("font_color", fg)
+	dot.add_child(num)
+	# Button не контейнер: якорь до ручных офсетов.
+	num.set_anchors_preset(Control.PRESET_FULL_RECT)
+	if is_claimable:
+		dot.pressed.connect(_sigil_claim_milestone.bind(set_id, tier))
+	if is_claimed:
+		# Глиф «✓» вне шрифта Manrope: отметка рисуется, а не печатается.
+		var mark := SigilMilestoneMark.new()
+		mark.name = "SigilDotMark"
+		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		dot.add_child(mark)
+		mark.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		mark.offset_left = -16.0
+		mark.offset_top = 2.0
+		mark.offset_right = -2.0
+		mark.offset_bottom = 14.0
+	return dot
+
+
+## Тап по claimable-точке: клейм уходит на сервер, офлайн — в очередь Net.
+func _sigil_claim_milestone(set_id: String, tier: int) -> void:
+	Sfx.click()
+	_sigil.request_milestone_claim(_online._device_id, set_id, tier)
+
+
+## Тексты наград майлстоунов — дословно из брифа Task 7 (минус — U+2212).
+func _sigil_milestone_reward_text(tier: int) -> String:
+	match tier:
+		3: return "+40 к капу эфира"
+		6: return "−10% эфира крафтов комплекта"
+		13: return "Верстак ×2 для стихии"
+		25: return "Четвёртый слот дневного крафта"
+		_: return ""
+
+
+## Акцент стихии для панелей комплектов.
+func _sigil_set_accent(set_id: String) -> Color:
+	match set_id:
+		"fire": return Color(0.98, 0.55, 0.32)
+		"water": return Color(0.33, 0.68, 1.0)
+		"air": return Color(0.55, 0.85, 0.92)
+		"earth": return Color(0.82, 0.66, 0.42)
+		_: return Color(0.62, 0.66, 0.72)
+
+
+## Main-обработчик клейма майлстоуна (вторая подписка на sigil_milestone_result):
+## ok && claimed — попап награды и refresh коллекции, чтобы флаги перерисовались.
+## Офлайн-форма и ошибки ничего не делают — эффекты строго по серверу.
+func _on_sigil_milestone_result(result: Dictionary) -> void:
+	if not result.get("ok", false) or not result.get("claimed", false):
+		return
+	var tier := int(result.get("tier", 0))
+	_sigil_claim_popup(tier)
+	_sigil.request_collection(_online._device_id)
+
+
+## Попап «Награда получена»: слой поверх модалки (z=20) и фуллскрина (z=30),
+## закрытие по OK или тапу по фону. Неизвестный тир награды попап не строит.
+func _sigil_claim_popup(tier: int) -> void:
+	var reward := _sigil_milestone_reward_text(tier)
+	if reward == "" or _sigil_claim_layer != null:
+		return
+	Sfx.click()
+	var root := Control.new()
+	root.name = "SigilClaimLayer"
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.z_index = 40
+	add_child(root)
+	_sigil_claim_layer = root
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.72)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(dim)
+	dim.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and ev.pressed \
+				and ev.button_index == MOUSE_BUTTON_LEFT:
+			_close_sigil_claim_popup()
+	)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.add_theme_stylebox_override("panel", _panel_style(Color(0.05, 0.05, 0.08, 0.98), 12))
+	center.add_child(panel)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+
+	var title := _label("Награда получена", 20)
+	title.name = "SigilClaimTitle"
+	title.autowrap_mode = TextServer.AUTOWRAP_OFF
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_color_override("font_color", Color(0.90, 0.82, 0.56))
+	vbox.add_child(title)
+
+	var body := _label(reward, 15)
+	body.autowrap_mode = TextServer.AUTOWRAP_OFF
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_theme_color_override("font_color", Color(0.80, 0.82, 0.86))
+	vbox.add_child(body)
+
+	var ok_btn := _small_button("OK", Vector2(120, 40))
+	ok_btn.name = "SigilClaimOk"
+	ok_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	ok_btn.pressed.connect(_close_sigil_claim_popup)
+	vbox.add_child(ok_btn)
+
+
+func _close_sigil_claim_popup() -> void:
+	if _sigil_claim_layer == null:
+		return
+	var d := _sigil_claim_layer
+	_sigil_claim_layer = null
+	d.queue_free()
+	Sfx.click()
 
 
 ## Ячейка коллекции: кнопка с плейсхолдером превью, бейдж «×N» в углу при
@@ -3191,3 +3503,17 @@ func _clean_str(v) -> String:
 
 func _run_selftest() -> void:
 	await Selftest.run(self)
+
+
+## Рисованная галочка для claimed-точек майлстоунов: глиф «✓» вне шрифта
+## Manrope, поэтому отметка рисуется двумя линиями в _draw.
+class SigilMilestoneMark:
+	extends Control
+
+	func _draw() -> void:
+		var c := Color(0.90, 0.82, 0.56)
+		var w := 2.0
+		draw_line(Vector2(size.x * 0.16, size.y * 0.52),
+			Vector2(size.x * 0.42, size.y * 0.78), c, w)
+		draw_line(Vector2(size.x * 0.42, size.y * 0.78),
+			Vector2(size.x * 0.86, size.y * 0.22), c, w)

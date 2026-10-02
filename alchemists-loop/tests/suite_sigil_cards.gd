@@ -470,6 +470,149 @@ static func run(g: Game) -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(sb6_p))
 	_sb5_restore_file(sb6_disk_path, sb6_disk_snap)
 
+	# ---- Task 7a: вкладка «Комплекты» — панели сетов, точки майлстоунов и
+	# клейм; экран сета с силуэтами — Task 7b. Сид повторяет расширенный
+	# демо-харнес: earth-каталог из 8 карт, наборы четырёх стихий (20+ имён
+	# добивки из CATEGORY_OF), коллекция из 7 карт земля и milestone {earth: [3]}.
+	# Рендер в headless не зовём: проверяется каркас вкладки и состояния точек.
+	var sb7_earth_ids: Array = ["earth", "stone", "clay", "brick", "sand",
+		"mountain", "mud", "metal", "glass", "obsidian", "ash", "gold",
+		"beast", "person", "seed", "grass", "mushroom", "tool", "tree",
+		"crystal", "forest", "wood", "flower", "desert", "boat"]
+	var sb7_defs := [["clay", "common", "Глина", 50, 90210], ["stone", "common",
+		"Камень", 50, 90213], ["sand", "common", "Песок", 50, 90214],
+		["brick", "rare", "Кирпич", 150, 90215], ["glass", "rare", "Стекло",
+		150, 90216], ["metal", "epic", "Металл", 400, 90211],
+		["gold", "epic", "Золото", 400, 90217], ["mountain", "legendary",
+		"Гора", 800, 90212]]
+	var sb7_cards: Array = []
+	for sb7_d in sb7_defs:
+		sb7_cards.append({"id": sb7_d[0], "set": "earth", "rarity": sb7_d[1],
+			"ether_cost": sb7_d[3],
+			"recipe": [{"item_id": "fire", "qty": 10},
+				{"item_id": "water", "qty": 12}, {"item_id": "earth", "qty": 14}],
+			"process": "calcinatio", "stage": "nigredo",
+			"fallback_name": sb7_d[2], "object_type": "object", "seed": sb7_d[4]})
+	var sb7_sets := [{"id": "fire", "title": "Стихия Огня", "card_ids": []},
+		{"id": "water", "title": "Стихия Воды", "card_ids": []},
+		{"id": "air", "title": "Стихия Воздуха", "card_ids": []},
+		{"id": "earth", "title": "Стихия Земли", "card_ids": sb7_earth_ids}]
+	var sb7_coll := func(cids: Array) -> Dictionary:
+		var out: Dictionary = {}
+		for sb7_c in cids:
+			out[str(sb7_c)] = {"copies": 1, "first_at": "2026-09-30T18:00:00"}
+		return out
+
+	# ---- sb7: четыре панели в порядке каталога, титулы и прогресс ----
+	sm.set_catalog(sb7_cards, sb7_sets, "unit-t7")
+	sm._on_collection_result({"ok": true, "cards": sb7_coll.call(["clay", "metal",
+		"mountain", "stone", "sand", "brick", "glass"]), "extras": [],
+		"milestones": {}})
+	g._open_sigil_modal("sets")
+	# Имена панелей/точек уникальны по сету/тиру (add_child переименовывает
+	# одинаковые имена соседей), поэтому поиск — по wildcard SigilSetPanel*/SigilDot*.
+	var sb7_panels := g._sigil_tab_content.find_children("SigilSetPanel*",
+		"PanelContainer", true, false)
+	var sb7_ids: Array = []
+	for sb7_p in sb7_panels:
+		sb7_ids.append(str((sb7_p as Control).get_meta("set_id", "")))
+	var sb7_titles := {}
+	var sb7_counts := {}
+	for sb7_p in sb7_panels:
+		var sb7_t := (sb7_p as Control).find_child("SigilSetTitle", true, false) as Label
+		var sb7_c := (sb7_p as Control).find_child("SigilSetCount", true, false) as Label
+		sb7_titles[str((sb7_p as Control).get_meta("set_id", ""))] = \
+			sb7_t.text if sb7_t != null else ""
+		sb7_counts[str((sb7_p as Control).get_meta("set_id", ""))] = \
+			sb7_c.text if sb7_c != null else ""
+	# Тип явный: выражения с Dictionary.get(...) верят Variant, инференс `:=` их не тянет.
+	var sb7_panels_ok: bool = sb7_panels.size() == 4 and sb7_ids == ["fire", "water",
+		"air", "earth"] and sb7_titles.get("fire", "") == "Стихия Огня" \
+		and sb7_titles.get("water", "") == "Стихия Воды" \
+		and sb7_titles.get("air", "") == "Стихия Воздуха" \
+		and sb7_titles.get("earth", "") == "Стихия Земли" \
+		and sb7_counts.get("earth", "") == "7/25" and sb7_counts.get("fire", "") == "0/25"
+	Selftest.check("sb7 sets tab builds four panels in catalog order", sb7_panels_ok)
+	g._close_sigil_collection()
+
+	# ---- сид 2: 6 собранных earth + milestone {earth: [3]} --- точки ---
+	sm._on_collection_result({"ok": true, "cards": sb7_coll.call(["clay", "metal",
+		"mountain", "stone", "sand", "brick"]), "extras": [],
+		"milestones": {"earth": [3]}})
+	g._open_sigil_modal("sets")
+	var sb7_dots: Dictionary = {}
+	for sb7_p in g._sigil_tab_content.find_children("SigilSetPanel*",
+			"PanelContainer", true, false):
+		if str((sb7_p as Control).get_meta("set_id", "")) == "earth":
+			for sb7_d in (sb7_p as Control).find_children("SigilDot*", "Button",
+					true, false):
+				sb7_dots[int((sb7_d as Button).get_meta("tier", 0))] = sb7_d
+	var sb7_states := {}
+	for sb7_t in [3, 6, 13, 25]:
+		if sb7_dots.has(sb7_t):
+			sb7_states[sb7_t] = str((sb7_dots[sb7_t] as Button).get_meta("state", ""))
+	var sb7_dot6: Button = sb7_dots.get(6, null)
+	var sb7_claim_list := [0]
+	var sb7_claim_cb := func(_r: Dictionary) -> void: sb7_claim_list[0] += 1
+	Net.sigil_milestone_result.connect(sb7_claim_cb)
+	if sb7_dot6 != null and not sb7_dot6.disabled:
+		sb7_dot6.pressed.emit()
+	Net.sigil_milestone_result.disconnect(sb7_claim_cb)
+	var sb7_dots_ok: bool = sb7_states.get(3, "") == "claimed" \
+		and sb7_states.get(6, "") == "claimable" \
+		and sb7_states.get(13, "") == "locked" \
+		and sb7_states.get(25, "") == "locked" \
+		and sb7_dot6 != null and not sb7_dot6.disabled \
+		and sb7_dots.has(3) and (sb7_dots[3] as Button).disabled \
+		and sb7_dots.has(13) and (sb7_dots[13] as Button).disabled \
+		and sb7_dots.has(25) and (sb7_dots[25] as Button).disabled \
+		and sb7_claim_list[0] == 1 \
+		and sm.claimed_tiers("earth") == [3]  # офлайн-клейм флаги не трогает
+	Selftest.check("sb7 milestone dot states", sb7_dots_ok)
+	g._close_sigil_collection()
+
+	# ---- main-обработчик: попап награды + refresh; офлайн — ничего -----
+	var sb7_collects := [0]
+	var sb7_collect_cb := func(_r: Dictionary) -> void: sb7_collects[0] += 1
+	Net.sigil_collection_result.connect(sb7_collect_cb)
+	if g.has_method("_on_sigil_milestone_result"):
+		g._on_sigil_milestone_result({"ok": true, "claimed": true, "set": "earth",
+			"tier": 6})
+	Net.sigil_collection_result.disconnect(sb7_collect_cb)
+	var sb7_popup := g._sigil_claim_layer
+	var sb7_popup_text := ""
+	var sb7_popup_z := 0
+	if sb7_popup != null:
+		sb7_popup_z = int(sb7_popup.z_index)
+		for l in sb7_popup.find_children("*", "Label", true, false):
+			sb7_popup_text += (l as Label).text + "\n"
+	# Закрытие кнопкой OK и офлайн-форма (ok=false) — в той же проверке: обе
+	# соседние ветки одного хендлера, отдельными чеками их не плодим.
+	var sb7_ok_btn: Button = null
+	if sb7_popup != null:
+		sb7_ok_btn = sb7_popup.find_child("SigilClaimOk", true, false) as Button
+	if sb7_ok_btn != null:
+		sb7_ok_btn.pressed.emit()
+	var sb7_popup_closed := g._sigil_claim_layer == null and sb7_popup != null \
+		and sb7_popup.is_queued_for_deletion()
+	if g.has_method("_on_sigil_milestone_result"):
+		g._on_sigil_milestone_result({"ok": false, "offline": true})
+	var sb7_no_offline_popup := g._sigil_claim_layer == null and sb7_popup_closed
+	var sb7_popup_ok: bool = sb7_popup != null and sb7_popup_z >= 20 \
+		and sb7_popup_text.contains("Награда получена") \
+		and sb7_popup_text.contains("−10% эфира крафтов комплекта") \
+		and sb7_collects[0] == 1 \
+		and sb7_popup_closed and sb7_no_offline_popup
+	Selftest.check("sb7 milestone ok popup and refresh", sb7_popup_ok)
+
+	# Откат: сиды и флаги — в состояние до блока (дисковых записей нет: клейм в
+	# офлайне ушёл в очередь Net и был синхронно слит offline-ответом).
+	g._close_sigil_collection()
+	sm.set_catalog([], [], "")
+	sm._server_collection = {}
+	sm._server_extras = []
+	sm._milestones_claimed = {}
+
 
 ## Текст user-файла для снапшота блока sb5: пустая строка = файла не было.
 static func _sb5_file_text(path: String) -> String:
