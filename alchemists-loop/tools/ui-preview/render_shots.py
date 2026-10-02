@@ -799,32 +799,19 @@ def _pp_after_body(img, y0):
     return ry
 
 
-def pp_after_a() -> Image.Image:
+def pp_after() -> Image.Image:
+    """По правке пользователя: одна кнопка по центру + крестик-закрытие."""
     img = _pp_base()
     _pp_card(img, 70, 470, 80, 540)
     _pp_after_head(img, 80)
-    ry = _pp_after_body(img, 130)
-    y = 470
-    button(img, [236, y, 104, 44], "Закрыть", 0, "after", size=14)
-    button(img, [348, y, 100, 48], "Забрать", 1, "after", size=15)
-    return img
-
-
-def pp_after_b() -> Image.Image:
-    img = _pp_base()
-    _pp_card(img, 70, 470, 70, 550)
-    _pp_after_head(img, 70)
-    ry = _pp_after_body(img, 120)
-    y = 452
-    button(img, [94, y, 352, 48], "Забрать", 1, "after", size=15)
-    button(img, [94, y + 54, 352, 40], "Закрыть", 0, "after", size=13)
+    _pp_after_body(img, 130)
+    button(img, [W / 2 - 100, 468, 200, 48], "Забрать", 1, "after", size=15)
     return img
 
 
 def board_popups() -> Image.Image:
-    variants = [("ДО · как сейчас: орб 130, простыня текста, равные кнопки", pp_before()),
-                ("ПОСЛЕ A · иконка+✕44, рецептная строка, чипы, действия справа", pp_after_a()),
-                ("ПОСЛЕ B · то же, действия колонкой на всю ширину", pp_after_b())]
+    variants = [("ДО · как сейчас: орб 130, простыня текста, две равные кнопки", pp_before()),
+                ("ПОСЛЕ · иконка+✕44, рецептная строка, чипы, ОДНА кнопка по центру", pp_after())]
     img = Image.new("RGBA", (W + 40, len(variants) * (PP_H + 64) + 90), (7, 11, 16, 255))
     text(img, (20, 26), "Блок 3 · Попапы открытий/целей", size=24, weight=800, color=(234, 242, 247))
     text(img, (20, 62), "Код игры не тронут: это мок-предложения для согласования.",
