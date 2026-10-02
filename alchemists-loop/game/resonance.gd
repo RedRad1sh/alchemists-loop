@@ -194,6 +194,7 @@ func _on_net_echoes_result(result: Dictionary) -> void:
 		g._hub._log_event("Подмастерья: +1 отголосок за «%s»" % g._clean_str(_res_apprentice.get("name", "?")))
 	_res_check_milestones()
 	_refresh_resonance_page()
+	g._progress_ui._refresh_achievement_map()
 	if g._saves._return_open:
 		g._saves._refresh_return_popup()
 	g._engine._refresh()
@@ -217,5 +218,6 @@ func _on_net_echoes_claim_result(result: Dictionary) -> void:
 	else:
 		g._online._set_status("Эхо пусто — загляни позже.")
 	_refresh_resonance_page()
+	g._progress_ui._refresh_achievement_map()
 	g._engine._refresh_header()
 	g._saves._save_game()
