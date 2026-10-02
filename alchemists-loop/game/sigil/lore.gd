@@ -82,7 +82,7 @@ static func _compatible(process: String, stage: String) -> bool:
 		"albedo":
 			return process in ["sublimatio", "distillatio", "coniunctio"]
 		"rubedo":
-			return process in ["coniunctio", "calcinatio"]
+			return process in ["coniunctio", "calcinatio", "sublimatio"]
 		"citrinitas":
 			return process in ["sublimatio", "coniunctio", "distillatio"]
 	return false
@@ -213,11 +213,12 @@ static func generate(card: Dictionary) -> Dictionary:
 			has_mercury = true
 
 	if has_mercury:
-		# перевыбираем warning из фрагментов с safety volatile/poison
+		# перевыбираем warning ТОЛЬКО из фрагментов, чей подставленный текст
+		# реально говорит про летучесть/яд — иначе тест mercury не сойдётся
 		var safe := []
 		for f in _load_slot("warnings"):
-			var safety := str((f as Dictionary).get("tags", {}).get("safety", ""))
-			if safety == "volatile" or safety == "poison":
+			var tw := _substitute(str((f as Dictionary).get("text", "")), source_id, target_id, process, stage)
+			if tw.contains("летуч") or tw.contains("яд") or tw.contains("отрав"):
 				safe.append(f)
 		if safe.is_empty():
 			return {}
