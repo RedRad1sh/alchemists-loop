@@ -158,6 +158,31 @@ function screenExperiment(mode) {
 }
 
 function screenHouse(mode) {
+  const cats = [["Окно", 1], ["Ковёр", 3], ["Стул", 1], ["Растение", 1]];
+  if (mode === "after") {
+    // блок 4 согласован: карточки 2×N, без ценников, чип «куплено: N»
+    return `<div class="screen">
+      ${header(mode)}${resrow()}${tabs(mode, 3)}
+      <div class="panel" style="flex:1;overflow:hidden">
+        <div class="poptitle" style="font-size:22px;text-align:center">ДОМ СВЕТИКА</div>
+        <div class="popsub" style="text-align:center">Уют, обстановка и произвольные цвета — видно другим игрокам.</div>
+        <div class="housescene"><div class="fire"></div></div>
+        <button class="btn k2 donecta" disabled>Домик построен ✓</button>
+        <div class="sect" style="color:#fff;font-size:14px;font-weight:600">Обстановка</div>
+        <div class="subline" style="font-size:12px">Коллекция: 12/90 · купленное ставится бесплатно</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          ${cats.map(([nm, owned]) => `<div class="hcard">
+            <div class="hthumb"><i></i></div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+              <div style="flex:1"><b style="color:#eaf2f7;font-size:14px">${nm}</b><br>
+                <span class="chip${owned ? "" : " mut"}">куплено: ${owned}</span></div>
+              <button class="btn k1" style="height:40px;padding:0 14px;font-size:12px">Выбрать</button>
+            </div>
+          </div>`).join("")}
+        </div>
+      </div>
+    </div>`;
+  }
   const furn = [["🪟","Окно · 1/10","Классическое"],["🧶","Ковёр · 3/10","Восточный"],
                 ["🪑","Стул · 1/10","Классический"],["🪴","Растение · 1/10","В горшке"]];
   return `<div class="screen">

@@ -435,31 +435,38 @@ def screen_house(mode):
     d.ellipse([W - 172, y + 88, W - 128, y + 140], fill=(255, 215, 106))
     d.rectangle([60, y + 40, 130, y + 110], fill=(70, 110, 150), outline=(90, 66, 44), width=6)
     y += 262
-    if mode == "before":
-        button(img, [26, y, W - 52, 46], "Домик построен ✓", 2, mode, disabled=True, size=14)
-        y += 58
-    else:
-        icon(img, "check", (26, y + 2, 16, 16), (111, 207, 142))
-        text(img, (50, y + 10), "Домик построен — уют виден гостям и в рейтинге.", size=13, color=C["ink2"])
-        y += 30
+    # CTA постройки/статуса домика — под превью комнаты в обоих режимах (как в игре)
+    button(img, [26, y, W - 52, 46], "Домик построен ✓", 2, "before", disabled=True, size=14)
+    y += 58
     text(img, (26, y), "Обстановка", size=14, weight=400 if mode == "before" else 700,
          color=(255, 255, 255) if mode == "before" else C["ink1"])
     y += 24
     text(img, (26, y), "Коллекция: 12/90 · купленное ставится бесплатно", size=12, color=C["ink2"])
     y += 24
-    furn = [("home", "Окно · 1/10", "Классическое"), ("map", "Ковёр · 3/10", "Восточный"),
-            ("user", "Стул · 1/10", "Классический"), ("leaf", "Растение · 1/10", "В горшке")]
-    for icn, nm, val in furn:
-        rrect(img, [26, y, 82, y + 44], 8, fill=(12, 17, 24))
-        icon(img, icn, (40, y + 12, 20, 20), (159, 180, 196))
-        text(img, (94, y + 22), nm, size=14, color=C["ink1"], anchor="lm")
-        if mode == "before":
+    if mode == "before":
+        furn = [("home", "Окно · 1/10", "Классическое"), ("map", "Ковёр · 3/10", "Восточный"),
+                ("user", "Стул · 1/10", "Классический"), ("leaf", "Растение · 1/10", "В горшке")]
+        for icn, nm, val in furn:
+            rrect(img, [26, y, 82, y + 44], 8, fill=(12, 17, 24))
+            icon(img, icn, (40, y + 12, 20, 20), (159, 180, 196))
+            text(img, (94, y + 22), nm, size=14, color=C["ink1"], anchor="lm")
             button(img, [W - 172, y, 146, 44], f"{val} ✓", 1, mode, size=14)
-        else:
-            bw = 118
-            button(img, [W - 26 - bw, y + 2, bw, 40], val, 0, mode, size=13)
-            icon(img, "chevron_right", (W - 40, y + 14, 14, 14), C["ink2"])
-        y += 52
+            y += 52
+        return img
+    # ПОСЛЕ (блок 4 согласован): карточки 2×N, без ценников, чип «куплено: N»
+    cw = (W - 52 - 10) // 2
+    cats = [("Окно", 1), ("Ковёр", 3), ("Стул", 1), ("Растение", 1)]
+    for i, (nm, owned) in enumerate(cats):
+        cx = 26 + (i % 2) * (cw + 10)
+        cy = y + (i // 2) * 142
+        rrect(img, [cx, cy, cx + cw, cy + 132], 12, fill=(13, 20, 28), outline=(30, 41, 54))
+        rrect(img, [cx + 8, cy + 8, cx + cw - 8, cy + 70], 8, fill=(5, 8, 12, 230))
+        rrect(img, [cx + 18, cy + 36, cx + cw - 18, cy + 62], 4, fill=(140, 90, 60))
+        text(img, (cx + 10, cy + 88), nm, size=14, weight=600, color=C["ink1"], anchor="lm")
+        rrect(img, [cx + 10, cy + 98, cx + 104, cy + 118], 10, fill=(38, 50, 66))
+        text(img, (cx + 18, cy + 108), "куплено: %d" % owned, size=11, weight=600,
+             color=(168, 232, 168) if owned else (126, 141, 156), anchor="lm")
+        button(img, [cx + cw - 96, cy + 84, 88, 40], "Выбрать", 1, "after", size=12)
     return img
 
 

@@ -283,3 +283,9 @@ body {
 /* автопосадка меню вкладок на 540 px */
 .phone[data-mode="after"] .tabs.tight .tab { font-size: 10px; padding: 9px 5px; }
 .phone[data-mode="after"] .tabs.tighter .tab { font-size: 10px; padding: 9px 4px; gap: 3px; }
+
+/* блок 4: карточки каталога дома */
+.hcard { background:#0d141c; border:1px solid #1e2936; border-radius:12px; padding:8px; }
+.hthumb { background:#05080c; border-radius:8px; height:62px; position:relative; }
+.hthumb i { position:absolute; left:10px; right:10px; top:28px; height:26px; background:#8c5a3c; border-radius:4px; }
+.chip.mut { color:#7e8d9c; }
