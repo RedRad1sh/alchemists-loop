@@ -183,8 +183,11 @@ def new_phone() -> Image.Image:
 def header(img, mode):
     C = AFTER if mode == "after" else BEFORE
     img.paste(Image.new("RGBA", (W, H), C["bg0"]), (0, 0))
-    text(img, (12, 22), "ПЕТЛЯ АЛХИМИКА", size=24 if mode == "before" else 21,
-         weight=800, color=C["ink1"], tracking=0 if mode == "before" else 0.4)
+    if mode == "after":
+        # блок 1, вариант A: иконки, тач 44, бейдж-пилюля; цвета кнопок игры
+        _hz_head_buttons(img, 24, 0.0)
+        return 56
+    text(img, (12, 22), "ПЕТЛЯ АЛХИМИКА", size=24, weight=800, color=C["ink1"])
     x = W - 12 - 36 - 4 * (46 if mode == "before" else 44) - 3 * 6
     bw = 46 if mode == "before" else 44
     bh = 36 if mode == "before" else 44
@@ -209,6 +212,8 @@ def header(img, mode):
                 text(img, (bx + bw, y + 3), "1", size=11, weight=600, color=C["gold_ink"], anchor="mm")
     orb(img, W - 12 - 18, y + 18, 18, (80, 190, 120), mode=mode)
     return y + bh
+
+
 
 
 def resrow(img, top, mode):
@@ -293,7 +298,7 @@ def screen_lab(mode):
     tm, mode = mode, "before"
     img = new_phone()
     C = AFTER if mode == "after" else BEFORE
-    top = header(img, mode)
+    top = header(img, tm)
     top = resrow(img, top, mode)
     top = tabs(img, top, tm, 1)
     panel(img, [12, top, W - 12, H - 190 if mode == "after" else H - 168], mode)
@@ -366,7 +371,7 @@ def screen_experiment(mode):
     tm, mode = mode, "before"
     img = new_phone()
     C = BEFORE
-    top = header(img, mode)
+    top = header(img, tm)
     top = resrow(img, top, mode)
     top = tabs(img, top, tm, 0)
     text(img, (12, top), "ЭКСПЕРИМЕНТ", size=20, weight=800, color=(255, 255, 255))
@@ -417,7 +422,7 @@ def screen_house(mode):
     tm, mode = mode, "before"
     img = new_phone()
     C = AFTER if mode == "after" else BEFORE
-    top = header(img, mode)
+    top = header(img, tm)
     top = resrow(img, top, mode)
     top = tabs(img, top, tm, 3)
     panel(img, [12, top, W - 12, H - 12], mode)
@@ -543,6 +548,107 @@ def main() -> None:
     for name, img in shots.items():
         img.convert("RGB").save(OUT / f"{name}.png")
         print("wrote", OUT / f"{name}.png", img.size)
+
+
+
+
+# ================= итерация-2, блок 1: шапка и строка ресурсов =================
+HZ_H = 250
+
+
+def _hz_base() -> Image.Image:
+    return Image.new("RGBA", (W, HZ_H), BEFORE["bg0"] + (255,))
+
+
+def _hz_bubble(img, y):
+    rrect(img, [W - 242, y, W - 12, y + 56], 12, fill=(22, 32, 44, 250), outline=(44, 58, 75))
+    text(img, (W - 230, y + 12), "Привет! Я — Светик. Давай", size=13, color=(232, 241, 248))
+    text(img, (W - 230, y + 32), "сварим что-нибудь!", size=13, color=(232, 241, 248))
+
+
+def hz_before() -> Image.Image:
+    img = _hz_base()
+    text(img, (12, 20), "ПЕТЛЯ АЛХИМИКА", size=24, weight=800, color=(255, 255, 255))
+    x = W - 12 - 36 - 4 * 46 - 3 * 6
+    for i, (g, gold) in enumerate([("✦", True), ("▲", False), ("♪", False), ("Ж", False)]):
+        bx = x + i * 52
+        rrect(img, [bx, 14, bx + 46, 14 + 36], 8, fill=(232, 170, 26) if gold else (40, 53, 73))
+        text(img, (bx + 23, 32), g, size=14, weight=600,
+             color=(41, 31, 8) if gold else (224, 236, 240), anchor="mm")
+        if i == 1:
+            text(img, (bx + 40, 17), "1", size=11, color=(255, 255, 255))
+    orb(img, W - 30, 32, 18, (80, 190, 120))
+    text(img, (12, 66), "⚡ Эфир: 120 / 230  ·  резерв: 0  ·  +1.05/с", size=14, color=(255, 255, 255))
+    button(img, [W - 12 - 82 - 8 - 82, 60, 82, 34], "Дом", 2, "before")
+    button(img, [W - 12 - 82, 60, 82, 34], "Лавка", 1, "before")
+    text(img, (12, 104), "Веществ открыто: 11 / 57  ·  Рецептов: 7 / 53", size=14, color=BEFORE["ink2"])
+    text(img, (12, 130), "✦ Светик: Первая пара — 0/1", size=13, color=(255, 217, 112))
+    _hz_bubble(img, 58)  # перекрывает «Дом»/«Лавка» — как в игре сейчас
+    return img
+
+
+def _hz_head_buttons(img, title_size, tracking):
+    text(img, (12, 22), "ПЕТЛЯ АЛХИМИКА", size=title_size, weight=800,
+         color=AFTER["ink1"], tracking=tracking)
+    x = W - 12 - 40 - 4 * 44 - 3 * 6
+    for i, (nm, gold) in enumerate([("star", True), ("trend_up", False), ("volume", False), ("book", False)]):
+        bx = x + i * 50
+        if gold:
+            rrect(img, [bx, 12, bx + 44, 56], 10, fill=AFTER["gold"])
+            icon(img, nm, (bx + 12, 22, 20, 20), AFTER["gold_ink"])
+        else:
+            rrect(img, [bx, 12, bx + 44, 56], 10, fill=(24, 34, 46, 235), outline=AFTER["line"])
+            icon(img, nm, (bx + 12, 22, 20, 20), AFTER["ink1"])
+        if i == 1:
+            rrect(img, [bx + 34, 6, bx + 50, 22], 8, fill=AFTER["gold"])
+            text(img, (bx + 42, 14), "1", size=11, weight=600, color=AFTER["gold_ink"], anchor="mm")
+    orb(img, W - 32, 34, 20, (80, 190, 120))
+
+
+def hz_after_a() -> Image.Image:
+    """Минимум: иконки + тач 44 + бейдж-пилюля + пузырь не перекрывает кнопки."""
+    img = _hz_base()
+    _hz_head_buttons(img, 24, 0.0)
+    text(img, (12, 66), "⚡ Эфир: 120 / 230  ·  резерв: 0  ·  +1.05/с", size=14, color=(255, 255, 255))
+    button(img, [W - 12 - 82 - 8 - 82, 60, 82, 34], "Дом", 2, "before")
+    button(img, [W - 12 - 82, 60, 82, 34], "Лавка", 1, "before")
+    text(img, (12, 104), "Веществ открыто: 11 / 57  ·  Recipes: 7 / 53".replace("Recipes", "Рецептов"),
+         size=14, color=BEFORE["ink2"])
+    text(img, (12, 130), "✦ Светик: Первая пара — 0/1", size=13, color=(255, 217, 112))
+    _hz_bubble(img, 158)
+    return img
+
+
+def hz_after_b() -> Image.Image:
+    """Порядок: то же + KPI-чип эфира, равные «Дом/Лавка», тайтл 21 с трекингом."""
+    img = _hz_base()
+    _hz_head_buttons(img, 21, 0.4)
+    icon(img, "bolt", (12, 66, 18, 18), AFTER["accent"])
+    text(img, (36, 64), "120 / 230", size=16, weight=600, color=AFTER["ink1"])
+    text(img, (128, 68), "+1.05/с · резерв 0", size=13, color=AFTER["ink3"])
+    button(img, [W - 12 - 96 - 8 - 96, 60, 96, 40], "Дом", 0, "after", icon_name="home")
+    button(img, [W - 12 - 96, 60, 96, 40], "Лавка", 0, "after", icon_name="bag")
+    text(img, (12, 108), "Веществ открыто: 11 / 57  ·  Рецептов: 7 / 53", size=13, color=AFTER["ink2"])
+    icon(img, "star", (12, 130, 14, 14), AFTER["gold"])
+    text(img, (32, 129), "Светик: Первая пара — 0/1", size=13, color=AFTER["gold"])
+    _hz_bubble(img, 158)
+    return img
+
+
+def board_header() -> Image.Image:
+    variants = [("ДО · как сейчас в игре", hz_before()),
+                ("ПОСЛЕ A · минимум: иконки, тач 44, бейдж-пилюля", hz_after_a()),
+                ("ПОСЛЕ B · A + KPI-чип эфира, равные Дом/Лавка, тайтл 21", hz_after_b())]
+    img = Image.new("RGBA", (W + 40, len(variants) * (HZ_H + 64) + 90), (7, 11, 16, 255))
+    text(img, (20, 26), "Блок 1 · Шапка и строка ресурсов", size=24, weight=800, color=(234, 242, 247))
+    text(img, (20, 62), "Код игры не тронут: это мок-предложения для согласования.",
+         size=13, color=(126, 141, 156))
+    y = 90
+    for caption, sub in variants:
+        text(img, (20, y + 14), caption, size=14, weight=700, color=(169, 184, 198))
+        img.paste(sub, (20, y + 40), sub)
+        y += HZ_H + 64
+    return img
 
 
 if __name__ == "__main__":

@@ -47,7 +47,18 @@ const orb = (col, cnt) => `
   </span>`;
 
 /* ---------- блоки экрана: всё как в текущей игре (после отката) ---------- */
-function header() {
+function header(mode) {
+  if (mode === "after") {
+    // блок 1, вариант A: иконки, 44x44, бейдж-пилюля; цвета кнопок как в игре
+    return `<div class="head">
+      <div class="title">ПЕТЛЯ АЛХИМИКА</div>
+      <button class="hbtn gold">${ic("star", 20)}</button>
+      <button class="hbtn">${ic("trend_up", 20)}<span class="bnum">1</span></button>
+      <button class="hbtn">${ic("volume", 20)}</button>
+      <button class="hbtn">${ic("book", 20)}</button>
+      <span class="orb" style="width:40px;height:40px;background:radial-gradient(circle at 35% 30%, #9fe8b0, #2f8f5b)"></span>
+    </div>`;
+  }
   return `<div class="head">
     <div class="title">ПЕТЛЯ АЛХИМИКА</div>
     <button class="hbtn gold">✦</button>
@@ -82,7 +93,7 @@ function cells() {
 /* ---------- экраны ---------- */
 function screenLab(mode) {
   return `<div class="screen">
-    ${header()}${resrow()}${tabs(mode, 1)}
+    ${header(mode)}${resrow()}${tabs(mode, 1)}
     <div class="panel" style="flex:1">
       <div style="display:flex;align-items:center;gap:18px;justify-content:center;padding:14px 0 6px">
         <div style="text-align:center">${orb("#e0764f")}<div class="muted" style="font-size:11px;margin-top:4px">A</div></div>
@@ -115,7 +126,7 @@ function screenLab(mode) {
 
 function screenExperiment(mode) {
   return `<div class="screen">
-    ${header()}${resrow()}${tabs(mode, 0)}
+    ${header(mode)}${resrow()}${tabs(mode, 0)}
     <div style="display:flex;align-items:center;gap:10px">
       <div class="sect" style="flex:1;font-size:20px;color:#fff;font-weight:800">ЭКСПЕРИМЕНТ</div>
       <button class="btn k2" style="height:36px;padding:0 12px;font-size:13px">✦ Светик · 10 ⚡</button>
@@ -143,7 +154,7 @@ function screenHouse(mode) {
   const furn = [["🪟","Окно · 1/10","Классическое"],["🧶","Ковёр · 3/10","Восточный"],
                 ["🪑","Стул · 1/10","Классический"],["🪴","Растение · 1/10","В горшке"]];
   return `<div class="screen">
-    ${header()}${resrow()}${tabs(mode, 3)}
+    ${header(mode)}${resrow()}${tabs(mode, 3)}
     <div class="panel" style="flex:1;overflow:hidden">
       <div class="poptitle" style="font-size:22px;text-align:center">ДОМ СВЕТИКА</div>
       <div class="popsub" style="text-align:center">Уют, обстановка и произвольные цвета — видно другим игрокам.</div>
@@ -161,7 +172,7 @@ function screenHouse(mode) {
 
 function screenPopup(mode) {
   return `<div class="screen">
-    ${header()}${resrow()}${tabs(mode, 1)}
+    ${header(mode)}${resrow()}${tabs(mode, 1)}
     <div class="panel" style="flex:1"></div>
     <div class="dim"><div class="popcard">
       <div class="poptitle">НОВЫЙ РЕЦЕПТ!</div>
