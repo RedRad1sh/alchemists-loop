@@ -613,6 +613,99 @@ static func run(g: Game) -> void:
 	sm._server_extras = []
 	sm._milestones_claimed = {}
 
+	# ---- Task 7b: экран комплекта — сетка 25 карт сета: собранные — мини-арт
+	# из сеяного превью-кэша рендера (приём sb6: рендер в headless не зовём),
+	# несобранные (и неизвестные каталогу) — силуэт: контур круга + «???» БЕЗ
+	# имени и без арта; тап по собранной карте открывает фуллскрин. Сид — как
+	# в sb7: 8 earth-карт в каталоге, 25 card_ids, коллекция из 7 карт земли.
+	# Сид каталога/коллекции — как в sb7: 8 earth-карт, 25 card_ids, 7 собранных.
+	sm.set_catalog(sb7_cards, sb7_sets, "unit-t7")
+	sm._on_collection_result({"ok": true, "cards": sb7_coll.call(["clay", "metal",
+		"mountain", "stone", "sand", "brick", "glass"]), "extras": [],
+		"milestones": {}})
+	# Сидированные PNG превью-кэша считаем по карточным рецептам — каталог уже
+	# стоит, иначе paths разошлись бы с боевым card_recipe_for и рендер в
+	# headless повис бы на frame_post_draw (приём sb6: рендер не зовём).
+	var sb7g_blank := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+	var sb7g_render_paths: Array = []
+	for sb7g_cid in ["clay", "metal", "mountain", "stone", "sand", "brick", "glass"]:
+		var sb7g_p := sm._svc.cache_path(sm.card_recipe_for({"card_id": sb7g_cid}),
+			sm.preview_options())
+		if sb7g_blank.save_png(sb7g_p) == OK:
+			sb7g_render_paths.append(sb7g_p)
+	# Полный арт фуллскрина при тапе читается из дискового кэша карты (не рендер).
+	var sb7g_disk_path := sm._cached_path("clay")
+	var sb7g_disk_snap := _sb5_file_text(sb7g_disk_path)
+	sm._save_cached_image("clay", sb7g_blank)
+	var sb7g_preview0 := sm._preview_cache.duplicate()
+	g._open_sigil_modal("sets")
+	await g._open_sigil_set_screen("earth")
+	await g.get_tree().process_frame
+	var sb7g_screen := g._sigil_set_screen
+	var sb7g_title := ""
+	var sb7g_grid: GridContainer = null
+	if sb7g_screen != null:
+		var sb7g_t := sb7g_screen.find_child("SigilSetScreenTitle", true, false) as Label
+		sb7g_title = sb7g_t.text if sb7g_t != null else ""
+		sb7g_grid = sb7g_screen.find_child("SigilSetGrid", true, false) as GridContainer
+	var sb7g_collected_map := {"clay": true, "metal": true, "mountain": true,
+		"stone": true, "sand": true, "brick": true, "glass": true}
+	var sb7g_cells_ok := true
+	var sb7g_art := 0
+	var sb7g_sil := 0
+	if sb7g_grid != null:
+		for sb7g_i in sb7g_grid.get_child_count():
+			var sb7g_cell := sb7g_grid.get_child(sb7g_i) as Control
+			var sb7g_cid := str(sb7g_cell.get_meta("card_id", ""))
+			var sb7g_text := ""
+			var sb7g_has_art := false
+			for l in sb7g_cell.find_children("*", "Label", true, false):
+				sb7g_text += (l as Label).text + "|"
+			for t in sb7g_cell.find_children("*", "TextureRect", true, false):
+				if (t as TextureRect).texture != null:
+					sb7g_has_art = true
+			if sb7g_collected_map.has(sb7g_cid):
+				sb7g_art += 1
+				sb7g_cells_ok = sb7g_cells_ok and sb7g_has_art \
+					and not sb7g_text.contains("???")
+			else:
+				sb7g_sil += 1
+				sb7g_cells_ok = sb7g_cells_ok and sb7g_text == "???|" \
+					and not sb7g_has_art
+	# Тап по собранной карте (clay) открывает полноэкранный просмотр карты.
+	var sb7g_col_btn: Button = null
+	if sb7g_grid != null and g._sigil_set_screen != null:
+		sb7g_col_btn = g._sigil_set_screen.find_child("SigilSetCell_clay",
+			true, false) as Button
+	if sb7g_col_btn != null:
+		sb7g_col_btn.pressed.emit()
+	var sb7g_fs_z := 0
+	if g._sigil_fullscreen != null:
+		sb7g_fs_z = int(g._sigil_fullscreen.z_index)
+	var sb7g_ok: bool = sb7g_screen != null \
+		and sb7g_title == "Стихия Земли · 7/25" \
+		and sb7g_grid != null and sb7g_grid.columns == 5 \
+		and sb7g_grid.get_child_count() == 25 \
+		and sb7g_art == 7 and sb7g_sil == 18 \
+		and sb7g_cells_ok and g._sigil_fullscreen != null \
+		and sb7g_fs_z >= 20
+	Selftest.check("sb7 set screen silhouettes hide unknown", sb7g_ok)
+	# Откат: слои, сиды и кэши — в состояние до блока; сидированные PNG превью —
+	# единственная запись блока на диск (той же судьбой, что и в sb6).
+	if g._sigil_fullscreen != null:
+		g._close_sigil_fullscreen()
+	if g._sigil_set_screen != null:
+		g._close_sigil_set_screen()
+	g._close_sigil_collection()
+	sm._preview_cache = sb7g_preview0
+	sm.set_catalog([], [], "")
+	sm._server_collection = {}
+	sm._server_extras = []
+	sm._milestones_claimed = {}
+	for sb7g_p in sb7g_render_paths:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(sb7g_p))
+	_sb5_restore_file(sb7g_disk_path, sb7g_disk_snap)
+
 
 ## Текст user-файла для снапшота блока sb5: пустая строка = файла не было.
 static func _sb5_file_text(path: String) -> String:

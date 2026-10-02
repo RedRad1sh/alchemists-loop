@@ -433,6 +433,7 @@ var _sigil_tab_btns: Array = []  # кнопки вкладок; подсветк
 var _sigil_tab_seq := 0  # поколение вкладки: гасит корутины билдеров при переключении
 var _sigil_fullscreen: Control = null  # полноэкранный просмотр карты; != null ⇒ открыт
 var _sigil_claim_layer: Control = null  # попап награды клейма майлстоуна; != null ⇒ открыт
+var _sigil_set_screen: Control = null  # экран комплекта (Task 7b); != null ⇒ открыт
 var _sigil_render_busy := false  # превью-рендер в полёте: у сервиса один SubViewport, фуллскрин ждёт (T5-M2)
 var _sigil_header_btn: Button  ## кнопка Аркана Сигилов в шапке (иконка-таро)
 var _inv_grid: GridContainer = null
@@ -1850,8 +1851,9 @@ func _demo_seed_sigil_coll() -> void:
 			"llm_name": "Хроматический сигил", "crafted_at": "2026-10-01T09:00:00"}],
 		"milestones": {"earth": [3]}})
 	_open_sigil_modal()
-	# --sigiltab=collection|fullscreen|sets: один show_tab на ветку, чтобы
-	# вкладку не ребилдить дважды (set_grid/set screen — Task 7b).
+	# --sigiltab=collection|fullscreen|sets|set_grid: один show_tab на ветку,
+	# чтобы вкладку не ребилдить дважды (set_grid поверх «sets» открывает
+	# экран комплекта — Task 7b).
 	match _demo_harness._sigil_tab:
 		"collection", "fullscreen":
 			_sigil_show_tab("collection")
@@ -1865,6 +1867,9 @@ func _demo_seed_sigil_coll() -> void:
 						_sigil._server_collection[first]))
 		"sets":
 			_sigil_show_tab("sets")
+		"set_grid":
+			_sigil_show_tab("sets")
+			_open_sigil_set_screen("earth")
 		_:
 			pass
 
@@ -2242,7 +2247,208 @@ func _sigil_set_panel(set_def: Dictionary) -> Control:
 	var claimed := _sigil.claimed_tiers(set_id)
 	for tier in [3, 6, 13, 25]:
 		dots.add_child(_sigil_milestone_dot(set_id, tier, collected, claimed))
+	# Тап по панели (вне точек-майлстоунов) открывает экран комплекта — точки
+	# живут по своим координатам, чтобы клейм не спотыкался о навигацию.
+	var dot_boxes: Array = []
+	for c in dots.get_children():
+		dot_boxes.append(c as Control)
+	panel.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and ev.pressed \
+				and ev.button_index == MOUSE_BUTTON_LEFT:
+			var pos := (ev as InputEventMouseButton).global_position
+			for db in dot_boxes:
+				if db.get_global_rect().has_point(pos):
+					return
+			_open_sigil_set_screen(set_id)
+	)
 	return panel
+
+
+## Экран комплекта (Task 7b): фуллскрин-слой над модалкой (z=30) с сеткой 25
+## карт сета. Собранные карты каталога — мини-арт из превью-кэша и тап на
+## фуллскрин карты; несобранные и неизвестные каталогу — СИЛУЭТ: тёмный
+## контур круга + «???», без имени и без арта (спека: без спойлера).
+## ✕ закрывает слой — вкладка «Комплекты» под ним остаётся как есть.
+func _open_sigil_set_screen(set_id: String) -> void:
+	if _sigil_set_screen != null or _sigil == null or _sigil_coll == null:
+		return
+	var set_def: Dictionary = {}
+	for s in _sigil.catalog_sets():
+		if str((s as Dictionary).get("id", "")) == set_id:
+			set_def = s as Dictionary
+			break
+	if set_def.is_empty():
+		return
+	Sfx.click()
+	var root := Control.new()
+	root.name = "SigilSetScreen"
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.z_index = 30
+	add_child(root)
+	_sigil_set_screen = root
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.84)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(dim)
+	dim.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and ev.pressed \
+				and ev.button_index == MOUSE_BUTTON_LEFT:
+			_close_sigil_set_screen()
+	)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		margin.add_theme_constant_override(side, 16)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(margin)
+	var panel := PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.add_theme_stylebox_override("panel",
+		_panel_style(Color(0.055, 0.065, 0.10, 0.99), 18))
+	margin.add_child(panel)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+
+	var accent := _sigil_set_accent(set_id)
+	var collected := 0
+	var ids: Array = set_def.get("card_ids", [])
+	for cid in ids:
+		if _sigil.has_collected(str(cid)):
+			collected += 1
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	vbox.add_child(head)
+	var title := _label("%s · %d/%d" % [str(set_def.get("title", "")),
+		collected, SIGIL_SET_SIZE], 20)
+	title.name = "SigilSetScreenTitle"
+	title.autowrap_mode = TextServer.AUTOWRAP_OFF
+	title.add_theme_color_override("font_color", accent)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(title)
+	var close_btn := _small_button("✕", Vector2(46, 40))
+	close_btn.name = "SigilSetClose"
+	close_btn.tooltip_text = "Закрыть"
+	close_btn.pressed.connect(_close_sigil_set_screen)
+	head.add_child(close_btn)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(scroll)
+	var grid := GridContainer.new()
+	grid.name = "SigilSetGrid"
+	grid.columns = 5
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(grid)
+
+	var pending: Array = []
+	for cid in ids:
+		var cs := str(cid)
+		var coll_entry: Dictionary = {}
+		if _sigil._server_collection.has(cs):
+			coll_entry = _sigil._server_collection[cs]
+		var cell := _sigil_set_cell(cs, coll_entry)
+		grid.add_child(cell)
+		if not _sigil.card(cs).is_empty() and _sigil.has_collected(cs):
+			pending.append([cell, {"card_id": cs}])
+	# Мини-арты — из превью-кэша по одному, как в коллекции: сетка с силуэтами
+	# видна сразу, картинки приходят кадром позже (рендер — только на промах).
+	var scr := root
+	for p in pending:
+		_sigil_render_busy = true
+		var tex := await _sigil.preview_texture(p[1])
+		_sigil_render_busy = false
+		if _sigil_set_screen != scr or not is_instance_valid(p[0]):
+			continue
+		if tex != null:
+			_sigil_fill_preview((p[0] as Control).get_meta("preview"), tex)
+
+
+## Закрыть экран комплекта: слой уходит, вкладка «Комплекты» под ним остаётся
+## как есть (без перестройки — спека Task 7b: «возврат к вкладке»).
+func _close_sigil_set_screen() -> void:
+	if _sigil_set_screen == null:
+		return
+	var s := _sigil_set_screen
+	_sigil_set_screen = null
+	s.queue_free()
+	Sfx.click()
+
+
+## Ячейка сетки комплекта: собранная карта каталога — кнопка с мини-артом и
+## тапом на фуллскрин карты; несобранная или неизвестная каталогу — силуэт:
+## тёмный контур круга + «???», без имени и без арта (спека: без спойлера).
+func _sigil_set_cell(card_id: String, coll_entry: Dictionary) -> Control:
+	var card := _sigil.card(card_id)
+	if not card.is_empty() and _sigil.has_collected(card_id):
+		var entry := _sigil_catalog_entry(card_id, coll_entry)
+		var accent := _rarity_color(str(entry.get("rarity", "common")))
+		var btn := Button.new()
+		btn.name = "SigilSetCell_" + card_id
+		btn.custom_minimum_size = Vector2(0, 110)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.clip_contents = true
+		btn.add_theme_stylebox_override("normal", _sigil_row_style(accent, 0.0))
+		btn.add_theme_stylebox_override("hover", _sigil_row_style(accent, 0.05))
+		btn.add_theme_stylebox_override("pressed", _sigil_row_style(accent, 0.09))
+		btn.add_theme_stylebox_override("disabled", _sigil_row_style(accent, 0.0))
+		btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		btn.pressed.connect(_open_sigil_fullscreen.bind(entry))
+		var holder := Control.new()
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(holder)
+		# Button не контейнер: якоря — до ручных офсетов.
+		holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+		holder.offset_left = 6
+		holder.offset_top = 6
+		holder.offset_right = -6
+		holder.offset_bottom = -6
+		var shot := _sigil_preview_slot(accent, 0)
+		shot.custom_minimum_size = Vector2(0, 0)
+		holder.add_child(shot)
+		shot.set_anchors_preset(Control.PRESET_FULL_RECT)
+		btn.set_meta("preview", shot)
+		btn.set_meta("card_id", card_id)
+		return btn
+	var box := PanelContainer.new()
+	box.name = "SigilSetCell_" + card_id
+	box.custom_minimum_size = Vector2(0, 110)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.clip_contents = true
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.04, 0.045, 0.07, 1.0)
+	sb.border_color = Color(0.42, 0.45, 0.52, 0.3)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(12)
+	box.add_theme_stylebox_override("panel", sb)
+	var vb := VBoxContainer.new()
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_theme_constant_override("separation", 4)
+	box.add_child(vb)
+	var ring := SigilSilhouette.new()
+	ring.name = "SigilSilhouetteRing"
+	ring.custom_minimum_size = Vector2(64, 64)
+	ring.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(ring)
+	var q := _label("???", 16)
+	q.autowrap_mode = TextServer.AUTOWRAP_OFF
+	q.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	q.add_theme_color_override("font_color", Color(0.45, 0.49, 0.58))
+	vb.add_child(q)
+	box.set_meta("card_id", card_id)
+	return box
 
 
 ## Точка-майлстоун комплекта: claimed — приглушённая с отметкой; claimable
@@ -3209,6 +3415,9 @@ func _close_top_modal() -> bool:
 	if _sigil_fullscreen != null:
 		_close_sigil_fullscreen()
 		return true
+	if _sigil_set_screen != null:
+		_close_sigil_set_screen()
+		return true
 	if _sigil_craft_screen != null:
 		_close_sigil_craft_screen()
 		return true
@@ -3517,3 +3726,17 @@ class SigilMilestoneMark:
 			Vector2(size.x * 0.42, size.y * 0.78), c, w)
 		draw_line(Vector2(size.x * 0.42, size.y * 0.78),
 			Vector2(size.x * 0.86, size.y * 0.22), c, w)
+
+
+## Силуэт несобранной карты комплекта (Task 7b): тёмный контур круга без
+## заливки — игрок не получает ни имени, ни арта, ни намёка на сид карты.
+class SigilSilhouette:
+	extends Control
+
+	func _draw() -> void:
+		var c := Color(0.28, 0.32, 0.40)
+		var w := 2.0
+		var r := (minf(size.x, size.y) - 8.0) * 0.5
+		if r <= 0.0:
+			return
+		draw_arc(size * 0.5, r, 0.0, TAU, 48, c, w, true)
