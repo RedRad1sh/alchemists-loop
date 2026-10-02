@@ -976,11 +976,10 @@ func _build_ui() -> void:
 	var margin := Control.new()
 	margin.name = "Margin"
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	margin.offset_left = 12
-	margin.offset_right = -12
-	margin.offset_top = 12
-	margin.offset_bottom = -14
 	add_child(margin)
+	# UX-29: safe-area inset поверх базовых отступов (notch/rounded corners).
+	_apply_safe_area()
+	get_window().size_changed.connect(_apply_safe_area)
 
 	var root := VBoxContainer.new()
 	root.name = "Root"
@@ -1137,6 +1136,19 @@ func _build_ui() -> void:
 	# Все поверхности построены — граница навигации имеет право показывать
 	# interstitial (см. _ui_ready в _on_tab_changed).
 	_ui_ready = true
+
+func _apply_safe_area() -> void:
+	var m := get_node_or_null("Margin") as Control
+	if m == null:
+		return
+	var sa := DisplayServer.get_display_safe_area()
+	var vr := get_viewport().get_visible_rect()
+	# Базовые отступы игры 12/-12/12/-14 плюс безопасные insets дисплея.
+	m.offset_left = 12 + maxf(0.0, sa.position.x - vr.position.x)
+	m.offset_top = 12 + maxf(0.0, sa.position.y - vr.position.y)
+	m.offset_right = -12 - maxf(0.0, vr.end.x - sa.end.x)
+	m.offset_bottom = -14 - maxf(0.0, vr.end.y - sa.end.y)
+
 
 func _fit_ui_root_after_layout(host: Control, root: Control) -> void:
 	# Два кадра дают всем динамическим страницам посчитать minimum size;
