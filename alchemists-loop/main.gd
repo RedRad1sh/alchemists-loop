@@ -364,6 +364,14 @@ var _popup: Control
 var _popup_dim: ColorRect = null
 var _popup_orb: ElementOrb
 var _popup_title: Label
+var _popup_recipe: HBoxContainer
+var _popup_orb_a: ElementOrb
+var _popup_orb_b: ElementOrb
+var _popup_orb_c: ElementOrb
+var _popup_recipe_name: Label
+var _popup_chips: HBoxContainer
+var _popup_rarity: Label
+var _popup_reward: Label
 var _popup_sub: Label
 var floaters: Array = []
 var _pulse_t := 0.0
@@ -1297,6 +1305,17 @@ func _stylebox_9(path: String, m: Vector4, mod: Color = Color(1, 1, 1, 1)) -> St
 	sb.modulate_color = mod
 	return sb
 
+func _chip_style(bg_col: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg_col
+	sb.set_corner_radius_all(13)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 5
+	sb.content_margin_bottom = 5
+	return sb
+
+
 func _panel_style(bg_col: Color, radius: int) -> StyleBox:
 	var sb := _stylebox_9("res://assets/ui/panel.png",
 		Vector4(16, 14, 16, 14), Color(1, 1, 1, bg_col.a))
@@ -1470,86 +1489,143 @@ func _build_popup() -> void:
 	center.visible = false
 	add_child(center)
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel",
-		_panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
+	var card_sb := _panel_style(Color(0.09, 0.13, 0.19, 0.97), 20)
+	card.add_theme_stylebox_override("panel", card_sb)
+	# Блок 3: ровные поля карточки 24 px со всех сторон (самопроверка выравнивания).
+	for prop in ["content_margin_left", "content_margin_right", "content_margin_top", "content_margin_bottom"]:
+		card_sb.set(prop, 24.0)
 	center.add_child(card)
 	var col := VBoxContainer.new()
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.add_theme_constant_override("separation", 10)
-	col.custom_minimum_size = Vector2(280, 0)
+	col.add_theme_constant_override("separation", 12)
+	col.custom_minimum_size = Vector2(320, 0)
 	card.add_child(col)
 
-	_popup_title = _label("НОВЫЙ РЕЦЕПТ!", 24)
-	_popup_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Заголовок: иконка + текст 20 px, слева (без крестика — закрытие тапом).
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	col.add_child(head)
+	head.add_child(UiIcon.make("flask", 22, Color(0.35, 0.85, 0.82)))
+	_popup_title = _label("НОВЫЙ РЕЦЕПТ!", 20)
 	if _font_bold != null:
 		_popup_title.add_theme_font_override("font", _font_bold)
 	_popup_title.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
-	col.add_child(_popup_title)
+	head.add_child(_popup_title)
 
 	_popup_orb = ElementOrb.new()
 	_popup_orb.interactive = false
-	_popup_orb.custom_minimum_size = Vector2(130, 130)
+	_popup_orb.custom_minimum_size = Vector2(96, 96)
 	_popup_orb.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	col.add_child(_popup_orb)
 
-	_popup_sub = _label("", 16)
+	# Рецептная строка: мини-орбы A + B → C и имя результата.
+	_popup_recipe = HBoxContainer.new()
+	_popup_recipe.alignment = BoxContainer.ALIGNMENT_CENTER
+	_popup_recipe.add_theme_constant_override("separation", 8)
+	col.add_child(_popup_recipe)
+	_popup_orb_a = ElementOrb.new()
+	_popup_orb_a.interactive = false
+	_popup_orb_a.custom_minimum_size = Vector2(28, 28)
+	_popup_recipe.add_child(_popup_orb_a)
+	_popup_recipe.add_child(_label("+", 16))
+	_popup_orb_b = ElementOrb.new()
+	_popup_orb_b.interactive = false
+	_popup_orb_b.custom_minimum_size = Vector2(28, 28)
+	_popup_recipe.add_child(_popup_orb_b)
+	_popup_recipe.add_child(_label("→", 16))
+	_popup_orb_c = ElementOrb.new()
+	_popup_orb_c.interactive = false
+	_popup_orb_c.custom_minimum_size = Vector2(28, 28)
+	_popup_recipe.add_child(_popup_orb_c)
+	_popup_recipe_name = _label("", 14)
+	_popup_recipe.add_child(_popup_recipe_name)
+
+	# Чипы редкости и награды.
+	_popup_chips = HBoxContainer.new()
+	_popup_chips.alignment = BoxContainer.ALIGNMENT_CENTER
+	_popup_chips.add_theme_constant_override("separation", 8)
+	col.add_child(_popup_chips)
+	_popup_rarity = _label("", 12)
+	_popup_rarity.add_theme_stylebox_override("normal", _chip_style(Color(0.15, 0.20, 0.26, 0.9)))
+	_popup_chips.add_child(_popup_rarity)
+	_popup_reward = _label("", 12)
+	_popup_reward.add_theme_stylebox_override("normal", _chip_style(Color(0.28, 0.24, 0.12, 0.9)))
+	_popup_reward.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
+	_popup_chips.add_child(_popup_reward)
+
+	_popup_sub = _label("", 13)
 	_popup_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_popup_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(_popup_sub)
 
+	# Блок 3 (правка пользователя): ОДНА кнопка по центру, без «Закрыть».
 	var actions := HBoxContainer.new()
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	actions.add_theme_constant_override("separation", 8)
 	col.add_child(actions)
-	var ok := _small_button("Забрать", Vector2(132, 44), 2)
-	ok.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var ok := _small_button("Забрать", Vector2(200, 48), 2)
 	ok.pressed.connect(_hide_popup)
 	actions.add_child(ok)
-	var close := _small_button("Закрыть", Vector2(104, 44), 0)
-	close.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	close.pressed.connect(_hide_popup)
-	actions.add_child(close)
 	card.gui_input.connect(_on_popup_card_input)
+	dim.gui_input.connect(_on_popup_dim_input)
 	_popup = center
 
 func _show_challenge_win_popup(item_id: String, target_name: String, a: String, b: String, first: bool = false) -> void:
-	_popup_title.text = "ЕЖЕДНЕВНАЯ ЦЕЛЬ!"
-	_popup_orb.setup(item_id, _item_colors.get(item_id, Color(0.7, 0.8, 0.9)), true, _online._item_glyph(item_id))
 	var head := "Ты первым в мире получил вещество из «%s»!" if first else "Цель дня выполнена: вещество из «%s»!"
-	_popup_sub.text = head + "\n%s + %s → %s\n+%d эфира" % [
-		target_name, _online._item_name(a), _online._item_name(b), _online._item_name(item_id), CHALLENGE_REWARD]
-	_popup_dim.visible = true
-	_popup.visible = true
-	_popup.scale = Vector2(0.7, 0.7)
-	var tw := create_tween()
-	tw.tween_property(_popup, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
-	Sfx.legendary()
+	_present_popup(item_id, head % target_name, "ЕЖЕДНЕВНАЯ ЦЕЛЬ!", Color(1.0, 0.9, 0.4),
+		a, b, CHALLENGE_REWARD, true)
 
 func _show_discovery_popup(item_id: String, a: String, b: String, milestones: Array = []) -> void:
 	var author := String(_online._server_authors.get(item_id, ""))
 	var r := _engine._rarity_of(item_id)
-	var sub := "%s + %s → %s" % [_online._item_name(a), _online._item_name(b), _online._item_name(item_id)]
+	var sub := ""
 	if author != "":
-		sub += "\nавтор: %s" % author
+		sub += "автор: %s" % author
 	var dsc := _online._item_desc(item_id)
 	if dsc != "":
-		sub += "\n«%s»" % dsc
-	sub += "\n%s · награда +%d ⚡" % [r["name"], r["bounty"]]
+		sub += ("\n" if sub != "" else "") + "«%s»" % dsc
 	for m in milestones:
-		sub += "\n%s" % _engine._milestone_text(int(m))
-	_present_popup(item_id, sub, "НОВЫЙ РЕЦЕПТ!", r["color"])
+		sub += ("\n" if sub != "" else "") + "%s" % _engine._milestone_text(int(m))
+	# рецепт и награда теперь в рецептной строке и чипах, не в «простыне»
+	_present_popup(item_id, sub, "НОВЫЙ РЕЦЕПТ!", r["color"], a, b, int(r["bounty"]))
 
-func _present_popup(item_id: String, subtext: String, title: String = "", title_color: Color = Color(1.0, 0.9, 0.4)) -> void:
+func _present_popup(item_id: String, subtext: String, title: String = "", title_color: Color = Color(1.0, 0.9, 0.4),
+		a: String = "", b: String = "", reward: int = -1, legendary: bool = false) -> void:
 	if title != "":
 		_popup_title.text = title
 	_popup_title.add_theme_color_override("font_color", title_color)
 	_popup_orb.setup(item_id, _item_colors.get(item_id, Color(0.7, 0.8, 0.9)), true, _online._item_glyph(item_id))
+	# рецептная строка A + B → C
+	var has_pair := a != "" and b != ""
+	for nd in [_popup_orb_a, _popup_orb_b, _popup_orb_c, _popup_recipe_name]:
+		nd.visible = has_pair
+	for nd in _popup_recipe.get_children():
+		if nd is Label:
+			(nd as Label).visible = has_pair
+	if has_pair:
+		_popup_orb_a.setup(a, _item_colors.get(a, Color(0.7, 0.8, 0.9)), false, _online._item_glyph(a))
+		_popup_orb_b.setup(b, _item_colors.get(b, Color(0.7, 0.8, 0.9)), false, _online._item_glyph(b))
+		_popup_orb_c.setup(item_id, _item_colors.get(item_id, Color(0.7, 0.8, 0.9)), false, _online._item_glyph(item_id))
+		_popup_recipe_name.text = _online._item_name(item_id)
+	# чипы: редкость и награда
+	var r := _engine._rarity_of(item_id)
+	_popup_rarity.text = str(r["name"])
+	_popup_rarity.visible = true
+	if reward > 0:
+		_popup_reward.text = "+%d ⚡ награда" % reward
+		_popup_reward.visible = true
+	else:
+		_popup_reward.visible = false
 	_popup_sub.text = subtext
+	_popup_sub.visible = subtext.strip_edges() != ""
 	_popup_dim.visible = true
 	_popup.visible = true
 	_popup.scale = Vector2(0.7, 0.7)
 	var tw := create_tween()
 	tw.tween_property(_popup, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
-	Sfx.discovery()
+	if legendary:
+		Sfx.legendary()
+	else:
+		Sfx.discovery()
 
 func _hide_popup() -> void:
 	_popup_dim.visible = false
@@ -1557,6 +1633,12 @@ func _hide_popup() -> void:
 	Sfx.click()
 
 var _popup_swipe_start := Vector2.ZERO
+
+func _on_popup_dim_input(ev: InputEvent) -> void:
+	if ev is InputEventMouseButton and (ev as InputEventMouseButton).pressed \
+			and (ev as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		_hide_popup()
+
 
 func _on_popup_card_input(ev: InputEvent) -> void:
 	if ev is InputEventMouseButton:

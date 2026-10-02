@@ -178,6 +178,28 @@ function screenHouse(mode) {
 }
 
 function screenPopup(mode) {
+  if (mode === "after") {
+    // согласовано: иконка+заголовок слева, орб 96, рецептная строка, чипы,
+    // ОДНА кнопка по центру, без крестика (закрытие — тап по фону/карточке)
+    return `<div class="screen">
+      ${header(mode)}${resrow()}${tabs(mode, 1)}
+      <div class="panel" style="flex:1"></div>
+      <div class="dim"><div class="popcard" style="width:360px;padding:24px">
+        <div style="display:flex;align-items:center;gap:10px">${ic("flask", 22, "#59d9d2")}
+          <div class="poptitle" style="font-size:20px;margin:0">НОВЫЙ РЕЦЕПТ!</div></div>
+        <div style="display:flex;justify-content:center;margin:14px 0">${orb("#96d691", 96)}</div>
+        <div style="display:flex;justify-content:center;align-items:center;gap:8px">
+          ${orb("#e0764f", 32)}<span class="muted">+</span>${orb("#96d691", 32)}<span class="muted">→</span>${orb("#ff9d64", 32)}
+          <b style="color:#eaf2f7">Цветок</b></div>
+        <div style="display:flex;justify-content:center;gap:8px;margin:12px 0">
+          <span class="chip">Обычный</span><span class="chip gold">+12 ⚡ награда</span></div>
+        <div class="popsub">автор: redrad1sh</div>
+        <div class="popactions" style="justify-content:center">
+          <button class="btn k1" style="width:200px;height:48px">Забрать</button>
+        </div>
+      </div></div>
+    </div>`;
+  }
   return `<div class="screen">
     ${header(mode)}${resrow()}${tabs(mode, 1)}
     <div class="panel" style="flex:1"></div>

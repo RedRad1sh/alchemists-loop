@@ -466,31 +466,47 @@ def screen_house(mode):
 def screen_popup(mode):
     img = screen_lab(mode)  # внутри mode станет "before", вкладки — tm
     blend_rect(img, [0, 0, W, H], (0, 0, 0, 158) if mode == "before" else (4, 8, 12, 168))
-    cw, ch = 320, 330
-    x0, y0 = (W - cw) // 2, (H - ch) // 2 - 20
-    C = AFTER if mode == "after" else BEFORE
-    rrect(img, [x0, y0, x0 + cw, y0 + ch], 16 if mode == "before" else 18,
-          fill=(16, 22, 31, 250) if mode == "before" else (18, 26, 36, 250),
-          outline=(42, 54, 72) if mode == "before" else C["line2"])
-    y = y0 + 18
-    if mode == "after":
-        button(img, [x0 + cw - 56, y0 + 12, 44, 44], "", 0, mode, icon_name="x")
-        y += 34
-    text(img, (W / 2, y + 10), "НОВЫЙ РЕЦЕПТ!", size=24 if mode == "before" else 21, weight=800,
-         color=(255, 230, 107) if mode == "before" else C["gold"], anchor="mm")
-    y += 40
-    orb(img, W / 2, y + 55, 46, (150, 214, 145), glyph="✿" if mode == "before" else None, mode=mode)
-    y += 116
-    text(img, (W / 2, y), "Огонь + Росток → Цветок", size=14, color=C["ink2"], anchor="mm")
-    y += 20
-    text(img, (W / 2, y), "+12 эфира", size=14, color=C["ink2"], anchor="mm")
-    y += 26
     if mode == "before":
+        cw, ch = 320, 330
+        x0, y0 = (W - cw) // 2, (H - ch) // 2 - 20
+        rrect(img, [x0, y0, x0 + cw, y0 + ch], 16, fill=(16, 22, 31, 250), outline=(42, 54, 72))
+        y = y0 + 28
+        text(img, (W / 2, y), "НОВЫЙ РЕЦЕПТ!", size=24, weight=800, color=(255, 230, 107), anchor="mm")
+        y += 40
+        orb(img, W / 2, y + 55, 46, (150, 214, 145), glyph="✿", mode=mode)
+        y += 116
+        text(img, (W / 2, y), "Огонь + Росток → Цветок", size=14, color=BEFORE["ink2"], anchor="mm")
+        y += 20
+        text(img, (W / 2, y), "+12 эфира", size=14, color=BEFORE["ink2"], anchor="mm")
+        y += 26
         button(img, [x0 + 16, y, (cw - 40) / 2, 44], "Забрать", 2, mode, size=14)
         button(img, [x0 + 24 + (cw - 40) / 2, y, (cw - 40) / 2, 44], "Закрыть", 0, mode, size=14)
-    else:
-        button(img, [x0 + 16, y, cw - 32 - 104, 44], "Забрать", 1, mode, size=15)
-        button(img, [x0 + cw - 16 - 96, y, 96, 44], "Закрыть", 0, mode, size=14)
+        return img
+    # ПОСЛЕ (согласовано): иконка+заголовок слева, орб 96, рецептная строка,
+    # чипы, ОДНА кнопка по центру, без крестика.
+    cw, ch = 360, 372
+    x0, y0 = (W - cw) // 2, (H - ch) // 2 - 10
+    C = AFTER
+    rrect(img, [x0, y0, x0 + cw, y0 + ch], 18, fill=(18, 26, 36, 250), outline=C["line2"])
+    icon(img, "flask", (x0 + 24, y0 + 22, 22, 22), C["accent"])
+    text(img, (x0 + 56, y0 + 33), "НОВЫЙ РЕЦЕПТ!", size=20, weight=800, color=C["gold"], anchor="lm")
+    orb(img, W / 2, y0 + 116, 48, (150, 214, 145), mode="after")
+    ry = y0 + 186
+    cx = W / 2
+    orb(img, cx - 78, ry, 16, (224, 118, 79), mode="after")
+    text(img, (cx - 52, ry), "+", size=15, weight=700, color=C["ink3"], anchor="mm")
+    orb(img, cx - 28, ry, 16, (150, 214, 145), mode="after")
+    text(img, (cx - 2, ry), "→", size=15, weight=700, color=C["ink3"], anchor="mm")
+    orb(img, cx + 22, ry, 16, (255, 157, 100), mode="after")
+    text(img, (cx + 46, ry), "Цветок", size=14, weight=600, color=C["ink1"], anchor="lm")
+    ry += 30
+    rrect(img, [cx - 118, ry, cx - 12, ry + 26], 13, fill=(38, 50, 66), outline=C["line"])
+    text(img, (cx - 106, ry + 13), "Обычный", size=12, weight=600, color=(168, 232, 168), anchor="lm")
+    rrect(img, [cx - 4, ry, cx + 118, ry + 26], 13, fill=(46, 40, 22), outline=(120, 100, 40))
+    text(img, (cx + 8, ry + 13), "+12 ⚡ награда", size=12, weight=600, color=C["gold"], anchor="lm")
+    ry += 38
+    text(img, (W / 2, ry), "автор: redrad1sh", size=13, color=C["ink2"], anchor="mm")
+    button(img, [W / 2 - 100, y0 + ch - 72, 200, 48], "Забрать", 1, "after", size=15)
     return img
 
 
@@ -775,7 +791,7 @@ def pp_before() -> Image.Image:
 def _pp_after_head(img, y0):
     icon(img, "flask", (94, y0 + 20, 22, 22), AFTER["accent"])
     text(img, (124, y0 + 31), "НОВЫЙ РЕЦЕПТ!", size=20, weight=800, color=AFTER["gold"], tracking=0.3)
-    button(img, [W - 70 - 44, y0 + 10, 44, 44], "", 0, "after", icon_name="x")
+    # без крестика: закрытие — тап по фону/карточке (правка пользователя)
 
 
 def _pp_after_body(img, y0):
@@ -811,7 +827,7 @@ def pp_after() -> Image.Image:
 
 def board_popups() -> Image.Image:
     variants = [("ДО · как сейчас: орб 130, простыня текста, две равные кнопки", pp_before()),
-                ("ПОСЛЕ · иконка+✕44, рецептная строка, чипы, ОДНА кнопка по центру", pp_after())]
+                ("ПОСЛЕ · иконка в заголовке, рецептная строка, чипы, ОДНА кнопка по центру", pp_after())]
     img = Image.new("RGBA", (W + 40, len(variants) * (PP_H + 64) + 90), (7, 11, 16, 255))
     text(img, (20, 26), "Блок 3 · Попапы открытий/целей", size=24, weight=800, color=(234, 242, 247))
     text(img, (20, 62), "Код игры не тронут: это мок-предложения для согласования.",
