@@ -83,7 +83,7 @@ func _build_progress_popup() -> void:
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.pressed.connect(func() -> void:
 		# UI/UX: animate popup closing (fade + scale)
-		var tween := create_tween().set_parallel(true)
+		var tween := g.create_tween().set_parallel(true)
 		tween.tween_property(_prog_dim, "modulate:a", 0.0, 0.2)
 		tween.tween_property(_prog_popup, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 		tween.chain().tween_callback(func():
@@ -131,7 +131,7 @@ func _open_progress_popup() -> void:
 	# UI/UX: animate popup appearance (fade + scale)
 	_prog_dim.modulate.a = 0.0
 	_prog_popup.scale = Vector2(0.9, 0.9)
-	var tween := create_tween().set_parallel(true)
+	var tween := g.create_tween().set_parallel(true)
 	tween.tween_property(_prog_dim, "modulate:a", 1.0, 0.25)
 	tween.tween_property(_prog_popup, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	# After the popup becomes visible the map's graphs need one more layout

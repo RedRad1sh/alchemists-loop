@@ -766,15 +766,15 @@ func _do_scroll_to_atom(node_id: String) -> void:
 	if not is_instance_valid(atom) or _scroll_container == null:
 		return
 	# Calculate the atom's position relative to the scroll container's content
-	var atom_global_pos := atom.global_position
-	var scroll_global_pos := _scroll_container.global_position
-	var relative_y := atom_global_pos.y - scroll_global_pos.y
+	var atom_global_pos: Vector2 = atom.global_position
+	var scroll_global_pos: Vector2 = _scroll_container.global_position
+	var relative_y: float = atom_global_pos.y - scroll_global_pos.y
 	# Scroll to center the atom in the viewport, with some offset for the header
-	var scroll_height := _scroll_container.size.y
-	var target_scroll := relative_y - scroll_height * 0.3  # 30% from top
+	var scroll_height: float = _scroll_container.size.y
+	var target_scroll: float = relative_y - scroll_height * 0.3  # 30% from top
 	target_scroll = maxf(0.0, target_scroll)
 	# Smooth scroll animation
-	var current_scroll := _scroll_container.scroll_vertical
+	var current_scroll: int = _scroll_container.scroll_vertical
 	var tween := create_tween()
 	tween.tween_method(
 		func(value: float) -> void: _scroll_container.scroll_vertical = int(value),

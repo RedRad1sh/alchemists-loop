@@ -7,8 +7,8 @@ class_name AchievementMapLine
 
 
 func draw(canvas: Control, start: Vector2, end: Vector2, context: Dictionary = {}) -> void:
-	var has_connection := context.get("connection", false)
-	var is_highlighted := context.get("highlighted", false)
+	var has_connection: bool = context.get("connection", false)
+	var is_highlighted: bool = context.get("highlighted", false)
 	var alpha := float(context.get("alpha", 1.0))
 	
 	if has_connection:
