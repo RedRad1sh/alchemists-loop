@@ -12,6 +12,13 @@ var glyph_key: String = "spark"
 var caption: String = ""
 var map_status := MAP_LOCKED
 var glyph_tint: Color = Color("#d8d7ce")
+# UI/UX: progress indicator (0.0 to 1.0)
+var progress_ratio: float = 0.0:
+	set(value):
+		if is_equal_approx(progress_ratio, value):
+			return
+		progress_ratio = clampf(value, 0.0, 1.0)
+		queue_redraw()
 var map_selected: bool = false:
 	set(value):
 		if map_selected == value:
@@ -25,6 +32,10 @@ var _screen_touch_pressed := false
 var _screen_touch_index := -1
 var _press_position := Vector2.ZERO
 var _last_screen_touch_msec := -1000
+# UI/UX: pulse animation state for available atoms
+var _pulse_phase := 0.0
+# UI/UX: tap feedback tween (scale bounce)
+var _tap_tween: Tween = null
 
 
 func setup(node_id: String, glyph: String, node_caption: String, node_status: int) -> void:
@@ -59,6 +70,20 @@ func set_map_status(node_status: int) -> void:
 			glyph_tint = Color("#9aa8b2")
 			if _caption_label != null:
 				_caption_label.add_theme_color_override("font_color", Color("#7e8d98"))
+	# UI/UX: enable pulse animation only for available atoms
+	set_process(node_status == MAP_AVAILABLE)
+	if node_status != MAP_AVAILABLE:
+		_pulse_phase = 0.0
+	queue_redraw()
+
+
+func _process(delta: float) -> void:
+	# UI/UX: gentle pulsing glow for available milestones (breathing effect)
+	if map_status != MAP_AVAILABLE:
+		return
+	_pulse_phase += delta * 2.5
+	if _pulse_phase > TAU:
+		_pulse_phase -= TAU
 	queue_redraw()
 
 
@@ -97,11 +122,24 @@ func _draw() -> void:
 	super._draw()
 	var center := size / 2.0
 	if map_status == MAP_AVAILABLE:
-		draw_arc(center, radius + 3.5, 0.0, TAU, 48, Color("#e8c778"), 2.0, true)
+		# UI/UX: pulse animation — breathing glow ring
+		var pulse_alpha := 0.5 + 0.3 * sin(_pulse_phase)
+		var pulse_radius := radius + 3.5 + 1.5 * sin(_pulse_phase)
+		draw_arc(center, pulse_radius, 0.0, TAU, 48, Color("#e8c778", pulse_alpha), 2.5, true)
+		# Secondary outer glow
+		var outer_alpha := 0.15 + 0.1 * sin(_pulse_phase + 1.0)
+		draw_arc(center, radius + 8.0, 0.0, TAU, 48, Color("#e8c778", outer_alpha), 1.5, true)
 	elif map_status == MAP_UNLOCKED:
 		draw_arc(center, radius + 2.5, 0.0, TAU, 48, Color("#f3ce75"), 2.0, true)
 	else:
 		draw_arc(center, radius + 1.0, 0.0, TAU, 48, Color(0.48, 0.57, 0.64, 0.42), 1.0, true)
+	# UI/UX: progress arc (only show when there's partial progress and not yet unlocked)
+	if progress_ratio > 0.0 and progress_ratio < 1.0 and map_status != MAP_UNLOCKED:
+		var progress_angle := progress_ratio * TAU
+		var progress_color := Color("#4ade80") if map_status == MAP_AVAILABLE else Color("#60a5fa")
+		progress_color.a = 0.85
+		# Draw progress arc starting from top (-PI/2)
+		draw_arc(center, radius + 5.5, -PI / 2.0, -PI / 2.0 + progress_angle, 32, progress_color, 3.0, true)
 	if is_hovered:
 		draw_arc(center, radius + 6.0, 0.0, TAU, 48, Color("#b2eee2"), 1.5, true)
 	if map_selected:
@@ -163,6 +201,14 @@ func _gui_input(event: InputEvent) -> void:
 
 func _finish_tap(release_position: Vector2) -> void:
 	if release_position.distance_to(_press_position) <= drag_threshold:
+		# UI/UX: scale bounce animation on tap
+		if _tap_tween != null and _tap_tween.is_valid():
+			_tap_tween.kill()
+		_tap_tween = create_tween()
+		_tap_tween.tween_property(self, "scale", Vector2(0.85, 0.85), 0.08).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		_tap_tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.15).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+		# UI/UX: haptic feedback
+		Input.vibrate_handheld(15)
 		clicked.emit(self)
 
 
@@ -170,3 +216,6 @@ func _exit_tree() -> void:
 	_mouse_pressed = false
 	_screen_touch_pressed = false
 	_screen_touch_index = -1
+	if _tap_tween != null and _tap_tween.is_valid():
+		_tap_tween.kill()
+		_tap_tween = null

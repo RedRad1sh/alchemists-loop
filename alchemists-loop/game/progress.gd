@@ -82,8 +82,14 @@ func _build_progress_popup() -> void:
 	var close := g._small_button("Закрыть", Vector2(150, 44))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.pressed.connect(func() -> void:
-		_prog_dim.visible = false
-		_prog_popup.visible = false
+		# UI/UX: animate popup closing (fade + scale)
+		var tween := create_tween().set_parallel(true)
+		tween.tween_property(_prog_dim, "modulate:a", 0.0, 0.2)
+		tween.tween_property(_prog_popup, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.chain().tween_callback(func():
+			_prog_dim.visible = false
+			_prog_popup.visible = false
+		)
 		Sfx.click())
 	col.add_child(close)
 
@@ -122,6 +128,12 @@ func _open_progress_popup() -> void:
 	_prog_tabs.current_tab = 0
 	_prog_dim.visible = true
 	_prog_popup.visible = true
+	# UI/UX: animate popup appearance (fade + scale)
+	_prog_dim.modulate.a = 0.0
+	_prog_popup.scale = Vector2(0.9, 0.9)
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(_prog_dim, "modulate:a", 1.0, 0.25)
+	tween.tween_property(_prog_popup, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	# After the popup becomes visible the map's graphs need one more layout
 	# pass so atoms settle into their lanes at the actual rendered width.
 	if _ach_map != null and is_instance_valid(_ach_map):

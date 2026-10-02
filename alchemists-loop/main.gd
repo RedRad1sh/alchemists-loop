@@ -1646,8 +1646,14 @@ func _close_top_modal() -> bool:
 		Sfx.click()
 		return true
 	elif _progress_ui._prog_popup.visible:
-		_progress_ui._prog_dim.visible = false
-		_progress_ui._prog_popup.visible = false
+		# UI/UX: animate popup closing (same as close button)
+		var tween := create_tween().set_parallel(true)
+		tween.tween_property(_progress_ui._prog_dim, "modulate:a", 0.0, 0.2)
+		tween.tween_property(_progress_ui._prog_popup, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.chain().tween_callback(func():
+			_progress_ui._prog_dim.visible = false
+			_progress_ui._prog_popup.visible = false
+		)
 		Sfx.click()
 		return true
 	elif _hub._profile_popup.visible:

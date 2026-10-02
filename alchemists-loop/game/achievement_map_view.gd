@@ -541,6 +541,10 @@ func _update_map_state(sections: Array) -> void:
 					atom.set_map_status(node_status)
 					atom.set_caption(_entry_caption(entry))
 					atom.map_selected = node_id == _selected_id
+					# UI/UX: pass progress ratio to atom for visual progress arc
+					var target := maxi(1, int(entry.get("param", 1)))
+					var progress := maxi(0, _entry_progress(entry))
+					atom.progress_ratio = float(mini(progress, target)) / float(target)
 			var track_label: Label = _track_count_labels.get(track_key, null)
 			if is_instance_valid(track_label):
 				track_label.text = "%s  %d/%d" % [String(track["title"]), track_done, track_total]
