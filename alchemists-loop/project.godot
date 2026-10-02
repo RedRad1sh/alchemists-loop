@@ -31,6 +31,9 @@ Monetization="*res://autoload/monetization.gd"
 Sfx="*res://autoload/sfx.gd"
 Net="*res://autoload/net.gd"
 
+[editor_plugins]
+enabled=PackedStringArray("res://addons/medusa/plugin.cfg")
+
 [display]
 
 window/size/viewport_width=540
