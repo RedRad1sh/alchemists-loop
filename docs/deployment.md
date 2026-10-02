@@ -27,6 +27,10 @@ sudo -u deploy git clone https://github.com/RedRad1sh/alchemists-loop.git /opt/a
 ### 2. Configure Environment
 
 ```bash
+# Create database directory
+sudo mkdir -p /var/lib/alchemists-loop
+sudo chown deploy:deploy /var/lib/alchemists-loop
+
 # Create .env file
 sudo -u deploy nano /opt/alchemists-loop/discovery-server/server/.env
 ```

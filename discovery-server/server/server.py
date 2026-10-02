@@ -49,8 +49,12 @@ def _setup_logging() -> None:
 _setup_logging()
 
 from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from pydantic import ValidationError
+
+import dashboard
+import admin
 
 # ---------------------------------------------------------------------------
 # Конфигурация
@@ -259,6 +263,14 @@ app = FastAPI(
     description="Сервер для регистрации нового вещества, полученного варкой неизвестной пары",
     version="1.0.0",
 )
+
+# Статика (CSS/JS для дашборда/админки)
+_static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+os.makedirs(_static_dir, exist_ok=True)
+app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
+# Дашборд и админ-панель (подключаются после init_db в startup)
+_dashboard_setup = False
 
 # ---------------------------------------------------------------------------
 # Pydantic-модели
@@ -1652,6 +1664,18 @@ async def startup():
         print("[world] Генерация: локальная (очевидные пары). Для полной LLM задайте ключ.")
     else:
         print(f"[world] LLM-провайдер: {prov}")
+
+    # Подключаем дашборд и админ-панель
+    global _dashboard_setup
+    if not _dashboard_setup:
+        dashboard.setup_dashboard(app, get_db, DB_PATH)
+        admin.setup_admin(app, get_db)
+        _dashboard_setup = True
+        print("[world] Дашборд: /dashboard")
+        if os.environ.get("ADMIN_PASS"):
+            print("[world] Админ-панель: /admin")
+        else:
+            print("[world] Админ-панель: /admin (ADMIN_PASS не задан — вход заблокирован)")
 
 @app.get("/api/health", response_model=HealthResponse)
 async def health():
