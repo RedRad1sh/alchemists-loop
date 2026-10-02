@@ -178,6 +178,9 @@ static func run(g: Game) -> void:
 	# ---- Task 3: майлстоуны — серверные флаги наград и транспорт клейма ----
 	# Ответ коллекции несёт milestones (set -> тиры); отсутствие ключа — не
 	# ошибка, а «сервер ничего не подтвердил»: полное замещение состояния.
+	# Снапшот user-кэша коллекции: клейм и roundtrip ниже пишут его на диск;
+	# restore в конце блока держит прогон герметичным.
+	var sb3_coll_snap := _sb5_file_text(SigilManager.COLLECTION_FILE)
 	sm._on_collection_result({"ok": true, "cards": {}, "extras": [],
 		"milestones": {"fire": [3, 6]}})
 	var sb3_from_collection := sm.claimed_tiers("fire") == [3, 6]
@@ -224,10 +227,12 @@ static func run(g: Game) -> void:
 	Selftest.check("sb3 flags survive cache roundtrip",
 		not sb3_snapshot.is_empty() and sm.claimed_tiers("fire") == sb3_snapshot)
 
-	# Откат: не оставляем флаги и серверную коллекцию живому менеджеру.
+	# Откат: не оставляем флаги и серверную коллекцию живому менеджеру и
+	# возвращаем user-кэш коллекции к состоянию до блока.
 	sm._milestones_claimed = {}
 	sm._server_collection = {}
 	sm._server_extras = []
+	_sb5_restore_file(SigilManager.COLLECTION_FILE, sb3_coll_snap)
 
 	# ---- Task 4: эффекты наград — кап эфира и скидка крафта ----
 	# Кап: +40 за каждый комплект, у которого сервер подтвердил тир 3.
