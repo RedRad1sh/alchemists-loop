@@ -706,6 +706,50 @@ static func run(g: Game) -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(sb7g_p))
 	_sb5_restore_file(sb7g_disk_path, sb7g_disk_snap)
 
+	# ---- Task 8: достижения карточек. Сид — как sb7: каталог earth из 8 карт
+	# с редкостями (common/rare/epic/legendary) и 25 card_ids сета; коллекция —
+	# 2 карты (common + epic) + один хроматический extra. Сборка/клеймы только
+	# прямым сетом стейта менеджера — дисковых записей блок не делает, поэтому
+	# _ach_progress можно проверять напрямую (в selftest _ach_update — no-op, а
+	# награды эфира тут не нужны).
+	sm.set_catalog(sb7_cards, sb7_sets, "unit-t8")
+	sm._on_collection_result({"ok": true, "cards": sb7_coll.call(["clay", "metal"]),
+		"extras": [{"id": "chroma_t", "rarity": "chromatic", "llm_name": "Тест"}],
+		"milestones": {}})
+	var sb8_ach := func(kind: String, param: int) -> Dictionary:
+		return {"id": "sb8_x", "title": "x", "kind": kind, "param": param, "ether": 0}
+	var sb8_progress_ok: bool = g._progress_ui._ach_progress(sb8_ach.call("sigil_total", 1)) == 2 \
+		and g._progress_ui._ach_progress(sb8_ach.call("sigil_first_rarity", 0)) == 1 \
+		and g._progress_ui._ach_progress(sb8_ach.call("sigil_first_rarity", 1)) == 0 \
+		and g._progress_ui._ach_progress(sb8_ach.call("sigil_first_rarity", 2)) == 1 \
+		and g._progress_ui._ach_progress(sb8_ach.call("sigil_set_count", 13)) == 2 \
+		and g._progress_ui._ach_progress(sb8_ach.call("sigil_sets_full", 1)) == 0 \
+		and sm.has_rarity(4)
+	Selftest.check("sb8 sigil achievement progress counts", sb8_progress_ok)
+
+	# ---- сид 2: все 25 card_ids earth в _server_collection — комплект полон,
+	# set_count достигает 25 (хроматика в сете не считается).
+	sm._on_collection_result({"ok": true, "cards": sb7_coll.call(sb7_earth_ids),
+		"extras": [], "milestones": {}})
+	var sb8_full_ok: bool = g._progress_ui._ach_progress(sb8_ach.call("sigil_set_count", 13)) == 25 \
+		and g._progress_ui._ach_progress(sb8_ach.call("sigil_sets_full", 1)) == 1
+	Selftest.check("sb8 full set counts once", sb8_full_ok)
+
+	# ---- проводка: collection_changed доходит до _ach_update (в selftest
+	# _ach_update no-op, сигнал эмитим — наблюдаем коннект, не эффект).
+	sm.collection_changed.emit()
+	var sb8_target := g._progress_ui._ach_update
+	var sb8_wired := false
+	for sb8_c in sm.collection_changed.get_connections():
+		if (sb8_c as Dictionary).get("callable", Callable()) == sb8_target:
+			sb8_wired = true
+	Selftest.check("sb8 collection change triggers ach update", sb8_wired)
+	# Откат: сиды — в состояние до блока (дисковых записей нет).
+	sm.set_catalog([], [], "")
+	sm._server_collection = {}
+	sm._server_extras = []
+	sm._milestones_claimed = {}
+
 
 ## Текст user-файла для снапшота блока sb5: пустая строка = файла не было.
 static func _sb5_file_text(path: String) -> String:

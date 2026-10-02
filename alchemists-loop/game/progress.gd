@@ -127,6 +127,33 @@ func _ach_progress(a: Dictionary) -> int:
 		"affinity": return g._spirit._companion_level_for(g._spirit._companion_affinity)
 		"upgrades": return _upgrades_total()
 		"sets": return _set_done.size()
+		# Достижения карточек (Аркан Сигилов). Источник — серверная коллекция:
+		# _server_collection (уникальные card_id), не локальный _collection.
+		"sigil_total": return g._sigil._server_collection.size()
+		"sigil_first_rarity": return 1 if g._sigil.has_rarity(int(a.get("param", 0))) else 0
+		"sigil_set_count":
+			var best := 0
+			for s in g._sigil.catalog_sets():
+				var ids: Array = (s as Dictionary).get("card_ids", [])
+				var per := 0
+				for cid in ids:
+					if g._sigil.has_collected(str(cid)):
+						per += 1
+				best = maxi(best, per)
+			return best
+		"sigil_sets_full":
+			var full := 0
+			for s in g._sigil.catalog_sets():
+				var ids: Array = (s as Dictionary).get("card_ids", [])
+				if ids.is_empty():
+					continue
+				var per := 0
+				for cid in ids:
+					if g._sigil.has_collected(str(cid)):
+						per += 1
+				if per == ids.size():
+					full += 1
+			return full
 	return 0
 
 func _ach_update() -> void:
@@ -178,6 +205,18 @@ func _ach_requirement(a: Dictionary) -> String:
 		"affinity": return "Достигни %d уровня дружбы со Светиком" % p
 		"upgrades": return "Купи %d уровней улучшений" % p
 		"sets": return "Собери %d комплекта стихий" % p
+		# Достижения карточек (Аркан Сигилов) — тексты из спеки §1 дословно.
+		"sigil_total": return "Собери первый сигил" if p == 1 else "Собери %d сигилов" % p
+		"sigil_first_rarity":
+			match p:
+				0: return "Собери карту обычной редкости"
+				1: return "Собери карту редкой редкости"
+				2: return "Собери карту эпической редкости"
+				3: return "Собери карту легендарной редкости"
+				4: return "Собери хроматический сигил"
+			return ""
+		"sigil_set_count": return "Собери %d карт одного комплекта" % p
+		"sigil_sets_full": return "Собери все четыре комплекта" if p == 4 else "Собери комплект целиком"
 	return ""
 
 func _rebuild_ach_rows() -> void:

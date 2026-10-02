@@ -315,6 +315,26 @@ func has_collected(card_id: String) -> bool:
 	return copies_of(card_id) > 0
 
 
+## Есть ли собранная карта данной редкости (для достижений). Индекс редкости:
+## 0=common, 1=rare, 2=epic, 3=legendary — по серверной коллекции и каталогу;
+## 4=chromatic — по внекомплектным крафтам (любой extra).
+func has_rarity(idx: int) -> bool:
+	if idx == 4:
+		return _server_extras.size() > 0
+	var wanted := ""
+	match idx:
+		0: wanted = "common"
+		1: wanted = "rare"
+		2: wanted = "epic"
+		3: wanted = "legendary"
+		_: return false
+	for cid in _server_collection:
+		var c := card(str(cid))
+		if str(c.get("rarity", "")) == wanted:
+			return true
+	return false
+
+
 func server_collection() -> Dictionary:
 	return _server_collection.duplicate(true)
 

@@ -621,6 +621,9 @@ func _ready() -> void:
 	Net.sigil_milestone_result.connect(_on_sigil_milestone_result)
 	_sigil.craft_completed.connect(_on_sigil_craft_completed)
 	_sigil.craft_failed.connect(_on_sigil_craft_failed)
+	# Task 8: достижения карточек обновляются при любой смене коллекции. В selftest
+	# _ach_update no-op (g._selftest), поэтому коннект безопасен и в прогоне сьютов.
+	_sigil.collection_changed.connect(_progress_ui._ach_update)
 	_init_new_game()
 	_saves._load_game()
 	_build_ui()
