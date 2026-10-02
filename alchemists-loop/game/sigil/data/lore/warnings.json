@@ -1,0 +1,2411 @@
+{
+  "fragments": [
+    {
+      "id": "warnings_001",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": []
+      },
+      "text": "Если {source} коснётся {mercury:gen} — берегись: пары ядовиты, работай на ветру",
+      "weight": 6
+    },
+    {
+      "id": "warnings_002",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": []
+      },
+      "text": "Если {source} коснётся {mercury:gen} — не вдыхай дым — он оставляет горький привкус",
+      "weight": 6
+    },
+    {
+      "id": "warnings_003",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": []
+      },
+      "text": "Если {source} коснётся {mercury:gen} — держись подальше от открытого пламени",
+      "weight": 6
+    },
+    {
+      "id": "warnings_004",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": []
+      },
+      "text": "Если {source} коснётся {mercury:gen} — если жидкость зашипит, немедленно отойди",
+      "weight": 6
+    },
+    {
+      "id": "warnings_005",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": []
+      },
+      "text": "Если {source} коснётся {mercury:gen} — не касайся голыми руками, пока не остынет",
+      "weight": 6
+    },
+    {
+      "id": "warnings_006",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": []
+      },
+      "text": "Если {source} коснётся {mercury:gen} — сосуд может треснуть — работай вдали от глаз",
+      "weight": 6
+    },
+    {
+      "id": "warnings_007",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пары {source:gen} ядовиты: берегись: пары ядовиты, работай на ветру",
+      "weight": 6
+    },
+    {
+      "id": "warnings_008",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пары {source:gen} ядовиты: не вдыхай дым — он оставляет горький привкус",
+      "weight": 6
+    },
+    {
+      "id": "warnings_009",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пары {source:gen} ядовиты: держись подальше от открытого пламени",
+      "weight": 6
+    },
+    {
+      "id": "warnings_010",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пары {source:gen} ядовиты: если жидкость зашипит, немедленно отойди",
+      "weight": 6
+    },
+    {
+      "id": "warnings_011",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пары {source:gen} ядовиты: не касайся голыми руками, пока не остынет",
+      "weight": 6
+    },
+    {
+      "id": "warnings_012",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пары {source:gen} ядовиты: сосуд может треснуть — работай вдали от глаз",
+      "weight": 6
+    },
+    {
+      "id": "warnings_013",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не нагревай {source:acc} слишком сильно: берегись: пары ядовиты, работай на ветру",
+      "weight": 6
+    },
+    {
+      "id": "warnings_014",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не нагревай {source:acc} слишком сильно: не вдыхай дым — он оставляет горький привкус",
+      "weight": 6
+    },
+    {
+      "id": "warnings_015",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не нагревай {source:acc} слишком сильно: держись подальше от открытого пламени",
+      "weight": 6
+    },
+    {
+      "id": "warnings_016",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не нагревай {source:acc} слишком сильно: если жидкость зашипит, немедленно отойди",
+      "weight": 6
+    },
+    {
+      "id": "warnings_017",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не нагревай {source:acc} слишком сильно: не касайся голыми руками, пока не остынет",
+      "weight": 6
+    },
+    {
+      "id": "warnings_018",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не нагревай {source:acc} слишком сильно: сосуд может треснуть — работай вдали от глаз",
+      "weight": 6
+    },
+    {
+      "id": "warnings_019",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Берегись: {source} летуч, и берегись: пары ядовиты, работай на ветру",
+      "weight": 5
+    },
+    {
+      "id": "warnings_020",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Берегись: {source} летуч, и не вдыхай дым — он оставляет горький привкус",
+      "weight": 5
+    },
+    {
+      "id": "warnings_021",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Берегись: {source} летуч, и держись подальше от открытого пламени",
+      "weight": 5
+    },
+    {
+      "id": "warnings_022",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Берегись: {source} летуч, и если жидкость зашипит, немедленно отойди",
+      "weight": 5
+    },
+    {
+      "id": "warnings_023",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Берегись: {source} летуч, и не касайся голыми руками, пока не остынет",
+      "weight": 5
+    },
+    {
+      "id": "warnings_024",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Берегись: {source} летуч, и сосуд может треснуть — работай вдали от глаз",
+      "weight": 5
+    },
+    {
+      "id": "warnings_025",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "берегись: пары ядовиты, работай на ветру: не вдыхай испарения {source:gen}",
+      "weight": 5
+    },
+    {
+      "id": "warnings_026",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "не вдыхай дым — он оставляет горький привкус: не вдыхай испарения {source:gen}",
+      "weight": 5
+    },
+    {
+      "id": "warnings_027",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "держись подальше от открытого пламени: не вдыхай испарения {source:gen}",
+      "weight": 5
+    },
+    {
+      "id": "warnings_028",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "если жидкость зашипит, немедленно отойди: не вдыхай испарения {source:gen}",
+      "weight": 5
+    },
+    {
+      "id": "warnings_029",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "не касайся голыми руками, пока не остынет: не вдыхай испарения {source:gen}",
+      "weight": 5
+    },
+    {
+      "id": "warnings_030",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "сосуд может треснуть — работай вдали от глаз: не вдыхай испарения {source:gen}",
+      "weight": 5
+    },
+    {
+      "id": "warnings_031",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не смешивай {source:acc} c {mercury:acc}: берегись: пары ядовиты, работай на ветру",
+      "weight": 6
+    },
+    {
+      "id": "warnings_032",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не смешивай {source:acc} c {mercury:acc}: не вдыхай дым — он оставляет горький привкус",
+      "weight": 6
+    },
+    {
+      "id": "warnings_033",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не смешивай {source:acc} c {mercury:acc}: держись подальше от открытого пламени",
+      "weight": 6
+    },
+    {
+      "id": "warnings_034",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не смешивай {source:acc} c {mercury:acc}: если жидкость зашипит, немедленно отойди",
+      "weight": 6
+    },
+    {
+      "id": "warnings_035",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не смешивай {source:acc} c {mercury:acc}: не касайся голыми руками, пока не остынет",
+      "weight": 6
+    },
+    {
+      "id": "warnings_036",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не смешивай {source:acc} c {mercury:acc}: сосуд может треснуть — работай вдали от глаз",
+      "weight": 6
+    },
+    {
+      "id": "warnings_037",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "берегись: пары ядовиты, работай на ветру — иначе {source} улетит с дымом",
+      "weight": 5
+    },
+    {
+      "id": "warnings_038",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "не вдыхай дым — он оставляет горький привкус — иначе {source} улетит с дымом",
+      "weight": 5
+    },
+    {
+      "id": "warnings_039",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "держись подальше от открытого пламени — иначе {source} улетит с дымом",
+      "weight": 5
+    },
+    {
+      "id": "warnings_040",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "если жидкость зашипит, немедленно отойди — иначе {source} улетит с дымом",
+      "weight": 5
+    },
+    {
+      "id": "warnings_041",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "не касайся голыми руками, пока не остынет — иначе {source} улетит с дымом",
+      "weight": 5
+    },
+    {
+      "id": "warnings_042",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "сосуд может треснуть — работай вдали от глаз — иначе {source} улетит с дымом",
+      "weight": 5
+    },
+    {
+      "id": "warnings_043",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} подальше от огня: берегись: пары ядовиты, работай на ветру",
+      "weight": 5
+    },
+    {
+      "id": "warnings_044",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} подальше от огня: не вдыхай дым — он оставляет горький привкус",
+      "weight": 5
+    },
+    {
+      "id": "warnings_045",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} подальше от огня: держись подальше от открытого пламени",
+      "weight": 5
+    },
+    {
+      "id": "warnings_046",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} подальше от огня: если жидкость зашипит, немедленно отойди",
+      "weight": 5
+    },
+    {
+      "id": "warnings_047",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} подальше от огня: не касайся голыми руками, пока не остынет",
+      "weight": 5
+    },
+    {
+      "id": "warnings_048",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} подальше от огня: сосуд может треснуть — работай вдали от глаз",
+      "weight": 5
+    },
+    {
+      "id": "warnings_049",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "берегись: пары ядовиты, работай на ветру: отойди, пока не остынет",
+      "weight": 4
+    },
+    {
+      "id": "warnings_050",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "не вдыхай дым — он оставляет горький привкус: отойди, пока не остынет",
+      "weight": 4
+    },
+    {
+      "id": "warnings_051",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "держись подальше от открытого пламени: отойди, пока не остынет",
+      "weight": 4
+    },
+    {
+      "id": "warnings_052",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "если жидкость зашипит, немедленно отойди: отойди, пока не остынет",
+      "weight": 4
+    },
+    {
+      "id": "warnings_053",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "не касайся голыми руками, пока не остынет: отойди, пока не остынет",
+      "weight": 4
+    },
+    {
+      "id": "warnings_054",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "сосуд может треснуть — работай вдали от глаз: отойди, пока не остынет",
+      "weight": 4
+    },
+    {
+      "id": "warnings_055",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Если пойдёт едкий дым — берегись: пары ядовиты, работай на ветру",
+      "weight": 5
+    },
+    {
+      "id": "warnings_056",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Если пойдёт едкий дым — не вдыхай дым — он оставляет горький привкус",
+      "weight": 5
+    },
+    {
+      "id": "warnings_057",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Если пойдёт едкий дым — держись подальше от открытого пламени",
+      "weight": 5
+    },
+    {
+      "id": "warnings_058",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Если пойдёт едкий дым — если жидкость зашипит, немедленно отойди",
+      "weight": 5
+    },
+    {
+      "id": "warnings_059",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Если пойдёт едкий дым — не касайся голыми руками, пока не остынет",
+      "weight": 5
+    },
+    {
+      "id": "warnings_060",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Если пойдёт едкий дым — сосуд может треснуть — работай вдали от глаз",
+      "weight": 5
+    },
+    {
+      "id": "warnings_061",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "берегись: пары ядовиты, работай на ветру — и {source} отравит смесь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_062",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "не вдыхай дым — он оставляет горький привкус — и {source} отравит смесь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_063",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "держись подальше от открытого пламени — и {source} отравит смесь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_064",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "если жидкость зашипит, немедленно отойди — и {source} отравит смесь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_065",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "не касайся голыми руками, пока не остынет — и {source} отравит смесь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_066",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "сосуд может треснуть — работай вдали от глаз — и {source} отравит смесь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_067",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не смешивай {source:acc} c {target:acc} впопыхах: берегись: пары ядовиты, работай на ветру",
+      "weight": 5
+    },
+    {
+      "id": "warnings_068",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не смешивай {source:acc} c {target:acc} впопыхах: не вдыхай дым — он оставляет горький привкус",
+      "weight": 5
+    },
+    {
+      "id": "warnings_069",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не смешивай {source:acc} c {target:acc} впопыхах: держись подальше от открытого пламени",
+      "weight": 5
+    },
+    {
+      "id": "warnings_070",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не смешивай {source:acc} c {target:acc} впопыхах: если жидкость зашипит, немедленно отойди",
+      "weight": 5
+    },
+    {
+      "id": "warnings_071",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не смешивай {source:acc} c {target:acc} впопыхах: не касайся голыми руками, пока не остынет",
+      "weight": 5
+    },
+    {
+      "id": "warnings_072",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Не смешивай {source:acc} c {target:acc} впопыхах: сосуд может треснуть — работай вдали от глаз",
+      "weight": 5
+    },
+    {
+      "id": "warnings_073",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "берегись: пары ядовиты, работай на ветру — иначе пойдёт едкая гарь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_074",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "не вдыхай дым — он оставляет горький привкус — иначе пойдёт едкая гарь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_075",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "держись подальше от открытого пламени — иначе пойдёт едкая гарь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_076",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "если жидкость зашипит, немедленно отойди — иначе пойдёт едкая гарь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_077",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "не касайся голыми руками, пока не остынет — иначе пойдёт едкая гарь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_078",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "сосуд может треснуть — работай вдали от глаз — иначе пойдёт едкая гарь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_079",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Осторожно: {source} легко воспламеняется берегись: пары ядовиты, работай на ветру",
+      "weight": 5
+    },
+    {
+      "id": "warnings_080",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Осторожно: {source} легко воспламеняется не вдыхай дым — он оставляет горький привкус",
+      "weight": 5
+    },
+    {
+      "id": "warnings_081",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Осторожно: {source} легко воспламеняется держись подальше от открытого пламени",
+      "weight": 5
+    },
+    {
+      "id": "warnings_082",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Осторожно: {source} легко воспламеняется если жидкость зашипит, немедленно отойди",
+      "weight": 5
+    },
+    {
+      "id": "warnings_083",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Осторожно: {source} легко воспламеняется не касайся голыми руками, пока не остынет",
+      "weight": 5
+    },
+    {
+      "id": "warnings_084",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Осторожно: {source} легко воспламеняется сосуд может треснуть — работай вдали от глаз",
+      "weight": 5
+    },
+    {
+      "id": "warnings_085",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "При берегись: пары ядовиты, работай на ветру держи лицо подальше от сосуда",
+      "weight": 5
+    },
+    {
+      "id": "warnings_086",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "При не вдыхай дым — он оставляет горький привкус держи лицо подальше от сосуда",
+      "weight": 5
+    },
+    {
+      "id": "warnings_087",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "При держись подальше от открытого пламени держи лицо подальше от сосуда",
+      "weight": 5
+    },
+    {
+      "id": "warnings_088",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "При если жидкость зашипит, немедленно отойди держи лицо подальше от сосуда",
+      "weight": 5
+    },
+    {
+      "id": "warnings_089",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "При не касайся голыми руками, пока не остынет держи лицо подальше от сосуда",
+      "weight": 5
+    },
+    {
+      "id": "warnings_090",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "При сосуд может треснуть — работай вдали от глаз держи лицо подальше от сосуда",
+      "weight": 5
+    },
+    {
+      "id": "warnings_091",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "берегись: пары ядовиты, работай на ветру — тяжёлые испарения стелются по полу",
+      "weight": 5
+    },
+    {
+      "id": "warnings_092",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "не вдыхай дым — он оставляет горький привкус — тяжёлые испарения стелются по полу",
+      "weight": 5
+    },
+    {
+      "id": "warnings_093",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "держись подальше от открытого пламени — тяжёлые испарения стелются по полу",
+      "weight": 5
+    },
+    {
+      "id": "warnings_094",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "если жидкость зашипит, немедленно отойди — тяжёлые испарения стелются по полу",
+      "weight": 5
+    },
+    {
+      "id": "warnings_095",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "не касайся голыми руками, пока не остынет — тяжёлые испарения стелются по полу",
+      "weight": 5
+    },
+    {
+      "id": "warnings_096",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "poison",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "сосуд может треснуть — работай вдали от глаз — тяжёлые испарения стелются по полу",
+      "weight": 5
+    },
+    {
+      "id": "warnings_097",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Если берегись: пары ядовиты, работай на ветру — немедленно гаси огонь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_098",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Если не вдыхай дым — он оставляет горький привкус — немедленно гаси огонь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_099",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Если держись подальше от открытого пламени — немедленно гаси огонь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_100",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Если если жидкость зашипит, немедленно отойди — немедленно гаси огонь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_101",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Если не касайся голыми руками, пока не остынет — немедленно гаси огонь",
+      "weight": 5
+    },
+    {
+      "id": "warnings_102",
+      "slot": "warnings",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Если сосуд может треснуть — работай вдали от глаз — немедленно гаси огонь",
+      "weight": 5
+    }
+  ],
+  "version": 1
+}

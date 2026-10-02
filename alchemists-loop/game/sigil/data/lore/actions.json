@@ -1,0 +1,2369 @@
+{
+  "fragments": [
+    {
+      "id": "actions_001",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Помести {source:acc} в тигель и держи в огне всю ночь и наблюдай",
+      "weight": 8
+    },
+    {
+      "id": "actions_002",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Помести {source:acc} в реторту и оставь под луной до утра и наблюдай",
+      "weight": 8
+    },
+    {
+      "id": "actions_003",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Помести {source:acc} в алембик и перегоняй трижды и наблюдай",
+      "weight": 8
+    },
+    {
+      "id": "actions_004",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Помести {source:acc} в глиняный горшок, закопав в тёплую золу и наблюдай",
+      "weight": 8
+    },
+    {
+      "id": "actions_005",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Помести {source:acc} в стеклянную колбу, подвесив над слабым огнём и наблюдай",
+      "weight": 8
+    },
+    {
+      "id": "actions_006",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Помести {source:acc} в тигель, накрыв влажной тканью до рассвета и наблюдай",
+      "weight": 8
+    },
+    {
+      "id": "actions_007",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Смешай {source:acc} c {target:acc} в тигель и держи в огне всю ночь",
+      "weight": 7
+    },
+    {
+      "id": "actions_008",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Смешай {source:acc} c {target:acc} в реторту и оставь под луной до утра",
+      "weight": 7
+    },
+    {
+      "id": "actions_009",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Смешай {source:acc} c {target:acc} в алембик и перегоняй трижды",
+      "weight": 7
+    },
+    {
+      "id": "actions_010",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Смешай {source:acc} c {target:acc} в глиняный горшок, закопав в тёплую золу",
+      "weight": 7
+    },
+    {
+      "id": "actions_011",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Смешай {source:acc} c {target:acc} в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 7
+    },
+    {
+      "id": "actions_012",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Смешай {source:acc} c {target:acc} в тигель, накрыв влажной тканью до рассвета",
+      "weight": 7
+    },
+    {
+      "id": "actions_013",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Раствори {source:acc} в кислоте в тигель и держи в огне всю ночь",
+      "weight": 6
+    },
+    {
+      "id": "actions_014",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Раствори {source:acc} в кислоте в реторту и оставь под луной до утра",
+      "weight": 6
+    },
+    {
+      "id": "actions_015",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Раствори {source:acc} в кислоте в алембик и перегоняй трижды",
+      "weight": 6
+    },
+    {
+      "id": "actions_016",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Раствори {source:acc} в кислоте в глиняный горшок, закопав в тёплую золу",
+      "weight": 6
+    },
+    {
+      "id": "actions_017",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Раствори {source:acc} в кислоте в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 6
+    },
+    {
+      "id": "actions_018",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Раствори {source:acc} в кислоте в тигель, накрыв влажной тканью до рассвета",
+      "weight": 6
+    },
+    {
+      "id": "actions_019",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Прогрей {source:acc} на огне до красноты в тигель и держи в огне всю ночь",
+      "weight": 6
+    },
+    {
+      "id": "actions_020",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Прогрей {source:acc} на огне до красноты в реторту и оставь под луной до утра",
+      "weight": 6
+    },
+    {
+      "id": "actions_021",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Прогрей {source:acc} на огне до красноты в алембик и перегоняй трижды",
+      "weight": 6
+    },
+    {
+      "id": "actions_022",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Прогрей {source:acc} на огне до красноты в глиняный горшок, закопав в тёплую золу",
+      "weight": 6
+    },
+    {
+      "id": "actions_023",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Прогрей {source:acc} на огне до красноты в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 6
+    },
+    {
+      "id": "actions_024",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Прогрей {source:acc} на огне до красноты в тигель, накрыв влажной тканью до рассвета",
+      "weight": 6
+    },
+    {
+      "id": "actions_025",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Собери росу с {target:gen} в тигель и держи в огне всю ночь",
+      "weight": 6
+    },
+    {
+      "id": "actions_026",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Собери росу с {target:gen} в реторту и оставь под луной до утра",
+      "weight": 6
+    },
+    {
+      "id": "actions_027",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Собери росу с {target:gen} в алембик и перегоняй трижды",
+      "weight": 6
+    },
+    {
+      "id": "actions_028",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Собери росу с {target:gen} в глиняный горшок, закопав в тёплую золу",
+      "weight": 6
+    },
+    {
+      "id": "actions_029",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Собери росу с {target:gen} в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 6
+    },
+    {
+      "id": "actions_030",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Собери росу с {target:gen} в тигель, накрыв влажной тканью до рассвета",
+      "weight": 6
+    },
+    {
+      "id": "actions_031",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Запечатай {source:acc} в глиняном сосуде в тигель и держи в огне всю ночь",
+      "weight": 6
+    },
+    {
+      "id": "actions_032",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Запечатай {source:acc} в глиняном сосуде в реторту и оставь под луной до утра",
+      "weight": 6
+    },
+    {
+      "id": "actions_033",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Запечатай {source:acc} в глиняном сосуде в алембик и перегоняй трижды",
+      "weight": 6
+    },
+    {
+      "id": "actions_034",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Запечатай {source:acc} в глиняном сосуде в глиняный горшок, закопав в тёплую золу",
+      "weight": 6
+    },
+    {
+      "id": "actions_035",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Запечатай {source:acc} в глиняном сосуде в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 6
+    },
+    {
+      "id": "actions_036",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Запечатай {source:acc} в глиняном сосуде в тигель, накрыв влажной тканью до рассвета",
+      "weight": 6
+    },
+    {
+      "id": "actions_037",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Растолки {source:acc} в ступке и просей в тигель и держи в огне всю ночь",
+      "weight": 6
+    },
+    {
+      "id": "actions_038",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Растолки {source:acc} в ступке и просей в реторту и оставь под луной до утра",
+      "weight": 6
+    },
+    {
+      "id": "actions_039",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Растолки {source:acc} в ступке и просей в алембик и перегоняй трижды",
+      "weight": 6
+    },
+    {
+      "id": "actions_040",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Растолки {source:acc} в ступке и просей в глиняный горшок, закопав в тёплую золу",
+      "weight": 6
+    },
+    {
+      "id": "actions_041",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Растолки {source:acc} в ступке и просей в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 6
+    },
+    {
+      "id": "actions_042",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Растолки {source:acc} в ступке и просей в тигель, накрыв влажной тканью до рассвета",
+      "weight": 6
+    },
+    {
+      "id": "actions_043",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Соедини {source:acc} c {mercury:ins} в тигель и держи в огне всю ночь",
+      "weight": 7
+    },
+    {
+      "id": "actions_044",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Соедини {source:acc} c {mercury:ins} в реторту и оставь под луной до утра",
+      "weight": 7
+    },
+    {
+      "id": "actions_045",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Соедини {source:acc} c {mercury:ins} в алембик и перегоняй трижды",
+      "weight": 7
+    },
+    {
+      "id": "actions_046",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Соедини {source:acc} c {mercury:ins} в глиняный горшок, закопав в тёплую золу",
+      "weight": 7
+    },
+    {
+      "id": "actions_047",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Соедини {source:acc} c {mercury:ins} в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 7
+    },
+    {
+      "id": "actions_048",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "volatile",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Соедини {source:acc} c {mercury:ins} в тигель, накрыв влажной тканью до рассвета",
+      "weight": 7
+    },
+    {
+      "id": "actions_049",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Возгони {source:acc}, собирая белый налёт в тигель и держи в огне всю ночь",
+      "weight": 6
+    },
+    {
+      "id": "actions_050",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Возгони {source:acc}, собирая белый налёт в реторту и оставь под луной до утра",
+      "weight": 6
+    },
+    {
+      "id": "actions_051",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Возгони {source:acc}, собирая белый налёт в алембик и перегоняй трижды",
+      "weight": 6
+    },
+    {
+      "id": "actions_052",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Возгони {source:acc}, собирая белый налёт в глиняный горшок, закопав в тёплую золу",
+      "weight": 6
+    },
+    {
+      "id": "actions_053",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Возгони {source:acc}, собирая белый налёт в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 6
+    },
+    {
+      "id": "actions_054",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Возгони {source:acc}, собирая белый налёт в тигель, накрыв влажной тканью до рассвета",
+      "weight": 6
+    },
+    {
+      "id": "actions_055",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Очисти {source:acc} через полотно в тигель и держи в огне всю ночь",
+      "weight": 5
+    },
+    {
+      "id": "actions_056",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Очисти {source:acc} через полотно в реторту и оставь под луной до утра",
+      "weight": 5
+    },
+    {
+      "id": "actions_057",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Очисти {source:acc} через полотно в алембик и перегоняй трижды",
+      "weight": 5
+    },
+    {
+      "id": "actions_058",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Очисти {source:acc} через полотно в глиняный горшок, закопав в тёплую золу",
+      "weight": 5
+    },
+    {
+      "id": "actions_059",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Очисти {source:acc} через полотно в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 5
+    },
+    {
+      "id": "actions_060",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Очисти {source:acc} через полотно в тигель, накрыв влажной тканью до рассвета",
+      "weight": 5
+    },
+    {
+      "id": "actions_061",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Нагрей {source:acc} до появления золы в тигель и держи в огне всю ночь",
+      "weight": 5
+    },
+    {
+      "id": "actions_062",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Нагрей {source:acc} до появления золы в реторту и оставь под луной до утра",
+      "weight": 5
+    },
+    {
+      "id": "actions_063",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Нагрей {source:acc} до появления золы в алембик и перегоняй трижды",
+      "weight": 5
+    },
+    {
+      "id": "actions_064",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Нагрей {source:acc} до появления золы в глиняный горшок, закопав в тёплую золу",
+      "weight": 5
+    },
+    {
+      "id": "actions_065",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Нагрей {source:acc} до появления золы в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 5
+    },
+    {
+      "id": "actions_066",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Нагрей {source:acc} до появления золы в тигель, накрыв влажной тканью до рассвета",
+      "weight": 5
+    },
+    {
+      "id": "actions_067",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Разотри {source:acc} c {salt:ins} в тигель и держи в огне всю ночь",
+      "weight": 6
+    },
+    {
+      "id": "actions_068",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Разотри {source:acc} c {salt:ins} в реторту и оставь под луной до утра",
+      "weight": 6
+    },
+    {
+      "id": "actions_069",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Разотри {source:acc} c {salt:ins} в алембик и перегоняй трижды",
+      "weight": 6
+    },
+    {
+      "id": "actions_070",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Разотри {source:acc} c {salt:ins} в глиняный горшок, закопав в тёплую золу",
+      "weight": 6
+    },
+    {
+      "id": "actions_071",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Разотри {source:acc} c {salt:ins} в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 6
+    },
+    {
+      "id": "actions_072",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Разотри {source:acc} c {salt:ins} в тигель, накрыв влажной тканью до рассвета",
+      "weight": 6
+    },
+    {
+      "id": "actions_073",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Перегони {source:acc} и собери дистиллят в тигель и держи в огне всю ночь",
+      "weight": 7
+    },
+    {
+      "id": "actions_074",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Перегони {source:acc} и собери дистиллят в реторту и оставь под луной до утра",
+      "weight": 7
+    },
+    {
+      "id": "actions_075",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Перегони {source:acc} и собери дистиллят в алембик и перегоняй трижды",
+      "weight": 7
+    },
+    {
+      "id": "actions_076",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Перегони {source:acc} и собери дистиллят в глиняный горшок, закопав в тёплую золу",
+      "weight": 7
+    },
+    {
+      "id": "actions_077",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Перегони {source:acc} и собери дистиллят в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 7
+    },
+    {
+      "id": "actions_078",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Перегони {source:acc} и собери дистиллят в тигель, накрыв влажной тканью до рассвета",
+      "weight": 7
+    },
+    {
+      "id": "actions_079",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "rubedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Соедини {source:acc} c {sulfur:ins} в тигель и держи в огне всю ночь",
+      "weight": 6
+    },
+    {
+      "id": "actions_080",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "rubedo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Соедини {source:acc} c {sulfur:ins} в реторту и оставь под луной до утра",
+      "weight": 6
+    },
+    {
+      "id": "actions_081",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "rubedo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Соедини {source:acc} c {sulfur:ins} в алембик и перегоняй трижды",
+      "weight": 6
+    },
+    {
+      "id": "actions_082",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "rubedo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Соедини {source:acc} c {sulfur:ins} в глиняный горшок, закопав в тёплую золу",
+      "weight": 6
+    },
+    {
+      "id": "actions_083",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "rubedo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Соедини {source:acc} c {sulfur:ins} в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 6
+    },
+    {
+      "id": "actions_084",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "rubedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Соедини {source:acc} c {sulfur:ins} в тигель, накрыв влажной тканью до рассвета",
+      "weight": 6
+    },
+    {
+      "id": "actions_085",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Подвесь {source:acc} в марле над паром в тигель и держи в огне всю ночь",
+      "weight": 5
+    },
+    {
+      "id": "actions_086",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Подвесь {source:acc} в марле над паром в реторту и оставь под луной до утра",
+      "weight": 5
+    },
+    {
+      "id": "actions_087",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Подвесь {source:acc} в марле над паром в алембик и перегоняй трижды",
+      "weight": 5
+    },
+    {
+      "id": "actions_088",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Подвесь {source:acc} в марле над паром в глиняный горшок, закопав в тёплую золу",
+      "weight": 5
+    },
+    {
+      "id": "actions_089",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Подвесь {source:acc} в марле над паром в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 5
+    },
+    {
+      "id": "actions_090",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Подвесь {source:acc} в марле над паром в тигель, накрыв влажной тканью до рассвета",
+      "weight": 5
+    },
+    {
+      "id": "actions_091",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Запечатай {source:acc} и оставь бродить в тигель и держи в огне всю ночь",
+      "weight": 5
+    },
+    {
+      "id": "actions_092",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Запечатай {source:acc} и оставь бродить в реторту и оставь под луной до утра",
+      "weight": 5
+    },
+    {
+      "id": "actions_093",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Запечатай {source:acc} и оставь бродить в алембик и перегоняй трижды",
+      "weight": 5
+    },
+    {
+      "id": "actions_094",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Запечатай {source:acc} и оставь бродить в глиняный горшок, закопав в тёплую золу",
+      "weight": 5
+    },
+    {
+      "id": "actions_095",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Запечатай {source:acc} и оставь бродить в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 5
+    },
+    {
+      "id": "actions_096",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Запечатай {source:acc} и оставь бродить в тигель, накрыв влажной тканью до рассвета",
+      "weight": 5
+    },
+    {
+      "id": "actions_097",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "rubedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Смешай {source:acc} c {lead:acc} в тигель и держи в огне всю ночь",
+      "weight": 6
+    },
+    {
+      "id": "actions_098",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "rubedo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Смешай {source:acc} c {lead:acc} в реторту и оставь под луной до утра",
+      "weight": 6
+    },
+    {
+      "id": "actions_099",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "rubedo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Смешай {source:acc} c {lead:acc} в алембик и перегоняй трижды",
+      "weight": 6
+    },
+    {
+      "id": "actions_100",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "rubedo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Смешай {source:acc} c {lead:acc} в глиняный горшок, закопав в тёплую золу",
+      "weight": 6
+    },
+    {
+      "id": "actions_101",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "rubedo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Смешай {source:acc} c {lead:acc} в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 6
+    },
+    {
+      "id": "actions_102",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "rubedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Смешай {source:acc} c {lead:acc} в тигель, накрыв влажной тканью до рассвета",
+      "weight": 6
+    },
+    {
+      "id": "actions_103",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Возгони {source:acc} на водяной бане в тигель и держи в огне всю ночь",
+      "weight": 5
+    },
+    {
+      "id": "actions_104",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Возгони {source:acc} на водяной бане в реторту и оставь под луной до утра",
+      "weight": 5
+    },
+    {
+      "id": "actions_105",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Возгони {source:acc} на водяной бане в алембик и перегоняй трижды",
+      "weight": 5
+    },
+    {
+      "id": "actions_106",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Возгони {source:acc} на водяной бане в глиняный горшок, закопав в тёплую золу",
+      "weight": 5
+    },
+    {
+      "id": "actions_107",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Возгони {source:acc} на водяной бане в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 5
+    },
+    {
+      "id": "actions_108",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "sublimatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Возгони {source:acc} на водяной бане в тигель, накрыв влажной тканью до рассвета",
+      "weight": 5
+    },
+    {
+      "id": "actions_109",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Осторожно нагрей {source:acc} c водой в тигель и держи в огне всю ночь",
+      "weight": 5
+    },
+    {
+      "id": "actions_110",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Осторожно нагрей {source:acc} c водой в реторту и оставь под луной до утра",
+      "weight": 5
+    },
+    {
+      "id": "actions_111",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Осторожно нагрей {source:acc} c водой в алембик и перегоняй трижды",
+      "weight": 5
+    },
+    {
+      "id": "actions_112",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Осторожно нагрей {source:acc} c водой в глиняный горшок, закопав в тёплую золу",
+      "weight": 5
+    },
+    {
+      "id": "actions_113",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Осторожно нагрей {source:acc} c водой в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 5
+    },
+    {
+      "id": "actions_114",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Осторожно нагрей {source:acc} c водой в тигель, накрыв влажной тканью до рассвета",
+      "weight": 5
+    },
+    {
+      "id": "actions_115",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "citrinitas"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Соедини {source:acc} c {target:acc}, помешивая в тигель и держи в огне всю ночь",
+      "weight": 6
+    },
+    {
+      "id": "actions_116",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "citrinitas"
+        ],
+        "vessel": [
+          "реторта"
+        ]
+      },
+      "text": "Соедини {source:acc} c {target:acc}, помешивая в реторту и оставь под луной до утра",
+      "weight": 6
+    },
+    {
+      "id": "actions_117",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "citrinitas"
+        ],
+        "vessel": [
+          "алембик"
+        ]
+      },
+      "text": "Соедини {source:acc} c {target:acc}, помешивая в алембик и перегоняй трижды",
+      "weight": 6
+    },
+    {
+      "id": "actions_118",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "citrinitas"
+        ],
+        "vessel": [
+          "горшок"
+        ]
+      },
+      "text": "Соедини {source:acc} c {target:acc}, помешивая в глиняный горшок, закопав в тёплую золу",
+      "weight": 6
+    },
+    {
+      "id": "actions_119",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "citrinitas"
+        ],
+        "vessel": [
+          "колба"
+        ]
+      },
+      "text": "Соедини {source:acc} c {target:acc}, помешивая в стеклянную колбу, подвесив над слабым огнём",
+      "weight": 6
+    },
+    {
+      "id": "actions_120",
+      "slot": "actions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "citrinitas"
+        ],
+        "vessel": [
+          "тигель"
+        ]
+      },
+      "text": "Соедини {source:acc} c {target:acc}, помешивая в тигель, накрыв влажной тканью до рассвета",
+      "weight": 6
+    }
+  ],
+  "version": 1
+}

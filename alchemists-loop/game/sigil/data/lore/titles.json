@@ -1,0 +1,2453 @@
+{
+  "fragments": [
+    {
+      "id": "titles_001",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {symbol} — {stage}",
+      "weight": 7
+    },
+    {
+      "id": "titles_002",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {symbol} — {stage}",
+      "weight": 7
+    },
+    {
+      "id": "titles_003",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {symbol} — {stage}",
+      "weight": 7
+    },
+    {
+      "id": "titles_004",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {symbol} — {stage}",
+      "weight": 7
+    },
+    {
+      "id": "titles_005",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {symbol} — {stage}",
+      "weight": 7
+    },
+    {
+      "id": "titles_006",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {symbol} — {stage}",
+      "weight": 7
+    },
+    {
+      "id": "titles_007",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} {stage}: путь {process}",
+      "weight": 7
+    },
+    {
+      "id": "titles_008",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} {stage}: путь {process}",
+      "weight": 7
+    },
+    {
+      "id": "titles_009",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} {stage}: путь {process}",
+      "weight": 7
+    },
+    {
+      "id": "titles_010",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} {stage}: путь {process}",
+      "weight": 7
+    },
+    {
+      "id": "titles_011",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} {stage}: путь {process}",
+      "weight": 7
+    },
+    {
+      "id": "titles_012",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} {stage}: путь {process}",
+      "weight": 7
+    },
+    {
+      "id": "titles_013",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} под знаком {symbol}",
+      "weight": 6
+    },
+    {
+      "id": "titles_014",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} под знаком {symbol}",
+      "weight": 6
+    },
+    {
+      "id": "titles_015",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} под знаком {symbol}",
+      "weight": 6
+    },
+    {
+      "id": "titles_016",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} под знаком {symbol}",
+      "weight": 6
+    },
+    {
+      "id": "titles_017",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} под знаком {symbol}",
+      "weight": 6
+    },
+    {
+      "id": "titles_018",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} под знаком {symbol}",
+      "weight": 6
+    },
+    {
+      "id": "titles_019",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{target} {stage} — {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_020",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{target} {stage} — {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_021",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{target} {stage} — {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_022",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{target} {stage} — {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_023",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{target} {stage} — {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_024",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{target} {stage} — {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_025",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "врата {stage} через {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_026",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "врата {stage} через {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_027",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "врата {stage} через {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_028",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "врата {stage} через {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_029",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "врата {stage} через {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_030",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "врата {stage} через {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_031",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} и {symbol} в час {stage}",
+      "weight": 6
+    },
+    {
+      "id": "titles_032",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} и {symbol} в час {stage}",
+      "weight": 6
+    },
+    {
+      "id": "titles_033",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} и {symbol} в час {stage}",
+      "weight": 6
+    },
+    {
+      "id": "titles_034",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} и {symbol} в час {stage}",
+      "weight": 6
+    },
+    {
+      "id": "titles_035",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} и {symbol} в час {stage}",
+      "weight": 6
+    },
+    {
+      "id": "titles_036",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} и {symbol} в час {stage}",
+      "weight": 6
+    },
+    {
+      "id": "titles_037",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} ведёт к {stage} через {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_038",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} ведёт к {stage} через {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_039",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} ведёт к {stage} через {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_040",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} ведёт к {stage} через {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_041",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} ведёт к {stage} через {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_042",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} ведёт к {stage} через {process}",
+      "weight": 6
+    },
+    {
+      "id": "titles_043",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "алхимия {process} и {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_044",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "алхимия {process} и {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_045",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "алхимия {process} и {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_046",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "алхимия {process} и {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_047",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "алхимия {process} и {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_048",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "алхимия {process} и {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_049",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} {process} — {symbol}",
+      "weight": 5
+    },
+    {
+      "id": "titles_050",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} {process} — {symbol}",
+      "weight": 5
+    },
+    {
+      "id": "titles_051",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} {process} — {symbol}",
+      "weight": 5
+    },
+    {
+      "id": "titles_052",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} {process} — {symbol}",
+      "weight": 5
+    },
+    {
+      "id": "titles_053",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} {process} — {symbol}",
+      "weight": 5
+    },
+    {
+      "id": "titles_054",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} {process} — {symbol}",
+      "weight": 5
+    },
+    {
+      "id": "titles_055",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {stage}: рождение {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "titles_056",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {stage}: рождение {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "titles_057",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {stage}: рождение {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "titles_058",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {stage}: рождение {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "titles_059",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {stage}: рождение {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "titles_060",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {stage}: рождение {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "titles_061",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} и {process} — {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_062",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} и {process} — {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_063",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} и {process} — {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_064",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} и {process} — {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_065",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} и {process} — {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_066",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} и {process} — {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_067",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {stage} — {symbol}",
+      "weight": 5
+    },
+    {
+      "id": "titles_068",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {stage} — {symbol}",
+      "weight": 5
+    },
+    {
+      "id": "titles_069",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {stage} — {symbol}",
+      "weight": 5
+    },
+    {
+      "id": "titles_070",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {stage} — {symbol}",
+      "weight": 5
+    },
+    {
+      "id": "titles_071",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {stage} — {symbol}",
+      "weight": 5
+    },
+    {
+      "id": "titles_072",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} {stage} — {symbol}",
+      "weight": 5
+    },
+    {
+      "id": "titles_073",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{target} через {process} к {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_074",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{target} через {process} к {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_075",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{target} через {process} к {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_076",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{target} через {process} к {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_077",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{target} через {process} к {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_078",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{target} через {process} к {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_079",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} {stage}: {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_080",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} {stage}: {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_081",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} {stage}: {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_082",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} {stage}: {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_083",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} {stage}: {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_084",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} {stage}: {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_085",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} волею {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_086",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} волею {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_087",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} волею {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_088",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} волею {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_089",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} волею {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_090",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{process} волею {stage}",
+      "weight": 5
+    },
+    {
+      "id": "titles_091",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} под знаком {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_092",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} под знаком {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_093",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} под знаком {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_094",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} под знаком {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_095",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} под знаком {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_096",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} под знаком {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_097",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "рождение {target:gen} в {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_098",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "рождение {target:gen} в {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_099",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "рождение {target:gen} в {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_100",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "рождение {target:gen} в {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_101",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "рождение {target:gen} в {process}",
+      "weight": 5
+    },
+    {
+      "id": "titles_102",
+      "slot": "titles",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "рождение {target:gen} в {process}",
+      "weight": 5
+    }
+  ],
+  "version": 1
+}

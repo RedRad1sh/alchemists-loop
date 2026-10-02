@@ -1,0 +1,2243 @@
+{
+  "fragments": [
+    {
+      "id": "conditions_001",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Прогревай {source:acc} под светом полной луны",
+      "weight": 7
+    },
+    {
+      "id": "conditions_002",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Прогревай {source:acc} в жаркой печи, раскалённой до бела",
+      "weight": 7
+    },
+    {
+      "id": "conditions_003",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Прогревай {source:acc} при ровном пламени свечи, без сквозняков",
+      "weight": 7
+    },
+    {
+      "id": "conditions_004",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Прогревай {source:acc} в холодном погребе, во тьме и тишине",
+      "weight": 7
+    },
+    {
+      "id": "conditions_005",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Прогревай {source:acc} под первыми лучами солнца на востоке",
+      "weight": 7
+    },
+    {
+      "id": "conditions_006",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Прогревай {source:acc} в грозу, когда воздух пахнет озоном",
+      "weight": 7
+    },
+    {
+      "id": "conditions_007",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} под светом полной луны",
+      "weight": 6
+    },
+    {
+      "id": "conditions_008",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} в жаркой печи, раскалённой до бела",
+      "weight": 6
+    },
+    {
+      "id": "conditions_009",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} при ровном пламени свечи, без сквозняков",
+      "weight": 6
+    },
+    {
+      "id": "conditions_010",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} в холодном погребе, во тьме и тишине",
+      "weight": 6
+    },
+    {
+      "id": "conditions_011",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} под первыми лучами солнца на востоке",
+      "weight": 6
+    },
+    {
+      "id": "conditions_012",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} в грозу, когда воздух пахнет озоном",
+      "weight": 6
+    },
+    {
+      "id": "conditions_013",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Держи смесь под светом полной луны, пока не пойдёт пар",
+      "weight": 6
+    },
+    {
+      "id": "conditions_014",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Держи смесь в жаркой печи, раскалённой до бела, пока не пойдёт пар",
+      "weight": 6
+    },
+    {
+      "id": "conditions_015",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Держи смесь при ровном пламени свечи, без сквозняков, пока не пойдёт пар",
+      "weight": 6
+    },
+    {
+      "id": "conditions_016",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Держи смесь в холодном погребе, во тьме и тишине, пока не пойдёт пар",
+      "weight": 6
+    },
+    {
+      "id": "conditions_017",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Держи смесь под первыми лучами солнца на востоке, пока не пойдёт пар",
+      "weight": 6
+    },
+    {
+      "id": "conditions_018",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Держи смесь в грозу, когда воздух пахнет озоном, пока не пойдёт пар",
+      "weight": 6
+    },
+    {
+      "id": "conditions_019",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Выдержи {source:acc} под светом полной луны, ровно до утра",
+      "weight": 5
+    },
+    {
+      "id": "conditions_020",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Выдержи {source:acc} в жаркой печи, раскалённой до бела, ровно до утра",
+      "weight": 5
+    },
+    {
+      "id": "conditions_021",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Выдержи {source:acc} при ровном пламени свечи, без сквозняков, ровно до утра",
+      "weight": 5
+    },
+    {
+      "id": "conditions_022",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Выдержи {source:acc} в холодном погребе, во тьме и тишине, ровно до утра",
+      "weight": 5
+    },
+    {
+      "id": "conditions_023",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Выдержи {source:acc} под первыми лучами солнца на востоке, ровно до утра",
+      "weight": 5
+    },
+    {
+      "id": "conditions_024",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Выдержи {source:acc} в грозу, когда воздух пахнет озоном, ровно до утра",
+      "weight": 5
+    },
+    {
+      "id": "conditions_025",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пусть {source} под светом полной луны и наберётся силы",
+      "weight": 5
+    },
+    {
+      "id": "conditions_026",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пусть {source} в жаркой печи, раскалённой до бела и наберётся силы",
+      "weight": 5
+    },
+    {
+      "id": "conditions_027",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пусть {source} при ровном пламени свечи, без сквозняков и наберётся силы",
+      "weight": 5
+    },
+    {
+      "id": "conditions_028",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пусть {source} в холодном погребе, во тьме и тишине и наберётся силы",
+      "weight": 5
+    },
+    {
+      "id": "conditions_029",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пусть {source} под первыми лучами солнца на востоке и наберётся силы",
+      "weight": 5
+    },
+    {
+      "id": "conditions_030",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пусть {source} в грозу, когда воздух пахнет озоном и наберётся силы",
+      "weight": 5
+    },
+    {
+      "id": "conditions_031",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} под светом полной луны, не открывая сосуда",
+      "weight": 6
+    },
+    {
+      "id": "conditions_032",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} в жаркой печи, раскалённой до бела, не открывая сосуда",
+      "weight": 6
+    },
+    {
+      "id": "conditions_033",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} при ровном пламени свечи, без сквозняков, не открывая сосуда",
+      "weight": 6
+    },
+    {
+      "id": "conditions_034",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} в холодном погребе, во тьме и тишине, не открывая сосуда",
+      "weight": 6
+    },
+    {
+      "id": "conditions_035",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} под первыми лучами солнца на востоке, не открывая сосуда",
+      "weight": 6
+    },
+    {
+      "id": "conditions_036",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} в грозу, когда воздух пахнет озоном, не открывая сосуда",
+      "weight": 6
+    },
+    {
+      "id": "conditions_037",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Нагревай до шипения под светом полной луны",
+      "weight": 6
+    },
+    {
+      "id": "conditions_038",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Нагревай до шипения в жаркой печи, раскалённой до бела",
+      "weight": 6
+    },
+    {
+      "id": "conditions_039",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Нагревай до шипения при ровном пламени свечи, без сквозняков",
+      "weight": 6
+    },
+    {
+      "id": "conditions_040",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Нагревай до шипения в холодном погребе, во тьме и тишине",
+      "weight": 6
+    },
+    {
+      "id": "conditions_041",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Нагревай до шипения под первыми лучами солнца на востоке",
+      "weight": 6
+    },
+    {
+      "id": "conditions_042",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Нагревай до шипения в грозу, когда воздух пахнет озоном",
+      "weight": 6
+    },
+    {
+      "id": "conditions_043",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Остуди {source:acc} под светом полной луны, затем вновь нагрей",
+      "weight": 5
+    },
+    {
+      "id": "conditions_044",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Остуди {source:acc} в жаркой печи, раскалённой до бела, затем вновь нагрей",
+      "weight": 5
+    },
+    {
+      "id": "conditions_045",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Остуди {source:acc} при ровном пламени свечи, без сквозняков, затем вновь нагрей",
+      "weight": 5
+    },
+    {
+      "id": "conditions_046",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Остуди {source:acc} в холодном погребе, во тьме и тишине, затем вновь нагрей",
+      "weight": 5
+    },
+    {
+      "id": "conditions_047",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Остуди {source:acc} под первыми лучами солнца на востоке, затем вновь нагрей",
+      "weight": 5
+    },
+    {
+      "id": "conditions_048",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Остуди {source:acc} в грозу, когда воздух пахнет озоном, затем вновь нагрей",
+      "weight": 5
+    },
+    {
+      "id": "conditions_049",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Выдержи {source:acc} в темноте под светом полной луны",
+      "weight": 5
+    },
+    {
+      "id": "conditions_050",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Выдержи {source:acc} в темноте в жаркой печи, раскалённой до бела",
+      "weight": 5
+    },
+    {
+      "id": "conditions_051",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Выдержи {source:acc} в темноте при ровном пламени свечи, без сквозняков",
+      "weight": 5
+    },
+    {
+      "id": "conditions_052",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Выдержи {source:acc} в темноте в холодном погребе, во тьме и тишине",
+      "weight": 5
+    },
+    {
+      "id": "conditions_053",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Выдержи {source:acc} в темноте под первыми лучами солнца на востоке",
+      "weight": 5
+    },
+    {
+      "id": "conditions_054",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Выдержи {source:acc} в темноте в грозу, когда воздух пахнет озоном",
+      "weight": 5
+    },
+    {
+      "id": "conditions_055",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пусть {source} стоит под светом полной луны и вызревает",
+      "weight": 5
+    },
+    {
+      "id": "conditions_056",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пусть {source} стоит в жаркой печи, раскалённой до бела и вызревает",
+      "weight": 5
+    },
+    {
+      "id": "conditions_057",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пусть {source} стоит при ровном пламени свечи, без сквозняков и вызревает",
+      "weight": 5
+    },
+    {
+      "id": "conditions_058",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пусть {source} стоит в холодном погребе, во тьме и тишине и вызревает",
+      "weight": 5
+    },
+    {
+      "id": "conditions_059",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пусть {source} стоит под первыми лучами солнца на востоке и вызревает",
+      "weight": 5
+    },
+    {
+      "id": "conditions_060",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Пусть {source} стоит в грозу, когда воздух пахнет озоном и вызревает",
+      "weight": 5
+    },
+    {
+      "id": "conditions_061",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Грей {source:acc} под светом полной луны, помешивая лопаткой",
+      "weight": 6
+    },
+    {
+      "id": "conditions_062",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Грей {source:acc} в жаркой печи, раскалённой до бела, помешивая лопаткой",
+      "weight": 6
+    },
+    {
+      "id": "conditions_063",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Грей {source:acc} при ровном пламени свечи, без сквозняков, помешивая лопаткой",
+      "weight": 6
+    },
+    {
+      "id": "conditions_064",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Грей {source:acc} в холодном погребе, во тьме и тишине, помешивая лопаткой",
+      "weight": 6
+    },
+    {
+      "id": "conditions_065",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Грей {source:acc} под первыми лучами солнца на востоке, помешивая лопаткой",
+      "weight": 6
+    },
+    {
+      "id": "conditions_066",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Грей {source:acc} в грозу, когда воздух пахнет озоном, помешивая лопаткой",
+      "weight": 6
+    },
+    {
+      "id": "conditions_067",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} под светом полной луны, накрыв крышкой",
+      "weight": 5
+    },
+    {
+      "id": "conditions_068",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} в жаркой печи, раскалённой до бела, накрыв крышкой",
+      "weight": 5
+    },
+    {
+      "id": "conditions_069",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} при ровном пламени свечи, без сквозняков, накрыв крышкой",
+      "weight": 5
+    },
+    {
+      "id": "conditions_070",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} в холодном погребе, во тьме и тишине, накрыв крышкой",
+      "weight": 5
+    },
+    {
+      "id": "conditions_071",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} под первыми лучами солнца на востоке, накрыв крышкой",
+      "weight": 5
+    },
+    {
+      "id": "conditions_072",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} в грозу, когда воздух пахнет озоном, накрыв крышкой",
+      "weight": 5
+    },
+    {
+      "id": "conditions_073",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Томи {source:acc} под светом полной луны на малом огне",
+      "weight": 6
+    },
+    {
+      "id": "conditions_074",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Томи {source:acc} в жаркой печи, раскалённой до бела на малом огне",
+      "weight": 6
+    },
+    {
+      "id": "conditions_075",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Томи {source:acc} при ровном пламени свечи, без сквозняков на малом огне",
+      "weight": 6
+    },
+    {
+      "id": "conditions_076",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Томи {source:acc} в холодном погребе, во тьме и тишине на малом огне",
+      "weight": 6
+    },
+    {
+      "id": "conditions_077",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Томи {source:acc} под первыми лучами солнца на востоке на малом огне",
+      "weight": 6
+    },
+    {
+      "id": "conditions_078",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Томи {source:acc} в грозу, когда воздух пахнет озоном на малом огне",
+      "weight": 6
+    },
+    {
+      "id": "conditions_079",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} под светом полной луны, пока не выпадет роса",
+      "weight": 5
+    },
+    {
+      "id": "conditions_080",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} в жаркой печи, раскалённой до бела, пока не выпадет роса",
+      "weight": 5
+    },
+    {
+      "id": "conditions_081",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} при ровном пламени свечи, без сквозняков, пока не выпадет роса",
+      "weight": 5
+    },
+    {
+      "id": "conditions_082",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} в холодном погребе, во тьме и тишине, пока не выпадет роса",
+      "weight": 5
+    },
+    {
+      "id": "conditions_083",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} под первыми лучами солнца на востоке, пока не выпадет роса",
+      "weight": 5
+    },
+    {
+      "id": "conditions_084",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "distillatio"
+        ],
+        "safety": "",
+        "stage": [
+          "albedo"
+        ],
+        "vessel": []
+      },
+      "text": "Держи {source:acc} в грозу, когда воздух пахнет озоном, пока не выпадет роса",
+      "weight": 5
+    },
+    {
+      "id": "conditions_085",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Подержи {source:acc} под светом полной луны, затем слей настой",
+      "weight": 5
+    },
+    {
+      "id": "conditions_086",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Подержи {source:acc} в жаркой печи, раскалённой до бела, затем слей настой",
+      "weight": 5
+    },
+    {
+      "id": "conditions_087",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Подержи {source:acc} при ровном пламени свечи, без сквозняков, затем слей настой",
+      "weight": 5
+    },
+    {
+      "id": "conditions_088",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Подержи {source:acc} в холодном погребе, во тьме и тишине, затем слей настой",
+      "weight": 5
+    },
+    {
+      "id": "conditions_089",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Подержи {source:acc} под первыми лучами солнца на востоке, затем слей настой",
+      "weight": 5
+    },
+    {
+      "id": "conditions_090",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Подержи {source:acc} в грозу, когда воздух пахнет озоном, затем слей настой",
+      "weight": 5
+    },
+    {
+      "id": "conditions_091",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} под светом полной луны, чтобы осел осадок",
+      "weight": 5
+    },
+    {
+      "id": "conditions_092",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} в жаркой печи, раскалённой до бела, чтобы осел осадок",
+      "weight": 5
+    },
+    {
+      "id": "conditions_093",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} при ровном пламени свечи, без сквозняков, чтобы осел осадок",
+      "weight": 5
+    },
+    {
+      "id": "conditions_094",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} в холодном погребе, во тьме и тишине, чтобы осел осадок",
+      "weight": 5
+    },
+    {
+      "id": "conditions_095",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} под первыми лучами солнца на востоке, чтобы осел осадок",
+      "weight": 5
+    },
+    {
+      "id": "conditions_096",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "putrefactio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo"
+        ],
+        "vessel": []
+      },
+      "text": "Оставь {source:acc} в грозу, когда воздух пахнет озоном, чтобы осел осадок",
+      "weight": 5
+    },
+    {
+      "id": "conditions_097",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Следи, чтобы {source} под светом полной луны и не перегревался",
+      "weight": 5
+    },
+    {
+      "id": "conditions_098",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Следи, чтобы {source} в жаркой печи, раскалённой до бела и не перегревался",
+      "weight": 5
+    },
+    {
+      "id": "conditions_099",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Следи, чтобы {source} при ровном пламени свечи, без сквозняков и не перегревался",
+      "weight": 5
+    },
+    {
+      "id": "conditions_100",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Следи, чтобы {source} в холодном погребе, во тьме и тишине и не перегревался",
+      "weight": 5
+    },
+    {
+      "id": "conditions_101",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Следи, чтобы {source} под первыми лучами солнца на востоке и не перегревался",
+      "weight": 5
+    },
+    {
+      "id": "conditions_102",
+      "slot": "conditions",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Следи, чтобы {source} в грозу, когда воздух пахнет озоном и не перегревался",
+      "weight": 5
+    }
+  ],
+  "version": 1
+}

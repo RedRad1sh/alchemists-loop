@@ -1,0 +1,2453 @@
+{
+  "fragments": [
+    {
+      "id": "symbols_001",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Это {stage}: {symbol} в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 7
+    },
+    {
+      "id": "symbols_002",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Это {stage}: {symbol} то, что видишь, — отражение внутренней работы",
+      "weight": 7
+    },
+    {
+      "id": "symbols_003",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Это {stage}: {symbol} алхимик узнаёт в этом лик своего труда",
+      "weight": 7
+    },
+    {
+      "id": "symbols_004",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Это {stage}: {symbol} так рождается единство противоположностей",
+      "weight": 7
+    },
+    {
+      "id": "symbols_005",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Это {stage}: {symbol} это печать превращения, выжженная в материи",
+      "weight": 7
+    },
+    {
+      "id": "symbols_006",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Это {stage}: {symbol} символ этот старше камней и мудрее книг",
+      "weight": 7
+    },
+    {
+      "id": "symbols_007",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Алхимик видит в этом {symbol} в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 6
+    },
+    {
+      "id": "symbols_008",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Алхимик видит в этом {symbol} то, что видишь, — отражение внутренней работы",
+      "weight": 6
+    },
+    {
+      "id": "symbols_009",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Алхимик видит в этом {symbol} алхимик узнаёт в этом лик своего труда",
+      "weight": 6
+    },
+    {
+      "id": "symbols_010",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Алхимик видит в этом {symbol} так рождается единство противоположностей",
+      "weight": 6
+    },
+    {
+      "id": "symbols_011",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Алхимик видит в этом {symbol} это печать превращения, выжженная в материи",
+      "weight": 6
+    },
+    {
+      "id": "symbols_012",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Алхимик видит в этом {symbol} символ этот старше камней и мудрее книг",
+      "weight": 6
+    },
+    {
+      "id": "symbols_013",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "в этом скрыт знак змеи, кусающей собственный хвост — знак {symbol} на пути {stage}",
+      "weight": 6
+    },
+    {
+      "id": "symbols_014",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "то, что видишь, — отражение внутренней работы — знак {symbol} на пути {stage}",
+      "weight": 6
+    },
+    {
+      "id": "symbols_015",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "алхимик узнаёт в этом лик своего труда — знак {symbol} на пути {stage}",
+      "weight": 6
+    },
+    {
+      "id": "symbols_016",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "так рождается единство противоположностей — знак {symbol} на пути {stage}",
+      "weight": 6
+    },
+    {
+      "id": "symbols_017",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "это печать превращения, выжженная в материи — знак {symbol} на пути {stage}",
+      "weight": 6
+    },
+    {
+      "id": "symbols_018",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "символ этот старше камней и мудрее книг — знак {symbol} на пути {stage}",
+      "weight": 6
+    },
+    {
+      "id": "symbols_019",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Так {symbol} открывает врата {stage} в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 6
+    },
+    {
+      "id": "symbols_020",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Так {symbol} открывает врата {stage} то, что видишь, — отражение внутренней работы",
+      "weight": 6
+    },
+    {
+      "id": "symbols_021",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Так {symbol} открывает врата {stage} алхимик узнаёт в этом лик своего труда",
+      "weight": 6
+    },
+    {
+      "id": "symbols_022",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Так {symbol} открывает врата {stage} так рождается единство противоположностей",
+      "weight": 6
+    },
+    {
+      "id": "symbols_023",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Так {symbol} открывает врата {stage} это печать превращения, выжженная в материи",
+      "weight": 6
+    },
+    {
+      "id": "symbols_024",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Так {symbol} открывает врата {stage} символ этот старше камней и мудрее книг",
+      "weight": 6
+    },
+    {
+      "id": "symbols_025",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "В {source:prep} таится {symbol} в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 6
+    },
+    {
+      "id": "symbols_026",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "В {source:prep} таится {symbol} то, что видишь, — отражение внутренней работы",
+      "weight": 6
+    },
+    {
+      "id": "symbols_027",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "В {source:prep} таится {symbol} алхимик узнаёт в этом лик своего труда",
+      "weight": 6
+    },
+    {
+      "id": "symbols_028",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "В {source:prep} таится {symbol} так рождается единство противоположностей",
+      "weight": 6
+    },
+    {
+      "id": "symbols_029",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "В {source:prep} таится {symbol} это печать превращения, выжженная в материи",
+      "weight": 6
+    },
+    {
+      "id": "symbols_030",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "В {source:prep} таится {symbol} символ этот старше камней и мудрее книг",
+      "weight": 6
+    },
+    {
+      "id": "symbols_031",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} является в час {stage} в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 6
+    },
+    {
+      "id": "symbols_032",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} является в час {stage} то, что видишь, — отражение внутренней работы",
+      "weight": 6
+    },
+    {
+      "id": "symbols_033",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} является в час {stage} алхимик узнаёт в этом лик своего труда",
+      "weight": 6
+    },
+    {
+      "id": "symbols_034",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} является в час {stage} так рождается единство противоположностей",
+      "weight": 6
+    },
+    {
+      "id": "symbols_035",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} является в час {stage} это печать превращения, выжженная в материи",
+      "weight": 6
+    },
+    {
+      "id": "symbols_036",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} является в час {stage} символ этот старше камней и мудрее книг",
+      "weight": 6
+    },
+    {
+      "id": "symbols_037",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Мастер узнаёт {symbol} среди в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 6
+    },
+    {
+      "id": "symbols_038",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Мастер узнаёт {symbol} среди то, что видишь, — отражение внутренней работы",
+      "weight": 6
+    },
+    {
+      "id": "symbols_039",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Мастер узнаёт {symbol} среди алхимик узнаёт в этом лик своего труда",
+      "weight": 6
+    },
+    {
+      "id": "symbols_040",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Мастер узнаёт {symbol} среди так рождается единство противоположностей",
+      "weight": 6
+    },
+    {
+      "id": "symbols_041",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Мастер узнаёт {symbol} среди это печать превращения, выжженная в материи",
+      "weight": 6
+    },
+    {
+      "id": "symbols_042",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Мастер узнаёт {symbol} среди символ этот старше камней и мудрее книг",
+      "weight": 6
+    },
+    {
+      "id": "symbols_043",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} несёт печать {symbol} в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 6
+    },
+    {
+      "id": "symbols_044",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} несёт печать {symbol} то, что видишь, — отражение внутренней работы",
+      "weight": 6
+    },
+    {
+      "id": "symbols_045",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} несёт печать {symbol} алхимик узнаёт в этом лик своего труда",
+      "weight": 6
+    },
+    {
+      "id": "symbols_046",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} несёт печать {symbol} так рождается единство противоположностей",
+      "weight": 6
+    },
+    {
+      "id": "symbols_047",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} несёт печать {symbol} это печать превращения, выжженная в материи",
+      "weight": 6
+    },
+    {
+      "id": "symbols_048",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} несёт печать {symbol} символ этот старше камней и мудрее книг",
+      "weight": 6
+    },
+    {
+      "id": "symbols_049",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} венчает труд {stage} в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 6
+    },
+    {
+      "id": "symbols_050",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} венчает труд {stage} то, что видишь, — отражение внутренней работы",
+      "weight": 6
+    },
+    {
+      "id": "symbols_051",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} венчает труд {stage} алхимик узнаёт в этом лик своего труда",
+      "weight": 6
+    },
+    {
+      "id": "symbols_052",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} венчает труд {stage} так рождается единство противоположностей",
+      "weight": 6
+    },
+    {
+      "id": "symbols_053",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} венчает труд {stage} это печать превращения, выжженная в материи",
+      "weight": 6
+    },
+    {
+      "id": "symbols_054",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} венчает труд {stage} символ этот старше камней и мудрее книг",
+      "weight": 6
+    },
+    {
+      "id": "symbols_055",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "В этом в этом скрыт знак змеи, кусающей собственный хвост сокрыт {symbol} {stage}",
+      "weight": 5
+    },
+    {
+      "id": "symbols_056",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "В этом то, что видишь, — отражение внутренней работы сокрыт {symbol} {stage}",
+      "weight": 5
+    },
+    {
+      "id": "symbols_057",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "В этом алхимик узнаёт в этом лик своего труда сокрыт {symbol} {stage}",
+      "weight": 5
+    },
+    {
+      "id": "symbols_058",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "В этом так рождается единство противоположностей сокрыт {symbol} {stage}",
+      "weight": 5
+    },
+    {
+      "id": "symbols_059",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "В этом это печать превращения, выжженная в материи сокрыт {symbol} {stage}",
+      "weight": 5
+    },
+    {
+      "id": "symbols_060",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "В этом символ этот старше камней и мудрее книг сокрыт {symbol} {stage}",
+      "weight": 5
+    },
+    {
+      "id": "symbols_061",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} повторяет путь {stage} в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 5
+    },
+    {
+      "id": "symbols_062",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} повторяет путь {stage} то, что видишь, — отражение внутренней работы",
+      "weight": 5
+    },
+    {
+      "id": "symbols_063",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} повторяет путь {stage} алхимик узнаёт в этом лик своего труда",
+      "weight": 5
+    },
+    {
+      "id": "symbols_064",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} повторяет путь {stage} так рождается единство противоположностей",
+      "weight": 5
+    },
+    {
+      "id": "symbols_065",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} повторяет путь {stage} это печать превращения, выжженная в материи",
+      "weight": 5
+    },
+    {
+      "id": "symbols_066",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} повторяет путь {stage} символ этот старше камней и мудрее книг",
+      "weight": 5
+    },
+    {
+      "id": "symbols_067",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Алхимик ставит {symbol} над {stage} в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 5
+    },
+    {
+      "id": "symbols_068",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Алхимик ставит {symbol} над {stage} то, что видишь, — отражение внутренней работы",
+      "weight": 5
+    },
+    {
+      "id": "symbols_069",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Алхимик ставит {symbol} над {stage} алхимик узнаёт в этом лик своего труда",
+      "weight": 5
+    },
+    {
+      "id": "symbols_070",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Алхимик ставит {symbol} над {stage} так рождается единство противоположностей",
+      "weight": 5
+    },
+    {
+      "id": "symbols_071",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Алхимик ставит {symbol} над {stage} это печать превращения, выжженная в материи",
+      "weight": 5
+    },
+    {
+      "id": "symbols_072",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Алхимик ставит {symbol} над {stage} символ этот старше камней и мудрее книг",
+      "weight": 5
+    },
+    {
+      "id": "symbols_073",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} сплетается с {source:ins} в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 5
+    },
+    {
+      "id": "symbols_074",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} сплетается с {source:ins} то, что видишь, — отражение внутренней работы",
+      "weight": 5
+    },
+    {
+      "id": "symbols_075",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} сплетается с {source:ins} алхимик узнаёт в этом лик своего труда",
+      "weight": 5
+    },
+    {
+      "id": "symbols_076",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} сплетается с {source:ins} так рождается единство противоположностей",
+      "weight": 5
+    },
+    {
+      "id": "symbols_077",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} сплетается с {source:ins} это печать превращения, выжженная в материи",
+      "weight": 5
+    },
+    {
+      "id": "symbols_078",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} сплетается с {source:ins} символ этот старше камней и мудрее книг",
+      "weight": 5
+    },
+    {
+      "id": "symbols_079",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} рождает {symbol} из {source:gen} в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 5
+    },
+    {
+      "id": "symbols_080",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} рождает {symbol} из {source:gen} то, что видишь, — отражение внутренней работы",
+      "weight": 5
+    },
+    {
+      "id": "symbols_081",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} рождает {symbol} из {source:gen} алхимик узнаёт в этом лик своего труда",
+      "weight": 5
+    },
+    {
+      "id": "symbols_082",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} рождает {symbol} из {source:gen} так рождается единство противоположностей",
+      "weight": 5
+    },
+    {
+      "id": "symbols_083",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} рождает {symbol} из {source:gen} это печать превращения, выжженная в материи",
+      "weight": 5
+    },
+    {
+      "id": "symbols_084",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} рождает {symbol} из {source:gen} символ этот старше камней и мудрее книг",
+      "weight": 5
+    },
+    {
+      "id": "symbols_085",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Мастер видит {symbol} над {target:ins} в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 5
+    },
+    {
+      "id": "symbols_086",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Мастер видит {symbol} над {target:ins} то, что видишь, — отражение внутренней работы",
+      "weight": 5
+    },
+    {
+      "id": "symbols_087",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Мастер видит {symbol} над {target:ins} алхимик узнаёт в этом лик своего труда",
+      "weight": 5
+    },
+    {
+      "id": "symbols_088",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Мастер видит {symbol} над {target:ins} так рождается единство противоположностей",
+      "weight": 5
+    },
+    {
+      "id": "symbols_089",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Мастер видит {symbol} над {target:ins} это печать превращения, выжженная в материи",
+      "weight": 5
+    },
+    {
+      "id": "symbols_090",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Мастер видит {symbol} над {target:ins} символ этот старше камней и мудрее книг",
+      "weight": 5
+    },
+    {
+      "id": "symbols_091",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} скрыт в {source:prep}, в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 5
+    },
+    {
+      "id": "symbols_092",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} скрыт в {source:prep}, то, что видишь, — отражение внутренней работы",
+      "weight": 5
+    },
+    {
+      "id": "symbols_093",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} скрыт в {source:prep}, алхимик узнаёт в этом лик своего труда",
+      "weight": 5
+    },
+    {
+      "id": "symbols_094",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} скрыт в {source:prep}, так рождается единство противоположностей",
+      "weight": 5
+    },
+    {
+      "id": "symbols_095",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} скрыт в {source:prep}, это печать превращения, выжженная в материи",
+      "weight": 5
+    },
+    {
+      "id": "symbols_096",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{symbol} скрыт в {source:prep}, символ этот старше камней и мудрее книг",
+      "weight": 5
+    },
+    {
+      "id": "symbols_097",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} и {symbol} — одно в час в этом скрыт знак змеи, кусающей собственный хвост",
+      "weight": 5
+    },
+    {
+      "id": "symbols_098",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} и {symbol} — одно в час то, что видишь, — отражение внутренней работы",
+      "weight": 5
+    },
+    {
+      "id": "symbols_099",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} и {symbol} — одно в час алхимик узнаёт в этом лик своего труда",
+      "weight": 5
+    },
+    {
+      "id": "symbols_100",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} и {symbol} — одно в час так рождается единство противоположностей",
+      "weight": 5
+    },
+    {
+      "id": "symbols_101",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} и {symbol} — одно в час это печать превращения, выжженная в материи",
+      "weight": 5
+    },
+    {
+      "id": "symbols_102",
+      "slot": "symbols",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{stage} и {symbol} — одно в час символ этот старше камней и мудрее книг",
+      "weight": 5
+    }
+  ],
+  "version": 1
+}

@@ -1,0 +1,2453 @@
+{
+  "fragments": [
+    {
+      "id": "effects_001",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "крафт идёт ровнее — и крафт идёт ровнее",
+      "weight": 7
+    },
+    {
+      "id": "effects_002",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "материал служит дольше — и крафт идёт ровнее",
+      "weight": 7
+    },
+    {
+      "id": "effects_003",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "действие усиливается — и крафт идёт ровнее",
+      "weight": 7
+    },
+    {
+      "id": "effects_004",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "прилив сил у верстака — и крафт идёт ровнее",
+      "weight": 7
+    },
+    {
+      "id": "effects_005",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "результат стабильнее — и крафт идёт ровнее",
+      "weight": 7
+    },
+    {
+      "id": "effects_006",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "дорога к цели короче — и крафт идёт ровнее",
+      "weight": 7
+    },
+    {
+      "id": "effects_007",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "После этого {source} служит дольше крафт идёт ровнее",
+      "weight": 6
+    },
+    {
+      "id": "effects_008",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "После этого {source} служит дольше материал служит дольше",
+      "weight": 6
+    },
+    {
+      "id": "effects_009",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "После этого {source} служит дольше действие усиливается",
+      "weight": 6
+    },
+    {
+      "id": "effects_010",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "После этого {source} служит дольше прилив сил у верстака",
+      "weight": 6
+    },
+    {
+      "id": "effects_011",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "После этого {source} служит дольше результат стабильнее",
+      "weight": 6
+    },
+    {
+      "id": "effects_012",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "После этого {source} служит дольше дорога к цели короче",
+      "weight": 6
+    },
+    {
+      "id": "effects_013",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "крафт идёт ровнее усиливает действие {target:gen}",
+      "weight": 6
+    },
+    {
+      "id": "effects_014",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "материал служит дольше усиливает действие {target:gen}",
+      "weight": 6
+    },
+    {
+      "id": "effects_015",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "действие усиливается усиливает действие {target:gen}",
+      "weight": 6
+    },
+    {
+      "id": "effects_016",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "прилив сил у верстака усиливает действие {target:gen}",
+      "weight": 6
+    },
+    {
+      "id": "effects_017",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "результат стабильнее усиливает действие {target:gen}",
+      "weight": 6
+    },
+    {
+      "id": "effects_018",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "дорога к цели короче усиливает действие {target:gen}",
+      "weight": 6
+    },
+    {
+      "id": "effects_019",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Применённый крафт идёт ровнее, даёт прилив сил у верстака",
+      "weight": 6
+    },
+    {
+      "id": "effects_020",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Применённый материал служит дольше, даёт прилив сил у верстака",
+      "weight": 6
+    },
+    {
+      "id": "effects_021",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Применённый действие усиливается, даёт прилив сил у верстака",
+      "weight": 6
+    },
+    {
+      "id": "effects_022",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Применённый прилив сил у верстака, даёт прилив сил у верстака",
+      "weight": 6
+    },
+    {
+      "id": "effects_023",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Применённый результат стабильнее, даёт прилив сил у верстака",
+      "weight": 6
+    },
+    {
+      "id": "effects_024",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "Применённый дорога к цели короче, даёт прилив сил у верстака",
+      "weight": 6
+    },
+    {
+      "id": "effects_025",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "крафт идёт ровнее — и результат стабильнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_026",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "материал служит дольше — и результат стабильнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_027",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "действие усиливается — и результат стабильнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_028",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "прилив сил у верстака — и результат стабильнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_029",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "результат стабильнее — и результат стабильнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_030",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "дорога к цели короче — и результат стабильнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_031",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} в деле ускоряет {target:gen} крафт идёт ровнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_032",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} в деле ускоряет {target:gen} материал служит дольше",
+      "weight": 5
+    },
+    {
+      "id": "effects_033",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} в деле ускоряет {target:gen} действие усиливается",
+      "weight": 5
+    },
+    {
+      "id": "effects_034",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} в деле ускоряет {target:gen} прилив сил у верстака",
+      "weight": 5
+    },
+    {
+      "id": "effects_035",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} в деле ускоряет {target:gen} результат стабильнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_036",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} в деле ускоряет {target:gen} дорога к цели короче",
+      "weight": 5
+    },
+    {
+      "id": "effects_037",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "крафт идёт ровнее отворяет дорогу к {target:dat}",
+      "weight": 5
+    },
+    {
+      "id": "effects_038",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "материал служит дольше отворяет дорогу к {target:dat}",
+      "weight": 5
+    },
+    {
+      "id": "effects_039",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "действие усиливается отворяет дорогу к {target:dat}",
+      "weight": 5
+    },
+    {
+      "id": "effects_040",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "прилив сил у верстака отворяет дорогу к {target:dat}",
+      "weight": 5
+    },
+    {
+      "id": "effects_041",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "результат стабильнее отворяет дорогу к {target:dat}",
+      "weight": 5
+    },
+    {
+      "id": "effects_042",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "дорога к цели короче отворяет дорогу к {target:dat}",
+      "weight": 5
+    },
+    {
+      "id": "effects_043",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "С {source:ins} работа спорится крафт идёт ровнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_044",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "С {source:ins} работа спорится материал служит дольше",
+      "weight": 5
+    },
+    {
+      "id": "effects_045",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "С {source:ins} работа спорится действие усиливается",
+      "weight": 5
+    },
+    {
+      "id": "effects_046",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "С {source:ins} работа спорится прилив сил у верстака",
+      "weight": 5
+    },
+    {
+      "id": "effects_047",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "С {source:ins} работа спорится результат стабильнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_048",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "С {source:ins} работа спорится дорога к цели короче",
+      "weight": 5
+    },
+    {
+      "id": "effects_049",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "крафт идёт ровнее — и работа ускоряется",
+      "weight": 5
+    },
+    {
+      "id": "effects_050",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "материал служит дольше — и работа ускоряется",
+      "weight": 5
+    },
+    {
+      "id": "effects_051",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "действие усиливается — и работа ускоряется",
+      "weight": 5
+    },
+    {
+      "id": "effects_052",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "прилив сил у верстака — и работа ускоряется",
+      "weight": 5
+    },
+    {
+      "id": "effects_053",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "результат стабильнее — и работа ускоряется",
+      "weight": 5
+    },
+    {
+      "id": "effects_054",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "дорога к цели короче — и работа ускоряется",
+      "weight": 5
+    },
+    {
+      "id": "effects_055",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} даёт больше отдачи крафт идёт ровнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_056",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} даёт больше отдачи материал служит дольше",
+      "weight": 5
+    },
+    {
+      "id": "effects_057",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} даёт больше отдачи действие усиливается",
+      "weight": 5
+    },
+    {
+      "id": "effects_058",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} даёт больше отдачи прилив сил у верстака",
+      "weight": 5
+    },
+    {
+      "id": "effects_059",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} даёт больше отдачи результат стабильнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_060",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} даёт больше отдачи дорога к цели короче",
+      "weight": 5
+    },
+    {
+      "id": "effects_061",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "крафт идёт ровнее открывает скрытые свойства {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "effects_062",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "материал служит дольше открывает скрытые свойства {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "effects_063",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "действие усиливается открывает скрытые свойства {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "effects_064",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "прилив сил у верстака открывает скрытые свойства {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "effects_065",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "результат стабильнее открывает скрытые свойства {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "effects_066",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "дорога к цели короче открывает скрытые свойства {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "effects_067",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "С этим {source:ins} верстак слушается крафт идёт ровнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_068",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "С этим {source:ins} верстак слушается материал служит дольше",
+      "weight": 5
+    },
+    {
+      "id": "effects_069",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "С этим {source:ins} верстак слушается действие усиливается",
+      "weight": 5
+    },
+    {
+      "id": "effects_070",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "С этим {source:ins} верстак слушается прилив сил у верстака",
+      "weight": 5
+    },
+    {
+      "id": "effects_071",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "С этим {source:ins} верстак слушается результат стабильнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_072",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "С этим {source:ins} верстак слушается дорога к цели короче",
+      "weight": 5
+    },
+    {
+      "id": "effects_073",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "крафт идёт ровнее — и результат тоньше",
+      "weight": 5
+    },
+    {
+      "id": "effects_074",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "материал служит дольше — и результат тоньше",
+      "weight": 5
+    },
+    {
+      "id": "effects_075",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "действие усиливается — и результат тоньше",
+      "weight": 5
+    },
+    {
+      "id": "effects_076",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "прилив сил у верстака — и результат тоньше",
+      "weight": 5
+    },
+    {
+      "id": "effects_077",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "результат стабильнее — и результат тоньше",
+      "weight": 5
+    },
+    {
+      "id": "effects_078",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "дорога к цели короче — и результат тоньше",
+      "weight": 5
+    },
+    {
+      "id": "effects_079",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "крафт идёт ровнее упрощает {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "effects_080",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "материал служит дольше упрощает {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "effects_081",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "действие усиливается упрощает {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "effects_082",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "прилив сил у верстака упрощает {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "effects_083",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "результат стабильнее упрощает {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "effects_084",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "дорога к цели короче упрощает {target:gen}",
+      "weight": 5
+    },
+    {
+      "id": "effects_085",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} в деле бережёт силы крафт идёт ровнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_086",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} в деле бережёт силы материал служит дольше",
+      "weight": 5
+    },
+    {
+      "id": "effects_087",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} в деле бережёт силы действие усиливается",
+      "weight": 5
+    },
+    {
+      "id": "effects_088",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} в деле бережёт силы прилив сил у верстака",
+      "weight": 5
+    },
+    {
+      "id": "effects_089",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} в деле бережёт силы результат стабильнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_090",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "{source} в деле бережёт силы дорога к цели короче",
+      "weight": 5
+    },
+    {
+      "id": "effects_091",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "крафт идёт ровнее — и путь к {target:dat} короче",
+      "weight": 5
+    },
+    {
+      "id": "effects_092",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "материал служит дольше — и путь к {target:dat} короче",
+      "weight": 5
+    },
+    {
+      "id": "effects_093",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "действие усиливается — и путь к {target:dat} короче",
+      "weight": 5
+    },
+    {
+      "id": "effects_094",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "прилив сил у верстака — и путь к {target:dat} короче",
+      "weight": 5
+    },
+    {
+      "id": "effects_095",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "результат стабильнее — и путь к {target:dat} короче",
+      "weight": 5
+    },
+    {
+      "id": "effects_096",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "дорога к цели короче — и путь к {target:dat} короче",
+      "weight": 5
+    },
+    {
+      "id": "effects_097",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "После {source:gen} дела спорятся крафт идёт ровнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_098",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "После {source:gen} дела спорятся материал служит дольше",
+      "weight": 5
+    },
+    {
+      "id": "effects_099",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "После {source:gen} дела спорятся действие усиливается",
+      "weight": 5
+    },
+    {
+      "id": "effects_100",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "После {source:gen} дела спорятся прилив сил у верстака",
+      "weight": 5
+    },
+    {
+      "id": "effects_101",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "После {source:gen} дела спорятся результат стабильнее",
+      "weight": 5
+    },
+    {
+      "id": "effects_102",
+      "slot": "effects",
+      "tags": {
+        "elements": [],
+        "process": [
+          "calcinatio",
+          "putrefactio",
+          "distillatio",
+          "sublimatio",
+          "coniunctio"
+        ],
+        "safety": "",
+        "stage": [
+          "nigredo",
+          "albedo",
+          "rubedo",
+          "citrinitas"
+        ],
+        "vessel": []
+      },
+      "text": "После {source:gen} дела спорятся дорога к цели короче",
+      "weight": 5
+    }
+  ],
+  "version": 1
+}
