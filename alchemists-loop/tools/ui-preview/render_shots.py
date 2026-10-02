@@ -940,5 +940,162 @@ def board_house4() -> Image.Image:
     return img
 
 
+
+
+# ================= итерация-2, блок 5: Мир и Рейтинг =================
+WR_H = 620
+RT_ROWS = [("redrad1sh", 41, 1280), ("mira", 33, 990), ("alx", 27, 860), ("ты", 11, 340)]
+
+
+def _wr_base(title, sub, center=True):
+    img = Image.new("RGBA", (W, WR_H), BEFORE["bg0"] + (255,))
+    text(img, (W / 2 if center else 12, 26), title, size=20, weight=800,
+         color=(255, 217, 112), anchor="mm" if center else "lm")
+    if sub:
+        text(img, (W / 2 if center else 12, 50), sub, size=13,
+             color=BEFORE["ink2"], anchor="mm" if center else "lm")
+    return img
+
+
+def rt_before() -> Image.Image:
+    img = _wr_base("РЕЙТИНГ ИГРОКОВ", "Кто сколько открыл — и чей домик можно посмотреть.")
+    y = 70
+    text(img, (W / 2, y), "Ты: 14 место · 11 открытий · 340 очков", size=12,
+         color=(245, 229, 191), anchor="mm")
+    y += 22
+    text(img, (W / 2, y), "Первооткрытия · вещества · очки целей", size=13,
+         color=(158, 189, 208), anchor="mm")
+    y += 26
+    button(img, [24, y, W - 48, 40], "Обновить", 1, "before", size=13)
+    y += 50
+    for i, (nm, disc, pts) in enumerate(RT_ROWS):
+        text(img, (24, y + 14), "%d. %s — %d открытий, %d очков" % (i + 1, nm, disc, pts),
+             size=14, color=(232, 241, 248), anchor="lm")
+        y += 30
+    text(img, (24, y + 10), "…", size=14, color=BEFORE["ink2"], anchor="lm")
+    return img
+
+
+def _rt_row(img, y, i, nm, disc, pts, me=False):
+    x0, x1 = 24, W - 24
+    rrect(img, [x0, y, x1, y + 56], 12, fill=(18, 26, 36) if not me else (24, 34, 30),
+          outline=(89, 224, 214) if me else (30, 41, 54))
+    medal = [(255, 217, 112), (198, 208, 218), (205, 150, 100)][i] if i < 3 else (126, 141, 156)
+    rrect(img, [x0 + 10, y + 14, x0 + 38, y + 42], 8, fill=(10, 14, 20))
+    text(img, (x0 + 24, y + 28), str(i + 1), size=14, weight=800, color=medal, anchor="mm")
+    orb(img, x0 + 56, y + 28, 14, (80, 190, 120) if me else (90, 167, 232), mode="after")
+    text(img, (x0 + 78, y + 20), nm + (" (ты)" if me else ""), size=14, weight=600,
+         color=AFTER["ink1"], anchor="lm")
+    text(img, (x0 + 78, y + 38), "%d открытий" % disc, size=11, color=AFTER["ink3"], anchor="lm")
+    rrect(img, [x1 - 92, y + 15, x1 - 10, y + 41], 13, fill=(38, 50, 66))
+    text(img, (x1 - 51, y + 28), "%d ⚡" % pts, size=12, weight=700, color=AFTER["gold"], anchor="mm")
+
+
+def rt_after() -> Image.Image:
+    img = _wr_base("РЕЙТИНГ ИГРОКОВ", "Кто сколько открыл — и чей домик можно посмотреть.")
+    y = 68
+    # своя строка — закреплённым чип-карточкой сверху
+    rrect(img, [24, y, W - 24, y + 40], 12, fill=(24, 34, 30), outline=(89, 224, 214))
+    text(img, (38, y + 20), "Ты: 14 место · 11 открытий · 340 ⚡", size=13, weight=600,
+         color=(168, 232, 200), anchor="lm")
+    y += 48
+    for i, (nm, disc, pts) in enumerate(RT_ROWS):
+        _rt_row(img, y, i, nm, disc, pts, me=(nm == "ты"))
+        y += 64
+    # «Обновить» — иконкой 44 в строке статуса
+    text(img, (24, y + 6), "Первооткрытия · вещества · очки целей", size=12, color=AFTER["ink3"], anchor="lm")
+    button(img, [W - 24 - 44, y - 4, 44, 40], "", 1, "after", icon_name="repeat")
+    return img
+
+
+def wl_before() -> Image.Image:
+    img = _wr_base("Мир живых открытий", None, center=False)
+    y = 52
+    text(img, (12, y), "Связь установлена · 57 веществ в мире", size=14, color=(158, 189, 208), anchor="lm")
+    y += 26
+    text(img, (12, y), "Гонка первооткрытий", size=16, weight=700, color=(255, 217, 112), anchor="lm")
+    y += 24
+    text(img, (12, y), "Цель дня: вещество из «Родник» · награда 25 ⚡", size=13,
+         color=(245, 229, 191), anchor="lm")
+    y += 26
+    text(img, (12, y), "Свежие открытия", size=16, weight=700, color=(140, 242, 232), anchor="lm")
+    y += 22
+    for ln in ["mira открыла «Пар» · 2 мин назад", "alx открыл «Кирпич» · 9 мин назад",
+               "redrad1sh открыл «Сталь» · 21 мин назад"]:
+        text(img, (12, y), ln, size=12, color=(196, 205, 214), anchor="lm")
+        y += 18
+    y += 8
+    text(img, (12, y), "Все вещества", size=18, weight=700, color=(232, 241, 248), anchor="lm")
+    y += 26
+    rrect(img, [12, y, W - 12, y + 40], 4, fill=(21, 27, 37))
+    text(img, (24, y + 20), "Поиск по миру: имя, id, автор…", size=13, color=(109, 120, 131), anchor="lm")
+    y += 48
+    for nm, au in [("Пар", "mira"), ("Кирпич", "alx"), ("Сталь", "redrad1sh")]:
+        text(img, (12, y + 14), "%s · автор %s" % (nm, au), size=14, color=(232, 241, 248), anchor="lm")
+        y += 30
+    button(img, [W / 2 - 70, y + 6, 44, 40], "‹", 1, "before")
+    text(img, (W / 2, y + 26), "стр. 1 / 4", size=13, color=BEFORE["ink2"], anchor="mm")
+    button(img, [W / 2 + 26, y + 6, 44, 40], "›", 1, "before")
+    return img
+
+
+def wl_after() -> Image.Image:
+    img = _wr_base("Мир живых открытий", None, center=False)
+    y = 52
+    text(img, (12, y), "Связь установлена · 57 веществ в мире", size=13, color=AFTER["ink3"], anchor="lm")
+    y += 24
+    # цель дня — карточкой с чипом награды
+    rrect(img, [12, y, W - 12, y + 52], 12, fill=(30, 27, 16), outline=(120, 100, 40))
+    icon(img, "trophy", (24, y + 16, 20, 20), AFTER["gold"])
+    text(img, (52, y + 18), "Цель дня: вещество из «Родник»", size=13, weight=600, color=AFTER["ink1"], anchor="lm")
+    rrect(img, [52, y + 30, 128, y + 46], 8, fill=(46, 40, 22))
+    text(img, (60, y + 38), "+25 ⚡", size=11, weight=700, color=AFTER["gold"], anchor="lm")
+    y += 60
+    text(img, (12, y), "Свежие открытия", size=15, weight=700, color=(89, 224, 214), anchor="lm")
+    y += 22
+    for nm, itm, ago in [("mira", "Пар", "2 мин"), ("alx", "Кирпич", "9 мин"), ("redrad1sh", "Сталь", "21 мин")]:
+        rrect(img, [12, y, W - 12, y + 40], 10, fill=(13, 20, 28), outline=(30, 41, 54))
+        orb(img, 32, y + 20, 12, (150, 214, 145), mode="after")
+        text(img, (52, y + 20), "%s открыла «%s»" % (nm, itm), size=12, weight=600, color=AFTER["ink1"], anchor="lm")
+        text(img, (W - 24, y + 20), ago, size=11, color=AFTER["ink3"], anchor="rm")
+        y += 46
+    y += 4
+    text(img, (12, y), "Все вещества", size=15, weight=700, color=AFTER["ink1"], anchor="lm")
+    y += 22
+    rrect(img, [12, y, W - 12, y + 40], 10, fill=AFTER["bg3"], outline=AFTER["line"])
+    icon(img, "search", (24, y + 12, 16, 16), AFTER["ink3"])
+    text(img, (48, y + 20), "Поиск по миру: имя, id, автор…", size=13, color=AFTER["ink3"], anchor="lm")
+    y += 48
+    for nm, au in [("Пар", "mira"), ("Кирпич", "alx")]:
+        rrect(img, [12, y, W - 12, y + 48], 12, fill=(13, 20, 28), outline=(30, 41, 54))
+        orb(img, 36, y + 24, 16, (150, 214, 145), mode="after")
+        text(img, (62, y + 16), nm, size=14, weight=600, color=AFTER["ink1"], anchor="lm")
+        text(img, (62, y + 34), "автор: %s" % au, size=11, color=AFTER["ink3"], anchor="lm")
+        icon(img, "chevron_right", (W - 40, y + 17, 14, 14), AFTER["ink2"])
+        y += 54
+    # пейджер как в игре: текстовые ‹ ›, но тач 44
+    button(img, [W / 2 - 78, y + 4, 44, 40], "‹", 1, "after", size=16)
+    text(img, (W / 2, y + 24), "стр. 1 / 4", size=13, color=AFTER["ink2"], anchor="mm")
+    button(img, [W / 2 + 34, y + 4, 44, 40], "›", 1, "after", size=16)
+    return img
+
+
+def board_world5() -> Image.Image:
+    variants = [("Рейтинг ДО · строки текстом, «Обновить» во всю ширину", rt_before()),
+                ("Рейтинг ПОСЛЕ · карточки: медаль, аватар, чип очков; своя строка сверху", rt_after()),
+                ("Мир ДО · простыни строк, мелкий пейджер", wl_before()),
+                ("Мир ПОСЛЕ · цель дня карточкой, лента и вещества карточками", wl_after())]
+    img = Image.new("RGBA", (W + 40, len(variants) * (WR_H + 64) + 90), (7, 11, 16, 255))
+    text(img, (20, 26), "Блок 5 · Мир и Рейтинг", size=24, weight=800, color=(234, 242, 247))
+    text(img, (20, 62), "Код игры не тронут: это мок-предложения для согласования.",
+         size=13, color=(126, 141, 156))
+    y = 90
+    for caption, sub in variants:
+        text(img, (20, y + 14), caption, size=14, weight=700, color=(169, 184, 198))
+        img.paste(sub, (20, y + 40), sub)
+        y += WR_H + 64
+    return img
+
+
 if __name__ == "__main__":
     main()
