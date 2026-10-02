@@ -2743,13 +2743,34 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	title_lbl.add_theme_color_override("font_color", accent)
 	vbox.add_child(title_lbl)
 
-	var art := _sigil_preview_slot(accent, 0)
-	art.custom_minimum_size = Vector2(300, 540)
-	vbox.add_child(art)
+	# Живая карточка: свой SubViewport + SigilCard (анимированная аура,
+	# искры/фольга — как в sigil_module_v2), вместо статичного PNG.
+	# НЕ используем _svc.preview_into: его viewport уже в дереве сервиса.
+	var live := SubViewportContainer.new()
+	live.custom_minimum_size = Vector2(300, 540)
+	live.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	live.stretch = true
+	vbox.add_child(live)
+	var lv := SubViewport.new()
+	lv.name = "LiveCardViewport"
+	lv.size = Vector2i(300, 540)
+	lv.transparent_bg = true
+	lv.disable_3d = true
+	lv.gui_disable_input = true
+	lv.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR
+	lv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	live.add_child(lv)
+	var lcard := SigilCard.new()
+	lcard.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	lcard.size = Vector2(300, 540)
+	lv.add_child(lcard)
+	var recipe := _sigil.make_card_recipe(_sigil.card(str(entry.get("card_id", ""))))
+	lcard.setup(recipe, _sigil._options)
 
-	# lore-блок: подпроект C — детерминированный текст под артом.
+	# lore-блок: оборотная сторона карточки (появляется при перевороте).
 	var lore := VBoxContainer.new()
 	lore.add_theme_constant_override("separation", 4)
+	lore.visible = false
 	vbox.add_child(lore)
 	var card_lore := SigilLore.generate({
 		"id": str(entry.get("card_id", "")),
@@ -2807,6 +2828,17 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	copies_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	copies_lbl.add_theme_color_override("font_color", Color(0.80, 0.82, 0.86))
 	vbox.add_child(copies_lbl)
+	# Ритуал: призыв -> стихии -> материализация -> переворот по тапу.
+	# Оверлей поверх живой карточки (центр экрана), а не строка в vbox.
+	var ritual := SigilRitual.new()
+	ritual.name = "SigilRitual"
+	ritual.custom_minimum_size = Vector2(300, 540)
+	ritual.size = Vector2(300, 540)
+	ritual.mouse_filter = Control.MOUSE_FILTER_STOP
+	ritual.pivot_offset = Vector2(150, 270)
+	ritual.set_anchors_preset(Control.PRESET_CENTER)
+	root.add_child(ritual)
+	ritual.start(rarity, accent, live, lore)
 
 	var close_btn := _small_button("✕", Vector2(46, 40))
 	close_btn.name = "SigilFsClose"
@@ -2848,7 +2880,6 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 				_close_sigil_fullscreen()
 	)
 
-	_sigil_fill_fullscreen_art(art, entry)
 
 
 ## Полный арт фуллскрина: для карты каталога — дисковый кэш по card_id, промах
