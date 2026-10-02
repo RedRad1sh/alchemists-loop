@@ -840,5 +840,115 @@ def board_popups() -> Image.Image:
     return img
 
 
+
+
+# ================= итерация-2, блок 4: Дом Светика =================
+HS_H = 620
+
+
+def _hs_room(img, y, h):
+    rrect(img, [24, y, W - 24, y + h], 10, fill=(107, 90, 73))
+    d = ImageDraw.Draw(img)
+    d.ellipse([W - 190, y + h - 110, W - 110, y + h - 30], fill=(255, 157, 60, 200))
+    d.ellipse([W - 172, y + h - 92, W - 128, y + h - 48], fill=(255, 215, 106))
+    d.rectangle([60, y + 40, 130, y + 110], fill=(70, 110, 150), outline=(90, 66, 44), width=6)
+    d.rectangle([150, y + h - 60, 260, y + h - 20], fill=(140, 90, 60))
+
+
+def _hs_head(img):
+    img.paste(Image.new("RGBA", (W, HS_H), BEFORE["bg0"] + (255,)), (0, 0))
+    text(img, (W / 2, 26), "ДОМ СВЕТИКА", size=20, weight=800, color=(255, 230, 107), anchor="mm")
+    text(img, (W / 2, 50), "Уют, обстановка и произвольные цвета — видно другим игрокам.",
+         size=13, color=BEFORE["ink2"], anchor="mm")
+    _hs_room(img, 66, 150)
+
+
+def _hs_rows(img, y, thumb_w, with_chip):
+    for i, (nm, owned) in enumerate([("Ковёр", True), ("Светильник", False), ("Полка", False)]):
+        rrect(img, [24, y, W - 24, y + 62], 10, fill=(13, 20, 28), outline=(30, 41, 54))
+        rrect(img, [32, y + 6, 32 + thumb_w, y + 56], 8, fill=(5, 8, 12, 230))
+        rrect(img, [40, y + 26, 32 + thumb_w - 12, y + 48], 4, fill=(140, 90, 60))
+        text(img, (44 + thumb_w, y + 22), nm, size=14, weight=600, color=(232, 241, 248), anchor="lm")
+        if with_chip:
+            if owned:
+                rrect(img, [44 + thumb_w, y + 34, 44 + thumb_w + 74, y + 54], 10, fill=(38, 50, 66))
+                text(img, (52 + thumb_w, y + 44), "куплено", size=11, weight=600, color=(168, 232, 168), anchor="lm")
+            else:
+                rrect(img, [44 + thumb_w, y + 34, 44 + thumb_w + 64, y + 54], 10, fill=(46, 40, 22))
+                text(img, (52 + thumb_w, y + 44), "40 ⚡", size=11, weight=600, color=(255, 217, 112), anchor="lm")
+        button(img, [W - 24 - 128, y + 11, 128, 40], "Выбрать", 1, "before", size=13)
+        y += 70
+    return y
+
+
+def hs_before() -> Image.Image:
+    img = Image.new("RGBA", (W, HS_H), BEFORE["bg0"] + (255,))
+    _hs_head(img)
+    y = 228
+    text(img, (24, y), "Обстановка", size=14, color=(232, 241, 248))
+    y += 22
+    _hs_rows(img, y, 76, False)
+    y += 3 * 70 + 6
+    button(img, [24, y, W - 48, 46], "Купить: Ковёр · 40 ⚡", 2, "before", size=14)
+    return img
+
+
+def hs_after_a() -> Image.Image:
+    """Карточки 2×N с крупным превью, чипами и кнопкой внутри карточки."""
+    img = Image.new("RGBA", (W, HS_H), BEFORE["bg0"] + (255,))
+    _hs_head(img)
+    y = 228
+    text(img, (24, y), "Обстановка", size=14, weight=600, color=(232, 241, 248))
+    y += 24
+    cw = (W - 48 - 10) // 2
+    items = [("Ковёр", True), ("Светильник", False), ("Полка", False), ("Камин", False)]
+    for i, (nm, owned) in enumerate(items):
+        cx = 24 + (i % 2) * (cw + 10)
+        cy = y + (i // 2) * 158
+        rrect(img, [cx, cy, cx + cw, cy + 148], 12, fill=(13, 20, 28), outline=(30, 41, 54))
+        rrect(img, [cx + 8, cy + 8, cx + cw - 8, cy + 78], 8, fill=(5, 8, 12, 230))
+        rrect(img, [cx + 18, cy + 40, cx + cw - 18, cy + 70], 4, fill=(140, 90, 60))
+        text(img, (cx + 10, cy + 96), nm, size=14, weight=600, color=(232, 241, 248), anchor="lm")
+        if owned:
+            rrect(img, [cx + 10, cy + 106, cx + 84, cy + 126], 10, fill=(38, 50, 66))
+            text(img, (cx + 18, cy + 116), "куплено", size=11, weight=600, color=(168, 232, 168), anchor="lm")
+        else:
+            rrect(img, [cx + 10, cy + 106, cx + 74, cy + 126], 10, fill=(46, 40, 22))
+            text(img, (cx + 18, cy + 116), "40 ⚡", size=11, weight=600, color=(255, 217, 112), anchor="lm")
+        button(img, [cx + cw - 96, cy + 92, 88, 40], "Выбрать", 1, "before", size=12)
+    y += 2 * 158 + 8
+    button(img, [W / 2 - 110, y, 220, 48], "Купить: Ковёр · 40 ⚡", 2, "before", size=14)
+    return img
+
+
+def hs_after_b() -> Image.Image:
+    """Строки как в игре, но превью 120×50 + чипы куплено/цены."""
+    img = Image.new("RGBA", (W, HS_H), BEFORE["bg0"] + (255,))
+    _hs_head(img)
+    y = 228
+    text(img, (24, y), "Обстановка", size=14, color=(232, 241, 248))
+    y += 22
+    _hs_rows(img, y, 120, True)
+    y += 3 * 70 + 6
+    button(img, [W / 2 - 110, y, 220, 48], "Купить: Ковёр · 40 ⚡", 2, "before", size=14)
+    return img
+
+
+def board_house4() -> Image.Image:
+    variants = [("ДО · строки с мелким превью 76×50, без цен", hs_before()),
+                ("ПОСЛЕ A · карточки 2×N, крупное превью, чипы, кнопка в карточке", hs_after_a()),
+                ("ПОСЛЕ B · строки как сейчас + превью 120×50 и чипы куплено/цена", hs_after_b())]
+    img = Image.new("RGBA", (W + 40, len(variants) * (HS_H + 64) + 90), (7, 11, 16, 255))
+    text(img, (20, 26), "Блок 4 · Дом Светика (каталог обстановки)", size=24, weight=800, color=(234, 242, 247))
+    text(img, (20, 62), "Код игры не тронут: это мок-предложения для согласования.",
+         size=13, color=(126, 141, 156))
+    y = 90
+    for caption, sub in variants:
+        text(img, (20, y + 14), caption, size=14, weight=700, color=(169, 184, 198))
+        img.paste(sub, (20, y + 40), sub)
+        y += HS_H + 64
+    return img
+
+
 if __name__ == "__main__":
     main()
