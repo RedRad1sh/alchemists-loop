@@ -331,40 +331,35 @@ def screen_lab(mode):
     else:
         rrect(img, [24, y, W - 24, y + 44], 4, fill=(21, 27, 37))
         text(img, (36, y + 22), "Поиск вещества по названию…", size=14, color=(109, 120, 131))
-    # BrewBar
-    by = H - (168 if mode == "before" else 190)
-    rrect(img, [12 if mode == "before" else 10, by, W - (12 if mode == "before" else 10), H - (12 if mode == "before" else 10)],
-          14 if mode == "before" else 18, fill=(16, 22, 31, 242), outline=(36, 64, 74) if mode == "before" else C["line"])
-    if mode == "before":
-        ry = by + 12
-        button(img, [24, ry, 48, 42], "Все", 0, mode)
-        for i, col in enumerate([(224, 118, 79), (90, 167, 232), (196, 164, 124), (206, 232, 239)]):
-            orb(img, 100 + i * 52, ry + 21, 22, col, glyph="◆" if i == 1 else "▲", count=100, mode=mode)
-        button(img, [320, ry - 5, 130, 52], "ВАРИТЬ", 1, mode, size=16)
-        button(img, [456, ry, 34, 42], "↻", 1, mode)
-        button(img, [494, ry, 34, 42], "✕", 0, mode)
-        ry += 56
-        rrect(img, [24, ry, W - 24, ry + 12], 6, fill=(41, 50, 61))
-        rrect(img, [24, ry, 24 + int((W - 48) * 0.42), ry + 12], 6, fill=(77, 217, 226))
-        ry += 20
-        text(img, (24, ry), "Перетащи ингредиенты в лунки или нажми «Варить».", size=13, color=C["ink2"])
-    else:
-        ry = by + 14
-        button(img, [24, ry, 48, 44], "Все", 0, mode)
-        for i, col in enumerate([(224, 118, 79), (90, 167, 232), (196, 164, 124), (206, 232, 239)]):
-            orb(img, 104 + i * 56, ry + 22, 23, col, count=100, mode=mode)
-        ry += 56
-        text(img, (24, ry), "КОТЁЛ", size=11, weight=600, color=(89, 224, 214), tracking=0.7)
-        rrect(img, [24, ry + 16, 372, ry + 26], 5, fill=C["bg3"], outline=C["line"])
-        rrect(img, [24, ry + 16, 24 + int(348 * 0.42), ry + 26], 5, fill=C["accent"])
-        button(img, [384, ry - 6, 132, 52], "ВАРИТЬ", 1, mode, icon_name="cauldron", size=15)
-        ry += 34
-        y2 = ry + 18
-        text(img, (24, y2 + 14), "Перетащи ингредиенты в лунки или нажми «Варить».", size=13, color=C["ink2"])
-        button(img, [368, y2, 44, 44], "", 1, mode, icon_name="repeat")
-        button(img, [420, y2, 44, 44], "", 0, mode, icon_name="x")
-        button(img, [472, y2, 44, 44], "Стоп", 1, mode, disabled=True, size=12)
+    brewbar(img, tm)
     return img
+
+
+def brewbar(img, bm):
+    """Нижняя панель варки. bm: "before" | "after" (блок 2, вариант B)."""
+    by = H - 168
+    rrect(img, [12, by, W - 12, H - 12], 14, fill=(16, 22, 31, 242), outline=(36, 64, 74))
+    ry = by + 12
+    button(img, [24, ry, 48, 42], "Все", 0, "before")
+    for i, col in enumerate(ORBS):
+        orb(img, 100 + i * 52, ry + 21, 22, col, glyph="◆" if i == 1 else "▲",
+            count=100, mode="after" if bm == "after" else "before")
+    if bm == "after":
+        # вариант B: ↻ и ✕ перед «ВАРИТЬ», кнопка в правом краю ряда
+        button(img, [320, ry, 40, 42], "↻", 1, "before")
+        button(img, [366, ry, 40, 42], "✕", 0, "before")
+        button(img, [412, ry - 5, 104, 52], "ВАРИТЬ", 1, "before", size=15)
+    else:
+        button(img, [320, ry - 5, 130, 52], "ВАРИТЬ", 1, "before", size=16)
+        button(img, [456, ry, 34, 42], "↻", 1, "before")
+        button(img, [494, ry, 34, 42], "✕", 0, "before")
+    ry += 56
+    rrect(img, [24, ry, W - 24, ry + 12], 6, fill=(41, 50, 61))
+    rrect(img, [24, ry, 24 + int((W - 48) * 0.42), ry + 12], 6, fill=(77, 217, 226))
+    ry += 20
+    text(img, (24, ry), "Перетащи ингредиенты в лунки или нажми «Варить».", size=13, color=BEFORE["ink2"])
+    if bm == "after":
+        button(img, [W - 24 - 76, ry - 6, 76, 32], "Стоп", 1, "before", disabled=True, size=12)
 
 
 def screen_experiment(mode):
@@ -415,6 +410,7 @@ def screen_experiment(mode):
         text(img, (cx + cw / 2, cy + 50), nm, size=10, color=(207, 216, 224), anchor="mm")
     y += 2 * 74 + 6
     text(img, (W / 2, y), "Ячейки 4×N — как в игре, без строк-таблиц.", size=11, color=C["ink3"], anchor="mm")
+    brewbar(img, tm)
     return img
 
 

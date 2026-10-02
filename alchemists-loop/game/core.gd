@@ -1270,7 +1270,7 @@ func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
 	_auto_cancel = false
 	_auto_new.clear()
 	if _auto_stop_btn != null:
-		_auto_stop_btn.visible = true
+		_auto_stop_btn.disabled = false
 	var steps := 0
 	var cancelled := false
 	var paused_reason := ""
@@ -1314,7 +1314,7 @@ func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
 				_auto = false
 				_production_discount = 1.0
 				if _auto_stop_btn != null:
-					_auto_stop_btn.visible = false
+					_auto_stop_btn.disabled = true
 				return false
 			if bool(brew_res.get("failed", true)):
 				# U9 (T11): упавший шаг не двигает completed; производство
@@ -1332,7 +1332,7 @@ func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
 	_auto = false
 	_production_discount = 1.0
 	if _auto_stop_btn != null:
-		_auto_stop_btn.visible = false
+		_auto_stop_btn.disabled = true
 	if cancelled:
 		_craft_job["status"] = "paused_user"
 		Analytics.track("craft_job_cancel", {

@@ -1181,11 +1181,6 @@ func _build_brew_bar() -> void:
 		_source_col.add_child(orb)
 		_engine._source_orbs[item_id] = orb
 
-	_engine._brew_btn = _round_brew_button("ВАРИТЬ")
-	_engine._brew_btn.custom_minimum_size = Vector2(140, 52)  # увеличен hitbox
-	_engine._brew_btn.mouse_filter = Control.MOUSE_FILTER_STOP  # явный приём кликов
-	_engine._brew_btn.pressed.connect(_on_brew_btn_pressed)
-	row.add_child(_engine._brew_btn)
 	_engine._repeat_btn = _small_button("↻", Vector2(44, 42), 1)
 	_engine._repeat_btn.tooltip_text = "Повторить последнюю пару"
 	_engine._repeat_btn.pressed.connect(_engine._repeat_last)
@@ -1194,6 +1189,12 @@ func _build_brew_bar() -> void:
 	_engine._reset_btn.tooltip_text = "Сбросить ингредиенты из лунок"
 	_engine._reset_btn.pressed.connect(_engine._reset_slots)
 	row.add_child(_engine._reset_btn)
+	# Блок 2, вариант B: «ВАРИТЬ» в правом краю ряда (зона большого пальца).
+	_engine._brew_btn = _round_brew_button("ВАРИТЬ")
+	_engine._brew_btn.custom_minimum_size = Vector2(140, 52)  # увеличен hitbox
+	_engine._brew_btn.mouse_filter = Control.MOUSE_FILTER_STOP  # явный приём кликов
+	_engine._brew_btn.pressed.connect(_on_brew_btn_pressed)
+	row.add_child(_engine._brew_btn)
 
 	_engine._progress = ProgressBar.new()
 	_engine._progress.custom_minimum_size = Vector2(0, 12)
@@ -1224,7 +1225,8 @@ func _build_brew_bar() -> void:
 	srow.add_child(_engine._status_label)
 	_engine._auto_stop_btn = _small_button("Стоп", Vector2(76, 40), 1)
 	_engine._auto_stop_btn.tooltip_text = "Остановить этап; промежуточные предметы и задание производства сохранятся"
-	_engine._auto_stop_btn.visible = false
+	# Блок 2, вариант B: кнопка видна всегда (disabled в простое) — вёрстка не скачет.
+	_engine._auto_stop_btn.disabled = true
 	_engine._auto_stop_btn.pressed.connect(_engine._stop_auto)
 	srow.add_child(_engine._auto_stop_btn)
 

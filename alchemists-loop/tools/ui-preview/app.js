@@ -111,15 +111,22 @@ function screenLab(mode) {
       <div class="inputwrap"><input class="input" placeholder="Поиск вещества по названию…"></div>
     </div>
     <div class="brewbar">
-      <div class="brewrow">
-        <button class="btn k0" style="height:42px;padding:0 12px">Все</button>
-        ${orb("#e0764f", 100)}${orb("#5aa7e8", 100)}${orb("#c4a47c", 100)}${orb("#cee8ef", 100)}
-        <button class="btn k1" style="height:52px;padding:0 26px;font-size:16px">ВАРИТЬ</button>
-        <button class="btn k1" style="height:42px;width:44px">↻</button>
-        <button class="btn k0" style="height:42px;width:44px">✕</button>
+      <div class="brow">
+        <button class="btn k0" style="min-width:48px;height:42px">Все</button>
+        ${ORBS.map((o, i) => `<span class="orb src" style="background:radial-gradient(circle at 35% 30%, ${o.hi}, ${o.lo})">${i === 1 ? "◆" : "▲"}<span class="cnt${mode === "after" ? " in" : ""}">100</span></span>`).join("")}
+        ${mode === "after"
+          ? `<button class="btn k1" style="min-width:40px;height:42px">↻</button>
+             <button class="btn k0" style="min-width:40px;height:42px">✕</button>
+             <button class="btn k1" style="height:52px;padding:0 20px;font-size:15px;margin-left:auto">ВАРИТЬ</button>`
+          : `<button class="btn k1" style="height:52px;padding:0 26px;font-size:16px">ВАРИТЬ</button>
+             <button class="btn k1" style="min-width:34px;height:42px">↻</button>
+             <button class="btn k0" style="min-width:34px;height:42px">✕</button>`}
       </div>
-      <div class="prog"><i></i></div>
-      <div class="statusrow">Перетащи ингредиенты в лунки или нажми «Варить».</div>
+      <div class="prog"><i style="width:42%"></i></div>
+      <div class="brow" style="margin-top:8px">
+        <span class="bstatus">Перетащи ингредиенты в лунки или нажми «Варить».</span>
+        ${mode === "after" ? `<button class="btn k1" style="min-width:76px;height:32px;opacity:.45" disabled>Стоп</button>` : ""}
+      </div>
     </div>
   </div>`;
 }
