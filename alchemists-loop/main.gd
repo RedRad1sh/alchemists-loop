@@ -560,7 +560,9 @@ func _ready() -> void:
 		elif a == "--action=goals":
 			_demo_harness._action_goals = true
 	for a in args:
-		if a.begins_with("--shot="):
+		if a.begins_with("--gif="):
+			_demo_harness._gif_dir = a.substr("--gif=".length())
+		elif a.begins_with("--shot="):
 			_demo_harness._shot_path = a.substr("--shot=".length())
 		elif a.begins_with("--tab="):
 			_demo_harness._shot_tab = a.substr("--tab=".length()).to_int()
@@ -1871,6 +1873,10 @@ func _demo_seed_sigil_coll() -> void:
 				if target != "":
 					_open_sigil_fullscreen(_sigil_catalog_entry(target,
 						_sigil._server_collection[target]))
+					# GIF-демо: авто-переворот через 2 с после материализации.
+					var ritual := self.find_child("SigilRitual", true, false)
+					if ritual != null and ritual.has_method("set_auto_flip"):
+						ritual.set_auto_flip(2.0)
 		"sets":
 			_sigil_show_tab("sets")
 		"set_grid":
