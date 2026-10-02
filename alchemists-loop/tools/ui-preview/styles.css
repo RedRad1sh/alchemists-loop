@@ -289,3 +289,18 @@ body {
 .hthumb { background:#05080c; border-radius:8px; height:62px; position:relative; }
 .hthumb i { position:absolute; left:10px; right:10px; top:28px; height:26px; background:#8c5a3c; border-radius:4px; }
 .chip.mut { color:#7e8d9c; }
+
+.mechip { background:#18221e; border:1px solid #59e0d6; border-radius:12px; padding:8px 12px;
+  color:#a8e8c8; font-size:13px; font-weight:600; margin:8px 0; }
+.rtcard { display:flex; align-items:center; gap:8px; background:#121a24; border:1px solid #1e2936;
+  border-radius:12px; padding:8px 10px; margin-bottom:8px; }
+.rtcard.me { border-color:#59e0d6; background:#18221e; }
+.rtcard .rk { width:28px; height:28px; border-radius:8px; background:#0a0e14; color:#7e8d9c;
+  display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; }
+.rtcard .rk.m0 { color:#ffd96e; } .rtcard .rk.m1 { color:#c6d0da; } .rtcard .rk.m2 { color:#cd9664; }
+.feedcard { display:flex; align-items:center; gap:8px; background:#0d141c; border:1px solid #1e2936;
+  border-radius:10px; padding:6px 10px; margin-bottom:6px; }
+.wcard { display:flex; align-items:center; gap:10px; background:#0d141c; border:1px solid #1e2936;
+  border-radius:12px; padding:8px 10px; margin-bottom:8px; }
+.chalcard { display:flex; align-items:center; gap:10px; background:#1e1b10; border:1px solid #786428;
+  border-radius:12px; padding:10px 12px; margin:10px 0; }

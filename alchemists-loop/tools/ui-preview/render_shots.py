@@ -552,6 +552,28 @@ def board_tabs():
     return img
 
 
+def screen_rating(mode):
+    tm, md = mode, mode
+    img = new_phone()
+    top = header(img, tm)
+    top = resrow(img, top, "before")
+    top = tabs(img, top, tm, 4)
+    strip = (rt_before() if md == "before" else rt_after()).crop((0, 0, W, H - top))
+    img.paste(strip, (0, top), strip)
+    return img
+
+
+def screen_world(mode):
+    tm, md = mode, mode
+    img = new_phone()
+    top = header(img, tm)
+    top = resrow(img, top, "before")
+    top = tabs(img, top, tm, 2)
+    strip = (wl_before() if md == "before" else wl_after()).crop((0, 0, W, H - top))
+    img.paste(strip, (0, top), strip)
+    return img
+
+
 def main() -> None:
     _raster_icons()
     OUT.mkdir(parents=True, exist_ok=True)
@@ -562,6 +584,10 @@ def main() -> None:
         "screen_experiment_after": screen_experiment("after"),
         "screen_house_after": screen_house("after"),
         "screen_popup_after": screen_popup("after"),
+        "screen_rating_before": screen_rating("before"),
+        "screen_rating_after": screen_rating("after"),
+        "screen_world_before": screen_world("before"),
+        "screen_world_after": screen_world("after"),
         "board_icons": board_icons(),
         "board_tabs": board_tabs(),
     }

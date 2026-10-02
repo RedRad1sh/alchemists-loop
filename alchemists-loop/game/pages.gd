@@ -996,8 +996,23 @@ func _build_world(page: VBoxContainer) -> void:
 	var race_title := g._label("Гонка первооткрытий", 16)
 	race_title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.42))
 	page.add_child(race_title)
+	# Блок 5: цель дня — карточкой с иконкой кубка (награда видна в тексте цели).
+	var challenge_card := PanelContainer.new()
+	var ccsb := StyleBoxFlat.new()
+	ccsb.bg_color = Color(0.12, 0.10, 0.05, 0.9)
+	ccsb.set_corner_radius_all(12)
+	ccsb.border_color = Color(0.47, 0.39, 0.16, 0.9)
+	ccsb.set_border_width_all(1)
+	ccsb.content_margin_left = 12
+	ccsb.content_margin_right = 12
+	ccsb.content_margin_top = 10
+	ccsb.content_margin_bottom = 10
+	challenge_card.add_theme_stylebox_override("panel", ccsb)
+	page.add_child(challenge_card)
 	var challenge_row := HBoxContainer.new()
-	challenge_row.add_theme_constant_override("separation", 8)
+	challenge_row.add_theme_constant_override("separation", 10)
+	challenge_card.add_child(challenge_row)
+	challenge_row.add_child(UiIcon.make("trophy", 20, Color(1.0, 0.85, 0.42)))
 	g._online._challenge_avatar = g._make_avatar("", 20)
 	g._online._challenge_avatar.visible = false
 	challenge_row.add_child(g._online._challenge_avatar)
@@ -1005,7 +1020,6 @@ func _build_world(page: VBoxContainer) -> void:
 	g._online._challenge_label.add_theme_color_override("font_color", Color(0.95, 0.9, 0.75))
 	g._online._challenge_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	challenge_row.add_child(g._online._challenge_label)
-	page.add_child(challenge_row)
 	var feed_title := g._label("Свежие открытия", 16)
 	feed_title.add_theme_color_override("font_color", Color(0.55, 0.95, 0.9))
 	page.add_child(feed_title)
@@ -1035,6 +1049,12 @@ func _build_world(page: VBoxContainer) -> void:
 	g._online._world_search.clear_button_enabled = true
 	g._online._world_search.custom_minimum_size = Vector2(0, 40)
 	g._online._world_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var ssb := StyleBoxFlat.new()
+	ssb.bg_color = Color(0.05, 0.08, 0.12, 0.9)
+	ssb.set_corner_radius_all(10)
+	ssb.content_margin_left = 12
+	ssb.content_margin_right = 12
+	g._online._world_search.add_theme_stylebox_override("normal", ssb)
 	g._online._world_search.text_changed.connect(g._online._on_world_search)
 	g._online._world_search.text_submitted.connect(func(_t: String) -> void: g.get_viewport().gui_release_focus())
 	col.add_child(g._online._world_search)
@@ -1047,14 +1067,14 @@ func _build_world(page: VBoxContainer) -> void:
 	pager.alignment = BoxContainer.ALIGNMENT_CENTER
 	pager.add_theme_constant_override("separation", 8)
 	col.add_child(pager)
-	g._online._world_prev = g._small_button("‹", Vector2(52, 40), 1)
+	g._online._world_prev = g._small_button("‹", Vector2(44, 44), 1)
 	g._online._world_prev.pressed.connect(func() -> void: g._online._world_set_page(g._online._world_page - 1))
 	pager.add_child(g._online._world_prev)
 	g._online._world_page_label = g._label("", 13)
 	g._online._world_page_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	g._online._world_page_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pager.add_child(g._online._world_page_label)
-	g._online._world_next = g._small_button("›", Vector2(52, 40), 1)
+	g._online._world_next = g._small_button("›", Vector2(44, 44), 1)
 	g._online._world_next.pressed.connect(func() -> void: g._online._world_set_page(g._online._world_page + 1))
 	pager.add_child(g._online._world_next)
 	g._online._rebuild_world_grid()

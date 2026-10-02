@@ -240,8 +240,83 @@ function screenPopup(mode) {
   </div>`;
 }
 
+function screenRating(mode) {
+  const rows = [["redrad1sh", 41, 1280], ["mira", 33, 990], ["alx", 27, 860], ["ты", 11, 340]];
+  if (mode === "after") {
+    return `<div class="screen">
+      ${header(mode)}${resrow()}${tabs(mode, 4)}
+      <div class="panel" style="flex:1;overflow:hidden">
+        <div class="poptitle" style="font-size:20px;text-align:center">РЕЙТИНГ ИГРОКОВ</div>
+        <div class="popsub" style="text-align:center">Кто сколько открыл — и чей домик можно посмотреть.</div>
+        <div class="mechip">Ты: 14 место · 11 открытий · 340 ⚡</div>
+        ${rows.map(([nm, d, p], i) => `<div class="rtcard${nm === "ты" ? " me" : ""}">
+          <span class="rk${i < 3 ? " m" + i : ""}">${i + 1}</span>
+          <span class="orb" style="width:28px;height:28px;background:radial-gradient(circle at 35% 30%, #9fe8b0, #2f8f5b)"></span>
+          <span style="flex:1"><b style="color:#eaf2f7;font-size:14px">${nm}</b><br>
+            <span class="muted" style="font-size:11px">${d} открытий</span></span>
+          <span class="chip gold">${p} ⚡</span></div>`).join("")}
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <span class="muted" style="font-size:12px;flex:1">Первооткрытия · вещества · очки целей</span>
+          <button class="btn k1" style="min-width:44px;height:40px">${ic("repeat", 18)}</button></div>
+      </div>
+    </div>`;
+  }
+  return `<div class="screen">
+    ${header(mode)}${resrow()}${tabs(mode, 4)}
+    <div class="panel" style="flex:1;overflow:hidden">
+      <div class="poptitle" style="font-size:20px;text-align:center">РЕЙТИНГ ИГРОКОВ</div>
+      <div class="popsub" style="text-align:center">Кто сколько открыл — и чей домик можно посмотреть.</div>
+      <div class="popsub" style="text-align:center;color:#f5e5bf">Ты: 14 место · 11 открытий · 340 очков</div>
+      <div class="popsub" style="text-align:center">Первооткрытия · вещества · очки целей</div>
+      <button class="btn k1" style="width:100%;height:40px;margin:8px 0">Обновить</button>
+      ${rows.map(([nm, d, p], i) => `<div class="muted" style="font-size:14px;color:#e8f1f8;padding:5px 0">${i + 1}. ${nm} — ${d} открытий, ${p} очков</div>`).join("")}
+    </div>
+  </div>`;
+}
+
+function screenWorld(mode) {
+  if (mode === "after") {
+    return `<div class="screen">
+      ${header(mode)}${resrow()}${tabs(mode, 2)}
+      <div class="panel" style="flex:1;overflow:hidden">
+        <div class="sect" style="color:#eaf2f7;font-size:20px;font-weight:800">Мир живых открытий</div>
+        <div class="muted" style="font-size:13px">Связь установлена · 57 веществ в мире</div>
+        <div class="chalcard">${ic("trophy", 20, "#ffd96e")}
+          <span style="flex:1"><b style="color:#eaf2f7;font-size:13px">Цель дня: вещество из «Родник»</b><br>
+          <span class="chip gold">+25 ⚡</span></span></div>
+        <div class="sect" style="color:#59e0d6;font-size:15px">Свежие открытия</div>
+        ${[["mira", "Пар", "2 мин"], ["alx", "Кирпич", "9 мин"], ["redrad1sh", "Сталь", "21 мин"]].map(([n, it, ago]) =>
+          `<div class="feedcard"><span class="orb" style="width:24px;height:24px;background:radial-gradient(circle at 35% 30%, #b7f0b9, #6fbf72)"></span>
+           <span style="flex:1;color:#cfd8e0;font-size:12px">${n} открыл «${it}»</span>
+           <span class="muted" style="font-size:11px">${ago}</span></div>`).join("")}
+        <div class="sect" style="color:#eaf2f7;font-size:15px">Все вещества</div>
+        <div class="inputwrap"><input class="input" placeholder="Поиск по миру: имя, id, автор…"></div>
+        ${[["Пар", "mira"], ["Кирпич", "alx"]].map(([n, a]) => `<div class="wcard">
+          <span class="orb" style="width:32px;height:32px;background:radial-gradient(circle at 35% 30%, #b7f0b9, #6fbf72)"></span>
+          <span style="flex:1"><b style="color:#eaf2f7;font-size:14px">${n}</b><br>
+          <span class="muted" style="font-size:11px">автор: ${a}</span></span>${ic("chevron_right", 14)}</div>`).join("")}
+      </div>
+    </div>`;
+  }
+  return `<div class="screen">
+    ${header(mode)}${resrow()}${tabs(mode, 2)}
+    <div class="panel" style="flex:1;overflow:hidden">
+      <div class="sect" style="color:#eaf2f7;font-size:20px;font-weight:800">Мир живых открытий</div>
+      <div class="muted" style="font-size:14px">Связь установлена · 57 веществ в мире</div>
+      <div class="sect" style="color:#ffd96e;font-size:16px">Гонка первооткрытий</div>
+      <div style="color:#f5e5bf;font-size:13px">Цель дня: вещество из «Родник» · награда 25 ⚡</div>
+      <div class="sect" style="color:#8cf2e8;font-size:16px">Свежие открытия</div>
+      <div class="muted" style="font-size:12px;color:#c4cdd6">mira открыла «Пар» · 2 мин назад<br>alx открыл «Кирпич» · 9 мин назад</div>
+      <div class="sect" style="color:#eaf2f7;font-size:18px">Все вещества</div>
+      <div class="inputwrap"><input class="input" placeholder="Поиск по миру: имя, id, автор…"></div>
+      <div style="color:#e8f1f8;font-size:14px;padding:4px 0">Пар · автор mira<br>Кирпич · автор alx</div>
+    </div>
+  </div>`;
+}
+
 const SCREENS = [["lab", "Лаборатория", screenLab], ["exp", "Эксперимент", screenExperiment],
-  ["house", "Дом", screenHouse], ["popup", "Попап", screenPopup]];
+  ["house", "Дом", screenHouse], ["popup", "Попап", screenPopup],
+  ["rating", "Рейтинг", screenRating], ["world", "Мир", screenWorld]];
 
 /* ---------- views ---------- */
 const content = document.getElementById("content");
