@@ -121,6 +121,35 @@ static func run(g: Game) -> void:
 	Selftest.check("return lines", rtxt.contains("150") and rtxt.contains("Реторта готова") and rtxt.contains("#14"))
 	g._saves._close_return_popup()
 	Selftest.check("return closes", not g._saves._return_open and not g._saves._return_popup.visible)
+	# ============ sb9 (T9/B): строка «слишком короткое отсутствие» — только при честном статусе "" ============
+	# Офлайн-маршрут верстака сорвался на паузе: шагов нет, статус "ingredients".
+	# elif (_return_bench_status == "") не срабатывает — строка не появляется вовсе.
+	g._saves._return_bench_steps = 0
+	g._saves._return_bench_status = "ingredients"
+	g._pages._bench_on = true
+	g._pages._bench_target = "water"
+	g._saves._open_return_popup()
+	var sb9_rtxt := ""
+	for ch in g._saves._return_list.get_children():
+		sb9_rtxt += (ch as Label).text + "\n"
+	Selftest.check("sb9 return poster skips bench line when offline route failed",
+		not sb9_rtxt.contains("слишком короткое отсутствие"))
+	g._pages._bench_on = false
+	g._pages._bench_target = ""
+	g._saves._close_return_popup()
+	# Честное короткое отсутствие: верстак включён и цель выбрана, статус "" → строка есть.
+	g._saves._return_bench_status = ""
+	g._pages._bench_on = true
+	g._pages._bench_target = "water"
+	g._saves._open_return_popup()
+	sb9_rtxt = ""
+	for ch in g._saves._return_list.get_children():
+		sb9_rtxt += (ch as Label).text + "\n"
+	Selftest.check("sb9 return poster keeps bench line for genuine short absence",
+		sb9_rtxt.contains("слишком короткое отсутствие"))
+	g._pages._bench_on = false
+	g._pages._bench_target = ""
+	g._saves._close_return_popup()
 	g._last_rank = 14
 	g._online._world_total_seen = 60
 	g._saves._save_game()
