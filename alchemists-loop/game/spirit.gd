@@ -193,16 +193,34 @@ func _companion_open_dialog(text: String, ask_name: bool) -> void:
 		_companion_dlg_aff.text = _companion_affinity_line()
 	_companion_dim.visible = true
 	_companion_dlg.visible = true
+	# UI/UX: animate dialog appearance (fade + scale)
+	_companion_dim.modulate.a = 0.0
+	_companion_dlg.scale = Vector2(0.9, 0.9)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_companion_dim, "modulate:a", 1.0, 0.25)
+	tween.tween_property(_companion_dlg, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	if _companion != null:
 		_companion.z_index = 10
 
 func _companion_close_dialog() -> void:
-	if _companion_dim != null:
-		_companion_dim.visible = false
-	if _companion_dlg != null:
-		_companion_dlg.visible = false
-	if _companion != null:
-		_companion.z_index = 3
+	if _companion_dim != null and _companion_dlg != null:
+		# UI/UX: animate dialog closing (fade + scale)
+		var tween := g.create_tween().set_parallel(true)
+		tween.tween_property(_companion_dim, "modulate:a", 0.0, 0.2)
+		tween.tween_property(_companion_dlg, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.chain().tween_callback(func():
+			_companion_dim.visible = false
+			_companion_dlg.visible = false
+			if _companion != null:
+				_companion.z_index = 3
+		)
+	else:
+		if _companion_dim != null:
+			_companion_dim.visible = false
+		if _companion_dlg != null:
+			_companion_dlg.visible = false
+		if _companion != null:
+			_companion.z_index = 3
 	Sfx.click()
 
 func _companion_on_name_ok() -> void:
