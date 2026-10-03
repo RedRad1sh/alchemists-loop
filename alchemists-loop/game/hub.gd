@@ -108,11 +108,23 @@ func _open_profile() -> void:
 	_profile_stats.add_theme_color_override("font_color", Color(0.85, 0.9, 0.95))
 	_profile_dim.visible = true
 	_profile_popup.visible = true
+	# UI/UX: animate popup appearance (fade + scale)
+	_profile_dim.modulate.a = 0.0
+	_profile_popup.scale = Vector2(0.9, 0.9)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_profile_dim, "modulate:a", 1.0, 0.25)
+	tween.tween_property(_profile_popup, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	Sfx.click()
 
 func _close_profile() -> void:
-	_profile_dim.visible = false
-	_profile_popup.visible = false
+	# UI/UX: animate popup closing (fade + scale)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_profile_dim, "modulate:a", 0.0, 0.2)
+	tween.tween_property(_profile_popup, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.chain().tween_callback(func():
+		_profile_dim.visible = false
+		_profile_popup.visible = false
+	)
 	Sfx.click()
 
 func _clean_player_nick(raw: String) -> String:
@@ -261,16 +273,30 @@ func _build_craftable_popup() -> void:
 	scroll.add_child(_craftable_list)
 	var close := g._small_button("Закрыть", Vector2(150, 44))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	close.pressed.connect(func() -> void:
-		_craftable_dim.visible = false
-		_craftable_popup.visible = false
-		Sfx.click())
+	close.pressed.connect(_close_craftable)
 	col.add_child(close)
 
 func _open_craftable() -> void:
 	_rebuild_craftable_rows()
 	_craftable_dim.visible = true
 	_craftable_popup.visible = true
+	# UI/UX: animate popup appearance (fade + scale)
+	_craftable_dim.modulate.a = 0.0
+	_craftable_popup.scale = Vector2(0.9, 0.9)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_craftable_dim, "modulate:a", 1.0, 0.25)
+	tween.tween_property(_craftable_popup, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	Sfx.click()
+
+func _close_craftable() -> void:
+	# UI/UX: animate popup closing (fade + scale)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_craftable_dim, "modulate:a", 0.0, 0.2)
+	tween.tween_property(_craftable_popup, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.chain().tween_callback(func():
+		_craftable_dim.visible = false
+		_craftable_popup.visible = false
+	)
 	Sfx.click()
 
 func _rebuild_craftable_rows() -> void:
@@ -381,10 +407,7 @@ func _build_settings_popup() -> void:
 	col.add_child(hint)
 	var close := g._small_button("Закрыть", Vector2(150, 44))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	close.pressed.connect(func() -> void:
-		_settings_dim.visible = false
-		_settings_popup.visible = false
-		Sfx.click())
+	close.pressed.connect(_close_settings)
 	col.add_child(close)
 
 func _open_settings() -> void:
@@ -393,6 +416,23 @@ func _open_settings() -> void:
 	_music_slider.value = Sfx.music_volume
 	_settings_dim.visible = true
 	_settings_popup.visible = true
+	# UI/UX: animate popup appearance (fade + scale)
+	_settings_dim.modulate.a = 0.0
+	_settings_popup.scale = Vector2(0.9, 0.9)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_settings_dim, "modulate:a", 1.0, 0.25)
+	tween.tween_property(_settings_popup, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	Sfx.click()
+
+func _close_settings() -> void:
+	# UI/UX: animate popup closing (fade + scale)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_settings_dim, "modulate:a", 0.0, 0.2)
+	tween.tween_property(_settings_popup, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.chain().tween_callback(func():
+		_settings_dim.visible = false
+		_settings_popup.visible = false
+	)
 	Sfx.click()
 
 # ---------- журнал событий ----------
@@ -438,16 +478,30 @@ func _build_journal_popup() -> void:
 	scroll.add_child(_journal_list)
 	var close := g._small_button("Закрыть", Vector2(150, 44))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	close.pressed.connect(func() -> void:
-		_journal_dim.visible = false
-		_journal_popup.visible = false
-		Sfx.click())
+	close.pressed.connect(_close_journal)
 	col.add_child(close)
 
 func _open_journal() -> void:
 	_rebuild_journal_rows()
 	_journal_dim.visible = true
 	_journal_popup.visible = true
+	# UI/UX: animate popup appearance (fade + scale)
+	_journal_dim.modulate.a = 0.0
+	_journal_popup.scale = Vector2(0.9, 0.9)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_journal_dim, "modulate:a", 1.0, 0.25)
+	tween.tween_property(_journal_popup, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	Sfx.click()
+
+func _close_journal() -> void:
+	# UI/UX: animate popup closing (fade + scale)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_journal_dim, "modulate:a", 0.0, 0.2)
+	tween.tween_property(_journal_popup, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.chain().tween_callback(func():
+		_journal_dim.visible = false
+		_journal_popup.visible = false
+	)
 	Sfx.click()
 
 func _rebuild_journal_rows() -> void:
@@ -523,10 +577,7 @@ func _build_upgrade_popup() -> void:
 
 	var close := g._small_button("Закрыть", Vector2(150, 44))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	close.pressed.connect(func() -> void:
-		_up_dim.visible = false
-		_up_popup.visible = false
-		Sfx.click())
+	close.pressed.connect(_close_upgrades)
 	col.add_child(close)
 
 func _build_prestige_popup() -> void:
@@ -567,17 +618,42 @@ func _build_prestige_popup() -> void:
 	ok.pressed.connect(_do_prestige)
 	btns.add_child(ok)
 	var cancel := g._small_button("Отмена", Vector2(120, 46))
-	cancel.pressed.connect(func() -> void:
+	cancel.pressed.connect(_close_prestige)
+	btns.add_child(cancel)
+
+func _close_prestige() -> void:
+	# UI/UX: animate popup closing (fade + scale)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_prestige_dim, "modulate:a", 0.0, 0.2)
+	tween.tween_property(_prestige_popup, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.chain().tween_callback(func():
 		_prestige_dim.visible = false
 		_prestige_popup.visible = false
-		Sfx.click())
-	btns.add_child(cancel)
+	)
+	Sfx.click()
 
 func _open_upgrades() -> void:
 	_rebuild_up_rows()
 	_refresh_prestige_ui()
 	_up_dim.visible = true
 	_up_popup.visible = true
+	# UI/UX: animate popup appearance (fade + scale)
+	_up_dim.modulate.a = 0.0
+	_up_popup.scale = Vector2(0.9, 0.9)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_up_dim, "modulate:a", 1.0, 0.25)
+	tween.tween_property(_up_popup, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	Sfx.click()
+
+func _close_upgrades() -> void:
+	# UI/UX: animate popup closing (fade + scale)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_up_dim, "modulate:a", 0.0, 0.2)
+	tween.tween_property(_up_popup, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.chain().tween_callback(func():
+		_up_dim.visible = false
+		_up_popup.visible = false
+	)
 	Sfx.click()
 
 func _prestige_gain() -> int:
@@ -612,6 +688,12 @@ func _open_prestige_confirm() -> void:
 	_prestige_confirm_label.text = "Котёл перегонит лабораторию в чистое золото мудрецов.\n\nТеряешь: вещества, рецепты, улучшения и текущий эфир.\nСохраняешь: резерв, архивные печати, достижения, комплекты, дружбу Светика, имя.\n\nПолучишь: +%d Золота мудрецов (навсегда)." % gain
 	_prestige_dim.visible = true
 	_prestige_popup.visible = true
+	# UI/UX: animate popup appearance (fade + scale)
+	_prestige_dim.modulate.a = 0.0
+	_prestige_popup.scale = Vector2(0.9, 0.9)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_prestige_dim, "modulate:a", 1.0, 0.25)
+	tween.tween_property(_prestige_popup, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	Sfx.click()
 
 func _do_prestige() -> void:
