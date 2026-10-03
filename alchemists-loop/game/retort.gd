@@ -342,9 +342,7 @@ func _build_retort_picker() -> void:
 	var close := g._small_button("Закрыть", Vector2(150, 44))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.pressed.connect(func() -> void:
-		_retort_dim.visible = false
-		_retort_popup.visible = false
-		Sfx.click())
+		_close_retort_picker())
 	col.add_child(close)
 
 func _open_retort_picker(slot: int) -> void:
@@ -352,6 +350,23 @@ func _open_retort_picker(slot: int) -> void:
 	_rebuild_retort_rows()
 	_retort_dim.visible = true
 	_retort_popup.visible = true
+	# UI/UX: animate popup appearance (fade + scale)
+	_retort_dim.modulate.a = 0.0
+	_retort_popup.scale = Vector2(0.9, 0.9)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_retort_dim, "modulate:a", 1.0, 0.25)
+	tween.tween_property(_retort_popup, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	Sfx.click()
+
+func _close_retort_picker() -> void:
+	# UI/UX: animate popup closing (fade + scale)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_retort_dim, "modulate:a", 0.0, 0.2)
+	tween.tween_property(_retort_popup, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.chain().tween_callback(func():
+		_retort_dim.visible = false
+		_retort_popup.visible = false
+	)
 	Sfx.click()
 
 func _rebuild_retort_rows() -> void:
@@ -403,8 +418,14 @@ func _rebuild_retort_rows() -> void:
 func _on_retort_pick(sub: String) -> void:
 	var slot := _retort_pick_slot
 	_retort_pick_slot = -1
-	_retort_dim.visible = false
-	_retort_popup.visible = false
+	# UI/UX: animate popup closing before processing the pick
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_retort_dim, "modulate:a", 0.0, 0.15)
+	tween.tween_property(_retort_popup, "scale", Vector2(0.9, 0.9), 0.15).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.chain().tween_callback(func():
+		_retort_dim.visible = false
+		_retort_popup.visible = false
+	)
 	if _retort_start(slot, sub):
 		g._engine._refresh()
 	else:

@@ -1182,6 +1182,12 @@ func _auto_craft(item_id: String) -> void:
 		warning_note, blueprint_note, int(plan["total"]), ether_need, stage_cost]
 	g._confirm_dim.visible = true
 	g._confirm.visible = true
+	# UI/UX: animate confirm appearance (fade + scale)
+	g._confirm_dim.modulate.a = 0.0
+	g._confirm.scale = Vector2(0.9, 0.9)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(g._confirm_dim, "modulate:a", 1.0, 0.25)
+	tween.tween_property(g._confirm, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	Sfx.click()
 
 func _record_blueprint(item_id: String, plan: Dictionary) -> void:

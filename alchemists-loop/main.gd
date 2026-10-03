@@ -1516,8 +1516,11 @@ func _show_challenge_win_popup(item_id: String, target_name: String, a: String, 
 		target_name, _online._item_name(a), _online._item_name(b), _online._item_name(item_id), CHALLENGE_REWARD]
 	_popup_dim.visible = true
 	_popup.visible = true
+	# UI/UX: animate popup appearance (fade + scale)
+	_popup_dim.modulate.a = 0.0
 	_popup.scale = Vector2(0.7, 0.7)
-	var tw := create_tween()
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(_popup_dim, "modulate:a", 1.0, 0.25)
 	tw.tween_property(_popup, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
 	Sfx.legendary()
 
@@ -1543,14 +1546,24 @@ func _present_popup(item_id: String, subtext: String, title: String = "", title_
 	_popup_sub.text = subtext
 	_popup_dim.visible = true
 	_popup.visible = true
+	# UI/UX: animate popup appearance (fade + scale)
+	_popup_dim.modulate.a = 0.0
 	_popup.scale = Vector2(0.7, 0.7)
-	var tw := create_tween()
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(_popup_dim, "modulate:a", 1.0, 0.25)
 	tw.tween_property(_popup, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
 	Sfx.discovery()
 
 func _hide_popup() -> void:
-	_popup_dim.visible = false
-	_popup.visible = false
+	# UI/UX: animate popup closing (fade + scale)
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(_popup_dim, "modulate:a", 0.0, 0.2)
+	tween.tween_property(_popup, "scale", Vector2(0.7, 0.7), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.chain().tween_callback(func():
+		_popup_dim.visible = false
+		_popup.visible = false
+		_popup_dim.modulate.a = 1.0
+	)
 	Sfx.click()
 
 var _popup_swipe_start := Vector2.ZERO
@@ -1802,8 +1815,15 @@ func _build_confirm() -> void:
 	btns.add_child(cancel)
 
 func _hide_confirm() -> void:
-	_confirm_dim.visible = false
-	_confirm.visible = false
+	# UI/UX: animate confirm closing (fade + scale)
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(_confirm_dim, "modulate:a", 0.0, 0.2)
+	tween.tween_property(_confirm, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.chain().tween_callback(func():
+		_confirm_dim.visible = false
+		_confirm.visible = false
+		_confirm_dim.modulate.a = 1.0
+	)
 	_engine._pending_item = ""
 	_engine._pending_plan = {}
 	Sfx.click()
