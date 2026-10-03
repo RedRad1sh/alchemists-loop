@@ -720,6 +720,12 @@ func _open_color_picker(target: String) -> void:
 			_cp_ok.text = "Готово · %d ⚡" % int(Game.CUSTOM_COSTS.get(target, 0))
 	if _color_picker != null:
 		_color_picker.visible = true
+		# UI/UX: animate picker appearance (fade + scale)
+		_color_picker.modulate.a = 0.0
+		_color_picker.scale = Vector2(0.9, 0.9)
+		var tween := g.create_tween().set_parallel(true)
+		tween.tween_property(_color_picker, "modulate:a", 1.0, 0.25)
+		tween.tween_property(_color_picker, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	Sfx.click()
 
 
@@ -765,7 +771,14 @@ func _confirm_color_picker() -> void:
 
 func _close_color_picker() -> void:
 	if _color_picker != null:
-		_color_picker.visible = false
+		# UI/UX: animate picker closing (fade + scale)
+		var tween := g.create_tween().set_parallel(true)
+		tween.tween_property(_color_picker, "modulate:a", 0.0, 0.2)
+		tween.tween_property(_color_picker, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.chain().tween_callback(func():
+			_color_picker.visible = false
+			_color_picker.modulate.a = 1.0
+		)
 	Sfx.click()
 
 

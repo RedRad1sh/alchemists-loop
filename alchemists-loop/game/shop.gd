@@ -37,13 +37,25 @@ func open() -> void:
 	_rebuild()
 	_dim.visible = true
 	_popup.visible = true
+	# UI/UX: animate popup appearance (fade + scale)
+	_dim.modulate.a = 0.0
+	_popup.scale = Vector2(0.9, 0.9)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_dim, "modulate:a", 1.0, 0.25)
+	tween.tween_property(_popup, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	Sfx.click()
 	if not App.consent_is_decided():
 		_open_consent()
 
 func close() -> void:
-	_dim.visible = false
-	_popup.visible = false
+	# UI/UX: animate popup closing (fade + scale)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_dim, "modulate:a", 0.0, 0.2)
+	tween.tween_property(_popup, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.chain().tween_callback(func():
+		_dim.visible = false
+		_popup.visible = false
+	)
 	Sfx.click()
 
 func _build_shop_popup() -> void:
@@ -147,10 +159,22 @@ func _build_consent_popup() -> void:
 func _open_consent() -> void:
 	_consent_dim.visible = true
 	_consent_popup.visible = true
+	# UI/UX: animate consent popup appearance (fade + scale)
+	_consent_dim.modulate.a = 0.0
+	_consent_popup.scale = Vector2(0.9, 0.9)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_consent_dim, "modulate:a", 1.0, 0.25)
+	tween.tween_property(_consent_popup, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
 func _close_consent() -> void:
-	_consent_dim.visible = false
-	_consent_popup.visible = false
+	# UI/UX: animate consent popup closing (fade + scale)
+	var tween := g.create_tween().set_parallel(true)
+	tween.tween_property(_consent_dim, "modulate:a", 0.0, 0.2)
+	tween.tween_property(_consent_popup, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.chain().tween_callback(func():
+		_consent_dim.visible = false
+		_consent_popup.visible = false
+	)
 
 func _consent_allow() -> void:
 	App.set_consent(true, true)
