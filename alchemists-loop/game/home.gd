@@ -604,6 +604,12 @@ func _open_decor_shop(cat_id: String) -> void:
 	_rebuild_decor_popup()
 	if _decor_popup != null:
 		_decor_popup.visible = true
+		# UI/UX: animate popup appearance (fade + scale)
+		_decor_popup.modulate.a = 0.0
+		_decor_popup.scale = Vector2(0.9, 0.9)
+		var tween := g.create_tween().set_parallel(true)
+		tween.tween_property(_decor_popup, "modulate:a", 1.0, 0.25)
+		tween.tween_property(_decor_popup, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	Sfx.click()
 
 
@@ -668,7 +674,14 @@ func _rebuild_decor_popup() -> void:
 
 func _close_decor_popup() -> void:
 	if _decor_popup != null:
-		_decor_popup.visible = false
+		# UI/UX: animate popup closing (fade + scale)
+		var tween := g.create_tween().set_parallel(true)
+		tween.tween_property(_decor_popup, "modulate:a", 0.0, 0.2)
+		tween.tween_property(_decor_popup, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.chain().tween_callback(func():
+			_decor_popup.visible = false
+			_decor_popup.modulate.a = 1.0
+		)
 	_refresh_house_page()
 	# после магазина — наверх страницы, к домику: результат выбора виден сразу (п.3)
 	if g._tabs_ref != null and g._tabs_ref.current_tab == 3:
@@ -1242,6 +1255,12 @@ func _open_player_house(nick: String) -> void:
 		_house_visit_btn.visible = _visit_allowed(nick)
 	if _house_popup != null:
 		_house_popup.visible = true
+		# UI/UX: animate popup appearance (fade + scale)
+		_house_popup.modulate.a = 0.0
+		_house_popup.scale = Vector2(0.9, 0.9)
+		var tween := g.create_tween().set_parallel(true)
+		tween.tween_property(_house_popup, "modulate:a", 1.0, 0.25)
+		tween.tween_property(_house_popup, "scale", Vector2.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	_house_popup_title.text = "Домик: %s" % nick
 	_apply_player_house(nick, {})
 	Net.house_get(nick)
@@ -1249,7 +1268,14 @@ func _open_player_house(nick: String) -> void:
 
 func _close_house_popup() -> void:
 	if _house_popup != null:
-		_house_popup.visible = false
+		# UI/UX: animate popup closing (fade + scale)
+		var tween := g.create_tween().set_parallel(true)
+		tween.tween_property(_house_popup, "modulate:a", 0.0, 0.2)
+		tween.tween_property(_house_popup, "scale", Vector2(0.9, 0.9), 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.chain().tween_callback(func():
+			_house_popup.visible = false
+			_house_popup.modulate.a = 1.0
+		)
 	Sfx.click()
 
 
