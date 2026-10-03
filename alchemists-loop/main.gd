@@ -1634,29 +1634,19 @@ func _close_top_modal() -> bool:
 		_saves._close_return_popup()
 		return true
 	elif _hub._settings_popup.visible:
-		_hub._settings_dim.visible = false
-		_hub._settings_popup.visible = false
-		Sfx.click()
+		_hub._close_settings()
 		return true
 	elif _hub._craftable_popup.visible:
-		_hub._craftable_dim.visible = false
-		_hub._craftable_popup.visible = false
-		Sfx.click()
+		_hub._close_craftable()
 		return true
 	elif _retort._retort_popup.visible:
-		_retort._retort_dim.visible = false
-		_retort._retort_popup.visible = false
-		Sfx.click()
+		_retort._close_retort_picker()
 		return true
 	elif _hub._journal_popup.visible:
-		_hub._journal_dim.visible = false
-		_hub._journal_popup.visible = false
-		Sfx.click()
+		_hub._close_journal()
 		return true
 	elif _hub._prestige_popup.visible:
-		_hub._prestige_dim.visible = false
-		_hub._prestige_popup.visible = false
-		Sfx.click()
+		_hub._close_prestige()
 		return true
 	elif _progress_ui._prog_popup.visible:
 		# UI/UX: animate popup closing (same as close button)
@@ -1670,14 +1660,10 @@ func _close_top_modal() -> bool:
 		Sfx.click()
 		return true
 	elif _hub._profile_popup.visible:
-		_hub._profile_dim.visible = false
-		_hub._profile_popup.visible = false
-		Sfx.click()
+		_hub._close_profile()
 		return true
 	elif _hub._up_popup.visible:
-		_hub._up_dim.visible = false
-		_hub._up_popup.visible = false
-		Sfx.click()
+		_hub._close_upgrades()
 		return true
 	elif _spirit._companion_dlg != null and _spirit._companion_dlg.visible:
 		_spirit._companion_close_dialog()
