@@ -23,7 +23,7 @@ static func _ensure() -> void:
 
 
 static func register(type_name: StringName, generator: SigilIconGenerator) -> void:
-	_ready = true
+	_ensure()
 	_registry[String(type_name)] = generator
 
 

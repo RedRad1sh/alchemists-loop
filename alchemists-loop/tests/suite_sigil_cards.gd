@@ -26,6 +26,15 @@ static func _small_options() -> Dictionary:
 
 
 static func run(g: Game) -> void:
+	var saved_registry := SigilGeneratorRegistry._registry.duplicate()
+	var saved_ready := SigilGeneratorRegistry._ready
+	SigilGeneratorRegistry._registry = {}
+	SigilGeneratorRegistry._ready = false
+	SigilGeneratorRegistry.register(&"test_custom", SigilGenObject.new())
+	Selftest.check("custom registration preserves builtins", SigilGeneratorRegistry.has(&"test_custom")
+		and SigilGeneratorRegistry.has(&"planet") and SigilGeneratorRegistry.has(&"relic"))
+	SigilGeneratorRegistry._registry = saved_registry
+	SigilGeneratorRegistry._ready = saved_ready
 	# ---- SigilOptions.show_icon ----
 	var on := SigilOptions.make({})
 	var off := SigilOptions.make({"show_icon": false})
@@ -731,6 +740,16 @@ static func run(g: Game) -> void:
 		and g._progress_ui._ach_progress(sb8_ach.call("sigil_sets_full", 1)) == 0 \
 		and sm.has_rarity(4)
 	Selftest.check("sb8 sigil achievement progress counts", sb8_progress_ok)
+	var collection_signals: Array = []
+	var on_collection_changed := func() -> void: collection_signals.append("changed")
+	var on_collection_ready := func(_cards: Dictionary) -> void: collection_signals.append("ready")
+	sm.collection_changed.connect(on_collection_changed)
+	sm.collection_ready.connect(on_collection_ready)
+	sm._on_collection_result({"ok": true, "cards": {}, "extras": [{"rarity": "epic"}], "milestones": {}})
+	Selftest.check("legacy extras do not unlock chromatic achievement", not sm.has_rarity(4))
+	Selftest.check("collection refresh notifies achievements first", collection_signals == ["changed", "ready"])
+	sm.collection_changed.disconnect(on_collection_changed)
+	sm.collection_ready.disconnect(on_collection_ready)
 
 	# ---- сид 2: все 25 card_ids earth в _server_collection — комплект полон,
 	# set_count достигает 25 (хроматика в сете не считается).

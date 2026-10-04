@@ -7,6 +7,8 @@ render_mode blend_mix;
 // что кэш перестаёт быть кэшем. Движение задаётся фазой от seed'а —
 // у одного рецепта полоса всегда одна и та же, у разных лежит по-разному.
 
+uniform vec4 tint : source_color = vec4(1.0);
+
 uniform float strength = 0.0;
 uniform float phase = 0.0;
 uniform vec2 card_size = vec2(512.0, 1024.0);
@@ -37,5 +39,5 @@ void fragment() {
 
 	float hue = band * 0.42 + phase;
 	vec3 rainbow = hsv2rgb_manual(vec3(fract(hue), 0.62, 1.0));
-	COLOR = vec4(rainbow, clamp(band * mask * (0.52 * strength), 0.0, 1.0));
+	COLOR = vec4(rainbow * tint.rgb, clamp(band * mask * (0.52 * strength) * tint.a, 0.0, 1.0));
 }

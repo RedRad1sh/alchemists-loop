@@ -73,7 +73,9 @@ static func run(g: Game) -> void:
 	g.BREW_SECONDS = 0.05
 	var bench_before := int(g._engine.inventory.get("steam", 0))
 	var bench_res := g._saves._advance_bench_offline(400.0)
-	Selftest.check("bench offline brews", int(bench_res.get("steps", 0)) > 0)
+	Selftest.check("bench offline consumes full operation budget",
+		int(bench_res.get("steps", 0)) == 5 * maxi(g._engine._stage_ops(), 1))
+	Selftest.check("bench offline replans completed targets", int(bench_res.get("items", 0)) > 1)
 	Selftest.check("bench offline grows inventory",
 		int(g._engine.inventory.get("steam", 0)) > bench_before)
 	Selftest.check("bench offline spends ether", g._engine.ether < 100000)

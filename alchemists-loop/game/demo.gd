@@ -343,7 +343,11 @@ func _tick_demo() -> bool:
 			var img := g.get_viewport().get_texture().get_image()
 			if img != null:
 				var fp := _gif_dir.path_join("frame_%03d.png" % (_gif_frame / 3))
-				img.save_png(fp)
+				var err := img.save_png(fp)
+				if err != OK:
+					push_error("GIF frame save failed: %s (%d)" % [fp, err])
+					g.get_tree().quit(1)
+					return
 		if _gif_frame >= 240:  # ~80 кадров GIF (~4 с анимации)
 			g.get_tree().quit(0)
 		return true

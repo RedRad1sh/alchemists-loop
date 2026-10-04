@@ -221,7 +221,8 @@ class TestRealCatalogContract:
             json={"device_id": "dev-real", "craft_id": crafts[0]["id"]},
         )
         assert r.status_code == 200
-        r = client.post("/api/admin/sigil/rotate", params={"device_id": "dev-real"})
+        monkeypatch.setenv("ADMIN_API_TOKEN", "test-admin-token")
+        r = client.post("/api/admin/sigil/rotate", headers={"X-Admin-Token": "test-admin-token"}, params={"device_id": "dev-real"})
         assert r.status_code == 200
         assert all(c["stage"] in self.STAGES for c in r.json()["crafts"]), r.json()
 
@@ -334,7 +335,7 @@ class TestDailyOffer:
     def test_legacy_cache_is_regenerated(self, tmp_path, monkeypatch):
         s = _srv(tmp_path, monkeypatch)
         client = _mini(s, tmp_path, monkeypatch)
-        today = srv.date.today().isoformat()
+        today = srv._now_dt().date().isoformat()
         conn = sqlite3.connect(s.DB_PATH)
         conn.execute(
             "INSERT INTO sigil_daily (device_id, day, crafts_json, generated_at)"
@@ -358,7 +359,8 @@ class TestDailyOffer:
 
     def test_rotate_gives_catalog_cards(self, tmp_path, monkeypatch):
         client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
-        r = client.post("/api/admin/sigil/rotate", params={"device_id": "dev-a"})
+        monkeypatch.setenv("ADMIN_API_TOKEN", "test-admin-token")
+        r = client.post("/api/admin/sigil/rotate", headers={"X-Admin-Token": "test-admin-token"}, params={"device_id": "dev-a"})
         assert r.status_code == 200
         body = r.json()
         assert body["ok"] is True
@@ -392,12 +394,8 @@ class TestDailyOffer:
         # Ротация дня: четвёртый слот приходит только с оффером следующего дня.
         # «Завтра» дёргаем от реального today, не хардкодом — иначе календарная
         # бомба: в реальный завтрашний день патч даёт день кэша → cache-hit.
-        next_ordinal = srv.date.today().toordinal() + 1
-        class _NextDay(srv.date):
-            @classmethod
-            def today(cls):
-                return cls.fromordinal(next_ordinal)
-        monkeypatch.setattr(srv, "date", _NextDay)
+        tomorrow = srv._now_dt() + srv.timedelta(days=1)
+        monkeypatch.setattr(srv, "_now_dt", lambda: tomorrow)
         crafts = _offer(client, "dev-a25")
         assert len(crafts) == srv._SIGIL_SLOTS + 1
         # 4-й слот — обычный каталог-крафт, не хроматик.
@@ -466,7 +464,7 @@ class TestCraft:
     def test_card_outside_catalog_rejected(self, tmp_path, monkeypatch):
         s = _srv(tmp_path, monkeypatch)
         client = _mini(s, tmp_path, monkeypatch)
-        today = srv.date.today().isoformat()
+        today = srv._now_dt().date().isoformat()
         forged = [{
             "id": f"{today}_dev-fake_0", "card_id": "not_a_card", "set": "",
             "rarity": "legendary", "ingredients": [], "ether_cost": 1,
@@ -513,7 +511,7 @@ class TestCraft:
         """
         s = _srv(tmp_path, monkeypatch)
         client = _mini(s, tmp_path, monkeypatch)
-        today = srv.date.today().isoformat()
+        today = srv._now_dt().date().isoformat()
         forged = [{
             "id": "replay_0", "card_id": "coal", "set": "fire",
             "rarity": "common", "ingredients": [], "ether_cost": 40,
@@ -692,3 +690,33 @@ class TestContract:
         assert inspect.iscoroutinefunction(srv.sigil_craft) is False
         assert inspect.iscoroutinefunction(srv.sigil_collection) is False
         assert inspect.iscoroutinefunction(srv.sigil_milestone) is False
+
+
+class TestAdminAuthorization:
+    def test_admin_routes_fail_closed(self, tmp_path, monkeypatch):
+        client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
+        for route in ("rotate", "reset", "free-craft"):
+            url = f"/api/admin/sigil/{route}"
+            monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)
+            assert client.post(url, params={"device_id": "dev-admin"}).status_code == 403
+            monkeypatch.setenv("ADMIN_API_TOKEN", "test-secret")
+            for headers in ({}, {"X-Admin-Token": "wrong"}):
+                assert client.post(url, params={"device_id": "dev-admin"},
+                                   headers=headers).status_code == 403
+
+    def test_authorized_admin_operations(self, tmp_path, monkeypatch):
+        client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
+        monkeypatch.setenv("ADMIN_API_TOKEN", "test-secret")
+        headers = {"X-Admin-Token": "test-secret"}
+        for route in ("rotate", "free-craft", "reset"):
+            response = client.post(f"/api/admin/sigil/{route}",
+                                   params={"device_id": "dev-admin"}, headers=headers)
+            assert response.status_code == 200
+            assert response.json()["ok"] is True
+
+    def test_offer_uses_server_day(self, tmp_path, monkeypatch):
+        client = _mini(_srv(tmp_path, monkeypatch), tmp_path, monkeypatch)
+        monkeypatch.setattr(srv, "_now_dt", lambda: srv.datetime(2040, 1, 2, 0, 1))
+        response = client.get("/api/sigil/daily", params={"device_id": "dev-day"})
+        assert response.status_code == 200
+        assert response.json()["day"] == "2040-01-02"

@@ -1444,10 +1444,16 @@ func _hint_candidates() -> Array:
 				seen[key] = true
 	return res
 
+var _bench_poster: Label
+
+func _bench_poster_text() -> String:
+	return "Подмастерье: варит выбранное вещество каждые %d с, без потолка накопления. Эфир списывается по обычной цене варки; скидка чертежа применяется." % int(g._sigil.bench_interval(_bench_target))
+
 func _build_bench_page(container: VBoxContainer) -> void:
 	container.add_child(g._label(_mode_hint("bench"), 15))
-	var bench_poster := "Подмастерье: варит выбранное вещество каждые %d с, без потолка накопления. Эфир списывается по обычной цене варки; скидка чертежа применяется." % int(Game.BENCH_INTERVAL)
-	container.add_child(g._label(bench_poster, 12))
+	var bench_poster := _bench_poster_text()
+	_bench_poster = g._label(bench_poster, 12)
+	container.add_child(_bench_poster)
 	if _bench_page_labels == null:
 		_bench_page_labels = []
 	(_bench_page_labels as Array).append(bench_poster)
@@ -1488,6 +1494,8 @@ func _bench_candidates() -> Array:
 	return res
 
 func _rebuild_bench_rows() -> void:
+	if is_instance_valid(_bench_poster):
+		_bench_poster.text = _bench_poster_text()
 	if _bench_rows == null:
 		return
 	for child in _bench_rows.get_children():

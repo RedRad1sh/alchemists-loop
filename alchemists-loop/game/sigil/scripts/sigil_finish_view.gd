@@ -120,7 +120,7 @@ func _make_foil() -> void:
 	_foil_mat.shader = sh
 	_foil_mat.set_shader_parameter("strength", strength)
 	_foil_mat.set_shader_parameter("phase", phase)
-	_foil_mat.set_shader_parameter("rect_size", art.size)
+	_foil_mat.set_shader_parameter("card_size", art.size)
 	_foil_mat.set_shader_parameter("tint", tint)
 
 	var rect := ColorRect.new()
@@ -135,9 +135,9 @@ func _make_foil() -> void:
 
 
 func _make_glints() -> void:
-	var sh: Shader = SigilAssets.shader_file("shaders/sigil_sparkle.gdshader")
+	var sh: Shader = SigilAssets.shader_file("shaders/sigil_sparcle.gdshader")
 	if sh == null:
-		push_warning("Missing shaders/sigil_sparkle.gdshader")
+		push_warning("Missing shaders/sigil_sparcle.gdshader")
 		return
 
 	var rng := SigilRng.new(seed_value).fork("sparkle")

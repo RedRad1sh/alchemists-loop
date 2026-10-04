@@ -682,10 +682,12 @@ func _vein_add_from_discover(pair_key: String, out: String, vein: Dictionary) ->
 	_refresh_week_page()
 
 
-func _on_net_vein_find_result(pair_key: String, result: Dictionary) -> void:
+func _on_net_vein_find_result(pair_key: String, cycle_id: String, result: Dictionary) -> void:
 	if result.get("offline", false) == true:
 		return
-	var f := _vein_find_entry(pair_key)
+	if cycle_id == "":
+		return
+	var f := _vein_find_entry(pair_key, cycle_id)
 	if f.is_empty():
 		return
 	if result.get("ok", false) != true:

@@ -191,6 +191,7 @@ func _process(delta: float) -> void:
 	# Animate hearts
 	var alive_hearts := []
 	for h in _hearts:
+		needs_redraw = true
 		h["life"] += delta
 		if h["life"] < h["max_life"]:
 			h["pos"] += h["vel"] * delta

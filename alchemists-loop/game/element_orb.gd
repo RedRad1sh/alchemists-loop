@@ -89,6 +89,7 @@ func _input(event: InputEvent) -> void:
 		_dragging = false
 		_pressed = false
 		_drop_done = true
+		modulate.a = 1.0
 		drag_ended.emit(self, get_global_mouse_position())
 
 
