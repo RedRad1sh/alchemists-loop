@@ -57,7 +57,10 @@ var _pending_requests: Dictionary = {}
 # * prune — не только удаление: просроченная запись ЭКСПЕРИМЕНТА при прунинге
 #   возвращает реагенты и эфир (_prune_pending_requests), иначе осиротевший
 #   _experiment_pending_pair намертво блокировал бы варку/престиж/новую игру.
-const PENDING_TTL_MSEC := 120000
+# Таймаут ожидания ответа мира: 1 секунда (запрос→ответ). Если сервер не
+# ответил — реагенты/эфир возвращаются и pending-запись снимается, поздний
+# ответ дропается (корреляция по pair_key).
+const PENDING_TTL_MSEC := 1000
 var _resume_experiment_wait := false
 var _resume_experiment_deadline := 0.0
 var _server_authors: Dictionary = {}
