@@ -21,9 +21,9 @@ static func run(g: Game) -> void:
 		and int(b_cycle["method"]) == HTTPClient.METHOD_GET)
 	# ---------- T1: dispatch -> сигналы (корреляция: pair_key / find_id) ----------
 	var seen_find: Array = []
-	var cb_find := func(_pk: String, r: Dictionary) -> void: seen_find.append([_pk, r])
+	var cb_find := func(_pk: String, _cycle: String, r: Dictionary) -> void: seen_find.append([_pk, r])
 	Net.vein_find_result.connect(cb_find)
-	Net._dispatch({"kind": "vein_find", "pair_key": "earth|fire"}, {"ok": true, "points": 1, "cap_reached": false})
+	Net._dispatch({"kind": "vein_find", "pair_key": "earth|fire", "body": {"cycle_id": "vc:1"}}, {"ok": true, "points": 1, "cap_reached": false})
 	var seen_pour: Array = []
 	var cb_pour := func(_fid: String, r: Dictionary) -> void: seen_pour.append([_fid, r])
 	Net.vein_pour_result.connect(cb_pour)
@@ -131,19 +131,22 @@ static func run(g: Game) -> void:
 	var pf4 := g._retention._vein_finds.size() == 1
 	# ответ сервера: registered + cap-награда один раз
 	var e0 := g._engine.ether
-	Net.vein_find_result.emit("fire|water", {"ok": true, "points": 1, "streak_added": true,
+	Net.vein_find_result.emit("fire|water", "vc:T", {"ok": true, "points": 1, "streak_added": true,
 		"streak_count": 5, "cap_reached": true, "cycle_id": "vc:T"})
 	var reg := String((g._retention._vein_finds[0] as Dictionary)["status"]) == "registered" \
 		and g._engine.ether >= e0 + Game.VEIN_STREAK_REWARD
 	# cycle_mismatch → find пересоздан с актуальным циклом (R2)
 	g._retention._cycle_cache = {"cycle_id": "vc:U", "tag1": "Туман", "state": "active",
 		"world_finds": 0, "my_points": 0, "my_streak": 0}
-	Net.vein_find_result.emit("fire|water", {"ok": false, "error": "cycle_mismatch", "cycle_id": "vc:U"})
+	Net.vein_find_result.emit("fire|water", "vc:T", {"ok": false, "error": "cycle_mismatch", "cycle_id": "vc:U"})
 	var remade := g._retention._vein_finds.size() == 1 \
 		and String((g._retention._vein_finds[0] as Dictionary)["cycle_id"]) == "vc:U" \
 		and String((g._retention._vein_finds[0] as Dictionary)["status"]) == "pending_server"
+	# An old queued response must not delete the record for the new cycle.
+	Net.vein_find_result.emit("fire|water", "vc:T", {"ok": false, "error": "unknown_pair"})
+	Selftest.check("vein stale response leaves new cycle intact", g._retention._vein_finds.size() == 1)
 	# unknown_pair — запись снимается
-	Net.vein_find_result.emit("fire|water", {"ok": false, "error": "unknown_pair"})
+	Net.vein_find_result.emit("fire|water", "vc:U", {"ok": false, "error": "unknown_pair"})
 	var dropped := g._retention._vein_finds.is_empty()
 	g._retention._cycle_cache = sv_cycle3
 	g._retention._vein_finds = sv_finds3

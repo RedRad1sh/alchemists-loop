@@ -431,7 +431,7 @@ static func _pick_frame(rhythm_id: String, card_id: String, seed: int) -> Dictio
 	if not (texts is Array) or (texts as Array).is_empty():
 		return {}
 	var roll := _slot_rng(card_id, seed, "frame_roll", rhythm_id)
-	if roll.next_float() > float(spec.get("prob", 0.0)):
+	if roll.randf() > float(spec.get("prob", 0.0)):
 		return {}
 	var cands: Array = []
 	for i in (texts as Array).size():

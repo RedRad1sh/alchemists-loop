@@ -51,6 +51,18 @@ def load_elements(path: Path) -> dict:
     return data["elements"]
 
 
+def write_elements(path: Path) -> None:
+    """Write the curated inflections; never guess Russian cases from card IDs."""
+    source = TOOLS_DIR / "sigil_elements_source.json"
+    if check_elements(source):
+        raise SystemExit("invalid canonical element data")
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8", newline="\n")
+    print(f"WROTE: {path}")
+
+
 def check_elements(path: Path) -> int:
     """Сверка elements.json с каталогом и схемой. 0 — зелёно, 1 — дрейф."""
     want_ids = catalog_card_ids() | set(ALCHEMY_IDS)
@@ -369,14 +381,15 @@ def check_fragments(data_dir: Path) -> int:
         print("FAIL: нет элементов.json — сначала Task 1", file=sys.stderr)
         return 1
     problems: list = []
-    any_missing = False
+    canonical = _all_fragments()
     for slot in FRAGMENT_SLOTS:
         path = data_dir / f"{slot}.json"
         if not path.exists():
             problems.append(f"{slot}: файл не найден")
-            any_missing = True
             continue
         data = json.loads(path.read_text(encoding="utf-8"))
+        if data != {"version": 1, "fragments": canonical[slot]}:
+            problems.append(f"{slot}: содержимое отличается от генератора")
         frags = data.get("fragments", [])
         if len(frags) < 100:
             problems.append(f"{slot}: фрагментов {len(frags)} < 100")
@@ -431,8 +444,10 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     if args.command == "elements":
-        # Запись реализуется в Step 2; пока --check — единственный режим.
-        return check_elements(ELEMENTS_PATH)
+        if check:
+            return check_elements(ELEMENTS_PATH)
+        write_elements(ELEMENTS_PATH)
+        return 0
     if args.command == "fragments":
         if check:
             return check_fragments(DATA_DIR)

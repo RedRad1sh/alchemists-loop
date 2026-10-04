@@ -1,4 +1,5 @@
 .env
+.venv/
 .godot/
 __pycache__/
 .pytest_cache/

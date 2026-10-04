@@ -49,7 +49,8 @@ def _setup_logging() -> None:
 
 _setup_logging()
 
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
+import secrets
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from pydantic import ValidationError
@@ -4771,7 +4772,7 @@ def sigil_daily(device_id: str = Query("", max_length=128)):
 
     conn = get_db()
     try:
-        today = date.today().isoformat()
+        today = _now_dt().date().isoformat()
         crafts_data = _ensure_sigil_daily(conn, device_id, today)
         return SigilDailyResponse(
             ok=True, day=today, catalog_version=_sigil_catalog()["version"],
@@ -4792,7 +4793,7 @@ def sigil_craft(req: SigilCraftRequest):
     """
     conn = get_db()
     try:
-        today = date.today().isoformat()
+        today = _now_dt().date().isoformat()
         crafts_data = _ensure_sigil_daily(conn, req.device_id, today)
         craft = next((c for c in crafts_data if c.get("id") == req.craft_id), None)
         if not craft:
@@ -4951,12 +4952,19 @@ def sigil_milestone(req: SigilMilestoneRequest):
         conn.close()
 
 
-@app.post("/api/admin/sigil/rotate")
+def _require_admin_token(x_admin_token: str = Header("")) -> None:
+    # No default credentials; disabled unless explicitly configured server-side.
+    expected = os.environ.get("ADMIN_API_TOKEN", "")
+    if not expected or not secrets.compare_digest(x_admin_token.encode("utf-8"), expected.encode("utf-8")):
+        raise HTTPException(status_code=403, detail="forbidden")
+
+
+@app.post("/api/admin/sigil/rotate", dependencies=[Depends(_require_admin_token)])
 def admin_sigil_rotate(device_id: str = Query("", max_length=128)):
     """Админ: принудительная ротация оффера дня."""
     conn = get_db()
     try:
-        today = date.today().isoformat()
+        today = _now_dt().date().isoformat()
         conn.execute("DELETE FROM sigil_daily WHERE device_id=? AND day=?", (device_id, today))
         conn.commit()
         # salt = мс-время: каждая ротация даёт НОВЫЙ оффер (иначе sha256(device#day)
@@ -4968,7 +4976,7 @@ def admin_sigil_rotate(device_id: str = Query("", max_length=128)):
         conn.close()
 
 
-@app.post("/api/admin/sigil/reset")
+@app.post("/api/admin/sigil/reset", dependencies=[Depends(_require_admin_token)])
 def admin_sigil_reset(device_id: str = Query("", max_length=128)):
     """Админ: полный сброс Аркана Сигилов игрока.
 
@@ -4991,12 +4999,12 @@ def admin_sigil_reset(device_id: str = Query("", max_length=128)):
         conn.close()
 
 
-@app.post("/api/admin/sigil/free-craft")
+@app.post("/api/admin/sigil/free-craft", dependencies=[Depends(_require_admin_token)])
 def admin_sigil_free_craft(device_id: str = Query("", max_length=128), craft_index: int = Query(0)):
     """Админ: бесплатный крафт по индексу слота (без проверки ресурсов)."""
     conn = get_db()
     try:
-        today = date.today().isoformat()
+        today = _now_dt().date().isoformat()
         crafts_data = _ensure_sigil_daily(conn, device_id, today)
         if craft_index < 0 or craft_index >= len(crafts_data):
             return {"ok": False, "error": "invalid_index"}

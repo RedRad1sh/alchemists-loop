@@ -476,7 +476,8 @@ func _ready() -> void:
 	_shop = Shop.new(self)
 	_online = Online.new(self)
 	_spirit = Spirit.new(self)
-	_admin = AdminConsole.new(self)
+	if OS.has_feature("editor"):
+		_admin = AdminConsole.new(self)
 	_saves = Saves.new(self)
 	_sigil = SigilManager.new()
 	_sigil.name = "SigilManager"

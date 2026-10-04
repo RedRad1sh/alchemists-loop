@@ -54,7 +54,7 @@ signal fair_claim_result(result: Dictionary)
 signal receipt_verify_result(result: Dictionary)
 signal account_export_result(result: Dictionary)
 signal account_delete_result(result: Dictionary)
-signal vein_find_result(pair_key: String, result: Dictionary)
+signal vein_find_result(pair_key: String, cycle_id: String, result: Dictionary)
 signal vein_pour_result(find_id: String, result: Dictionary)
 signal cycle_result(result: Dictionary)
 signal sigil_daily_result(result: Dictionary)
@@ -371,6 +371,11 @@ func _send_next() -> void:
 	var req: Dictionary = _queue.pop_front()
 	var built := _build_request(req)
 	var headers := PackedStringArray(["Content-Type: application/json"])
+	# Trusted editor tooling only. Never persist or package the token in the game.
+	if OS.has_feature("editor") and String(req.get("path", "")).begins_with("/admin/sigil/"):
+		var token := OS.get_environment("ADMIN_API_TOKEN")
+		if token != "":
+			headers.append("X-Admin-Token: " + token)
 	_inflight = req
 	var err := _try_send(String(built["url"]), headers, int(built["method"]), String(built["body"]))
 	if err != OK:
@@ -498,7 +503,8 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 		"receipt_verify":
 			receipt_verify_result.emit(parsed)
 		"vein_find":
-			vein_find_result.emit(String(req.get("pair_key", "")), parsed)
+			vein_find_result.emit(String(req.get("pair_key", "")),
+				String(req.get("body", {}).get("cycle_id", "")), parsed)
 		"vein_pour":
 			vein_pour_result.emit(String(req.get("find_id", "")), parsed)
 		"cycle":

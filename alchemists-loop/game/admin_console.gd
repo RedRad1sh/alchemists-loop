@@ -76,6 +76,8 @@ func _build_ui() -> void:
 	vbox.add_child(help)
 
 func toggle() -> void:
+	if not OS.has_feature("editor"):
+		return
 	_visible = !_visible
 	_dim.visible = _visible
 	_center.visible = _visible
@@ -94,6 +96,8 @@ func close() -> void:
 	_input.release_focus()
 
 func _on_command(text: String) -> void:
+	if not OS.has_feature("editor"):
+		return
 	var cmd := text.strip_edges().to_lower()
 	_input.text = ""
 	if cmd.is_empty():
@@ -210,13 +214,7 @@ func _cmd_sigil(parts: Array) -> void:
 		_log_text("[color=red]Usage: sigil rotate|free <0|1|2>[/color]")
 		return
 	var sub := str(parts[1])
-	if sub == "rotate":
-		# Принудительная ротация ежедневных крафтов
-		_g._sigil._daily_crafts.clear()
-		_g._sigil._daily_day = ""
-		_g._sigil.request_daily(_g._online._device_id)
-		_log_text("Sigil daily crafts rotated")
-	elif sub == "craft":
+	if sub == "craft":
 		# Открыть экран крафта крафта дня <N> (перенос материалов вручную).
 		# НЕ автозавершаем: игрок сам расставляет ингредиенты и жмёт «Крафт».
 		if parts.size() < 3:
@@ -246,7 +244,7 @@ func _cmd_sigil(parts: Array) -> void:
 			_log_text("Ritual demo: %s (тап по экрану — закрыть)" % rar)
 		else:
 			_log_text("[color=red]No ritual method[/color]")
-	elif sub == "reset":
+	elif sub in ["reset", "rotate"]:
 		# РОТАЦИЯ крафтов дня: сервер пересобирает оффер, коллекция цела.
 		var dev: String = _g._online._device_id
 		if not _g._sigil.sigil_admin_rotate_result.is_connected(_on_sigil_rotate_done):
@@ -272,10 +270,9 @@ func _cmd_sigil(parts: Array) -> void:
 		_g._sigil.craft_card(_g._online._device_id, craft_id)
 		var log := _log
 		var done := func(_cid: String, _rarity: String, _name: String) -> void:
-			log.append_text("Free craft done: %s (%s)\"n" % [_cid, _rarity])
+			log.append_text("Free craft done: %s (%s)\n" % [_cid, _rarity])
 		var fail := func(err: String) -> void:
-			log.append_text("[color=red]Free craft failed: %s[/color]
-" % err)
+			log.append_text("[color=red]Free craft failed: %s[/color]\n" % err)
 		_g._sigil.craft_completed.connect(done, CONNECT_ONE_SHOT)
 		_g._sigil.craft_failed.connect(fail, CONNECT_ONE_SHOT)
 	else:

@@ -1,4 +1,3 @@
-class_name SigilLore
 extends RefCounted
 # Детерминированный lore-генератор описаний карт (подпроект C).
 #

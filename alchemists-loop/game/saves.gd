@@ -530,11 +530,7 @@ func _bench_offline_ticks(elapsed: float) -> int:
 	return mini(ticks, Game.BENCH_OFFLINE_MAX_TICKS)
 
 func _advance_bench_offline(elapsed: float) -> Dictionary:
-	# Верстак в фоне. Один проход по ops текущего плана, не больше одного
-	# завершённого маршрута за окно — как у _advance_craft_job_offline:
-	# офлайн не должен обгонять живой темп. Скидка чертежа здесь НЕ применяется
-	# (discount = 1.0): скидка — награда за живой чертёж маршрута, а офлайн и
-	# так идёт вполсилы.
+	# Каждый завершённый маршрут перепланируется в пределах офлайн-бюджета.
 	_return_bench_steps = 0
 	_return_bench_items = 0
 	_return_bench_status = ""
@@ -549,50 +545,53 @@ func _advance_bench_offline(elapsed: float) -> Dictionary:
 		return {}
 
 	var item_id := g._pages._bench_target
-	var plan := g._guild._plan_craft(item_id)
-	if not bool(plan.get("ok", false)):
-		_return_bench_status = "recipe"
-		return {"steps": 0, "items": 0, "status": _return_bench_status}
-
-	var total := int(plan.get("total", 0))
 	var budget := ticks * maxi(g._engine._stage_ops(), 1)
 	var done := 0
 	var pause := ""
-	for raw_op in plan.get("ops", []):
-		var op: Dictionary = raw_op
-		var a := String(op.get("a", ""))
-		var b := String(op.get("b", ""))
-		for _i in int(op.get("n", 0)):
-			if done >= budget:
-				pause = "budget"
+	var previous_discount := g._engine._production_discount
+	while done < budget:
+		var plan := g._guild._plan_craft(item_id)
+		if not bool(plan.get("ok", false)) or int(plan.get("total", 0)) <= 0:
+			pause = "recipe"
+			break
+		var route_start := done
+		var discount := Game.BLUEPRINT_DISCOUNT if g._engine._blueprints.has(item_id) else 1.0
+		g._engine._production_discount = discount
+		for raw_op in plan.get("ops", []):
+			var op: Dictionary = raw_op
+			var a := String(op.get("a", ""))
+			var b := String(op.get("b", ""))
+			for _i in int(op.get("n", 0)):
+				if done >= budget:
+					pause = "budget"
+					break
+				pause = g._engine._production_pair_block(a, b)
+				if pause != "":
+					break
+				if not g._online._has_ingredients(a, b):
+					pause = "ingredients"
+					break
+				if g._engine._available_ether() < g._engine._pair_cost(a, b, discount):
+					pause = "ether"
+					break
+				var result := g._engine._commit_brew(a, b)
+				if bool(result.get("failed", true)):
+					pause = String(result.get("reason", "recipe"))
+					break
+				done += 1
+			if not pause.is_empty():
 				break
-			var pair_block := g._engine._production_pair_block(a, b)
-			if pair_block != "":
-				pause = pair_block
-				break
-			var pair_cost := g._engine._pair_cost(a, b, 1.0)
-			if not g._online._has_ingredients(a, b):
-				pause = "ingredients"
-				break
-			if g._engine._available_ether() < pair_cost:
-				pause = "ether"
-				break
-			var result := g._engine._commit_brew(a, b)
-			if bool(result.get("failed", true)):
-				var commit_reason := String(result.get("reason", ""))
-				pause = commit_reason if commit_reason in ["ingredients", "ether"] else "recipe"
-				break
-			done += 1
+		if done - route_start >= int(plan.get("total", 0)):
+			_return_bench_items += 1
+			g._engine._record_blueprint(item_id, plan)
 		if not pause.is_empty():
 			break
-
+		if done == route_start:
+			pause = "recipe"
+			break
+	g._engine._production_discount = previous_discount
 	_return_bench_steps = done
-	if done >= total and total > 0:
-		_return_bench_items = 1
-		_return_bench_status = "complete"
-		g._engine._record_blueprint(item_id, plan)
-	else:
-		_return_bench_status = pause if pause != "" else "budget"
+	_return_bench_status = pause if pause != "" else "complete"
 	if done > 0:
 		Analytics.track("bench_offline", {
 			"target": item_id, "steps": done, "items": _return_bench_items,
@@ -703,7 +702,6 @@ func _grant_offline() -> void:
 	if not craft_result.is_empty() and int(craft_result.get("steps", 0)) > 0:
 		g._engine.status_text = "Пока тебя не было, Производство продвинулся на %d шаг(а): %s." % [
 			int(craft_result["steps"]), String(craft_result.get("status", ""))]
-	_advance_bench_offline(elapsed)
 	_return_spring = 0
 	_return_spring_name = ""
 	if g._engine.spring_on and g._engine._mode_unlocked("spring"):
@@ -712,6 +710,7 @@ func _grant_offline() -> void:
 			_return_spring = sg
 			_return_spring_name = g._online._item_name(g._engine.spring_source)
 			g._engine.inventory[g._engine.spring_source] = int(g._engine.inventory.get(g._engine.spring_source, 0)) + sg
+	_advance_bench_offline(elapsed)
 	g._last_ts = now
 	_save_game()
 
@@ -847,10 +846,12 @@ func _refresh_return_popup() -> void:
 		add.call("• Родник капал потихоньку.", 14, dim)
 	else:
 		add.call("• Родник выключен — включи, и он будет капать без тебя.", 14, dim)
-	if _return_bench_steps > 0:
+	if _return_bench_steps > 0 or _return_bench_status != "":
 		var bench_line := "• Верстак в фоне (вполсилы): +%d варок." % _return_bench_steps
 		if _return_bench_items > 0:
 			bench_line += " «%s» готов и записан в чертёж." % g._online._item_name(g._pages._bench_target)
+		if _return_bench_status == "inventory":
+			bench_line += " Пауза: нет места в инвентаре."
 		elif _return_bench_status == "ether":
 			bench_line += " Пауза: эфир."
 		elif _return_bench_status == "ingredients":

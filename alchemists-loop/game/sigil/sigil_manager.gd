@@ -303,6 +303,7 @@ func _on_collection_result(result: Dictionary) -> void:
 	# ключа — не ошибка, а «ничего не подтверждено»: полное замещение состояния,
 	# а не накопление.
 	_milestones_claimed = _normalize_milestones(result.get("milestones", {}))
+	collection_changed.emit()
 	collection_ready.emit(_server_collection)
 
 
@@ -319,10 +320,13 @@ func has_collected(card_id: String) -> bool:
 
 ## Есть ли собранная карта данной редкости (для достижений). Индекс редкости:
 ## 0=common, 1=rare, 2=epic, 3=legendary — по серверной коллекции и каталогу;
-## 4=chromatic — по внекомплектным крафтам (любой extra).
+## 4=chromatic — только по хроматическим внекомплектным крафтам.
 func has_rarity(idx: int) -> bool:
 	if idx == 4:
-		return _server_extras.size() > 0
+		for extra in _server_extras:
+			if str(extra.get("rarity", "")) == "chromatic":
+				return true
+		return false
 	var wanted := ""
 	match idx:
 		0: wanted = "common"

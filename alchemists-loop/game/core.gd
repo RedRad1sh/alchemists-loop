@@ -1394,7 +1394,7 @@ func _run_bench_plan(item_id: String, plan: Dictionary) -> bool:
 			if st >= stage_limit:
 				g._pages._bench_busy = false
 				_production_discount = 1.0
-				status_text = "Производство: этап %d/%d завершён — продолжу через %d с." % [st, total, int(Game.BENCH_INTERVAL)]
+				status_text = "Производство: этап %d/%d завершён — продолжу через %d с." % [st, total, int(g._sigil.bench_interval(item_id))]
 				_refresh()
 				g._saves._save_game()
 				return true
