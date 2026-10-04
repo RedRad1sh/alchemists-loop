@@ -23,6 +23,8 @@
 > точке `f0b31fc` (сет иконок + меню вкладок), поверх оставлены только иконки
 > шапки и фикс пузырька Светика. Детали, новые правила приёмки (реальные кадры
 > через `tools/shots.py` + selftest в CI) и бэклог: `docs/ui-ux/2026-10-04-ui-revert-notes.md`.
+> CI: job `selftest` — автотесты на push `arena/**`/PR; job `ui-shots` — кадры
+> приёмки (head vs база) артефактом на PR и по `gh workflow run CI.yml [-f shots=false]`.
 
 <details>
 <summary>Как было (история мок-согласований, код откачен)</summary>

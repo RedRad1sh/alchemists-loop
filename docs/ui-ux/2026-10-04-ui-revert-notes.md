@@ -59,9 +59,24 @@
    Требуется локальный Godot 4.7.x (`GODOT=/путь/к/godot`) и `xvfb-run`
    (без графической сессии). Артефакты: `previews/shots/<label>/`,
    `docs/ui-ux/shots-diff/<a>_vs_<b>/report.md`.
-2. **selftest на каждом PR.** В CI добавлен job `selftest`
+   **Без локальных бинарей — через CI** (джоба `ui-shots`): на каждый PR она
+   снимает head и базовую ветку, кладёт `compare`-отчёт и оба набора артефактом
+   `ui-shots` (retention 14 дней). Ручной запуск:
+   ```bash
+   gh workflow run CI.yml --ref <ветка>              # тесты + кадры
+   gh workflow run CI.yml --ref <ветка> -f shots=false  # только тесты
+   gh run list --workflow CI.yml --branch <ветка>     # статус
+   gh run view <id> --log-failed                      # упавшие проверки
+   gh run download <id> -n ui-shots                   # скачать кадры
+   ```
+   (Примечание: `workflow_dispatch` GitHub видит только после того, как
+   `ci.yml` попадёт в `master`. До мержа агентам достаточно пуша: push в
+   `arena/**` запускает `selftest` автоматически, а PR запускает
+   `selftest` + `ui-shots`.)
+2. **selftest на каждом PR и push.** В CI есть job `selftest`
    (Godot headless + `tools/run_selftest.sh`) — ловит parse-ошибки и регресс
-   логики ещё до master.
+   логики ещё до master; push веток `arena/**` тоже гоняет его, чтобы агенты
+   проверяли себя без локального Godot.
 3. **Один экран — один коммит.** Структурные правки (перестройка контейнеров)
    не пакетируются: каждый такой коммит сопровождается кадром до/после.
 4. **Разделение слоёв:** скин (цвет/шрифт/радиус/иконки — через

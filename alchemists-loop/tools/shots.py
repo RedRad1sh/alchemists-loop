@@ -12,11 +12,17 @@
   python3 alchemists-loop/tools/shots.py compare baseline current
   python3 alchemists-loop/tools/shots.py list
 
+Опция `--project <каталог>` снимает кадры из ДРУГОГО чекаута (её использует CI,
+чтобы снять базовую ветку из каталога base/ тем же скриптом). Метки/артефакты
+всё равно пишутся рядом со скриптом.
+
 Результат run:  alchemists-loop/previews/shots/<label>/<сцена>.png
 Результат compare: docs/ui-ux/shots-diff/<base>_vs_<new>/{<сцена>.png, report.md}
 (каталоги артефактов в .gitignore — в репозиторий не попадают).
 
 Требования: Godot 4.7.x (из $GODOT или PATH), xvfb-run (если нет $DISPLAY).
+При первом запуске в чистом чекауте скрипт сам прогоняет
+`godot --headless --import` (нет каталога .godot — импорт ресурсов).
 Для compare нужен Pillow (`pip install pillow`), без него — понятная подсказка.
 
 Снимки детерминированы насколько это возможно: режим `--selftest` изолирует
@@ -85,23 +91,39 @@ def xvfb_prefix() -> list[str]:
     return ["xvfb-run", "-a", "-s", "-screen 0 540x960x24"]
 
 
-def run_scenarios(label: str, only: list[str] | None, plain: bool) -> int:
+def run_scenarios(label: str, only: list[str] | None, plain: bool,
+                  project: pathlib.Path) -> int:
     names = only or list(SCENARIOS)
     unknown = [n for n in names if n not in SCENARIOS]
     if unknown:
         sys.stderr.write(f"shots: неизвестные сцены: {', '.join(unknown)} (см. list)\n")
+        return 2
+    if not (project / "project.godot").is_file():
+        sys.stderr.write(f"shots: {project}/project.godot не найден — проверь --project\n")
         return 2
     godot = find_godot()
     prefix = xvfb_prefix()
     out_dir = SHOTS / label
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Чистый чекаут (базовая ветка в CI, свежий клон): без .godot ресурсы
+    # не импортированы и SVG/шрифты не загрузятся. --import штатный для 4.x.
+    if not (project / ".godot").is_dir():
+        print(f"[import] {project} — первый запуск, импорт ресурсов …", flush=True)
+        try:
+            subprocess.run(
+                [godot, "--headless", "--import", "--path", str(project)],
+                capture_output=True, text=True, timeout=600,
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            print(f"[warn] import не прошёл ({exc}) — пробуем снимать как есть")
+
     fails = []
     for name in names:
         out_png = (out_dir / f"{name}.png").resolve()
         if out_png.exists():
             out_png.unlink()
-        args = [godot, "--path", str(PROJECT), "--"]
+        args = [godot, "--path", str(project), "--"]
         if not plain:
             args.append("--selftest")   # изолированные ST-сейвы, без сети и privacy-dialog
         args += ["--demo", f"--shot={out_png}", *SCENARIOS[name]]
@@ -109,7 +131,7 @@ def run_scenarios(label: str, only: list[str] | None, plain: bool) -> int:
         print(f"[shot] {name} …", flush=True)
         try:
             proc = subprocess.run(
-                cmd, cwd=str(PROJECT), capture_output=True, text=True,
+                cmd, cwd=str(project), capture_output=True, text=True,
                 timeout=SHOT_TIMEOUT_S,
             )
         except subprocess.TimeoutExpired:
@@ -205,6 +227,9 @@ def main() -> int:
     p_run.add_argument("--only", help="только сцены через запятую (см. list)")
     p_run.add_argument("--plain", action="store_true",
                        help="без --selftest (снимок на локальном сейве вместо изолированного)")
+    p_run.add_argument("--project", metavar="DIR",
+                       help="каталог проекта Godot (по умолчанию alchemists-loop рядом со скриптом); "
+                            "для CI: съёмка базовой ветки из другого чекаута")
     p_cmp = sub.add_parser("compare", help="side-by-side + % диффа между двумя наборами")
     p_cmp.add_argument("base")
     p_cmp.add_argument("new")
@@ -213,7 +238,8 @@ def main() -> int:
     args = ap.parse_args()
     if args.cmd == "run":
         only = [s.strip() for s in args.only.split(",")] if args.only else None
-        return run_scenarios(args.label, only, args.plain)
+        project = pathlib.Path(args.project).resolve() if args.project else PROJECT
+        return run_scenarios(args.label, only, args.plain, project)
     if args.cmd == "compare":
         return compare(args.base, args.new)
     for name, extra in SCENARIOS.items():
