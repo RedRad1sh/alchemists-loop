@@ -11,7 +11,8 @@ var _ach_done: Dictionary = {}
 var _ach_world_first := 0
 var _ach_updating := false
 var _set_done: Dictionary = {}
-var _ach_rows: VBoxContainer = null
+var _ach_map: AchievementMapView = null
+var _prog_tabs: TabContainer = null
 
 func _init(game: Game) -> void:
 	g = game
@@ -37,37 +38,47 @@ func _build_progress_popup() -> void:
 	card.add_theme_stylebox_override("panel", g._panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
 	center.add_child(card)
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 8)
-	col.custom_minimum_size = Vector2(330, 0)
+	col.add_theme_constant_override("separation", 7)
+	col.custom_minimum_size = Vector2(466, 0)
 	card.add_child(col)
-	var t := g._label("ЗАДАНИЯ И ДОСТИЖЕНИЯ", 20)
+	var t := g._label("КАРТА ПРОГРЕССА", 19)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	t.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
 	col.add_child(t)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 420)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	col.add_child(scroll)
-	var inner := VBoxContainer.new()
-	inner.add_theme_constant_override("separation", 6)
-	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(inner)
-	inner.add_child(g._label("Задания Светика", 16))
+
+	_prog_tabs = TabContainer.new()
+	_prog_tabs.name = "ProgressPages"
+	_prog_tabs.custom_minimum_size = Vector2(0.0, 570.0)
+	_prog_tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_prog_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(_prog_tabs)
+
+	_ach_map = AchievementMapView.new()
+	_ach_map.name = "Карта"
+	_ach_map.setup(g)
+	_prog_tabs.add_child(_ach_map)
+
+	var quests_page := _new_progress_list_page("Светик")
+	quests_page.add_child(g._label("ЗАДАНИЯ СВЕТИКА", 15))
 	g._guild._quest_rows = VBoxContainer.new()
-	g._guild._quest_rows.add_theme_constant_override("separation", 4)
-	inner.add_child(g._guild._quest_rows)
-	inner.add_child(g._label("Достижения", 16))
-	_ach_rows = VBoxContainer.new()
-	_ach_rows.add_theme_constant_override("separation", 4)
-	inner.add_child(_ach_rows)
-	inner.add_child(g._label("Комплекты стихий", 16))
+	g._guild._quest_rows.add_theme_constant_override("separation", 5)
+	g._guild._quest_rows.mouse_filter = Control.MOUSE_FILTER_PASS
+	quests_page.add_child(g._guild._quest_rows)
+
+	var sets_page := _new_progress_list_page("Комплекты")
+	sets_page.add_child(g._label("КОМПЛЕКТЫ СТИХИЙ", 15))
 	g._set_rows = VBoxContainer.new()
-	g._set_rows.add_theme_constant_override("separation", 4)
-	inner.add_child(g._set_rows)
-	inner.add_child(g._label("Заказы гильдии", 16))
+	g._set_rows.add_theme_constant_override("separation", 5)
+	g._set_rows.mouse_filter = Control.MOUSE_FILTER_PASS
+	sets_page.add_child(g._set_rows)
+
+	var orders_page := _new_progress_list_page("Заказы")
+	orders_page.add_child(g._label("ЗАКАЗЫ ГИЛЬДИИ", 15))
 	g._guild._order_rows = VBoxContainer.new()
-	g._guild._order_rows.add_theme_constant_override("separation", 4)
-	inner.add_child(g._guild._order_rows)
+	g._guild._order_rows.add_theme_constant_override("separation", 5)
+	g._guild._order_rows.mouse_filter = Control.MOUSE_FILTER_PASS
+	orders_page.add_child(g._guild._order_rows)
+
 	var close := g._small_button("Закрыть", Vector2(150, 44))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.pressed.connect(func() -> void:
@@ -76,11 +87,39 @@ func _build_progress_popup() -> void:
 		Sfx.click())
 	col.add_child(close)
 
+
+func _new_progress_list_page(page_name: String) -> VBoxContainer:
+	var scroll := ScrollContainer.new()
+	scroll.name = page_name
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.mouse_filter = Control.MOUSE_FILTER_STOP
+	_prog_tabs.add_child(scroll)
+	var margin := MarginContainer.new()
+	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_theme_constant_override("margin_left", 4)
+	margin.add_theme_constant_override("margin_right", 8)
+	margin.add_theme_constant_override("margin_top", 5)
+	margin.add_theme_constant_override("margin_bottom", 5)
+	margin.mouse_filter = Control.MOUSE_FILTER_PASS
+	scroll.add_child(margin)
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 7)
+	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	inner.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	inner.mouse_filter = Control.MOUSE_FILTER_PASS
+	margin.add_child(inner)
+	return inner
+
 func _open_progress_popup() -> void:
 	_rebuild_quest_rows()
 	_rebuild_ach_rows()
 	_rebuild_set_rows()
 	_rebuild_order_rows()
+	_prog_tabs.current_tab = 0
 	_prog_dim.visible = true
 	_prog_popup.visible = true
 	Sfx.click()
@@ -145,6 +184,7 @@ func _ach_update() -> void:
 			g._engine._grant_ether(int(a.get("ether", 0)), "achievement")
 			newly.append(a)
 	_ach_updating = false
+	_refresh_achievement_map()
 	if not newly.is_empty():
 		g._saves._save_game()
 		_notify_achievements(newly)
@@ -181,44 +221,21 @@ func _ach_requirement(a: Dictionary) -> String:
 	return ""
 
 func _rebuild_ach_rows() -> void:
-	for child in _ach_rows.get_children():
-		_ach_rows.remove_child(child)
-		child.queue_free()
-	var head := g._label("Выполнено: %d / %d" % [_ach_done.size(), Game.ACHIEVEMENTS.size()], 12)
-	head.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
-	_ach_rows.add_child(head)
-	for a in Game.ACHIEVEMENTS:
-		var id := String(a["id"])
-		var done := _ach_done.has(id)
-		var prog := mini(_ach_progress(a), int(a.get("param", 1)))
-		var line := "✓ %s" % String(a["title"]) if done else "• %s — %d/%d" % [String(a["title"]), prog, int(a.get("param", 1))]
-		var lbl := g._label(line + " · +%d ⚡" % int(a.get("ether", 0)), 12)
-		if done:
-			lbl.add_theme_color_override("font_color", Color(0.45, 0.62, 0.5))
-		else:
-			lbl.add_theme_color_override("font_color", Color(0.9, 0.86, 0.72))
-		_ach_rows.add_child(lbl)
-		var req := _ach_requirement(a)
-		var sub_txt := req
-		if sub_txt == "":
-			sub_txt = "Продолжай варить и открывать"
-		sub_txt += " · навсегда +%d кап, +%.2f/с" % [Game.ACH_CAP, Game.ACH_REGEN]
-		var sub := g._label(sub_txt, 11)
-		sub.add_theme_color_override("font_color", Color(0.55, 0.66, 0.72))
-		_ach_rows.add_child(sub)
-	var res_head := g._label("Отголоски мира (повторов всего: %d)" % g._resonance._res_total, 12)
-	res_head.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
-	_ach_rows.add_child(res_head)
-	for m in Game.RES_MILES:
-		var mi := int(m)
-		var rline := "✓ %d — %s" % [mi, g._resonance._res_mile_reward_text(mi)] if g._resonance._res_done.has(mi) \
-			else "• %d — %d/%d · %s" % [mi, mini(g._resonance._res_total, mi), mi, g._resonance._res_mile_reward_text(mi)]
-		var rlbl := g._label(rline, 12)
-		if g._resonance._res_done.has(mi):
-			rlbl.add_theme_color_override("font_color", Color(0.45, 0.62, 0.5))
-		else:
-			rlbl.add_theme_color_override("font_color", Color(0.9, 0.86, 0.72))
-		_ach_rows.add_child(rlbl)
+	# Compatibility entry point for the popup flow; the map only mirrors current
+	# achievement and resonance state and never grants or persists anything.
+	if _ach_map != null and is_instance_valid(_ach_map):
+		_ach_map.refresh()
+
+
+func _refresh_achievement_map() -> void:
+	if (
+		_ach_map != null
+		and is_instance_valid(_ach_map)
+		and _prog_popup != null
+		and _prog_popup.visible
+	):
+		_ach_map.refresh()
+
 
 func _cat_title(cat: String) -> String:
 	for st in Game.CATEGORY_SETS:

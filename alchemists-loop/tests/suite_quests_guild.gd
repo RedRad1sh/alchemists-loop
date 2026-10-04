@@ -20,6 +20,47 @@ static func run(g: Game) -> void:
 
 	# достижения
 	Selftest.check("achievements data", Game.ACHIEVEMENTS.size() >= 20)
+	var map_script: GDScript = null
+	var map_instance: Control = null
+	if ResourceLoader.exists("res://game/achievement_map_view.gd"):
+		map_script = load("res://game/achievement_map_view.gd") as GDScript
+	if map_script != null:
+		map_instance = map_script.new() as Control
+	var map_states: Dictionary = {}
+	if map_instance != null:
+		map_states = map_instance.call("compute_track_states", [
+			{"id": "items10", "param": 10},
+			{"id": "items20", "param": 20},
+			{"id": "items30", "param": 30},
+		], {"items10": true})
+	Selftest.check(
+		"achievement map preserves completed milestones",
+		map_states.get("items10", -1) == 2
+	)
+	Selftest.check(
+		"achievement map unlocks only the next threshold",
+		map_states.get("items20", -1) == 1 and map_states.get("items30", -1) == 0
+	)
+	var independent_states: Dictionary = {}
+	if map_instance != null:
+		independent_states = map_instance.call("compute_track_states", [
+			{"id": "recipe5", "param": 5},
+			{"id": "recipe10", "param": 10},
+		], {})
+	Selftest.check("achievement map opens each independent track at its first step",
+		independent_states.get("recipe5", -1) == 1 and independent_states.get("recipe10", -1) == 0)
+	var tied_states: Dictionary = {}
+	if map_instance != null:
+		tied_states = map_instance.call("compute_track_states", [
+			{"id": "tier1a", "param": 10},
+			{"id": "tier1b", "param": 10},
+			{"id": "tier2", "param": 20},
+		], {})
+	Selftest.check("achievement map keeps equal thresholds in the same tier",
+		tied_states.get("tier1a", -1) == 1 and tied_states.get("tier1b", -1) == 1
+			and tied_states.get("tier2", -1) == 0)
+	if map_instance != null:
+		map_instance.free()
 	Selftest.check("ach items progress", g._progress_ui._ach_progress({"kind": "items"}) == g._engine.inventory.size())
 	Selftest.check("ach recipes progress", g._progress_ui._ach_progress({"kind": "recipes"}) == g._engine.known_recipes.size())
 	Selftest.check("ach successes", g._progress_ui._ach_progress({"kind": "successes"}) == g._engine.successes)
@@ -63,7 +104,7 @@ static func run(g: Game) -> void:
 	if inv_sz >= Game.PRESTIGE_MIN:
 		exp_g = int(floor(float(inv_sz - Game.PRESTIGE_MIN) / 5.0)) + 1
 	Selftest.check("prestige gain formula", g._hub._prestige_gain() == exp_g)
-	var sg_backup := g._engine.sage_gold
+	var sg_backup: int = int(g._engine.sage_gold)
 	g._engine.sage_gold = 0
 	var cap0 := g._engine._max_ether()
 	g._engine.sage_gold = 3
