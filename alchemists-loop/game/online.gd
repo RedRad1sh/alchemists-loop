@@ -1321,9 +1321,11 @@ func _can_spawn_event() -> bool:
 ## §9: «Озарение» не выпадает, когда открывать нечего; дар — когда дарить нечего.
 func _choose_event_type_weighted() -> String:
 	var roll := randf()
-	if roll < 0.50:
+	# Веса: комета 62%, дар ~26%, озарение ~12% (редкость: открывать уже нечего —
+	# озарение в принципе не выпадает, фолбэк в комету).
+	if roll < 0.62:
 		return "comet"
-	if roll < 0.78 and _random_opened_item() != "":
+	if roll < 0.88 and _random_opened_item() != "":
 		return "gift"
 	if not g._pages._unrevealed_recipe_candidates().is_empty():
 		return "insight"
@@ -1658,7 +1660,7 @@ func _build_toast_stack() -> void:
 	_toast_stack.name = "OnlineToastStack"
 	_toast_stack.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_toast_stack.offset_left = -360.0
-	_toast_stack.offset_top = 78.0
+	_toast_stack.offset_top = 120.0
 	_toast_stack.offset_right = -16.0
 	_toast_stack.offset_bottom = 520.0
 	_toast_stack.add_theme_constant_override("separation", 8)
@@ -1671,6 +1673,13 @@ func _toast(text: String, kind: int = NoticeKind.INFO, duration := 3.0) -> void:
 		return
 	if _toast_stack == null:
 		_build_online_ux()
+	# Анти-спам: одинаковые тосты подряд не дублируются (событие/статус не должно
+	# заваливать экран при каждом тике или быстром тапе).
+	if _toast_stack.get_child_count() > 0:
+		var last_panel: PanelContainer = _toast_stack.get_child(_toast_stack.get_child_count() - 1)
+		var last_label := _find_toast_label(last_panel)
+		if last_label != null and last_label.text == text:
+			return
 	var accent := TOAST_INFO
 	match kind:
 		NoticeKind.SUCCESS: accent = TOAST_SUCCESS
@@ -1725,6 +1734,17 @@ func _toast(text: String, kind: int = NoticeKind.INFO, duration := 3.0) -> void:
 		hide_tween.tween_property(panel, "position:x", 20.0, 0.2)
 		hide_tween.chain().tween_callback(panel.queue_free)
 	, CONNECT_ONE_SHOT)
+
+
+static func _find_toast_label(panel: PanelContainer) -> Label:
+	for child in panel.get_children():
+		if child is Label:
+			return child as Label
+		if child is MarginContainer:
+			for sub in child.get_children():
+				if sub is Label:
+					return sub as Label
+	return null
 
 
 func _build_network_badge() -> void:
