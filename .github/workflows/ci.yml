@@ -97,24 +97,13 @@ jobs:
       - name: Import project (ресурсы/uid)
         run: |
           "$GODOT" --headless --import --path alchemists-loop || true
-      - name: UI probe (UiTheme/UiStyle/UiIcon — до селфтеста)
-        run: |
-          status=0
-          "$GODOT" --headless --path alchemists-loop --script res://tools/ui_probe.gd 2>&1 \
-            | tee "$RUNNER_TEMP/probe.log" || status=$?
-          grep -E 'PROBE' "$RUNNER_TEMP/probe.log" || true
-          if [ "$status" -ne 0 ]; then
-            while IFS= read -r line; do echo "::error::$line"; done \
-              < <(grep -E 'PROBE FAIL|SCRIPT ERROR|Invalid call|VEIN T4 debug' "$RUNNER_TEMP/probe.log" | head -40)
-          fi
-          exit "$status"
       - name: Selftest (+ аннотации [FAIL]/SCRIPT ERROR для агентов)
         run: |
           status=0
           alchemists-loop/tools/run_selftest.sh 2>&1 | tee "$RUNNER_TEMP/selftest.log" || status=$?
           echo '## Selftest' >> "$GITHUB_STEP_SUMMARY"
-          if grep -Eq '^\[FAIL\]|SCRIPT ERROR|VEIN T4 debug' "$RUNNER_TEMP/selftest.log"; then
-            grep -E '^\[FAIL\]|SCRIPT ERROR|VEIN T4 debug' "$RUNNER_TEMP/selftest.log" | head -60 \
+          if grep -Eq '^\[FAIL\]|SCRIPT ERROR|VEIN T4 debug|UI statics debug' "$RUNNER_TEMP/selftest.log"; then
+            grep -E '^\[FAIL\]|SCRIPT ERROR|VEIN T4 debug|UI statics debug' "$RUNNER_TEMP/selftest.log" | head -60 \
               | sed 's/^/    /' >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'падений и SCRIPT ERROR не найдено' >> "$GITHUB_STEP_SUMMARY"
@@ -123,7 +112,7 @@ jobs:
           # (вроде несуществующей функции) не дают [FAIL], но ломают игру.
           if [ "$status" -ne 0 ] || grep -q 'SCRIPT ERROR' "$RUNNER_TEMP/selftest.log"; then
             while IFS= read -r line; do echo "::error::$line"; done \
-              < <(grep -E '^\[FAIL\]|SCRIPT ERROR|VEIN T4 debug' "$RUNNER_TEMP/selftest.log" | head -40)
+              < <(grep -E '^\[FAIL\]|SCRIPT ERROR|VEIN T4 debug|UI statics debug' "$RUNNER_TEMP/selftest.log" | head -40)
             echo "selftest: статус=$status, SCRIPT ERROR присутствует — прогон красный"
             exit 1
           fi

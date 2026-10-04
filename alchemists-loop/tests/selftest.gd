@@ -132,6 +132,27 @@ static func run(g: Game) -> void:
 	Selftest.check("find steam", String(g._online._find_recipe("water", "fire").get("out", "") ) == "steam")
 	Selftest.check("find empty", g._online._find_recipe("fire", "fire").is_empty())
 
+	# UI-статика: та же цепочка, что падала рантаймом в бейдже (прогон
+	# 37216106136: Nonexistent function 'font' in base 'GDScript'). Раньше
+	# сюит — чтобы сломанный статик всплыл первым чеком, а не среди 725.
+	# Живёт здесь, а не отдельным скриптом: SceneTree-скрипт с --script в 4.7
+	# повисал (шаг UI probe отменили по таймауту), а этот раннер уже дозирован.
+	var ui_build := UiTheme.build() != null
+	var ui_font := UiTheme.font(2) != null
+	var ui_tab := UiStyle.tab(true) != null
+	var ui_svg := UiIcon.texture("flask") != null
+	var probe_btn := Button.new()
+	UiIcon.badge(probe_btn, 3)
+	var ui_badge := probe_btn.get_node_or_null("CountBadge") != null
+	UiIcon.badge(probe_btn, 0)
+	var ui_badge0 := probe_btn.get_node_or_null("CountBadge") == null
+	probe_btn.free()
+	var ui_statics := ui_build and ui_font and ui_tab and ui_svg and ui_badge and ui_badge0
+	if not ui_statics:
+		print("UI statics debug: build=%s font=%s tab=%s svg=%s badge=%s badge0=%s" % [
+			ui_build, ui_font, ui_tab, ui_svg, ui_badge, ui_badge0])
+	Selftest.check("ui statics: build/font/tab/svg/badge", ui_statics)
+
 	await SuiteCoreBrew.run(g)
 	await SuiteLabModes.run(g)
 	await SuiteRetortReturn.run(g)
