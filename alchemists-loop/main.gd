@@ -3377,6 +3377,9 @@ func _sigil_craft_title(craft: Dictionary) -> String:
 	var llm_name := str(craft.get("llm_name", ""))
 	if llm_name != "":
 		return llm_name
+	var fb := str(craft.get("fallback_name", ""))
+	if fb != "":
+		return fb
 	return "Сигил «%s»" % _sigil_rarity_title(str(craft.get("rarity", "common"))).capitalize()
 
 

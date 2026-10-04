@@ -140,9 +140,13 @@ func _make_recipe(item_id: String, ingredients: PackedStringArray,
 
 ## Рецепт ежедневного крафта из словаря ответа сервера.
 func make_craft_recipe(craft: Dictionary) -> SigilRecipe:
+	var display_name := str(craft.get("llm_name", ""))
+	if display_name == "":
+		# Имя из каталога (fallback_name) — достойное название вместо id крафта.
+		display_name = str(craft.get("fallback_name", ""))
 	return _make_recipe(str(craft.get("id", "")), craft_ingredients(craft),
 		StringName(str(craft.get("rarity", "common"))), &"object",
-		str(craft.get("llm_name", "")))
+		display_name)
 
 
 ## Список id ингредиентов крафта (без количеств).
