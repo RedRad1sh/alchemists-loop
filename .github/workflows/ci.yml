@@ -115,6 +115,12 @@ jobs:
             while IFS= read -r line; do
               [ "$line" != "--" ] && echo "::$line"
             done < <(grep -E -A1 '^\[FAIL\]|SCRIPT ERROR|VEIN T4 debug|UI statics debug' "$RUNNER_TEMP/selftest.log" | head -60)
+            # Диагностика хвоста: статус, счётчики и последние строки лога —
+            # когда падение НЕ даёт [FAIL]/SCRIPT ERROR (краш/зависание/код 1).
+            echo "::error::selftest exit status=$status; counts: OK=$(grep -c '^\[OK\]' "$RUNNER_TEMP/selftest.log" || true) FAIL=$(grep -c '^\[FAIL\]' "$RUNNER_TEMP/selftest.log" || true) SCRIPT_ERR=$(grep -c 'SCRIPT ERROR' "$RUNNER_TEMP/selftest.log" || true) ERR=$(grep -c '^ERROR' "$RUNNER_TEMP/selftest.log" || true) LINES=$(wc -l < "$RUNNER_TEMP/selftest.log")"
+            tail -n 25 "$RUNNER_TEMP/selftest.log" | while IFS= read -r line; do
+              echo "::$line"
+            done
             echo "selftest: статус=$status, SCRIPT ERROR присутствует — прогон красный"
             exit 1
           fi
