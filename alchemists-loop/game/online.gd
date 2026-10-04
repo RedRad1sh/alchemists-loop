@@ -387,16 +387,24 @@ func _try_net_candidate(a: String, b: String) -> bool:
 	return true
 
 func _start_experiment(a: String, b: String) -> bool:
-	"""Явный Эксперимент: только 2 реагента в v1, сервер авторитетен."""
+	"""Явный Эксперимент: только 2 реагента в v1, сервер авторитетен (док §5)."""
 	if not _net_enabled or not Net.is_available():
-		_set_status("Эксперимент требует связи с миром: новый элемент нельзя создать офлайн.")
+		var message := ("Эксперимент требует связи с миром: "
+			+ "новый элемент нельзя создать офлайн.")
+		_set_status(message)
+		_toast(message, NoticeKind.ERROR, 4.0)
+		_haptic_error()
 		Sfx.error()
 		return false
 	# U11 (T14): начинаем эксперимент только на свободный pending-слот — иначе
 	# реагенты были бы съедены, а ответ чужой пары применён к эксперименту.
 	_prune_pending_requests()
 	if not _pending_requests.is_empty():
-		_set_status("Мир ещё обрабатывает предыдущий запрос — эксперимент будет доступен через несколько секунд.")
+		var message := ("Предыдущий запрос ещё обрабатывается. "
+			+ "Дождись ответа мира.")
+		_set_status(message)
+		_toast(message, NoticeKind.WARNING, 3.0)
+		_haptic_error()
 		Sfx.error()
 		return false
 	if not g._engine._begin_experiment(a, b):
@@ -404,8 +412,13 @@ func _start_experiment(a: String, b: String) -> bool:
 	# Слот пуст и иных потребителей в этом кадре нет — регистрация успешна by construction.
 	if not _register_pending_pair(a, b, true):
 		g._engine._finish_experiment_inputs(a, b, true)
+		_toast("Не удалось отправить эксперимент. Ресурсы возвращены.",
+			NoticeKind.ERROR)
 		return false
 	Net.check_pair(a, b, _net_nick, _device_id, true)
+	_set_status("Эксперимент начат: %s + %s." % [_item_name(a), _item_name(b)])
+	_toast("Эксперимент отправлен в мир", NoticeKind.INFO, 2.5)
+	_haptic_medium()
 	g._saves._save_game()
 	return true
 
@@ -1174,14 +1187,19 @@ func _build_event_qte() -> void:
 		return
 	# Глобальный прозрачный слой: интерактивен только маленький пузырёк.
 	# Он выше страниц/нижней панели, но ниже обычного discovery popup и магазина.
+	if _event_canvas == null:
+		# §6: глобальные события живут в своём CanvasLayer — ниже модалок (>=30),
+		# выше страниц; z_index контролей больше не участвует.
+		_event_canvas = CanvasLayer.new()
+		_event_canvas.name = "WorldEventCanvas"
+		_event_canvas.layer = 15
+		g.add_child(_event_canvas)
 	_event_qte = Control.new()
 	_event_qte.name = "WorldEventQTE"
 	_event_qte.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_event_qte.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_event_qte.visible = false
-	_event_qte.z_as_relative = false
-	_event_qte.z_index = 12
-	g.add_child(_event_qte)
+	_event_canvas.add_child(_event_qte)
 
 	_event_card = PanelContainer.new()
 	_event_card.name = "QTEBubble"
@@ -1253,32 +1271,99 @@ func _build_event_qte() -> void:
 	_event_progress.add_theme_stylebox_override("fill", progress_fill)
 	col.add_child(_event_progress)
 
+## §8: спавн события откладывается на неудобный момент.
+func _can_spawn_event() -> bool:
+	if _event_active or _event_telegraphing:
+		return false
+	var focus := g.get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is TextEdit:
+		return false
+	for node in g.get_tree().get_nodes_in_group("modal_ui"):
+		if node is CanvasItem and (node as CanvasItem).is_visible_in_tree():
+			return false
+	return true
+
+
+## §9: «Озарение» не выпадает, когда открывать нечего; дар — когда дарить нечего.
+func _choose_event_type_weighted() -> String:
+	var roll := randf()
+	if roll < 0.50:
+		return "comet"
+	if roll < 0.78 and _random_opened_item() != "":
+		return "gift"
+	if not g._pages._unrevealed_recipe_candidates().is_empty():
+		return "insight"
+	return "comet"
+
+
+## §7: позиционирование QTE — поля экрана + обход исключений (qte_exclusion,
+## поле ввода); на крошечном экране фолбэк в центр.
 func _place_event_qte() -> void:
 	if _event_qte == null or _event_card == null:
 		return
-	var viewport_size := g.get_viewport().get_visible_rect().size
+	var viewport_rect := g.get_viewport().get_visible_rect()
 	var card_size := _event_card.size
-	# Не прячем QTE под шапкой или BrewBar: случайность остаётся заметной
-	# и доступной на portrait-экране, в том числе на Android.
-	var left := 14.0
-	var top := 174.0
-	var max_x := maxf(left, viewport_size.x - card_size.x - 14.0)
-	var max_y := maxf(top, viewport_size.y - card_size.y - 164.0)
-	_event_card.position = Vector2(randf_range(left, max_x), randf_range(top, max_y))
+	if card_size.x <= 0.0 or card_size.y <= 0.0:
+		card_size = _event_card.custom_minimum_size
+	var min_pos := Vector2(QTE_MARGIN_LEFT, QTE_MARGIN_TOP)
+	var max_pos := Vector2(
+		viewport_rect.size.x - card_size.x - QTE_MARGIN_RIGHT,
+		viewport_rect.size.y - card_size.y - QTE_MARGIN_BOTTOM)
+	# Крошечный экран: интервал вырожден — центрируем.
+	max_pos.x = maxf(max_pos.x, min_pos.x)
+	max_pos.y = maxf(max_pos.y, min_pos.y)
+	var blocked := _qte_blocked_rects()
+	var fallback := Vector2(
+		(viewport_rect.size.x - card_size.x) * 0.5,
+		(viewport_rect.size.y - card_size.y) * 0.5)
+	for _attempt in range(QTE_PLACEMENT_ATTEMPTS):
+		var candidate := Vector2(
+			randf_range(min_pos.x, max_pos.x),
+			randf_range(min_pos.y, max_pos.y))
+		if not _rect_intersects_any(Rect2(candidate, card_size).grow(10.0), blocked):
+			_event_card.position = candidate
+			return
+	_event_card.position = fallback
+
+
+func _qte_blocked_rects() -> Array[Rect2]:
+	var result: Array[Rect2] = []
+	for node in g.get_tree().get_nodes_in_group("qte_exclusion"):
+		if node is Control:
+			var control := node as Control
+			if control.is_visible_in_tree():
+				result.append(control.get_global_rect().grow(12.0))
+	# Не спавним событие прямо поверх поля ввода.
+	var focus := g.get_viewport().gui_get_focus_owner()
+	if focus is Control:
+		result.append((focus as Control).get_global_rect().grow(20.0))
+	return result
+
+
+func _rect_intersects_any(rect: Rect2, others: Array[Rect2]) -> bool:
+	for other in others:
+		if rect.intersects(other):
+			return true
+	return false
 
 func _event_tick(delta: float) -> void:
+	_update_network_badge(delta)
+	if _event_telegraphing:
+		return
 	if _event_active:
 		_event_left -= delta
 		if _event_left <= 0.0:
 			_event_left = 0.0
 			_event_active = false
-			g._engine.status_text = "Событие упущено."
+			_set_status("Событие упущено.")
+			_toast("Событие упущено — следующее появится позже.",
+				NoticeKind.WARNING, 2.5)
 			g._engine._refresh()
 			_update_event_ui()
 		else:
 			_event_t -= delta
 			if _event_t <= 0.0:
-				_event_t = 0.12
+				_event_t = 0.08
 				_update_event_ui()
 		return
 	_event_clock += delta
@@ -1286,18 +1371,84 @@ func _event_tick(delta: float) -> void:
 		_event_clock = 0.0
 		_spawn_event()
 
+## §10: предупреждение перед QTE — телеграф с отложенной активацией.
 func _spawn_event() -> void:
-	_event_type = Game.EVENT_TYPES[randi() % Game.EVENT_TYPES.size()]
+	if not _can_spawn_event():
+		# Не сбрасываем ожидание полностью: повторим попытку через несколько секунд.
+		_event_clock = maxf(0.0, Game.EVENT_INTERVAL - 5.0)
+		return
+	_event_type = _choose_event_type_weighted()
+	_event_telegraphing = true
+	_event_spawn_token += 1
+	var token := _event_spawn_token
+	_place_event_qte()
+	_event_qte.visible = true
+	_event_card.visible = true
+	_event_card.modulate = Color(1, 1, 1, 0)
+	_event_card.scale = Vector2(0.72, 0.72)
+	_event_card.pivot_offset = _event_card.size * 0.5
+	_event_btn.disabled = true
+	_event_btn.text = _event_symbol()
+	if _event_label != null:
+		_event_label.text = "Событие близко…"
+	if _event_progress != null:
+		_event_progress.value = 0.0
+	Sfx.mystic()
+	_haptic_light()
+	var tween := g.create_tween()
+	tween.set_parallel(true)
+	tween.set_trans(Tween.TRANS_BACK)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(_event_card, "modulate:a", 1.0, 0.3)
+	tween.tween_property(_event_card, "scale", Vector2.ONE, 0.35)
+	var pulse := g.create_tween()
+	pulse.set_loops(2)
+	pulse.tween_property(_event_card, "modulate",
+		Color(1.15, 1.05, 0.72, 1.0), 0.22)
+	pulse.tween_property(_event_card, "modulate", Color.WHITE, 0.22)
+	var timer := g.get_tree().create_timer(QTE_TELEGRAPH_TIME)
+	timer.timeout.connect(_activate_event.bind(token), CONNECT_ONE_SHOT)
+
+
+func _activate_event(token: int) -> void:
+	if token != _event_spawn_token:
+		return
+	if not _event_telegraphing:
+		return
+	# Если за время предупреждения открылось модальное окно, событие откладывается.
+	if not _can_activate_telegraphed_event():
+		_cancel_event_telegraph()
+		_event_clock = maxf(0.0, Game.EVENT_INTERVAL - 5.0)
+		return
+	_event_telegraphing = false
 	_event_active = true
 	_event_left = Game.EVENT_WINDOW
 	_event_t = 0.0
-	_place_event_qte()
-	if _event_qte != null:
-		_event_qte.visible = true
-	g._engine.status_text = "☄ Событие: %s! Успей нажать всплывающее окно." % _event_name()
-	Sfx.mystic()
-	g._engine._refresh()
+	_event_btn.disabled = false
+	g._engine.status_text = "☄ %s" % _event_name()
+	_toast("Мировое событие: %s" % _event_name(), NoticeKind.INFO, 2.5)
+	_haptic_medium()
 	_update_event_ui()
+
+
+## Активация телеграфа запрещена при открытом модальном окне или поле ввода.
+## (_can_spawn_event не годится: во время телеграфа _event_telegraphing == true.)
+func _can_activate_telegraphed_event() -> bool:
+	var focus := g.get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is TextEdit:
+		return false
+	for node in g.get_tree().get_nodes_in_group("modal_ui"):
+		if node is CanvasItem and (node as CanvasItem).is_visible_in_tree():
+			return false
+	return true
+
+
+func _cancel_event_telegraph() -> void:
+	_event_spawn_token += 1
+	_event_telegraphing = false
+	_event_active = false
+	if _event_qte != null:
+		_event_qte.visible = false
 
 func _event_name() -> String:
 	match _event_type:
@@ -1322,61 +1473,121 @@ func _event_symbol() -> String:
 func _update_event_ui() -> void:
 	if _event_qte == null or _event_btn == null:
 		return
-	if _event_active:
+	if _event_telegraphing:
+		# §12: в телеграфе таймер ещё не идёт — пузырь только показывается.
 		_event_qte.visible = true
-		_event_btn.disabled = false
-		_event_btn.text = _event_symbol()
-		_event_btn.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
-		if _event_label != null:
-			_event_label.text = "%d с" % maxi(1, ceili(_event_left))
-		if _event_progress != null:
-			_event_progress.value = _event_left
-	else:
+		_event_btn.disabled = true
+		return
+	if not _event_active:
 		_event_qte.visible = false
 		_event_btn.disabled = true
 		if _event_progress != null:
 			_event_progress.value = 0.0
+		return
+	_event_qte.visible = true
+	_event_btn.disabled = false
+	_event_btn.text = _event_symbol()
+	# Цвет таймера: спокойный янтарный → тревожный красный к концу окна.
+	var ratio := clampf(_event_left / maxf(Game.EVENT_WINDOW, 0.001), 0.0, 1.0)
+	var urgency := Color("#ff5f56").lerp(Color("#ffd166"), ratio)
+	_event_btn.add_theme_color_override("font_color", urgency)
+	if _event_label != null:
+		_event_label.text = "%.1f с" % _event_left
+		_event_label.add_theme_color_override("font_color", urgency)
+	if _event_progress != null:
+		_event_progress.value = _event_left
+		var fill := StyleBoxFlat.new()
+		fill.bg_color = urgency
+		fill.set_corner_radius_all(2)
+		_event_progress.add_theme_stylebox_override("fill", fill)
+	# В последнюю секунду пузырёк слегка пульсирует.
+	if _event_left <= 1.0:
+		var pulse := 1.0 + sin(Time.get_ticks_msec() * 0.02) * 0.05
+		_event_card.scale = Vector2.ONE * pulse
+	else:
+		_event_card.scale = Vector2.ONE
 
+## §13: награда события — match по типу, тосты и фолбэки эфиром без «бесполезных»
+## сообщений (дарить/открывать нечего — игрок не остаётся без награды).
 func _on_event_tap() -> void:
 	if not _event_active:
 		return
 	var reward_pos := _event_btn.get_global_rect().get_center()
 	_event_active = false
 	_event_clock = 0.0
-	_update_event_ui()
+	_event_spawn_token += 1
+	_haptic_success()
 	match _event_type:
 		"comet":
 			# Полный грант 25: сверх кэпа уходит в ether_overflow (резерв),
 			# а не теряется.
 			g._engine._grant_ether(25, "comet")
-			g._engine.status_text = "☄ Комета! +25 эфира."
-			_floater_at(reward_pos, "+25 ⚡", Color(1.0, 0.9, 0.4))
+			_set_status("☄ Комета! +25 эфира.")
+			_toast("Кометный дождь: +25 эфира", NoticeKind.SUCCESS)
+			_floater_at(reward_pos, "+25 ⚡", Color("#ffe36e"))
 		"gift":
 			var pick := _random_opened_item()
 			if pick != "":
-				g._engine.inventory[pick] = int(g._engine.inventory.get(pick, 0)) + 1
-				g._engine.status_text = "☄ Дар тумана: %s +1." % _item_name(pick)
+				g._engine.inventory[pick] = (
+					int(g._engine.inventory.get(pick, 0)) + 1)
+				_set_status("✦ Дар тумана: %s +1." % _item_name(pick))
+				_toast("Дар тумана: %s +1" % _item_name(pick), NoticeKind.SUCCESS)
 				_floater_at(reward_pos, "+%s" % _item_name(pick),
 					g._item_colors.get(pick, Color.WHITE))
 			else:
-				g._engine.status_text = "☄ Дар тумана: пока нечего дарить."
+				# Никогда не оставляем игрока без награды (док §13).
+				g._engine._grant_ether(15, "gift_fallback")
+				_set_status("✦ Туман превратился в +15 эфира.")
+				_toast("Дар тумана: +15 эфира", NoticeKind.SUCCESS)
 		"insight":
-			var cand := g._pages._unrevealed_recipe_candidates()
-			if not cand.is_empty():
-				var r: Dictionary = cand[randi() % cand.size()]
-				var ra := String(r["a"])
-				var rb := String(r["b"])
-				var rout := String(r["out"])
+			var candidates := g._pages._unrevealed_recipe_candidates()
+			if not candidates.is_empty():
+				var recipe: Dictionary = candidates[randi() % candidates.size()]
+				var ra := String(recipe["a"])
+				var rb := String(recipe["b"])
+				var rout := String(recipe["out"])
 				g._engine.known_recipes[g._pair_key(ra, rb)] = true
-				g._engine.status_text = "☄ Озарение: %s + %s → %s!" % [_item_name(ra), _item_name(rb), _item_name(rout)]
+				_set_status("✧ Озарение: %s + %s → %s!" % [
+					_item_name(ra), _item_name(rb), _item_name(rout)])
+				_toast("Озарение открыло новый рецепт", NoticeKind.SUCCESS)
 				g._present_popup(rout, "Озарение открыло рецепт:\n%s + %s → %s" % [
 					_item_name(ra), _item_name(rb), _item_name(rout)])
 			else:
-				g._engine.status_text = "☄ Озарение: все пары из известных веществ открыты."
+				# Fallback вместо бесполезного сообщения (док §13).
+				g._engine._grant_ether(20, "insight_fallback")
+				_set_status("✧ Все доступные рецепты изучены: +20 эфира.")
+				_toast("Все рецепты изучены: +20 эфира", NoticeKind.SUCCESS)
 	Sfx.divide()
-	g._engine._refresh()
 	_update_event_ui()
+	g._engine._refresh()
 	g._saves._save_game()
+
+
+# ---------- Вибрация (док §14) ----------
+
+func _haptic_light() -> void:
+	if OS.has_feature("mobile"):
+		Input.vibrate_handheld(20)
+
+
+func _haptic_medium() -> void:
+	if OS.has_feature("mobile"):
+		Input.vibrate_handheld(45)
+
+
+func _haptic_success() -> void:
+	if not OS.has_feature("mobile"):
+		return
+	Input.vibrate_handheld(70)
+	var timer := g.get_tree().create_timer(0.10)
+	timer.timeout.connect(func() -> void:
+		Input.vibrate_handheld(35)
+	, CONNECT_ONE_SHOT)
+
+
+func _haptic_error() -> void:
+	if OS.has_feature("mobile"):
+		Input.vibrate_handheld(90)
 
 
 # ---------- UX-слой (док §2–3): тосты + индикатор сети ----------

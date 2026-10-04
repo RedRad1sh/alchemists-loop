@@ -147,6 +147,8 @@ func _build_lab(page: VBoxContainer) -> void:
 	g._engine._cauldron = CauldronView.new()
 	g._engine._cauldron.custom_minimum_size = Vector2(256, 210)
 	g._engine._cauldron.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# QTE-событие не должно заслонять котёл (док §7).
+	g._engine._cauldron.add_to_group("qte_exclusion")
 	mid.add_child(g._engine._cauldron)
 
 	g._engine._slot_b = g._make_slot("B")
@@ -301,6 +303,8 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 	_experiment_cauldron = CauldronView.new()
 	_experiment_cauldron.custom_minimum_size = Vector2(218, 188)
 	_experiment_cauldron.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# QTE-событие не должно заслонять котёл (док §7).
+	_experiment_cauldron.add_to_group("qte_exclusion")
 	cauldron_col.add_child(_experiment_cauldron)
 	_experiment_recipe_line = g._label("Свободен · перетащи реагенты сюда", 10)
 	_experiment_recipe_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

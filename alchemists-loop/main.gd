@@ -1160,6 +1160,8 @@ func _build_ui() -> void:
 	tabs.z_index = 0
 	_tabs_ref = tabs
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# Нижняя навигация: QTE-событие не должно появляться поверх вкладок (док §7).
+	tabs.add_to_group("qte_exclusion")
 	tabs.add_theme_stylebox_override("panel", _panel_style(Color(0.10, 0.13, 0.18, 0.35), 14))
 	# Вкладки должны помещаться на portrait-экране целиком: «Эксперимент»
 	# нельзя терять из видимой навигации при переходе в Лабораторию.
@@ -1235,6 +1237,8 @@ func _build_brew_bar() -> void:
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := _panel_style(Color(0.07, 0.10, 0.15, 0.96), 18)
 	bar.add_theme_stylebox_override("panel", sb)
+	# QTE-событие не должно появляться поверх панели варки (док §7).
+	bar.add_to_group("qte_exclusion")
 	add_child(bar)
 	_brew_bar = bar
 
@@ -1594,6 +1598,7 @@ func _build_popup() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	dim.z_index = 20
 	dim.visible = false
+	dim.add_to_group("modal_ui")
 	add_child(dim)
 	_popup_dim = dim
 	var center := CenterContainer.new()
@@ -1644,6 +1649,8 @@ func _build_popup() -> void:
 	actions.add_child(close)
 	card.gui_input.connect(_on_popup_card_input)
 	_popup = center
+	# Модальное окно блокирует спавн и активацию QTE (док §8).
+	center.add_to_group("modal_ui")
 
 func _show_challenge_win_popup(item_id: String, target_name: String, a: String, b: String, first: bool = false) -> void:
 	_popup_title.text = "ЕЖЕДНЕВНАЯ ЦЕЛЬ!"
@@ -3811,6 +3818,7 @@ func _build_confirm() -> void:
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.z_index = 20
 	dim.visible = false
+	dim.add_to_group("modal_ui")
 	add_child(dim)
 	_confirm_dim = dim
 
@@ -3818,6 +3826,7 @@ func _build_confirm() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	center.z_index = 21
 	center.visible = false
+	center.add_to_group("modal_ui")
 	add_child(center)
 	_confirm = center
 
