@@ -928,9 +928,15 @@ func _rebuild_world_grid() -> void:
 		_world_next.disabled = _world_page >= pages - 1
 
 func _item_name(item_id: String) -> String:
+	# Как _item_glyph: фейковые/тестовые ключи инвентаря (st_ep_* из U9)
+	# отсутствуют в ITEMS — без guard'а падал SCRIPT ERROR в _item_name.
+	if not g.ITEMS.has(item_id):
+		return item_id
 	return String(g.ITEMS[item_id]["name"])
 
 func _item_desc(item_id: String) -> String:
+	if not g.ITEMS.has(item_id):
+		return ""
 	return String(g.ITEMS[item_id].get("d", ""))
 
 func _item_glyph(item_id: String) -> String:
