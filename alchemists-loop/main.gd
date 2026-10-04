@@ -4036,7 +4036,7 @@ class SigilCardRevealDecor:
 		set_process(true)
 
 		# ── God-rays: часть «длинные-редкие», часть «короткие-частые» ──
-		var ray_count := 18 if is_special else 11
+		var ray_count := 10 if is_special else 6
 		for i in ray_count:
 			var long_ray := i % 3 == 0
 			_rays.append({
@@ -4049,12 +4049,12 @@ class SigilCardRevealDecor:
 			})
 
 		# ── Искры ──
-		var count := 90 if is_special else 42
+		var count := 45 if is_special else 22
 		for _i in count:
 			_sparks.append(_make_spark(_rng.randf_range(0.0, 0.25)))
 
 		# ── Орбитальные мотыльки (медленно кружат вокруг карты) ──
-		var mote_count := 22 if is_special else 10
+		var mote_count := 12 if is_special else 6
 		for _i in mote_count:
 			_motes.append({
 				"ang": _rng.randf() * TAU,
@@ -4132,14 +4132,14 @@ class SigilCardRevealDecor:
 			var f := float(i) / 7.0
 			draw_circle(center, diag * 1.6 * f,
 				Color(rc.r, rc.g, rc.b,
-					0.075 * pulse * fade_in * (1.0 - f * 0.70) + 0.10 * burst * (1.0 - f)))
+					0.038 * pulse * fade_in * (1.0 - f * 0.70) + 0.05 * burst * (1.0 - f)))
 
 		# ── Вертикальный столб света (только для особых) ──
 		if _special:
 			var pw := _card_half.x * (0.85 + 0.1 * sin(_t * 1.7))
 			for i in 4:
 				var g := 1.0 - float(i) / 4.0
-				var a_p := 0.055 * fade_in * g * pulse
+				var a_p := 0.028 * fade_in * g * pulse
 				draw_colored_polygon(PackedVector2Array([
 					center + Vector2(-pw * g, -size.y),
 					center + Vector2(pw * g, -size.y),
@@ -4203,7 +4203,7 @@ class SigilCardRevealDecor:
 				var a_near := (1.0 - t0) * (1.0 - t0)
 				var a_far := (1.0 - t1) * (1.0 - t1)
 				var col := Color(rc_mix(0.35).r, rc_mix(0.35).g, rc_mix(0.35).b, 1.0)
-				var alpha := 0.13 * flick * fade_in * (0.6 + 0.9 * burst)
+				var alpha := 0.065 * flick * fade_in * (0.6 + 0.9 * burst)
 				var w0 := 1.0 + t0 * 1.8   # конус расширяется
 				var w1 := 1.0 + t1 * 1.8
 				draw_colored_polygon(PackedVector2Array([
@@ -4245,7 +4245,7 @@ class SigilCardRevealDecor:
 				# Искра ещё «под» карточкой — сдвигаем на её край, чтобы
 				# рождалась из-за силуэта, а не в центре.
 				draw_pos = center + dir_s * edge
-			var a_sp := pow(1.0 - lt, 1.5) * 0.95 * fade_in
+			var a_sp := pow(1.0 - lt, 1.5) * 0.55 * fade_in
 			var core := Color(1.0, 0.96, 0.88) if bool(s["hot"]) else rc_mix(0.55)
 
 			# Трейл: ломаная из истории позиций, сужающаяся к хвосту.
@@ -4260,7 +4260,7 @@ class SigilCardRevealDecor:
 						float(s["size"]) * seg_a * 0.9, true)
 
 			draw_circle(draw_pos, float(s["size"]) * 3.4 * (1.0 - lt),
-				Color(rarity_color.r, rarity_color.g, rarity_color.b, a_sp * 0.28))
+				Color(rarity_color.r, rarity_color.g, rarity_color.b, a_sp * 0.16))
 			draw_circle(draw_pos, float(s["size"]) * (1.0 - lt * 0.4),
 				Color(core.r, core.g, core.b, a_sp))
 
@@ -4286,9 +4286,9 @@ class SigilCardRevealDecor:
 			for sgn in [1.0, -1.0]:
 				draw_colored_polygon(PackedVector2Array([
 					center + n * w, center - n * w, center + d * l * sgn,
-				]), Color(1.0, 0.98, 0.92, 0.55 * k))
+				]), Color(1.0, 0.98, 0.92, 0.28 * k))
 				draw_colored_polygon(PackedVector2Array([
 					center + n * w * 2.2, center - n * w * 2.2, center + d * l * 0.7 * sgn,
-				]), Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.35 * k))
+				]), Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.18 * k))
 		draw_circle(center, diag * 0.55 * k, Color(1.0, 1.0, 1.0, 0.35 * k))
 		draw_circle(center, diag * 0.28 * k, Color(1.0, 1.0, 1.0, 0.55 * k))
