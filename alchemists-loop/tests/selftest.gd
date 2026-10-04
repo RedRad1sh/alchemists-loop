@@ -145,7 +145,12 @@ static func run(g: Game) -> void:
 	UiIcon.badge(probe_btn, 3)
 	var ui_badge := probe_btn.get_node_or_null("CountBadge") != null
 	UiIcon.badge(probe_btn, 0)
-	var ui_badge0 := probe_btn.get_node_or_null("CountBadge") == null
+	# badge(0) снимает пилюлю через queue_free — узел остаётся до конца кадра,
+	# поэтому проверяем очередь удаления, а не отсутствие узла.
+	var ui_badge0 := true
+	var bn0 := probe_btn.get_node_or_null("CountBadge")
+	if bn0 != null:
+		ui_badge0 = bn0.is_queued_for_deletion()
 	probe_btn.free()
 	var ui_statics := ui_build and ui_font and ui_tab and ui_svg and ui_badge and ui_badge0
 	if not ui_statics:
