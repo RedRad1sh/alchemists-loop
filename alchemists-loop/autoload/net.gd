@@ -54,9 +54,16 @@ signal fair_claim_result(result: Dictionary)
 signal receipt_verify_result(result: Dictionary)
 signal account_export_result(result: Dictionary)
 signal account_delete_result(result: Dictionary)
-signal vein_find_result(pair_key: String, result: Dictionary)
+signal vein_find_result(pair_key: String, cycle_id: String, result: Dictionary)
 signal vein_pour_result(find_id: String, result: Dictionary)
 signal cycle_result(result: Dictionary)
+signal sigil_daily_result(result: Dictionary)
+signal sigil_craft_result(result: Dictionary)
+signal sigil_catalog_result(result: Dictionary)
+signal sigil_collection_result(result: Dictionary)
+signal sigil_milestone_result(result: Dictionary)
+signal sigil_admin_reset_result(result: Dictionary)
+signal sigil_admin_rotate_result(result: Dictionary)
 signal error(message: String)
 
 var base_url := DEFAULT_BASE
@@ -246,10 +253,54 @@ func cycle_status(device_id: String) -> void:
 		path += "?device_id=" + device_id.uri_encode()
 	_enqueue({"kind": "cycle", "path": path})
 
+# Аркан Сигилов: ежедневные крафты и крафт карточки.
+func sigil_daily(device_id: String) -> void:
+	var path := "/sigil/daily?device_id=" + device_id.uri_encode()
+	_enqueue({"kind": "sigil_daily", "path": path})
+
+func sigil_craft(device_id: String, craft_id: String) -> void:
+	_enqueue({
+		"kind": "sigil_craft", "path": "/sigil/craft",
+		"body": {"device_id": device_id, "craft_id": craft_id},
+	})
+
+## Каталог карт: статический артефакт сервера, device_id не нужен.
+func sigil_catalog() -> void:
+	_enqueue({"kind": "sigil_catalog", "path": "/sigil/catalog"})
+
+## Коллекция игрока: копии карт и внекомплектные крафты.
+func sigil_collection(device_id: String) -> void:
+	_enqueue({
+		"kind": "sigil_collection",
+		"path": "/sigil/collection?device_id=" + device_id.uri_encode(),
+	})
+
+## Клейм майлстоуна комплекта: POST /api/sigil/milestone. Ключ тела — "set"
+## (серверное поле), GDScript-параметр — set_id (не set).
+func sigil_milestone(device_id: String, set_id: String, tier: int) -> void:
+	_enqueue({
+		"kind": "sigil_milestone", "path": "/sigil/milestone",
+		"body": {"device_id": device_id, "set": set_id, "tier": tier},
+	})
+
 # T22: серверная проверка платёжного чека (POST /api/receipt/verify). Ответ —
 # сигнал receipt_verify_result: {"ok", "verified", "status", "reason",
 # "receipt_hash"} либо офлайн-форма {"ok": false, "offline": true}. Сырой токен
 # уходит на сервер один раз по запросу; в ответе сервера его нет (только SHA-256).
+## Админ: полный сброс Аркана игрока на сервере (коллекция + майлстоуны).
+func sigil_admin_reset(device_id: String) -> void:
+	_enqueue({
+		"kind": "sigil_admin_reset", "path": "/admin/sigil/reset?device_id=" + device_id.uri_encode(),
+		"body": {"device_id": device_id},  # body => _build_request шлёт POST (иначе GET = 405)
+	})
+
+## Админ: ротация оффера крафтов дня (коллекцию не трогает).
+func sigil_admin_rotate(device_id: String) -> void:
+	_enqueue({
+		"kind": "sigil_admin_rotate", "path": "/admin/sigil/rotate?device_id=" + device_id.uri_encode(),
+		"body": {"device_id": device_id},  # body => POST (без body ушёл бы GET = 405)
+	})
+
 func receipt_verify(device_id: String, provider: String, sku: String, receipt_token: String) -> void:
 	_enqueue({
 		"kind": "receipt_verify", "path": "/receipt/verify",
@@ -320,6 +371,11 @@ func _send_next() -> void:
 	var req: Dictionary = _queue.pop_front()
 	var built := _build_request(req)
 	var headers := PackedStringArray(["Content-Type: application/json"])
+	# Trusted editor tooling only. Never persist or package the token in the game.
+	if OS.has_feature("editor") and String(req.get("path", "")).begins_with("/admin/sigil/"):
+		var token := OS.get_environment("ADMIN_API_TOKEN")
+		if token != "":
+			headers.append("X-Admin-Token: " + token)
 	_inflight = req
 	var err := _try_send(String(built["url"]), headers, int(built["method"]), String(built["body"]))
 	if err != OK:
@@ -357,9 +413,17 @@ func _on_completed(result: int, response_code: int, _headers: PackedStringArray,
 	var parsed := {}
 	if response_code >= 200 and response_code < 300:
 		parsed = _parse(data)
-		if not parsed.is_empty() and not parsed.has("ok"):
-			parsed["ok"] = true
-		_available = true
+		if parsed.is_empty():
+			# 200 с не-JSON телом — это не наш API, а заглушка/антибот хостинга или
+			# прокси-страница. Раньше эта ветка ставила _available = true и сливала
+			# подписчикам пустой словарь: игра считала сервер здоровым, не уходила в
+			# офлайн и оставалась с предзаполненными статусами навсегда.
+			parsed = {"ok": false, "offline": true, "message": "сервер вернул не-JSON ответ"}
+			_available = false
+		else:
+			if not parsed.has("ok"):
+				parsed["ok"] = true
+			_available = true
 	elif result != HTTPRequest.RESULT_SUCCESS:
 		parsed = {"ok": false, "offline": true, "message": "нет ответа от сервера"}
 		_available = false
@@ -439,8 +503,23 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 		"receipt_verify":
 			receipt_verify_result.emit(parsed)
 		"vein_find":
-			vein_find_result.emit(String(req.get("pair_key", "")), parsed)
+			vein_find_result.emit(String(req.get("pair_key", "")),
+				String(req.get("body", {}).get("cycle_id", "")), parsed)
 		"vein_pour":
 			vein_pour_result.emit(String(req.get("find_id", "")), parsed)
 		"cycle":
 			cycle_result.emit(parsed)
+		"sigil_daily":
+			sigil_daily_result.emit(parsed)
+		"sigil_craft":
+			sigil_craft_result.emit(parsed)
+		"sigil_catalog":
+			sigil_catalog_result.emit(parsed)
+		"sigil_collection":
+			sigil_collection_result.emit(parsed)
+		"sigil_milestone":
+			sigil_milestone_result.emit(parsed)
+		"sigil_admin_reset":
+			sigil_admin_reset_result.emit(parsed)
+		"sigil_admin_rotate":
+			sigil_admin_rotate_result.emit(parsed)

@@ -515,3 +515,31 @@ static func run(g: Game) -> void:
 		and not t28_me.results[2].has("detail")
 		and String(t28_me.results[2].get("error", "")) == "HTTP 502")
 	t28_net.free()
+
+	# ============ I-2: 2xx с не-JSON телом = отказ, а не «сервер жив» ============
+	# Заглушка/антибот хостинга отвечает 200 на любой путь и отдаёт HTML. До фикса
+	# такая ветка ставила _available = true и сливала подписчикам пустой словарь:
+	# игра считала сервер здоровым, никогда не уходила в офлайн и оставалась с
+	# предзаполненными статусами (мир/атлас/неделя не доходят). Мутация «оставить
+	# _available = true без проверки тела» красит первый кейс, мутация «слать
+	# parsed как есть (без ok:false/offline)» красит второй, мутация «выбросить
+	# else-ветку» (ok/available для нормального JSON) красит третий.
+	var i2_net := NetBase.new()
+	var i2_world := OfflineSink.new()
+	i2_net.world_result.connect(i2_world.catch)
+	i2_net._inflight = {"kind": "world"}
+	i2_net._on_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(),
+		"<html><body>access denied</body></html>".to_utf8_buffer())
+	Selftest.check("i2 net non-json 2xx keeps server unavailable", not i2_net.is_available())
+	Selftest.check("i2 net non-json 2xx dispatches offline", i2_world.results.size() == 1
+		and not bool(i2_world.results[0].get("ok", true))
+		and bool(i2_world.results[0].get("offline", false)))
+	i2_net._inflight = {"kind": "world"}
+	i2_net._on_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(),
+		JSON.stringify({"page": 1, "items": []}).to_utf8_buffer())
+	Selftest.check("i2 net json 2xx marks available", i2_net.is_available()
+		and i2_world.results.size() == 2
+		and bool(i2_world.results[1].get("ok", false))
+		and int(i2_world.results[1].get("page", 0)) == 1
+		and not bool(i2_world.results[1].get("offline", false)))
+	i2_net.free()

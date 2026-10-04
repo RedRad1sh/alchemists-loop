@@ -1,0 +1,5769 @@
+{
+ "fragments": [
+  {
+   "id": "symbols_001",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_00",
+    "motif": "symbols_lead_00",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{stage} зовёт {symbol:acc} из тьмы. В этом скрыт знак змеи, кусающей собственный хвост.",
+   "weight": 7
+  },
+  {
+   "id": "symbols_002",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_01",
+    "motif": "symbols_lead_00",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{stage} зовёт {symbol:acc} из тьмы. То, что видишь, — отражение внутренней работы.",
+   "weight": 7
+  },
+  {
+   "id": "symbols_003",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_02",
+    "motif": "symbols_lead_00",
+    "track": [
+     "earth",
+     "void"
+    ]
+   },
+   "text": "{stage} зовёт {symbol:acc} из тьмы. Алхимик узнаёт в этом лик своего труда.",
+   "weight": 7
+  },
+  {
+   "id": "symbols_004",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_03",
+    "motif": "symbols_lead_00",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{stage} зовёт {symbol:acc} из тьмы. Так рождается единство противоположностей.",
+   "weight": 7
+  },
+  {
+   "id": "symbols_005",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_04",
+    "motif": "symbols_lead_00",
+    "track": [
+     "fire",
+     "void"
+    ]
+   },
+   "text": "{stage} зовёт {symbol:acc} из тьмы. Это печать превращения, выжженная в материи.",
+   "weight": 7
+  },
+  {
+   "id": "symbols_006",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_05",
+    "motif": "symbols_lead_00",
+    "track": [
+     "earth",
+     "void"
+    ]
+   },
+   "text": "{stage} зовёт {symbol:acc} из тьмы. Символ этот старше камней и мудрее книг.",
+   "weight": 7
+  },
+  {
+   "id": "symbols_007",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_06",
+    "motif": "symbols_lead_01",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "В час {stage:gen} {symbol} показывается мастеру. Здесь молчание говорит громче любой формулы.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_008",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_07",
+    "motif": "symbols_lead_01",
+    "track": []
+   },
+   "text": "В час {stage:gen} {symbol} показывается мастеру. Такое встречается раз в сто циклов, и не чаще.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_009",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_08",
+    "motif": "symbols_lead_01",
+    "track": []
+   },
+   "text": "В час {stage:gen} {symbol} показывается мастеру. Имени этому не дать, но узнают его сразу.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_010",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_09",
+    "motif": "symbols_lead_01",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "В час {stage:gen} {symbol} показывается мастеру. Между тьмой и светом пролегла здесь тонкая нить.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_011",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_10",
+    "motif": "symbols_lead_01",
+    "track": []
+   },
+   "text": "В час {stage:gen} {symbol} показывается мастеру. Древние звали это тропой без возврата.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_012",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_11",
+    "motif": "symbols_lead_01",
+    "track": []
+   },
+   "text": "В час {stage:gen} {symbol} показывается мастеру. Малое здесь повторяет большое, как капля повторяет ливень.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_013",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_12",
+    "motif": "symbols_lead_02",
+    "track": []
+   },
+   "text": "Знак {symbol:gen} ложится на {stage:acc}. В глубине сосуда спит то, что не терпит спешки.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_014",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_13",
+    "motif": "symbols_lead_02",
+    "track": []
+   },
+   "text": "Знак {symbol:gen} ложится на {stage:acc}. Это и предупреждение, и приглашение — смотря как читать.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_015",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_14",
+    "motif": "symbols_lead_02",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "Знак {symbol:gen} ложится на {stage:acc}. Ремесло любит тишину, а тишина любит меру.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_016",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_15",
+    "motif": "symbols_lead_02",
+    "track": []
+   },
+   "text": "Знак {symbol:gen} ложится на {stage:acc}. Кто увидел это, тот уже не тот, кем был прежде.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_017",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_16",
+    "motif": "symbols_lead_02",
+    "track": []
+   },
+   "text": "Знак {symbol:gen} ложится на {stage:acc}. Знание это стоит дорого, но платят за него не монетой.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_018",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_17",
+    "motif": "symbols_lead_02",
+    "track": []
+   },
+   "text": "Знак {symbol:gen} ложится на {stage:acc}. Здесь кончается книга и начинается дело.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_019",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_18",
+    "motif": "symbols_lead_03",
+    "track": [
+     "fire",
+     "water"
+    ]
+   },
+   "text": "Так {symbol} открывает врата {stage:gen}. Огонь проверяет то, что вода обещала.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_020",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_19",
+    "motif": "symbols_lead_03",
+    "track": []
+   },
+   "text": "Так {symbol} открывает врата {stage:gen}. Так сердце материи учится биться ровнее.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_021",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_20",
+    "motif": "symbols_lead_03",
+    "track": []
+   },
+   "text": "Так {symbol} открывает врата {stage:gen}. Ничто не исчезает: всё меняет облик и место.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_022",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_21",
+    "motif": "symbols_lead_03",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "Так {symbol} открывает врата {stage:gen}. Время над этой печатью не имеет полной власти.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_023",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_22",
+    "motif": "symbols_lead_03",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "Так {symbol} открывает врата {stage:gen}. Легче навести порядок в печи, чем в собственных мыслях.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_024",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_23",
+    "motif": "symbols_lead_03",
+    "track": []
+   },
+   "text": "Так {symbol} открывает врата {stage:gen}. Ошибка здесь — тоже шаг, если записана честно.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_025",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_24",
+    "motif": "symbols_lead_04",
+    "track": [
+     "air",
+     "void"
+    ]
+   },
+   "text": "В {source:prep} таится {symbol} и дышит {stage}. Тени у стены длиннее, чем кажется на рассвете.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_026",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_25",
+    "motif": "symbols_lead_04",
+    "track": [
+     "air"
+    ]
+   },
+   "text": "В {source:prep} таится {symbol} и дышит {stage}. Этот узел не развязать — можно лишь разжечь.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_027",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_26",
+    "motif": "symbols_lead_04",
+    "track": [
+     "air"
+    ]
+   },
+   "text": "В {source:prep} таится {symbol} и дышит {stage}. Работа любит свидетеля лишь в самом конце.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_028",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_27",
+    "motif": "symbols_lead_04",
+    "track": [
+     "air"
+    ]
+   },
+   "text": "В {source:prep} таится {symbol} и дышит {stage}. Всё тайное однажды покажет свой вес.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_029",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_28",
+    "motif": "symbols_lead_04",
+    "track": [
+     "air",
+     "void"
+    ]
+   },
+   "text": "В {source:prep} таится {symbol} и дышит {stage}. Холодное терпение сильнее горячей спешки.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_030",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_29",
+    "motif": "symbols_lead_04",
+    "track": [
+     "air",
+     "earth",
+     "earth"
+    ]
+   },
+   "text": "В {source:prep} таится {symbol} и дышит {stage}. Здесь металл вспоминает, что был когда-то камнем.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_031",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_30",
+    "motif": "symbols_lead_05",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{symbol} является в час {stage:gen}. Пока дым идёт вверх, надежда ещё жива.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_032",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_31",
+    "motif": "symbols_lead_05",
+    "track": []
+   },
+   "text": "{symbol} является в час {stage:gen}. Мастер узнаёт своё ремесло по запаху и по рукам.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_033",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_32",
+    "motif": "symbols_lead_05",
+    "track": []
+   },
+   "text": "{symbol} является в час {stage:gen}. Ни один опыт не пропадает, даже сгоревший.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_034",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_33",
+    "motif": "symbols_lead_05",
+    "track": [
+     "void",
+     "void"
+    ]
+   },
+   "text": "{symbol} является в час {stage:gen}. Последний шаг всегда делается в темноте.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_035",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_34",
+    "motif": "symbols_lead_05",
+    "track": []
+   },
+   "text": "{symbol} является в час {stage:gen}. Кто спешит, тот дважды начинает с начала.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_036",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_35",
+    "motif": "symbols_lead_05",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{symbol} является в час {stage:gen}. Огонь не спорит с тем, кто умеет ждать.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_037",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_36",
+    "motif": "symbols_lead_06",
+    "track": [
+     "void",
+     "void"
+    ]
+   },
+   "text": "Мастер узнаёт {symbol:acc} среди теней {stage:gen}. В тишине слышно, как вещество меняет решение.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_038",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_37",
+    "motif": "symbols_lead_06",
+    "track": [
+     "water",
+     "void",
+     "void"
+    ]
+   },
+   "text": "Мастер узнаёт {symbol:acc} среди теней {stage:gen}. Не всякая тьма просит света — иная просит свидетеля.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_039",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_38",
+    "motif": "symbols_lead_06",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "Мастер узнаёт {symbol:acc} среди теней {stage:gen}. Мера важнее силы: с ней и слабое держится.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_040",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_39",
+    "motif": "symbols_lead_06",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "Мастер узнаёт {symbol:acc} среди теней {stage:gen}. Сосуд помнит всё, что в нём побывало.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_041",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_40",
+    "motif": "symbols_lead_06",
+    "track": [
+     "earth",
+     "void"
+    ]
+   },
+   "text": "Мастер узнаёт {symbol:acc} среди теней {stage:gen}. Что взято у земли, земле и вернётся.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_042",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_41",
+    "motif": "symbols_lead_06",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "Мастер узнаёт {symbol:acc} среди теней {stage:gen}. Начало всегда скромнее, чем конец.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_043",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_42",
+    "motif": "symbols_lead_07",
+    "track": []
+   },
+   "text": "{stage} держит знак {symbol:gen}. Тайна ищет не хранителя, а умение молчать.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_044",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_43",
+    "motif": "symbols_lead_07",
+    "track": [
+     "fire",
+     "air"
+    ]
+   },
+   "text": "{stage} держит знак {symbol:gen}. Пламя гаснет от спешки раньше, чем от ветра.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_045",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_44",
+    "motif": "symbols_lead_07",
+    "track": []
+   },
+   "text": "{stage} держит знак {symbol:gen}. Всякая вещь сначала была чем-то другим.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_046",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_45",
+    "motif": "symbols_lead_07",
+    "track": [
+     "water",
+     "water"
+    ]
+   },
+   "text": "{stage} держит знак {symbol:gen}. Тот, кто считает капли, понимает реку.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_047",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_46",
+    "motif": "symbols_lead_07",
+    "track": []
+   },
+   "text": "{stage} держит знак {symbol:gen}. Порядок в мастерской — половина опыта.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_048",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_47",
+    "motif": "symbols_lead_07",
+    "track": []
+   },
+   "text": "{stage} держит знак {symbol:gen}. Молодое вино и молодую мысль не торопят.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_049",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_48",
+    "motif": "symbols_lead_08",
+    "track": [
+     "water",
+     "void"
+    ]
+   },
+   "text": "{symbol} венчает труд {stage:gen}. Холодная вода лечит то, что испортил горячий нрав.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_050",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_49",
+    "motif": "symbols_lead_08",
+    "track": [
+     "earth"
+    ]
+   },
+   "text": "{symbol} венчает труд {stage:gen}. Этот знак носили и до нас, и не только на металле.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_051",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_50",
+    "motif": "symbols_lead_08",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{symbol} венчает труд {stage:gen}. Свет свечи здесь честнее, чем свет солнца.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_052",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_51",
+    "motif": "symbols_lead_08",
+    "track": []
+   },
+   "text": "{symbol} венчает труд {stage:gen}. У всякого вещества есть своя обида; её лучше не будить.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_053",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_52",
+    "motif": "symbols_lead_08",
+    "track": []
+   },
+   "text": "{symbol} венчает труд {stage:gen}. Кто мешает часто, тот мешает и себе.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_054",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_53",
+    "motif": "symbols_lead_08",
+    "track": []
+   },
+   "text": "{symbol} венчает труд {stage:gen}. Ремесло растёт не от находок, а от повторений.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_055",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_54",
+    "motif": "symbols_lead_09",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "След {symbol:gen} ведёт через {stage:acc}. Всякая мера начинается с избытка, который убрали.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_056",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_55",
+    "motif": "symbols_lead_09",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "След {symbol:gen} ведёт через {stage:acc}. Сгоревшее занимает меньше места, чем несделанное.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_057",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_56",
+    "motif": "symbols_lead_09",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "След {symbol:gen} ведёт через {stage:acc}. Слово здесь весит столько же, сколько щепоть.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_058",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_57",
+    "motif": "symbols_lead_09",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "След {symbol:gen} ведёт через {stage:acc}. Не гляди в сосуд дольше, чем требует дело.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_059",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_58",
+    "motif": "symbols_lead_09",
+    "track": [
+     "void",
+     "void"
+    ]
+   },
+   "text": "След {symbol:gen} ведёт через {stage:acc}. Утренний свет уличает то, что скрыла ночь.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_060",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_59",
+    "motif": "symbols_lead_09",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "След {symbol:gen} ведёт через {stage:acc}. Малое терпение — и большое дело сдвинется.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_061",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_60",
+    "motif": "symbols_lead_10",
+    "track": []
+   },
+   "text": "{symbol} повторяет путь {stage:gen}. Секрет сосуда — в крышке, а не в содержимом.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_062",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_61",
+    "motif": "symbols_lead_10",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} повторяет путь {stage:gen}. Работа судит мастера по последней капле.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_063",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_62",
+    "motif": "symbols_lead_10",
+    "track": [
+     "fire",
+     "void",
+     "void"
+    ]
+   },
+   "text": "{symbol} повторяет путь {stage:gen}. Тёмное в темноте видно лучше, чем при свече.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_064",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_63",
+    "motif": "symbols_lead_10",
+    "track": []
+   },
+   "text": "{symbol} повторяет путь {stage:gen}. Настоящая формула пишется не чернилами.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_065",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_64",
+    "motif": "symbols_lead_10",
+    "track": []
+   },
+   "text": "{symbol} повторяет путь {stage:gen}. Что начато в спешке, закончится в убытке.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_066",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_65",
+    "motif": "symbols_lead_10",
+    "track": []
+   },
+   "text": "{symbol} повторяет путь {stage:gen}. Этот путь вдвое длиннее, если считать шаги.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_067",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_66",
+    "motif": "symbols_lead_11",
+    "track": [
+     "fire",
+     "water"
+    ]
+   },
+   "text": "Мастер ставит {symbol:acc} над {stage:ins}. Огонь и вода сходятся только в умелых руках.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_068",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_67",
+    "motif": "symbols_lead_11",
+    "track": [
+     "water",
+     "earth"
+    ]
+   },
+   "text": "Мастер ставит {symbol:acc} над {stage:ins}. Даже камень однажды соглашается с водой.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_069",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_00",
+    "motif": "symbols_lead_11",
+    "track": []
+   },
+   "text": "Мастер ставит {symbol:acc} над {stage:ins}. В этом скрыт знак змеи, кусающей собственный хвост.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_070",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_01",
+    "motif": "symbols_lead_11",
+    "track": []
+   },
+   "text": "Мастер ставит {symbol:acc} над {stage:ins}. То, что видишь, — отражение внутренней работы.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_071",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_02",
+    "motif": "symbols_lead_11",
+    "track": [
+     "earth"
+    ]
+   },
+   "text": "Мастер ставит {symbol:acc} над {stage:ins}. Алхимик узнаёт в этом лик своего труда.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_072",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_03",
+    "motif": "symbols_lead_11",
+    "track": []
+   },
+   "text": "Мастер ставит {symbol:acc} над {stage:ins}. Так рождается единство противоположностей.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_073",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_04",
+    "motif": "symbols_lead_12",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{symbol} сплетается с {source:ins}. Это печать превращения, выжженная в материи.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_074",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_05",
+    "motif": "symbols_lead_12",
+    "track": [
+     "earth"
+    ]
+   },
+   "text": "{symbol} сплетается с {source:ins}. Символ этот старше камней и мудрее книг.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_075",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_06",
+    "motif": "symbols_lead_12",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} сплетается с {source:ins}. Здесь молчание говорит громче любой формулы.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_076",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_07",
+    "motif": "symbols_lead_12",
+    "track": []
+   },
+   "text": "{symbol} сплетается с {source:ins}. Такое встречается раз в сто циклов, и не чаще.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_077",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_08",
+    "motif": "symbols_lead_12",
+    "track": []
+   },
+   "text": "{symbol} сплетается с {source:ins}. Имени этому не дать, но узнают его сразу.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_078",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_09",
+    "motif": "symbols_lead_12",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} сплетается с {source:ins}. Между тьмой и светом пролегла здесь тонкая нить.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_079",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_10",
+    "motif": "symbols_lead_13",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{stage} выводит {symbol:acc} из {source:gen}. Древние звали это тропой без возврата.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_080",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_11",
+    "motif": "symbols_lead_13",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{stage} выводит {symbol:acc} из {source:gen}. Малое здесь повторяет большое, как капля повторяет ливень.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_081",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_12",
+    "motif": "symbols_lead_13",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{stage} выводит {symbol:acc} из {source:gen}. В глубине сосуда спит то, что не терпит спешки.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_082",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_13",
+    "motif": "symbols_lead_13",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{stage} выводит {symbol:acc} из {source:gen}. Это и предупреждение, и приглашение — смотря как читать.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_083",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_14",
+    "motif": "symbols_lead_13",
+    "track": [
+     "water",
+     "void"
+    ]
+   },
+   "text": "{stage} выводит {symbol:acc} из {source:gen}. Ремесло любит тишину, а тишина любит меру.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_084",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_15",
+    "motif": "symbols_lead_13",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{stage} выводит {symbol:acc} из {source:gen}. Кто увидел это, тот уже не тот, кем был прежде.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_085",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_16",
+    "motif": "symbols_lead_14",
+    "track": []
+   },
+   "text": "Мастер видит {symbol:acc} над {target:ins}. Знание это стоит дорого, но платят за него не монетой.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_086",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_17",
+    "motif": "symbols_lead_14",
+    "track": []
+   },
+   "text": "Мастер видит {symbol:acc} над {target:ins}. Здесь кончается книга и начинается дело.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_087",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_18",
+    "motif": "symbols_lead_14",
+    "track": [
+     "fire",
+     "water"
+    ]
+   },
+   "text": "Мастер видит {symbol:acc} над {target:ins}. Огонь проверяет то, что вода обещала.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_088",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_19",
+    "motif": "symbols_lead_14",
+    "track": []
+   },
+   "text": "Мастер видит {symbol:acc} над {target:ins}. Так сердце материи учится биться ровнее.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_089",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_20",
+    "motif": "symbols_lead_14",
+    "track": []
+   },
+   "text": "Мастер видит {symbol:acc} над {target:ins}. Ничто не исчезает: всё меняет облик и место.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_090",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_21",
+    "motif": "symbols_lead_14",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "Мастер видит {symbol:acc} над {target:ins}. Время над этой печатью не имеет полной власти.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_091",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_22",
+    "motif": "symbols_lead_15",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{symbol} скрывается в {source:prep}. Легче навести порядок в печи, чем в собственных мыслях.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_092",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_23",
+    "motif": "symbols_lead_15",
+    "track": []
+   },
+   "text": "{symbol} скрывается в {source:prep}. Ошибка здесь — тоже шаг, если записана честно.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_093",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_24",
+    "motif": "symbols_lead_15",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} скрывается в {source:prep}. Тени у стены длиннее, чем кажется на рассвете.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_094",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_25",
+    "motif": "symbols_lead_15",
+    "track": []
+   },
+   "text": "{symbol} скрывается в {source:prep}. Этот узел не развязать — можно лишь разжечь.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_095",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_26",
+    "motif": "symbols_lead_15",
+    "track": []
+   },
+   "text": "{symbol} скрывается в {source:prep}. Работа любит свидетеля лишь в самом конце.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_096",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_27",
+    "motif": "symbols_lead_15",
+    "track": []
+   },
+   "text": "{symbol} скрывается в {source:prep}. Всё тайное однажды покажет свой вес.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_097",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_28",
+    "motif": "symbols_lead_16",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{stage} и {symbol} — одно. Холодное терпение сильнее горячей спешки.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_098",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_29",
+    "motif": "symbols_lead_16",
+    "track": [
+     "earth",
+     "earth"
+    ]
+   },
+   "text": "{stage} и {symbol} — одно. Здесь металл вспоминает, что был когда-то камнем.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_099",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_30",
+    "motif": "symbols_lead_16",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{stage} и {symbol} — одно. Пока дым идёт вверх, надежда ещё жива.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_100",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_31",
+    "motif": "symbols_lead_16",
+    "track": []
+   },
+   "text": "{stage} и {symbol} — одно. Мастер узнаёт своё ремесло по запаху и по рукам.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_101",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_32",
+    "motif": "symbols_lead_16",
+    "track": []
+   },
+   "text": "{stage} и {symbol} — одно. Ни один опыт не пропадает, даже сгоревший.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_102",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "symbols_tail_33",
+    "motif": "symbols_lead_16",
+    "track": [
+     "void",
+     "void"
+    ]
+   },
+   "text": "{stage} и {symbol} — одно. Последний шаг всегда делается в темноте.",
+   "weight": 5
+  },
+  {
+   "id": "symbols_103",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_68",
+    "motif": "symbols_lead_17",
+    "track": []
+   },
+   "text": "В {source:prep} {symbol} подаёт знак. Тайна не терпит свидетелей, но любит порядок.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_104",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_69",
+    "motif": "symbols_lead_17",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "В {source:prep} {symbol} подаёт знак. Здесь важен не ответ, а верный вопрос.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_105",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_70",
+    "motif": "symbols_lead_17",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "В {source:prep} {symbol} подаёт знак. То, что сгорело, уже не вернётся прежним.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_106",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_71",
+    "motif": "symbols_lead_17",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "В {source:prep} {symbol} подаёт знак. Тишина в сосуде громче любого спора.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_107",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_72",
+    "motif": "symbols_lead_17",
+    "track": []
+   },
+   "text": "В {source:prep} {symbol} подаёт знак. Малое уступает большому только на вид.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_108",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_73",
+    "motif": "symbols_lead_17",
+    "track": []
+   },
+   "text": "В {source:prep} {symbol} подаёт знак. Всякая мера начинается с честного взгляда.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_109",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_74",
+    "motif": "symbols_lead_18",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{stage} смотрит на мастера через {symbol:acc}. Дым уходит вверх, а урок остаётся внизу.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_110",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_75",
+    "motif": "symbols_lead_18",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{stage} смотрит на мастера через {symbol:acc}. Свет здесь достаётся тому, кто не боится тени.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_111",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_76",
+    "motif": "symbols_lead_18",
+    "track": []
+   },
+   "text": "{stage} смотрит на мастера через {symbol:acc}. В одной капле больше правды, чем в сотне слов.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_112",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_77",
+    "motif": "symbols_lead_18",
+    "track": [
+     "fire",
+     "water"
+    ]
+   },
+   "text": "{stage} смотрит на мастера через {symbol:acc}. Огонь не лжёт: он просто забирает лишнее.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_113",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_78",
+    "motif": "symbols_lead_18",
+    "track": []
+   },
+   "text": "{stage} смотрит на мастера через {symbol:acc}. Спешка — плохой союзник и хороший учитель.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_114",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_79",
+    "motif": "symbols_lead_18",
+    "track": []
+   },
+   "text": "{stage} смотрит на мастера через {symbol:acc}. Тот, кто молчит над работой, слышит больше.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_115",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_80",
+    "motif": "symbols_lead_19",
+    "track": []
+   },
+   "text": "{symbol} держит равновесие {stage:gen}. Всякая вещь помнит, из чего она сделана.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_116",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_81",
+    "motif": "symbols_lead_19",
+    "track": []
+   },
+   "text": "{symbol} держит равновесие {stage:gen}. Путь к сути лежит через терпение.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_117",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_82",
+    "motif": "symbols_lead_19",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} держит равновесие {stage:gen}. Холодное стекло хранит тепла больше, чем кажется.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_118",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_83",
+    "motif": "symbols_lead_19",
+    "track": []
+   },
+   "text": "{symbol} держит равновесие {stage:gen}. Секрет не в составе, а в порядке.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_119",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_84",
+    "motif": "symbols_lead_19",
+    "track": []
+   },
+   "text": "{symbol} держит равновесие {stage:gen}. Мастерство — это привычка не торопиться.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_120",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_85",
+    "motif": "symbols_lead_19",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{symbol} держит равновесие {stage:gen}. Здесь побеждает не сила, а ровный жар.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_121",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_86",
+    "motif": "symbols_lead_20",
+    "track": []
+   },
+   "text": "Мастер узнаёт {symbol:acc} по одному только звуку. Всякий опыт стоит своих ошибок.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_122",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_87",
+    "motif": "symbols_lead_20",
+    "track": []
+   },
+   "text": "Мастер узнаёт {symbol:acc} по одному только звуку. Сосуд учит смирению раньше, чем книга.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_123",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_88",
+    "motif": "symbols_lead_20",
+    "track": []
+   },
+   "text": "Мастер узнаёт {symbol:acc} по одному только звуку. Разница между ядом и лекарством — в мере.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_124",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_89",
+    "motif": "symbols_lead_20",
+    "track": [
+     "void",
+     "void"
+    ]
+   },
+   "text": "Мастер узнаёт {symbol:acc} по одному только звуку. В темноте легче разглядеть собственный след.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_125",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_90",
+    "motif": "symbols_lead_20",
+    "track": []
+   },
+   "text": "Мастер узнаёт {symbol:acc} по одному только звуку. Превращение начинается со смирения.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_126",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_91",
+    "motif": "symbols_lead_20",
+    "track": []
+   },
+   "text": "Мастер узнаёт {symbol:acc} по одному только звуку. Кто считает вслух, тот уже не ошибается.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_127",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_92",
+    "motif": "symbols_lead_21",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{symbol} ложится в основу {stage:gen}. Простое решение всегда дороже.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_128",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_93",
+    "motif": "symbols_lead_21",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} ложится в основу {stage:gen}. Тень говорит о предмете не меньше, чем сам предмет.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_129",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_94",
+    "motif": "symbols_lead_21",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} ложится в основу {stage:gen}. Всё, что даёт тепло, когда-то было холодным.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_130",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_95",
+    "motif": "symbols_lead_21",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} ложится в основу {stage:gen}. Нужное приходит в последний час терпения.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_131",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_96",
+    "motif": "symbols_lead_21",
+    "track": []
+   },
+   "text": "{symbol} ложится в основу {stage:gen}. Слово, сказанное над сосудом, тоже вещество.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_132",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_97",
+    "motif": "symbols_lead_21",
+    "track": []
+   },
+   "text": "{symbol} ложится в основу {stage:gen}. Дисциплина важнее вдохновения.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_133",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_98",
+    "motif": "symbols_lead_22",
+    "track": []
+   },
+   "text": "В час {stage:gen} {symbol} говорит без слов. Работа судит мастера без свидетелей.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_134",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_99",
+    "motif": "symbols_lead_22",
+    "track": []
+   },
+   "text": "В час {stage:gen} {symbol} говорит без слов. Лучший инструмент — привычка.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_135",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_100",
+    "motif": "symbols_lead_22",
+    "track": []
+   },
+   "text": "В час {stage:gen} {symbol} говорит без слов. Время здесь течёт иначе: не по часам, а по каплям.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_136",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_101",
+    "motif": "symbols_lead_22",
+    "track": []
+   },
+   "text": "В час {stage:gen} {symbol} говорит без слов. Только пустая посуда звенит громко.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_137",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_102",
+    "motif": "symbols_lead_22",
+    "track": []
+   },
+   "text": "В час {stage:gen} {symbol} говорит без слов. Опыт — горечь, но полезная.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_138",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_103",
+    "motif": "symbols_lead_22",
+    "track": []
+   },
+   "text": "В час {stage:gen} {symbol} говорит без слов. Скромность — первый признак настоящего дела.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_139",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_104",
+    "motif": "symbols_lead_23",
+    "track": []
+   },
+   "text": "{symbol} проходит сквозь {target:acc}. Всякое начало выглядит как ошибка.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_140",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_105",
+    "motif": "symbols_lead_23",
+    "track": [
+     "air",
+     "void"
+    ]
+   },
+   "text": "{symbol} проходит сквозь {target:acc}. Пар не держится, а след остаётся.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_141",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_106",
+    "motif": "symbols_lead_23",
+    "track": [
+     "water",
+     "void"
+    ]
+   },
+   "text": "{symbol} проходит сквозь {target:acc}. Простота — конец долгого пути.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_142",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_107",
+    "motif": "symbols_lead_23",
+    "track": []
+   },
+   "text": "{symbol} проходит сквозь {target:acc}. Всё лишнее сгорает первым.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_143",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_108",
+    "motif": "symbols_lead_23",
+    "track": []
+   },
+   "text": "{symbol} проходит сквозь {target:acc}. Мера — это тоже искусство.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_144",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_109",
+    "motif": "symbols_lead_23",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{symbol} проходит сквозь {target:acc}. Вода помнит руки, что её касались.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_145",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_110",
+    "motif": "symbols_lead_24",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} хранит молчание {stage:gen}. Ошибка, записанная на бумагу, вдвое дешевле.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_146",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_111",
+    "motif": "symbols_lead_24",
+    "track": [
+     "fire",
+     "water",
+     "void"
+    ]
+   },
+   "text": "{symbol} хранит молчание {stage:gen}. Не проси у огня пощады — проси точности.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_147",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_112",
+    "motif": "symbols_lead_24",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} хранит молчание {stage:gen}. Терпение — это разновидность силы.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_148",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_113",
+    "motif": "symbols_lead_24",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} хранит молчание {stage:gen}. Знание без навыка — просто слух.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_149",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_114",
+    "motif": "symbols_lead_24",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} хранит молчание {stage:gen}. Порядок начинается с чистой посуды.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_150",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_115",
+    "motif": "symbols_lead_24",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} хранит молчание {stage:gen}. Словами вещество не изменить.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_151",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_116",
+    "motif": "symbols_lead_25",
+    "track": []
+   },
+   "text": "По {symbol:dat} читают {stage:acc}. Всему свой срок, и срок этот не торопят.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_152",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_117",
+    "motif": "symbols_lead_25",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "По {symbol:dat} читают {stage:acc}. Никто не видел начала — только следствие.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_153",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_118",
+    "motif": "symbols_lead_25",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "По {symbol:dat} читают {stage:acc}. Тень мастера длиннее его руки.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_154",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_119",
+    "motif": "symbols_lead_25",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "По {symbol:dat} читают {stage:acc}. Огонь и время — одна и та же вещь.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_155",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_120",
+    "motif": "symbols_lead_25",
+    "track": []
+   },
+   "text": "По {symbol:dat} читают {stage:acc}. Тот, кто спешит, топит своё же дело.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_156",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_121",
+    "motif": "symbols_lead_25",
+    "track": []
+   },
+   "text": "По {symbol:dat} читают {stage:acc}. Спокойная рука сильнее крепкой.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_157",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_122",
+    "motif": "symbols_lead_26",
+    "track": []
+   },
+   "text": "{symbol} входит в работу тихо. Первое правило: смотреть, а не верить.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_158",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_123",
+    "motif": "symbols_lead_26",
+    "track": []
+   },
+   "text": "{symbol} входит в работу тихо. Такое не показывают, такое узнают.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_159",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_124",
+    "motif": "symbols_lead_26",
+    "track": []
+   },
+   "text": "{symbol} входит в работу тихо. Чистота здесь важнее остроумия.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_160",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_125",
+    "motif": "symbols_lead_26",
+    "track": []
+   },
+   "text": "{symbol} входит в работу тихо. Осторожность — половина удачи.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_161",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_126",
+    "motif": "symbols_lead_26",
+    "track": []
+   },
+   "text": "{symbol} входит в работу тихо. Умение ждать — тоже ремесло.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_162",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_127",
+    "motif": "symbols_lead_26",
+    "track": []
+   },
+   "text": "{symbol} входит в работу тихо. Всё, что делается в спешке, потом переделывают.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_163",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_128",
+    "motif": "symbols_lead_27",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{symbol} завершает круг {stage:gen}. Истина не боится проверки на огне.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_164",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_129",
+    "motif": "symbols_lead_27",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} завершает круг {stage:gen}. Даже ошибка оставляет хороший след.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_165",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_130",
+    "motif": "symbols_lead_27",
+    "track": []
+   },
+   "text": "{symbol} завершает круг {stage:gen}. Время — единственный честный свидетель.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_166",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_131",
+    "motif": "symbols_lead_27",
+    "track": []
+   },
+   "text": "{symbol} завершает круг {stage:gen}. Кто мерит дважды — режет один раз.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_167",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_132",
+    "motif": "symbols_lead_27",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{symbol} завершает круг {stage:gen}. Свет идёт изнутри, а не от свечи.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_168",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_133",
+    "motif": "symbols_lead_27",
+    "track": []
+   },
+   "text": "{symbol} завершает круг {stage:gen}. Сколько ни лей, больше сосуда не влезет.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_169",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_134",
+    "motif": "symbols_lead_28",
+    "track": []
+   },
+   "text": "{symbol} отмечает середину пути {stage:gen}. Всякий шум кончается, работа — нет.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_170",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_135",
+    "motif": "symbols_lead_28",
+    "track": []
+   },
+   "text": "{symbol} отмечает середину пути {stage:gen}. От усердия не бывает вреда.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_171",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_136",
+    "motif": "symbols_lead_28",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{symbol} отмечает середину пути {stage:gen}. Начатое в гневе не доводят до конца.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_172",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_137",
+    "motif": "symbols_lead_28",
+    "track": []
+   },
+   "text": "{symbol} отмечает середину пути {stage:gen}. Мера, ритм и покой — три ключа.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_173",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_138",
+    "motif": "symbols_lead_28",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{symbol} отмечает середину пути {stage:gen}. Огонь уважает только внимание.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_174",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_139",
+    "motif": "symbols_lead_28",
+    "track": []
+   },
+   "text": "{symbol} отмечает середину пути {stage:gen}. Каждая мелочь имеет свой вес.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_175",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_140",
+    "motif": "symbols_lead_29",
+    "track": []
+   },
+   "text": "{symbol} растёт вместе с {source:ins}. Тот, кто спрашивает, уже наполовину знает.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_176",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_141",
+    "motif": "symbols_lead_29",
+    "track": []
+   },
+   "text": "{symbol} растёт вместе с {source:ins}. Всякое терпение однажды даёт знак.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_177",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_142",
+    "motif": "symbols_lead_29",
+    "track": []
+   },
+   "text": "{symbol} растёт вместе с {source:ins}. Слова о веществе не заменят вещества.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_178",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_143",
+    "motif": "symbols_lead_29",
+    "track": []
+   },
+   "text": "{symbol} растёт вместе с {source:ins}. Сколько ни спеши, а срок свой придёт.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_179",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_144",
+    "motif": "symbols_lead_29",
+    "track": [
+     "earth"
+    ]
+   },
+   "text": "{symbol} растёт вместе с {source:ins}. Всё честное делается медленно.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_180",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_145",
+    "motif": "symbols_lead_29",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} растёт вместе с {source:ins}. Опыт — это след, а не память.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_181",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_146",
+    "motif": "symbols_lead_30",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{symbol} уводит взгляд от лишнего. Тайна любит тех, кто умеет молчать.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_182",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_147",
+    "motif": "symbols_lead_30",
+    "track": [
+     "water",
+     "void"
+    ]
+   },
+   "text": "{symbol} уводит взгляд от лишнего. В тишине слышно, как вещество меняет решение.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_183",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_148",
+    "motif": "symbols_lead_30",
+    "track": [
+     "water",
+     "water",
+     "void"
+    ]
+   },
+   "text": "{symbol} уводит взгляд от лишнего. Не всякая тьма просит света — иная просит свидетеля.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_184",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_00",
+    "motif": "symbols_lead_30",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{symbol} уводит взгляд от лишнего. В этом скрыт знак змеи, кусающей собственный хвост.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_185",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_01",
+    "motif": "symbols_lead_30",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{symbol} уводит взгляд от лишнего. То, что видишь, — отражение внутренней работы.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_186",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_02",
+    "motif": "symbols_lead_30",
+    "track": [
+     "water",
+     "earth"
+    ]
+   },
+   "text": "{symbol} уводит взгляд от лишнего. Алхимик узнаёт в этом лик своего труда.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_187",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_03",
+    "motif": "symbols_lead_31",
+    "track": []
+   },
+   "text": "{symbol} держит счёт каплям {stage:gen}. Так рождается единство противоположностей.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_188",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_04",
+    "motif": "symbols_lead_31",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{symbol} держит счёт каплям {stage:gen}. Это печать превращения, выжженная в материи.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_189",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_05",
+    "motif": "symbols_lead_31",
+    "track": [
+     "earth"
+    ]
+   },
+   "text": "{symbol} держит счёт каплям {stage:gen}. Символ этот старше камней и мудрее книг.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_190",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_06",
+    "motif": "symbols_lead_31",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} держит счёт каплям {stage:gen}. Здесь молчание говорит громче любой формулы.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_191",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_07",
+    "motif": "symbols_lead_31",
+    "track": []
+   },
+   "text": "{symbol} держит счёт каплям {stage:gen}. Такое встречается раз в сто циклов, и не чаще.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_192",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_08",
+    "motif": "symbols_lead_31",
+    "track": []
+   },
+   "text": "{symbol} держит счёт каплям {stage:gen}. Имени этому не дать, но узнают его сразу.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_193",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_09",
+    "motif": "symbols_lead_32",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} знакомит {source:acc} с {stage:ins}. Между тьмой и светом пролегла здесь тонкая нить.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_194",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_10",
+    "motif": "symbols_lead_32",
+    "track": []
+   },
+   "text": "{symbol} знакомит {source:acc} с {stage:ins}. Древние звали это тропой без возврата.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_195",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_11",
+    "motif": "symbols_lead_32",
+    "track": []
+   },
+   "text": "{symbol} знакомит {source:acc} с {stage:ins}. Малое здесь повторяет большое, как капля повторяет ливень.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_196",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_12",
+    "motif": "symbols_lead_32",
+    "track": []
+   },
+   "text": "{symbol} знакомит {source:acc} с {stage:ins}. В глубине сосуда спит то, что не терпит спешки.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_197",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_13",
+    "motif": "symbols_lead_32",
+    "track": []
+   },
+   "text": "{symbol} знакомит {source:acc} с {stage:ins}. Это и предупреждение, и приглашение — смотря как читать.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_198",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_14",
+    "motif": "symbols_lead_32",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{symbol} знакомит {source:acc} с {stage:ins}. Ремесло любит тишину, а тишина любит меру.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_199",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_15",
+    "motif": "symbols_lead_33",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{symbol} доводит дело до {stage:gen}. Кто увидел это, тот уже не тот, кем был прежде.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_200",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_16",
+    "motif": "symbols_lead_33",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{symbol} доводит дело до {stage:gen}. Знание это стоит дорого, но платят за него не монетой.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_201",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_17",
+    "motif": "symbols_lead_33",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{symbol} доводит дело до {stage:gen}. Здесь кончается книга и начинается дело.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_202",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_18",
+    "motif": "symbols_lead_33",
+    "track": [
+     "fire",
+     "water"
+    ]
+   },
+   "text": "{symbol} доводит дело до {stage:gen}. Огонь проверяет то, что вода обещала.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_203",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_19",
+    "motif": "symbols_lead_33",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{symbol} доводит дело до {stage:gen}. Так сердце материи учится биться ровнее.",
+   "weight": 6
+  },
+  {
+   "id": "symbols_204",
+   "slot": "symbols",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "symbols_tail_20",
+    "motif": "symbols_lead_33",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{symbol} доводит дело до {stage:gen}. Ничто не исчезает: всё меняет облик и место.",
+   "weight": 6
+  }
+ ],
+ "version": 1
+}

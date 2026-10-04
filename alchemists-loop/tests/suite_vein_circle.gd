@@ -21,9 +21,9 @@ static func run(g: Game) -> void:
 		and int(b_cycle["method"]) == HTTPClient.METHOD_GET)
 	# ---------- T1: dispatch -> сигналы (корреляция: pair_key / find_id) ----------
 	var seen_find: Array = []
-	var cb_find := func(_pk: String, r: Dictionary) -> void: seen_find.append([_pk, r])
+	var cb_find := func(_pk: String, _cycle: String, r: Dictionary) -> void: seen_find.append([_pk, r])
 	Net.vein_find_result.connect(cb_find)
-	Net._dispatch({"kind": "vein_find", "pair_key": "earth|fire"}, {"ok": true, "points": 1, "cap_reached": false})
+	Net._dispatch({"kind": "vein_find", "pair_key": "earth|fire", "body": {"cycle_id": "vc:1"}}, {"ok": true, "points": 1, "cap_reached": false})
 	var seen_pour: Array = []
 	var cb_pour := func(_fid: String, r: Dictionary) -> void: seen_pour.append([_fid, r])
 	Net.vein_pour_result.connect(cb_pour)
@@ -131,24 +131,43 @@ static func run(g: Game) -> void:
 	var pf4 := g._retention._vein_finds.size() == 1
 	# ответ сервера: registered + cap-награда один раз
 	var e0 := g._engine.ether
-	Net.vein_find_result.emit("fire|water", {"ok": true, "points": 1, "streak_added": true,
+	Net.vein_find_result.emit("fire|water", "vc:T", {"ok": true, "points": 1, "streak_added": true,
 		"streak_count": 5, "cap_reached": true, "cycle_id": "vc:T"})
 	var reg := String((g._retention._vein_finds[0] as Dictionary)["status"]) == "registered" \
 		and g._engine.ether >= e0 + Game.VEIN_STREAK_REWARD
 	# cycle_mismatch → find пересоздан с актуальным циклом (R2)
 	g._retention._cycle_cache = {"cycle_id": "vc:U", "tag1": "Туман", "state": "active",
 		"world_finds": 0, "my_points": 0, "my_streak": 0}
-	Net.vein_find_result.emit("fire|water", {"ok": false, "error": "cycle_mismatch", "cycle_id": "vc:U"})
+	Net.vein_find_result.emit("fire|water", "vc:T", {"ok": false, "error": "cycle_mismatch", "cycle_id": "vc:U"})
 	var remade := g._retention._vein_finds.size() == 1 \
 		and String((g._retention._vein_finds[0] as Dictionary)["cycle_id"]) == "vc:U" \
 		and String((g._retention._vein_finds[0] as Dictionary)["status"]) == "pending_server"
+	# An old queued response must not delete the record for the new cycle.
+	Net.vein_find_result.emit("fire|water", "vc:T", {"ok": false, "error": "unknown_pair"})
+	Selftest.check("vein stale response leaves new cycle intact", g._retention._vein_finds.size() == 1)
 	# unknown_pair — запись снимается
-	Net.vein_find_result.emit("fire|water", {"ok": false, "error": "unknown_pair"})
+	Net.vein_find_result.emit("fire|water", "vc:U", {"ok": false, "error": "unknown_pair"})
 	var dropped := g._retention._vein_finds.is_empty()
 	g._retention._cycle_cache = sv_cycle3
 	g._retention._vein_finds = sv_finds3
 	g._online._server_tag = sv_tags3
 	g._online._server_recipes = sv_sr
+	# Fix #6 + приоритет заявки: та же пара в двух циклах — ответ должен уйти в
+	# pending-заявку, а не в зарегистрированную запись прошлого цикла, которая
+	# стоит в массиве раньше. Мутация «return f без проверки статуса» (старый код)
+	# красит ve1; мутация «continue когда статус не pending_server» (слишком узкий
+	# фикс) красит ve2 — запоздалый ответ по зарегистрированной паре терялся бы.
+	g._retention._vein_finds = [
+		{"pair_key": "fire|water", "cycle_id": "vc:OLD", "status": "registered"},
+		{"pair_key": "fire|water", "cycle_id": "vc:NEW", "status": "pending_server"}]
+	var ve1 := String(g._retention._vein_find_entry("fire|water")["cycle_id"]) == "vc:NEW"
+	var ve_exact := String(g._retention._vein_find_entry("fire|water", "vc:OLD")["cycle_id"]) == "vc:OLD"
+	g._retention._vein_finds = [{"pair_key": "fire|water", "cycle_id": "vc:OLD", "status": "registered"}]
+	var ve2 := not g._retention._vein_find_entry("fire|water").is_empty()
+	var ve3 := g._retention._vein_find_entry("earth|air").is_empty()
+	g._retention._vein_finds = sv_finds3
+	Selftest.check("vein entry lookup: pending wins, cycle-exact matches, registered fallback",
+		ve1 and ve_exact and ve2 and ve3)
 	Selftest.check("personal find: route/dedup/tag/cap-grant/mismatch-recreate/drop",
 		pf1 and pf2 and pf3 and pf4 and reg and remade and dropped)
 

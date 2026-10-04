@@ -6,10 +6,14 @@ class_name Demo
 var g: Game
 
 var _action_circle := false
+var _action_sigilcoll := false
+var _sigil_tab := ""  # --sigiltab=collection|fullscreen|sets|set_grid (T6: collection/fullscreen)
 var _action_week := false
 var _action_goal := false
 var _action_goals := false
 var _shot_path := ""
+var _gif_dir := ""
+var _gif_frame := 0
 var _shot_tab := -1
 var _shot_frame := 0
 var _geom := false
@@ -333,6 +337,20 @@ func _tick_demo() -> bool:
 			_dump_geom()
 			g.get_tree().quit(0)
 		return true
+	if _gif_dir != "":
+		_gif_frame += 1
+		if _gif_frame % 3 == 0:  # каждый 3-й кадр (~50 мс при 60 fps)
+			var img := g.get_viewport().get_texture().get_image()
+			if img != null:
+				var fp := _gif_dir.path_join("frame_%03d.png" % (_gif_frame / 3))
+				var err := img.save_png(fp)
+				if err != OK:
+					push_error("GIF frame save failed: %s (%d)" % [fp, err])
+					g.get_tree().quit(1)
+					return
+		if _gif_frame >= 240:  # ~80 кадров GIF (~4 с анимации)
+			g.get_tree().quit(0)
+		return true
 	if _shot_path != "":
 		_shot_frame += 1
 		if _action_experiment and not _experiment_input_done:
@@ -345,7 +363,7 @@ func _tick_demo() -> bool:
 			g._engine._refresh()
 		if _shot_tab == 1 and not g._online._world_loaded and _shot_frame < 180:
 			return true
-		var shot_at := 120 if _action_experiment else 50
+		var shot_at := 120 if _action_experiment else (200 if _action_sigilcoll else 50)
 		if _shot_frame >= shot_at:
 			var img := g.get_viewport().get_texture().get_image()
 			if img == null:

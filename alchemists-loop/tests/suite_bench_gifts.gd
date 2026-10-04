@@ -20,18 +20,15 @@ static func run(g: Game) -> void:
 	Selftest.check("bench released", not g._pages._bench_busy and not g._engine.brewing)
 	g._pages._bench_on = false
 
-	# лимит Production: небольшой запас, дальше не варит
-	g._engine.inventory["steam"] = Game.BENCH_LIMIT
+	# потолка накопления больше нет: верстак варит выше прежнего лимита
+	g._engine.inventory["steam"] = 12
 	g._pages._bench_target = "steam"
 	g._pages._bench_on = true
 	g._pages._bench_clock = 0.0
 	g._pages._bench_tick(Game.BENCH_INTERVAL + 0.01)
-	Selftest.check("bench cap stops at limit", int(g._engine.inventory.get("steam", 0)) == Game.BENCH_LIMIT and not g._pages._bench_busy)
-	g._engine.inventory["steam"] = Game.BENCH_LIMIT - 1
-	g._pages._bench_clock = 0.0
-	g._pages._bench_tick(Game.BENCH_INTERVAL + 0.01)
+	Selftest.check("bench ignores old cap", g._pages._bench_busy)
 	await g.get_tree().create_timer(0.5).timeout
-	Selftest.check("bench cap brews to limit", int(g._engine.inventory.get("steam", 0)) == Game.BENCH_LIMIT)
+	Selftest.check("bench brews above old cap", int(g._engine.inventory.get("steam", 0)) > 12)
 	g._pages._bench_on = false
 
 	# «Дары»: случайное уже открытое вещество каждые 2 минуты
@@ -57,6 +54,40 @@ static func run(g: Game) -> void:
 			nonbase_half += int(g._engine.inventory[item_id])
 	Selftest.check("gift waits full interval", nonbase_half == nonbase_after)
 
+	# ============ Верстак в фоне: вполсилы, с потолком тиков ============
+	g._saves._return_bench_steps = 0
+	g._saves._saves_bench_probe = true
+	Selftest.check("bench interval is 40s", Game.BENCH_INTERVAL == 40.0)
+	Selftest.check("bench offline factor is half", Game.BENCH_OFFLINE_FACTOR == 0.5)
+	Selftest.check("bench offline needs a minute", g._saves._bench_offline_ticks(30.0) == 0)
+	Selftest.check("bench offline halves ticks", g._saves._bench_offline_ticks(160.0) == 2)
+	Selftest.check("bench offline caps ticks",
+		g._saves._bench_offline_ticks(Game.OFFLINE_CAP_SEC * 4.0) == Game.BENCH_OFFLINE_MAX_TICKS)
+
+	g._engine.inventory["fire"] = 200
+	g._engine.inventory["water"] = 200
+	g._engine.inventory["steam"] = 0
+	g._engine.ether = 100000
+	g._pages._bench_target = "steam"
+	g._pages._bench_on = true
+	g.BREW_SECONDS = 0.05
+	var bench_before := int(g._engine.inventory.get("steam", 0))
+	var bench_res := g._saves._advance_bench_offline(400.0)
+	Selftest.check("bench offline consumes full operation budget",
+		int(bench_res.get("steps", 0)) == 5 * maxi(g._engine._stage_ops(), 1))
+	Selftest.check("bench offline replans completed targets", int(bench_res.get("items", 0)) > 1)
+	Selftest.check("bench offline grows inventory",
+		int(g._engine.inventory.get("steam", 0)) > bench_before)
+	Selftest.check("bench offline spends ether", g._engine.ether < 100000)
+	Selftest.check("bench offline keeps kettle free", not g._engine.brewing)
+	Selftest.check("bench offline reports status", String(bench_res.get("status", "")) != "")
+
+	g._pages._bench_on = false
+	g._pages._bench_target = ""
+	Selftest.check("bench offline idle is empty",
+		g._saves._advance_bench_offline(400.0).is_empty())
+	g._saves._saves_bench_probe = false
+
 	# ============ U38 (A5): афиши стоков не дрейфуют от констант ============
 	var u38_desc := ""
 	for u38_u in Game.UPGRADES:
@@ -65,6 +96,33 @@ static func run(g: Game) -> void:
 	Selftest.check("u38 gift poster matches const", u38_desc.contains("%d мин" % int(Game.GIFT_INTERVAL / 60.0)))
 	var u38_found := 0
 	for u38_c in g._pages._bench_page_labels:
-		if String(u38_c).contains("%d с" % int(Game.BENCH_INTERVAL)) and String(u38_c).contains("%d шт" % Game.BENCH_LIMIT):
+		if String(u38_c).contains("%d с" % int(Game.BENCH_INTERVAL)) and String(u38_c).contains("без потолка"):
 			u38_found += 1
 	Selftest.check("u38 bench poster matches const", u38_found >= 1)
+
+	# ---- Task 4: награда комплекта — верстак вдвое быстрее (тир 13) ----
+	# brick — земля, lava — огонь: флаг земли не должен действовать на огонь,
+	# неизвестный item всегда получает базовый интервал.
+	var sm4 := g._sigil
+	var sb4_interval := sm4.bench_interval("brick") == 40.0 \
+		and sm4.bench_interval("lava") == 40.0 \
+		and sm4.bench_interval("no_such_item") == 40.0
+	sm4._on_collection_result({"ok": true, "cards": {}, "extras": [],
+		"milestones": {"earth": [13]}})
+	sb4_interval = sb4_interval and sm4.bench_interval("brick") == 20.0 \
+		and sm4.bench_interval("lava") == 40.0 \
+		and sm4.bench_interval("no_such_item") == 40.0
+	Selftest.check("sb4 bench interval halves for claimed category", sb4_interval)
+
+	# Офлайн-верстак: при тире 13 земли тот же gap даёт вдвое больше тиков
+	# (паттерн «bench offline caps ticks»: прямой вызов _bench_offline_ticks).
+	# База — без флагов: предыдущая проверка оставила earth [13] засеянным.
+	sm4._on_collection_result({"ok": true, "cards": {}, "extras": []})
+	g._pages._bench_target = "brick"
+	var sb4_base_ticks := g._saves._bench_offline_ticks(160.0)
+	sm4._on_collection_result({"ok": true, "cards": {}, "extras": [],
+		"milestones": {"earth": [13]}})
+	var sb4_offline := sb4_base_ticks == 2 and g._saves._bench_offline_ticks(160.0) == 4
+	sm4._on_collection_result({"ok": true, "cards": {}, "extras": []})
+	g._pages._bench_target = ""
+	Selftest.check("sb4 offline bench uses halved interval", sb4_offline)

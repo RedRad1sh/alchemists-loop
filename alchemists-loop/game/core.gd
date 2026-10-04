@@ -290,7 +290,7 @@ func _max_ether() -> int:
 	return Game.MAX_ETHER + 50 * _up_lvl("ether_cap") + _collection_cap_bonus() \
 		+ 40 * sage_gold + g._progress_ui._quest_cap_bonus() + g._progress_ui._ach_cap_bonus() + g._resonance._res_cap_bonus() \
 		+ g._retort._essence_cap_bonus() + g._riddles._letter_cap_bonus() + g._riddles._atlas_cap_bonus() + g._retention._circle_cap_bonus() \
-		+ g._retention._vein_cap_total
+		+ g._retention._vein_cap_total + g._sigil.milestone_cap_bonus()
 
 func _ether_rate() -> float:
 	return (Game.BASE_ETHER_REGEN + 0.35 * float(_up_lvl("ether_regen")) + _collection_regen_bonus() \
@@ -1380,9 +1380,6 @@ func _run_bench_plan(item_id: String, plan: Dictionary) -> bool:
 	# фоновая варка верстака: не трогает котёл и не блокирует игрока
 	if brewing or _auto or g._pages._bench_busy:
 		return false
-	if int(inventory.get(item_id, 0)) >= Game.BENCH_LIMIT:
-		status_text = "Верстак: «%s» уже накоплен до лимита %d — выбери другое вещество." % [g._online._item_name(item_id), Game.BENCH_LIMIT]
-		return false
 	var total := int(plan["total"])
 	var route_discount := Game.BLUEPRINT_DISCOUNT if _blueprints.has(item_id) else 1.0
 	g._pages._bench_busy = true
@@ -1397,7 +1394,7 @@ func _run_bench_plan(item_id: String, plan: Dictionary) -> bool:
 			if st >= stage_limit:
 				g._pages._bench_busy = false
 				_production_discount = 1.0
-				status_text = "Производство: этап %d/%d завершён — продолжу через %d с." % [st, total, int(Game.BENCH_INTERVAL)]
+				status_text = "Производство: этап %d/%d завершён — продолжу через %d с." % [st, total, int(g._sigil.bench_interval(item_id))]
 				_refresh()
 				g._saves._save_game()
 				return true

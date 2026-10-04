@@ -134,6 +134,19 @@ def setup_admin(app, get_db):
         finally:
             conn.close()
 
+    @app.post("/admin/players/{device_id}/sigil-reset")
+    @_require_auth
+    def admin_sigil_reset(request: Request, device_id: str):
+        """Сброс Аркана Сигилов игрока: коллекция + майлстоуны (админ-дашборд)."""
+        conn = get_db()
+        try:
+            conn.execute("DELETE FROM sigil_crafts WHERE device_id=?", (device_id,))
+            conn.execute("DELETE FROM sigil_milestones WHERE device_id=?", (device_id,))
+            conn.commit()
+        finally:
+            conn.close()
+        return RedirectResponse("/admin/players", status_code=303)
+
     @app.get("/admin/elements", response_class=HTMLResponse)
     @_require_auth
     def admin_elements(request: Request, q: str = ""):

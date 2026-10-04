@@ -1346,4 +1346,3 @@ func _on_event_tap() -> void:
 	g._engine._refresh()
 	_update_event_ui()
 	g._saves._save_game()
-

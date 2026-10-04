@@ -1444,10 +1444,16 @@ func _hint_candidates() -> Array:
 				seen[key] = true
 	return res
 
+var _bench_poster: Label
+
+func _bench_poster_text() -> String:
+	return "Подмастерье: варит выбранное вещество каждые %d с, без потолка накопления. Эфир списывается по обычной цене варки; скидка чертежа применяется." % int(g._sigil.bench_interval(_bench_target))
+
 func _build_bench_page(container: VBoxContainer) -> void:
 	container.add_child(g._label(_mode_hint("bench"), 15))
-	var bench_poster := "Подмастерье: варит выбранное вещество каждые %d с, копит до %d шт. и останавливается. Эфир списывается по обычной цене варки; скидка чертежа применяется." % [int(Game.BENCH_INTERVAL), Game.BENCH_LIMIT]
-	container.add_child(g._label(bench_poster, 12))
+	var bench_poster := _bench_poster_text()
+	_bench_poster = g._label(bench_poster, 12)
+	container.add_child(_bench_poster)
 	if _bench_page_labels == null:
 		_bench_page_labels = []
 	(_bench_page_labels as Array).append(bench_poster)
@@ -1488,6 +1494,8 @@ func _bench_candidates() -> Array:
 	return res
 
 func _rebuild_bench_rows() -> void:
+	if is_instance_valid(_bench_poster):
+		_bench_poster.text = _bench_poster_text()
 	if _bench_rows == null:
 		return
 	for child in _bench_rows.get_children():
@@ -1563,13 +1571,9 @@ func _bench_tick(delta: float) -> void:
 	if _bench_busy or g._engine._auto:
 		return
 	_bench_clock += delta
-	if _bench_clock < Game.BENCH_INTERVAL:
+	if _bench_clock < g._sigil.bench_interval(_bench_target):
 		return
 	_bench_clock = 0.0
-	if int(g._engine.inventory.get(_bench_target, 0)) >= Game.BENCH_LIMIT:
-		g._engine.status_text = "Верстак: «%s» уже накоплен до лимита %d — выбери другое вещество." % [g._online._item_name(_bench_target), Game.BENCH_LIMIT]
-		g._engine._refresh()
-		return
 	var plan := g._guild._plan_craft(_bench_target)
 	if not bool(plan.get("ok", false)):
 		g._engine.status_text = "Верстак ждёт: %s" % String(plan.get("reason", "нет подходящего рецепта"))
