@@ -59,3 +59,29 @@ jobs:
         run: pip install bandit
       - name: Bandit
         run: bandit -r discovery-server/server --exclude discovery-server/server/tests -lll -q
+
+  selftest:
+    # Прогон игровой логики и компиляции GDScript: ловит parse-ошибки вроде
+    # несовместимого типа при присваивании — ровно то, что проскочило в
+    # UI-итерации-2 (home.gd: GridContainer в переменную типа VBoxContainer)
+    # и ранее не проверялось в CI вовсе.
+    name: Game selftest (Godot headless)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Download Godot 4.7.2
+        run: |
+          mkdir -p "$RUNNER_TEMP/godot"
+          curl -fsSL -o "$RUNNER_TEMP/godot.zip" \
+            https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          chmod +x "$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64"
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Import project (ресурсы/uid)
+        run: |
+          "$GODOT" --headless --import --path alchemists-loop || true
+      - name: Selftest
+        run: alchemists-loop/tools/run_selftest.sh
