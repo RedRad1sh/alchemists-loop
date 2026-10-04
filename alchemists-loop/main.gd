@@ -3507,7 +3507,7 @@ func _show_pending_craft_card(craft_id: String, rarity: String, llm_name: String
 			craft = c
 			break
 	var img := await _sigil.get_card(craft_id, SigilManager.craft_ingredients(craft),
-		StringName(rarity), &"object", llm_name)
+		StringName(rarity), &"object", _sigil_craft_title(craft))
 	if img == null:
 		return
 	_show_sigil_card(ImageTexture.create_from_image(img), craft_id,
