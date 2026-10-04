@@ -77,9 +77,14 @@ static func badge(btn: Button, count: int) -> void:
 		lbl.name = "BadgeLabel"
 		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		lbl.add_theme_font_size_override("font_size", 11)
-		var f := UiTheme.font(2)
-		if f != null:
-			lbl.add_theme_font_override("font", f)
+		# Шрифт напрямую из токенов. Вызов UiTheme.font(2) из этой точки падал
+		# в рантайме: "Invalid call. Nonexistent function 'font' in base 'GDScript'"
+		# (лог CI; причина не воспроизводится вне прогона — вызов убран вовсе).
+		var fpath := String(DesignTokens.FONT_PATHS[2])
+		if ResourceLoader.exists(fpath):
+			var f := load(fpath) as Font
+			if f != null:
+				lbl.add_theme_font_override("font", f)
 		lbl.add_theme_color_override("font_color", DesignTokens.GOLD_INK)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER

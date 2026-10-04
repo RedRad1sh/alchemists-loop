@@ -11,6 +11,11 @@ on:
         description: 'Снять кадры UI (ui-shots) — выключить для быстрого прогона тестов'
         type: boolean
         default: true
+      sha:
+        description: 'Прогнать конкретный SHA (пусто = текущая ревизия) — для сравнения с базовой ревизией'
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -78,6 +83,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+          # inputs.sha только при workflow_dispatch (сравнение с базовой ревизией);
+          # иначе — обычная ревизия триггера (push/PR).
+          ref: ${{ inputs.sha || github.sha }}
       - name: Download Godot 4.7.2
         run: |
           mkdir -p "$RUNNER_TEMP/godot"
@@ -89,8 +97,36 @@ jobs:
       - name: Import project (ресурсы/uid)
         run: |
           "$GODOT" --headless --import --path alchemists-loop || true
-      - name: Selftest
-        run: alchemists-loop/tools/run_selftest.sh
+      - name: UI probe (UiTheme/UiStyle/UiIcon — до селфтеста)
+        run: |
+          status=0
+          "$GODOT" --headless --path alchemists-loop --script res://tools/ui_probe.gd 2>&1 \
+            | tee "$RUNNER_TEMP/probe.log" || status=$?
+          grep -E 'PROBE' "$RUNNER_TEMP/probe.log" || true
+          if [ "$status" -ne 0 ]; then
+            while IFS= read -r line; do echo "::error::$line"; done \
+              < <(grep -E 'PROBE FAIL|SCRIPT ERROR|Invalid call|VEIN T4 debug' "$RUNNER_TEMP/probe.log" | head -40)
+          fi
+          exit "$status"
+      - name: Selftest (+ аннотации [FAIL]/SCRIPT ERROR для агентов)
+        run: |
+          status=0
+          alchemists-loop/tools/run_selftest.sh 2>&1 | tee "$RUNNER_TEMP/selftest.log" || status=$?
+          echo '## Selftest' >> "$GITHUB_STEP_SUMMARY"
+          if grep -Eq '^\[FAIL\]|SCRIPT ERROR|VEIN T4 debug' "$RUNNER_TEMP/selftest.log"; then
+            grep -E '^\[FAIL\]|SCRIPT ERROR|VEIN T4 debug' "$RUNNER_TEMP/selftest.log" | head -60 \
+              | sed 's/^/    /' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'падений и SCRIPT ERROR не найдено' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # SCRIPT ERROR ломает прогон даже при 725/725: рантайм-ошибки скриптов
+          # (вроде несуществующей функции) не дают [FAIL], но ломают игру.
+          if [ "$status" -ne 0 ] || grep -q 'SCRIPT ERROR' "$RUNNER_TEMP/selftest.log"; then
+            while IFS= read -r line; do echo "::error::$line"; done \
+              < <(grep -E '^\[FAIL\]|SCRIPT ERROR|VEIN T4 debug' "$RUNNER_TEMP/selftest.log" | head -40)
+            echo "selftest: статус=$status, SCRIPT ERROR присутствует — прогон красный"
+            exit 1
+          fi
 
   ui-shots:
     # Кадры приёмки РЕАЛЬНОЙ игры (та же механика, что tools/shots.py локально):

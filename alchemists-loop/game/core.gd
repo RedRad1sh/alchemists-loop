@@ -901,7 +901,9 @@ func _refresh_header() -> void:
 			var uid := String(u["id"])
 			if _up_unlocked(uid) and _up_lvl(uid) < int(u["max"]) and _available_ether() >= _up_cost(uid):
 				affordable += 1
-				UiIcon.badge(g._hub._up_btn, affordable)
+		# Бейдж один раз после цикла: внутри цикла падение вызова повторялось
+		# по разу на каждый доступный апгрейд (лог CI).
+		UiIcon.badge(g._hub._up_btn, affordable)
 		g._hub._up_btn.add_theme_color_override("font_color",
 			Color(1.0, 0.88, 0.45) if affordable > 0 else Color(0.8, 0.85, 0.9))
 

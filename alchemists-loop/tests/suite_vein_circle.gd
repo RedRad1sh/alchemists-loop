@@ -149,6 +149,15 @@ static func run(g: Game) -> void:
 	g._retention._vein_finds = sv_finds3
 	g._online._server_tag = sv_tags3
 	g._online._server_recipes = sv_sr
+	# Диагностика при провале (CI-аннотации): какой под-чек упал и в каком
+	# состоянии эфир/кап — сам чек ниже не ослабляется.
+	if not (pf1 and pf2 and pf3 and pf4 and reg and remade and dropped):
+		print("VEIN T4 debug: pf1=%s pf2=%s pf3=%s pf4=%s reg=%s remade=%s dropped=%s " % [
+			pf1, pf2, pf3, pf4, reg, remade, dropped] +
+			"finds=%d ether=%d e0=%d cap=%d overflow=%d connected=%s" % [
+			g._retention._vein_finds.size(), g._engine.ether, e0, g._engine._max_ether(),
+			g._engine.ether_overflow,
+			Net.vein_find_result.is_connected(g._retention._on_net_vein_find_result)])
 	Selftest.check("personal find: route/dedup/tag/cap-grant/mismatch-recreate/drop",
 		pf1 and pf2 and pf3 and pf4 and reg and remade and dropped)
 
