@@ -128,7 +128,10 @@ static func run(g: Game) -> void:
 			valid = false
 		keys[g._pair_key(a, b)] = true
 	Selftest.check("recipes valid", valid)
-	Selftest.check("recipes unique", g.RECIPES.size() == 105 and keys.size() == g.RECIPES.size())
+	# База кода — 105 рецептов; сейв игрока может добавить серверные (мир-крафты),
+	# поэтому строгий ==105 краснел бы от прогресса. Инварианты: база не съедена
+	# и все пары в списке уникальны (register/restore дедупят — дубликат красит).
+	Selftest.check("recipes unique", g.RECIPES.size() >= 105 and keys.size() == g.RECIPES.size())
 	Selftest.check("find steam", String(g._online._find_recipe("water", "fire").get("out", "") ) == "steam")
 	Selftest.check("find empty", g._online._find_recipe("fire", "fire").is_empty())
 
@@ -136,6 +139,7 @@ static func run(g: Game) -> void:
 	await SuiteLabModes.run(g)
 	await SuiteRetortReturn.run(g)
 	await SuiteResonanceNet.run(g)
+	await SuiteOnlineUx.run(g)
 	await SuiteBenchGifts.run(g)
 	await SuiteCompanionAtlas.run(g)
 	await SuiteQuestsGuild.run(g)

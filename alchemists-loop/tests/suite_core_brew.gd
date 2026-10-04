@@ -17,8 +17,16 @@ static func run(g: Game) -> void:
 				layers[o] = l
 				changed = true
 	Selftest.check("graph layers settle", guard < 200)
+	# Монотонность — инвариант БАЗОВОГО DAG. Серверные рецепты (мир нормализует
+	# повторные открытия в алиасы вида ice+mist->mist) циклят граф и ломали бы
+	# инвариант легально; циклический контент уже гейтится «layer cycle safe» ниже.
+	var srv_keys := {}
+	for sr in g._online._server_recipes:
+		srv_keys[g._pair_key(String(sr["a"]), String(sr["b"]))] = true
 	var mono := true
 	for r in g.RECIPES:
+		if srv_keys.has(g._pair_key(String(r["a"]), String(r["b"]))):
+			continue
 		if int(layers.get(String(r["out"]), 99)) <= int(layers.get(String(r["a"]), 99)) \
 				or int(layers.get(String(r["out"]), 99)) <= int(layers.get(String(r["b"]), 99)):
 			mono = false

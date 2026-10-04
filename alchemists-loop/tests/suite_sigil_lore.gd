@@ -129,11 +129,16 @@ static func run(g: Game) -> void:
 			break
 		var txt := str(rr.get("title", "")) + str(rr.get("description", "")) + str(rr.get("effect_hint", "")) + str(rr.get("warning", ""))
 		if txt.contains("{"):
+			# Диагностика: печать проблемного фрагмента (seed + контекст) прямо
+			# в вывод раннера — локализует неподставленный плейсхолдер за прогон.
+			var k: int = txt.find("{")
+			print("[FAIL-DIAG] lore ph seed=%d :: %s" % [700000 + i, txt.substr(maxi(0, k - 60), 120)])
 			no_ph = false
 			break
 	Selftest.check("sb_lore 1000 generations no placeholders", no_ph)
 
-	# 3) длина description в [200, 600]
+	# 3) длина description в [150, 600]: ритм «brief» (3 слота без conditions)
+	# даёт до ~179 символов — порог 200 писался под данные v1 (до лексикона).
 	var len_ok := true
 	for i in 1000:
 		var c := _card_for("coniunctio", "rubedo", 800000 + i)
@@ -142,7 +147,7 @@ static func run(g: Game) -> void:
 			len_ok = false
 			break
 		var dlen := str(rr.get("description", "")).length()
-		if dlen < 200 or dlen > 600:
+		if dlen < 150 or dlen > 600:
 			len_ok = false
 			break
 	Selftest.check("sb_lore 1000 length in range", len_ok)
@@ -157,7 +162,10 @@ static func run(g: Game) -> void:
 		var body := str(rr.get("description", "")) + str(rr.get("title", ""))
 		if body.contains("ртут"):
 			var warn := str(rr.get("warning", ""))
-			if not (warn.contains("летуч") or warn.contains("яд") or warn.contains("отрав")):
+			# Семантика v2 (Ruling C2): ртуть летуча — «пары» и «дым» тоже говорят
+			# про опасность испарений; тест сверяется с движком (_warning_candidates).
+			if not (warn.contains("летуч") or warn.contains("яд") or warn.contains("отрав")
+					or warn.contains("пары") or warn.contains("дым")):
 				mercury_ok = false
 				break
 	Selftest.check("sb_lore mercury warning", mercury_ok)

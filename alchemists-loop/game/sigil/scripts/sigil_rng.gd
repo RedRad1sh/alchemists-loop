@@ -101,6 +101,12 @@ func randf() -> float:
 	return float(self.next_u32()) / 4294967296.0
 
 
+func next_float() -> float:
+	## Алиас randf() для lore v2 (lore_fixed.gd): тот же поток, [0, 1).
+	## Отдельный алиас вместо правки лора — старые вызовы не трогаем.
+	return self.randf()
+
+
 func randf_range(a: float, b: float) -> float:
 	return a + (b - a) * self.randf()
 
