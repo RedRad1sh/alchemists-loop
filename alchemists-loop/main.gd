@@ -1201,6 +1201,13 @@ func _build_ui() -> void:
 	_home._build_house_popup()
 	# Событие мира — глобальный QTE поверх текущей вкладки, не кнопка в «Мире».
 	_online._build_event_qte()
+	# UX-слой онлайн-части (тосты + индикатор сети) — поверх страниц,
+	# ниже модалок (док «refactor online.gd.md» §16).
+	# UX-слой онлайн-части (тосты + индикатор сети) — поверх страниц, ниже модалок
+	# (док «refactor online.gd.md» §16). В selftest не строится: сюита UX строит
+	# и сносит слой сама, а «фоновый» CanvasLayer менял замер троттла redraw (u14).
+	if not _selftest:
+		_online._build_online_ux()
 	_home._apply_cosmetic()
 	_update_brew_bar_visibility()
 	_spirit._refresh_companion_visible()

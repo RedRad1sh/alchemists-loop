@@ -72,6 +72,32 @@ var _world_page_label: Label = null
 var _world_prev: Button = null
 var _world_next: Button = null
 
+# ---------- UX layer (док «refactor online.gd.md» §1) ----------
+enum NoticeKind { INFO, SUCCESS, WARNING, ERROR }
+
+var _ux_layer: CanvasLayer = null
+var _toast_stack: VBoxContainer = null
+var _network_badge: PanelContainer = null
+var _network_badge_label: Label = null
+var _network_badge_spinner: Label = null
+var _network_badge_t := 0.0
+var _event_canvas: CanvasLayer = null
+var _event_telegraphing := false
+var _event_spawn_token := 0
+
+const TOAST_INFO := Color("#6f8fa8")
+const TOAST_SUCCESS := Color("#73c98b")
+const TOAST_WARNING := Color("#e6a84a")
+const TOAST_ERROR := Color("#dc6a6a")
+
+const QTE_MARGIN_LEFT := 16.0
+const QTE_MARGIN_RIGHT := 16.0
+const QTE_MARGIN_TOP := 96.0
+const QTE_MARGIN_BOTTOM := 120.0
+const QTE_TELEGRAPH_TIME := 1.1
+const QTE_PLACEMENT_ATTEMPTS := 24
+const TOAST_MAX := 4
+
 func _init(game: Game) -> void:
 	g = game
 
@@ -293,6 +319,8 @@ func _prune_pending_requests() -> void:
 			g._engine._finish_experiment_inputs(ea, eb, true)
 			_set_status("Мир не ответил вовремя: реагенты и эфир возвращены.")
 			g._saves._save_game()
+	if _pending_requests.is_empty():
+		_hide_network_pending()
 
 func _register_pending_pair(a: String, b: String, is_experiment: bool) -> bool:
 	# True — слот свободен и занят этой парой; False — pending уже ждёт ответа
@@ -304,6 +332,7 @@ func _register_pending_pair(a: String, b: String, is_experiment: bool) -> bool:
 		return false
 	_pending_requests[g._pair_key(a, b)] = {
 		"a": a, "b": b, "experiment": is_experiment, "at": Time.get_ticks_msec()}
+	_show_network_pending(is_experiment)
 	return true
 
 func _take_pending_pair(pair_key: String) -> Dictionary:
@@ -314,6 +343,8 @@ func _take_pending_pair(pair_key: String) -> Dictionary:
 		return {}
 	var entry: Dictionary = _pending_requests[pair_key]
 	_pending_requests.erase(pair_key)
+	if _pending_requests.is_empty():
+		_hide_network_pending()
 	return entry
 
 func _experiment_pending_matches(a: String, b: String) -> bool:
@@ -1346,3 +1377,183 @@ func _on_event_tap() -> void:
 	g._engine._refresh()
 	_update_event_ui()
 	g._saves._save_game()
+
+
+# ---------- UX-слой (док §2–3): тосты + индикатор сети ----------
+
+func _build_online_ux() -> void:
+	if _ux_layer != null:
+		return
+	_ux_layer = CanvasLayer.new()
+	_ux_layer.name = "OnlineUXLayer"
+	# Ниже модальных окон (их слой >= 30), выше страниц.
+	_ux_layer.layer = 20
+	g.add_child(_ux_layer)
+	_build_toast_stack()
+	_build_network_badge()
+
+
+## Полный съём UX-слоя (для selftest-сюиты и сбросов).
+func _teardown_online_ux() -> void:
+	if _toast_stack != null and is_instance_valid(_toast_stack):
+		_toast_stack.queue_free()
+	_toast_stack = null
+	if _network_badge != null and is_instance_valid(_network_badge):
+		_network_badge.queue_free()
+	_network_badge = null
+	_network_badge_label = null
+	_network_badge_spinner = null
+	if _ux_layer != null and is_instance_valid(_ux_layer):
+		_ux_layer.queue_free()
+	_ux_layer = null
+
+
+func _build_toast_stack() -> void:
+	_toast_stack = VBoxContainer.new()
+	_toast_stack.name = "OnlineToastStack"
+	_toast_stack.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_toast_stack.offset_left = -360.0
+	_toast_stack.offset_top = 78.0
+	_toast_stack.offset_right = -16.0
+	_toast_stack.offset_bottom = 520.0
+	_toast_stack.add_theme_constant_override("separation", 8)
+	_toast_stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ux_layer.add_child(_toast_stack)
+
+
+func _toast(text: String, kind: int = NoticeKind.INFO, duration := 3.0) -> void:
+	if text.strip_edges() == "":
+		return
+	if _toast_stack == null:
+		_build_online_ux()
+	var accent := TOAST_INFO
+	match kind:
+		NoticeKind.SUCCESS: accent = TOAST_SUCCESS
+		NoticeKind.WARNING: accent = TOAST_WARNING
+		NoticeKind.ERROR: accent = TOAST_ERROR
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(300, 52)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.modulate = Color(1, 1, 1, 0)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.055, 0.075, 0.11, 0.97)
+	style.border_color = accent
+	style.set_border_width_all(1)
+	style.border_width_left = 4
+	style.set_corner_radius_all(10)
+	style.shadow_color = Color(0, 0, 0, 0.35)
+	style.shadow_size = 8
+	panel.add_theme_stylebox_override("panel", style)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(margin)
+	var label := Label.new()
+	label.text = text
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", Color("#edf3f8"))
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_child(label)
+	_toast_stack.add_child(panel)
+	# Не даём уведомлениям заполнить весь экран. remove_child+queue_free:
+	# счётчик детей уменьшается в том же кадре (queue_free сам по себе сработал
+	# бы только в конце кадра — тест капа и экран это сразу ловят).
+	while _toast_stack.get_child_count() > TOAST_MAX:
+		var oldest := _toast_stack.get_child(0)
+		_toast_stack.remove_child(oldest)
+		oldest.queue_free()
+	var tween := g.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(panel, "modulate:a", 1.0, 0.18)
+	tween.tween_property(panel, "position:x", -10.0, 0.18).from(16.0)
+	var timer := g.get_tree().create_timer(duration)
+	timer.timeout.connect(func() -> void:
+		if not is_instance_valid(panel):
+			return
+		var hide_tween := g.create_tween()
+		hide_tween.set_parallel(true)
+		hide_tween.tween_property(panel, "modulate:a", 0.0, 0.2)
+		hide_tween.tween_property(panel, "position:x", 20.0, 0.2)
+		hide_tween.chain().tween_callback(panel.queue_free)
+	, CONNECT_ONE_SHOT)
+
+
+func _build_network_badge() -> void:
+	_network_badge = PanelContainer.new()
+	_network_badge.name = "NetworkPendingBadge"
+	_network_badge.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_network_badge.offset_left = 24.0
+	_network_badge.offset_top = 18.0
+	_network_badge.offset_right = -24.0
+	_network_badge.offset_bottom = 66.0
+	_network_badge.visible = false
+	_network_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.06, 0.10, 0.16, 0.96)
+	style.border_color = Color(0.35, 0.66, 0.95, 0.8)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(12)
+	style.shadow_color = Color(0, 0, 0, 0.3)
+	style.shadow_size = 6
+	_network_badge.add_theme_stylebox_override("panel", style)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 10)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_network_badge.add_child(row)
+	_network_badge_spinner = Label.new()
+	_network_badge_spinner.text = "◐"
+	_network_badge_spinner.add_theme_font_size_override("font_size", 18)
+	_network_badge_spinner.add_theme_color_override("font_color", Color("#79baff"))
+	row.add_child(_network_badge_spinner)
+	_network_badge_label = Label.new()
+	_network_badge_label.text = "Мир изучает сочетание…"
+	_network_badge_label.add_theme_font_size_override("font_size", 14)
+	_network_badge_label.add_theme_color_override("font_color", Color("#dcecff"))
+	row.add_child(_network_badge_label)
+	_ux_layer.add_child(_network_badge)
+
+
+func _show_network_pending(is_experiment: bool) -> void:
+	if _network_badge == null:
+		_build_online_ux()
+	_network_badge.visible = true
+	_network_badge.modulate.a = 0.0
+	_network_badge_label.text = (
+		"Мир проводит эксперимент…" if is_experiment else "Мир проверяет сочетание…")
+	var tween := g.create_tween()
+	tween.tween_property(_network_badge, "modulate:a", 1.0, 0.2)
+
+
+func _hide_network_pending() -> void:
+	if _network_badge == null or not _network_badge.visible:
+		return
+	# Мгновенное прятание: tween только гасит alpha на фоне. Отложенный
+	# visible=false через callback оставлял бейдж «видимым» целый кадр —
+	# тест и игрок видели зависший индикатор после изъятия записи.
+	_network_badge.visible = false
+	var tween := g.create_tween()
+	tween.tween_property(_network_badge, "modulate:a", 0.0, 0.15)
+
+
+func _update_network_badge(delta: float) -> void:
+	if _network_badge == null or not _network_badge.visible:
+		return
+	_network_badge_t += delta
+	var frames := ["◐", "◓", "◑", "◒"]
+	var index := int(_network_badge_t * 6.0) % frames.size()
+	_network_badge_spinner.text = frames[index]
+	if _pending_requests.is_empty():
+		_hide_network_pending()
+		return
+	var key = _pending_requests.keys()[0]
+	var entry: Dictionary = _pending_requests[key]
+	var started_at := int(entry.get("at", Time.get_ticks_msec()))
+	var elapsed := maxi(0, int((Time.get_ticks_msec() - started_at) / 1000))
+	var base := "Мир проводит эксперимент" if bool(entry.get("experiment", false)) \
+		else "Мир проверяет сочетание"
+	_network_badge_label.text = "%s · %d с" % [base, elapsed]
