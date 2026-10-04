@@ -120,5 +120,9 @@ func circle_rect() -> Rect2:
 		s.x - frame_margin * 2.0, s.y - frame_margin * 2.0 - name_h)
 	area = area.grow(-6.0)
 	var r := minf(area.size.x, area.size.y) * 0.5
-	var center := Vector2(s.x * 0.5, area.position.y + area.size.y * 0.5)
+	# Центр круга — центр области арта (под полосой имени), а НЕ всей карты:
+	# при 300x540 вертикальный центр карты сместил бы круг вниз (name_h вычитается).
+	# Так круг ровно по центру видимой области, аура/глифы не съезжают.
+	var center := Vector2(area.position.x + area.size.x * 0.5,
+		area.position.y + area.size.y * 0.5)
 	return Rect2(center - Vector2(r, r), Vector2(r, r) * 2.0)

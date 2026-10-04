@@ -15,6 +15,7 @@
                 <th>Device ID</th>
                 <th>Открытий</th>
                 <th>Регистрация</th>
+                <th>Действия</th>
             </tr>
         </thead>
         <tbody>
@@ -24,10 +25,16 @@
                 <td><code>{{ p.device_id[:12] }}...</code></td>
                 <td>{{ p.discovery_count }}</td>
                 <td>{{ p.created_at }}</td>
+                <td>
+                    <form method="post" action="/admin/players/{{ p.device_id }}/sigil-reset"
+                          onsubmit="return confirm('Сбросить все Сигилы этого игрока?');">
+                        <button class="outline secondary">Сбросить Сигилы</button>
+                    </form>
+                </td>
             </tr>
             {% endfor %}
             {% if not players %}
-            <tr><td colspan="4">Ничего не найдено</td></tr>
+            <tr><td colspan="5">Ничего не найдено</td></tr>
             {% endif %}
         </tbody>
     </table>

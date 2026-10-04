@@ -62,6 +62,8 @@ signal sigil_craft_result(result: Dictionary)
 signal sigil_catalog_result(result: Dictionary)
 signal sigil_collection_result(result: Dictionary)
 signal sigil_milestone_result(result: Dictionary)
+signal sigil_admin_reset_result(result: Dictionary)
+signal sigil_admin_rotate_result(result: Dictionary)
 signal error(message: String)
 
 var base_url := DEFAULT_BASE
@@ -285,6 +287,20 @@ func sigil_milestone(device_id: String, set_id: String, tier: int) -> void:
 # сигнал receipt_verify_result: {"ok", "verified", "status", "reason",
 # "receipt_hash"} либо офлайн-форма {"ok": false, "offline": true}. Сырой токен
 # уходит на сервер один раз по запросу; в ответе сервера его нет (только SHA-256).
+## Админ: полный сброс Аркана игрока на сервере (коллекция + майлстоуны).
+func sigil_admin_reset(device_id: String) -> void:
+	_enqueue({
+		"kind": "sigil_admin_reset", "path": "/admin/sigil/reset?device_id=" + device_id.uri_encode(),
+		"body": {"device_id": device_id},  # body => _build_request шлёт POST (иначе GET = 405)
+	})
+
+## Админ: ротация оффера крафтов дня (коллекцию не трогает).
+func sigil_admin_rotate(device_id: String) -> void:
+	_enqueue({
+		"kind": "sigil_admin_rotate", "path": "/admin/sigil/rotate?device_id=" + device_id.uri_encode(),
+		"body": {"device_id": device_id},  # body => POST (без body ушёл бы GET = 405)
+	})
+
 func receipt_verify(device_id: String, provider: String, sku: String, receipt_token: String) -> void:
 	_enqueue({
 		"kind": "receipt_verify", "path": "/receipt/verify",
@@ -497,3 +513,7 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 			sigil_collection_result.emit(parsed)
 		"sigil_milestone":
 			sigil_milestone_result.emit(parsed)
+		"sigil_admin_reset":
+			sigil_admin_reset_result.emit(parsed)
+		"sigil_admin_rotate":
+			sigil_admin_rotate_result.emit(parsed)

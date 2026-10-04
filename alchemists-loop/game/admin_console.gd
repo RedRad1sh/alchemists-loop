@@ -216,6 +216,43 @@ func _cmd_sigil(parts: Array) -> void:
 		_g._sigil._daily_day = ""
 		_g._sigil.request_daily(_g._online._device_id)
 		_log_text("Sigil daily crafts rotated")
+	elif sub == "craft":
+		# Открыть экран крафта крафта дня <N> (перенос материалов вручную).
+		# НЕ автозавершаем: игрок сам расставляет ингредиенты и жмёт «Крафт».
+		if parts.size() < 3:
+			_log_text("[color=red]Usage: sigil craft <0|1|2>[/color]")
+			return
+		var idx := int(parts[2])
+		if idx < 0 or idx > 2:
+			_log_text("[color=red]Index must be 0, 1, or 2[/color]")
+			return
+		var crafts: Array = _g._sigil._daily_crafts
+		if crafts.is_empty() or idx >= crafts.size():
+			_log_text("[color=red]No daily crafts available[/color]")
+			return
+		var craft: Dictionary = crafts[idx]
+		if _g.has_method("_open_sigil_craft"):
+			# Админ-команда: открываем экран крафта напрямую, без гейтов ресурсов
+			# (для тестирования окна; расставить ингредиенты игрок может тапом).
+			_g._open_sigil_craft(craft)
+			_log_text("Craft screen opened: %s (%s)" % [str(craft.get("id", "")), str(craft.get("rarity", ""))])
+		else:
+			_log_text("[color=red]No craft screen available[/color]")
+	elif sub == "ritual":
+		# Демо ритуала без крафта: смотрим визуал церемонии (rarity опционально).
+		var rar := str(parts[2]) if parts.size() > 2 else "epic"
+		if _g.has_method("_show_sigil_craft_ritual"):
+			_g._show_sigil_craft_ritual(rar)
+			_log_text("Ritual demo: %s (тап по экрану — закрыть)" % rar)
+		else:
+			_log_text("[color=red]No ritual method[/color]")
+	elif sub == "reset":
+		# РОТАЦИЯ крафтов дня: сервер пересобирает оффер, коллекция цела.
+		var dev: String = _g._online._device_id
+		if not _g._sigil.sigil_admin_rotate_result.is_connected(_on_sigil_rotate_done):
+			_g._sigil.sigil_admin_rotate_result.connect(_on_sigil_rotate_done, CONNECT_ONE_SHOT)
+		_g._sigil.request_admin_rotate(dev)
+		_log_text("Sigil reset: rotating daily crafts...")
 	elif sub == "free":
 		if parts.size() < 3:
 			_log_text("[color=red]Usage: sigil free <0|1|2>[/color]")
@@ -243,6 +280,22 @@ func _cmd_sigil(parts: Array) -> void:
 		_g._sigil.craft_failed.connect(fail, CONNECT_ONE_SHOT)
 	else:
 		_log_text("[color=red]Unknown sigil command: %s[/color]" % sub)
+
+## Ответ сервера на ротацию дневных: лог + новый оффер.
+func _on_sigil_rotate_done(result: Dictionary) -> void:
+	if bool(result.get("ok", false)):
+		var crafts: Array = result.get("crafts", [])
+		var ids := []
+		for c in crafts:
+			ids.append(str((c as Dictionary).get("id", "")))
+		_log_text("Daily crafts rotated: %s" % ", ".join(ids))
+		# Модалка коллекции открыта на «Крафтах дня» — перерисовать список
+		# с новым оффером (вкладка пересобирается с нуля через _sigil_show_tab).
+		if _g._sigil_coll != null and _g._sigil_tab == "crafts":
+			_g._sigil_show_tab.call_deferred("crafts")
+	else:
+		_log_text("[color=red]Sigil rotate FAIL: %s[/color]" % str(result.get("error", "?")))
+
 
 func _log_text(msg: String) -> void:
 	_log.append_text(msg + "\n")

@@ -12,6 +12,8 @@ signal card_ready(recipe_id: String, image: Image)
 signal collection_changed
 signal daily_crafts_ready(crafts: Array)
 signal craft_completed(craft_id: String, rarity: String, llm_name: String)
+signal sigil_admin_reset_result(result: Dictionary)
+signal sigil_admin_rotate_result(result: Dictionary)
 signal craft_failed(error: String)
 signal catalog_ready(cards: Dictionary)
 signal collection_ready(collection: Dictionary)
@@ -550,6 +552,48 @@ func daily_settled() -> bool:
 
 
 ## Ежедневные крафты: запросить с сервера.
+## Админ: ротация крафтов дня (сервер пересобирает оффер, коллекция цела).
+func request_admin_rotate(device_id: String) -> void:
+	if not Net.sigil_admin_rotate_result.is_connected(_on_admin_rotate_result):
+		Net.sigil_admin_rotate_result.connect(_on_admin_rotate_result, CONNECT_ONE_SHOT)
+	Net.sigil_admin_rotate(device_id)
+
+
+func _on_admin_rotate_result(result: Dictionary) -> void:
+	# Сервер вернул новый оффер — сразу подменяем локальный кэш дневных.
+	if bool(result.get("ok", false)) and result.has("crafts"):
+		_daily_crafts = result.get("crafts", [])
+		_daily_day = Time.get_date_string_from_system()
+		_save_daily_cache()
+	sigil_admin_rotate_result.emit(result)
+
+
+## Админ: полный сброс Аркана на сервере (коллекция + майлстоуны).
+func request_admin_reset(device_id: String) -> void:
+	if not Net.sigil_admin_reset_result.is_connected(_on_admin_reset_result):
+		Net.sigil_admin_reset_result.connect(_on_admin_reset_result, CONNECT_ONE_SHOT)
+	Net.sigil_admin_reset(device_id)
+
+
+func _on_admin_reset_result(result: Dictionary) -> void:
+	sigil_admin_reset_result.emit(result)
+
+
+## Удаляет PNG-кэш карточек (user://sigil_collection/*): после сброса коллекции
+## старые изображения не должны воскрешаться из кэша.
+func clear_image_cache() -> void:
+	var dir := DirAccess.open(CACHE_DIR)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var fname := dir.get_next()
+	while fname != "":
+		if not dir.current_is_dir() and fname.ends_with(".png"):
+			dir.remove(fname)
+		fname = dir.get_next()
+	dir.list_dir_end()
+
+
 func request_daily(device_id: String) -> void:
 	var today := _today_string()
 	if _daily_day == today and not _daily_crafts.is_empty():

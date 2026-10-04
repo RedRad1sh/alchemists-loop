@@ -1,2453 +1,5146 @@
 {
-  "fragments": [
-    {
-      "id": "results_001",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} обращается в {target:acc} поверхность покрывается белым налётом",
-      "weight": 7
-    },
-    {
-      "id": "results_002",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} обращается в {target:acc} жидкость мутнеет и густеет на глазах",
-      "weight": 7
-    },
-    {
-      "id": "results_003",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} обращается в {target:acc} из сосуда поднимается тонкий золотистый пар",
-      "weight": 7
-    },
-    {
-      "id": "results_004",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} обращается в {target:acc} на дне остаётся тёмный осадок",
-      "weight": 7
-    },
-    {
-      "id": "results_005",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} обращается в {target:acc} вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 7
-    },
-    {
-      "id": "results_006",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} обращается в {target:acc} появляются мерцающие искры, вьющиеся кверху",
-      "weight": 7
-    },
-    {
-      "id": "results_007",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "появляется {target:acc} поверхность покрывается белым налётом",
-      "weight": 6
-    },
-    {
-      "id": "results_008",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "появляется {target:acc} жидкость мутнеет и густеет на глазах",
-      "weight": 6
-    },
-    {
-      "id": "results_009",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "появляется {target:acc} из сосуда поднимается тонкий золотистый пар",
-      "weight": 6
-    },
-    {
-      "id": "results_010",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "появляется {target:acc} на дне остаётся тёмный осадок",
-      "weight": 6
-    },
-    {
-      "id": "results_011",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "появляется {target:acc} вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 6
-    },
-    {
-      "id": "results_012",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "появляется {target:acc} появляются мерцающие искры, вьющиеся кверху",
-      "weight": 6
-    },
-    {
-      "id": "results_013",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} растворяется, давая {target:acc} поверхность покрывается белым налётом",
-      "weight": 6
-    },
-    {
-      "id": "results_014",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} растворяется, давая {target:acc} жидкость мутнеет и густеет на глазах",
-      "weight": 6
-    },
-    {
-      "id": "results_015",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} растворяется, давая {target:acc} из сосуда поднимается тонкий золотистый пар",
-      "weight": 6
-    },
-    {
-      "id": "results_016",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} растворяется, давая {target:acc} на дне остаётся тёмный осадок",
-      "weight": 6
-    },
-    {
-      "id": "results_017",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} растворяется, давая {target:acc} вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 6
-    },
-    {
-      "id": "results_018",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} растворяется, давая {target:acc} появляются мерцающие искры, вьющиеся кверху",
-      "weight": 6
-    },
-    {
-      "id": "results_019",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "из {source:gen} выходит {target} поверхность покрывается белым налётом",
-      "weight": 6
-    },
-    {
-      "id": "results_020",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "из {source:gen} выходит {target} жидкость мутнеет и густеет на глазах",
-      "weight": 6
-    },
-    {
-      "id": "results_021",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "из {source:gen} выходит {target} из сосуда поднимается тонкий золотистый пар",
-      "weight": 6
-    },
-    {
-      "id": "results_022",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "из {source:gen} выходит {target} на дне остаётся тёмный осадок",
-      "weight": 6
-    },
-    {
-      "id": "results_023",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "из {source:gen} выходит {target} вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 6
-    },
-    {
-      "id": "results_024",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "из {source:gen} выходит {target} появляются мерцающие искры, вьющиеся кверху",
-      "weight": 6
-    },
-    {
-      "id": "results_025",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} теряет прежний вид поверхность покрывается белым налётом",
-      "weight": 6
-    },
-    {
-      "id": "results_026",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} теряет прежний вид жидкость мутнеет и густеет на глазах",
-      "weight": 6
-    },
-    {
-      "id": "results_027",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} теряет прежний вид из сосуда поднимается тонкий золотистый пар",
-      "weight": 6
-    },
-    {
-      "id": "results_028",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} теряет прежний вид на дне остаётся тёмный осадок",
-      "weight": 6
-    },
-    {
-      "id": "results_029",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} теряет прежний вид вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 6
-    },
-    {
-      "id": "results_030",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} теряет прежний вид появляются мерцающие искры, вьющиеся кверху",
-      "weight": 6
-    },
-    {
-      "id": "results_031",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} становится {target:ins} поверхность покрывается белым налётом",
-      "weight": 6
-    },
-    {
-      "id": "results_032",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} становится {target:ins} жидкость мутнеет и густеет на глазах",
-      "weight": 6
-    },
-    {
-      "id": "results_033",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} становится {target:ins} из сосуда поднимается тонкий золотистый пар",
-      "weight": 6
-    },
-    {
-      "id": "results_034",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} становится {target:ins} на дне остаётся тёмный осадок",
-      "weight": 6
-    },
-    {
-      "id": "results_035",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} становится {target:ins} вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 6
-    },
-    {
-      "id": "results_036",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} становится {target:ins} появляются мерцающие искры, вьющиеся кверху",
-      "weight": 6
-    },
-    {
-      "id": "results_037",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "в {source:prep} зарождается {target} поверхность покрывается белым налётом",
-      "weight": 5
-    },
-    {
-      "id": "results_038",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "в {source:prep} зарождается {target} жидкость мутнеет и густеет на глазах",
-      "weight": 5
-    },
-    {
-      "id": "results_039",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "в {source:prep} зарождается {target} из сосуда поднимается тонкий золотистый пар",
-      "weight": 5
-    },
-    {
-      "id": "results_040",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "в {source:prep} зарождается {target} на дне остаётся тёмный осадок",
-      "weight": 5
-    },
-    {
-      "id": "results_041",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "в {source:prep} зарождается {target} вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 5
-    },
-    {
-      "id": "results_042",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "в {source:prep} зарождается {target} появляются мерцающие искры, вьющиеся кверху",
-      "weight": 5
-    },
-    {
-      "id": "results_043",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} вспыхивает, оставляя {target:acc} поверхность покрывается белым налётом",
-      "weight": 5
-    },
-    {
-      "id": "results_044",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} вспыхивает, оставляя {target:acc} жидкость мутнеет и густеет на глазах",
-      "weight": 5
-    },
-    {
-      "id": "results_045",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} вспыхивает, оставляя {target:acc} из сосуда поднимается тонкий золотистый пар",
-      "weight": 5
-    },
-    {
-      "id": "results_046",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} вспыхивает, оставляя {target:acc} на дне остаётся тёмный осадок",
-      "weight": 5
-    },
-    {
-      "id": "results_047",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} вспыхивает, оставляя {target:acc} вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 5
-    },
-    {
-      "id": "results_048",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} вспыхивает, оставляя {target:acc} появляются мерцающие искры, вьющиеся кверху",
-      "weight": 5
-    },
-    {
-      "id": "results_049",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "остаётся лишь {target} из {source:gen} поверхность покрывается белым налётом",
-      "weight": 5
-    },
-    {
-      "id": "results_050",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "остаётся лишь {target} из {source:gen} жидкость мутнеет и густеет на глазах",
-      "weight": 5
-    },
-    {
-      "id": "results_051",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "остаётся лишь {target} из {source:gen} из сосуда поднимается тонкий золотистый пар",
-      "weight": 5
-    },
-    {
-      "id": "results_052",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "остаётся лишь {target} из {source:gen} на дне остаётся тёмный осадок",
-      "weight": 5
-    },
-    {
-      "id": "results_053",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "остаётся лишь {target} из {source:gen} вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 5
-    },
-    {
-      "id": "results_054",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "остаётся лишь {target} из {source:gen} появляются мерцающие искры, вьющиеся кверху",
-      "weight": 5
-    },
-    {
-      "id": "results_055",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} и {target} соединяются поверхность покрывается белым налётом",
-      "weight": 6
-    },
-    {
-      "id": "results_056",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} и {target} соединяются жидкость мутнеет и густеет на глазах",
-      "weight": 6
-    },
-    {
-      "id": "results_057",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} и {target} соединяются из сосуда поднимается тонкий золотистый пар",
-      "weight": 6
-    },
-    {
-      "id": "results_058",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} и {target} соединяются на дне остаётся тёмный осадок",
-      "weight": 6
-    },
-    {
-      "id": "results_059",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} и {target} соединяются вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 6
-    },
-    {
-      "id": "results_060",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} и {target} соединяются появляются мерцающие искры, вьющиеся кверху",
-      "weight": 6
-    },
-    {
-      "id": "results_061",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} оседает, и над ним встаёт {target} поверхность покрывается белым налётом",
-      "weight": 5
-    },
-    {
-      "id": "results_062",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} оседает, и над ним встаёт {target} жидкость мутнеет и густеет на глазах",
-      "weight": 5
-    },
-    {
-      "id": "results_063",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} оседает, и над ним встаёт {target} из сосуда поднимается тонкий золотистый пар",
-      "weight": 5
-    },
-    {
-      "id": "results_064",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} оседает, и над ним встаёт {target} на дне остаётся тёмный осадок",
-      "weight": 5
-    },
-    {
-      "id": "results_065",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} оседает, и над ним встаёт {target} вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 5
-    },
-    {
-      "id": "results_066",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} оседает, и над ним встаёт {target} появляются мерцающие искры, вьющиеся кверху",
-      "weight": 5
-    },
-    {
-      "id": "results_067",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} бледнеет, превращаясь в {target:acc} поверхность покрывается белым налётом",
-      "weight": 5
-    },
-    {
-      "id": "results_068",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} бледнеет, превращаясь в {target:acc} жидкость мутнеет и густеет на глазах",
-      "weight": 5
-    },
-    {
-      "id": "results_069",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} бледнеет, превращаясь в {target:acc} из сосуда поднимается тонкий золотистый пар",
-      "weight": 5
-    },
-    {
-      "id": "results_070",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} бледнеет, превращаясь в {target:acc} на дне остаётся тёмный осадок",
-      "weight": 5
-    },
-    {
-      "id": "results_071",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} бледнеет, превращаясь в {target:acc} вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 5
-    },
-    {
-      "id": "results_072",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} бледнеет, превращаясь в {target:acc} появляются мерцающие искры, вьющиеся кверху",
-      "weight": 5
-    },
-    {
-      "id": "results_073",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} отдаёт {target:acc} поверхность покрывается белым налётом",
-      "weight": 5
-    },
-    {
-      "id": "results_074",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} отдаёт {target:acc} жидкость мутнеет и густеет на глазах",
-      "weight": 5
-    },
-    {
-      "id": "results_075",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} отдаёт {target:acc} из сосуда поднимается тонкий золотистый пар",
-      "weight": 5
-    },
-    {
-      "id": "results_076",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} отдаёт {target:acc} на дне остаётся тёмный осадок",
-      "weight": 5
-    },
-    {
-      "id": "results_077",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} отдаёт {target:acc} вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 5
-    },
-    {
-      "id": "results_078",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} отдаёт {target:acc} появляются мерцающие искры, вьющиеся кверху",
-      "weight": 5
-    },
-    {
-      "id": "results_079",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "вместо {source:gen} остаётся {target} поверхность покрывается белым налётом",
-      "weight": 5
-    },
-    {
-      "id": "results_080",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "вместо {source:gen} остаётся {target} жидкость мутнеет и густеет на глазах",
-      "weight": 5
-    },
-    {
-      "id": "results_081",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "вместо {source:gen} остаётся {target} из сосуда поднимается тонкий золотистый пар",
-      "weight": 5
-    },
-    {
-      "id": "results_082",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "вместо {source:gen} остаётся {target} на дне остаётся тёмный осадок",
-      "weight": 5
-    },
-    {
-      "id": "results_083",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "вместо {source:gen} остаётся {target} вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 5
-    },
-    {
-      "id": "results_084",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "вместо {source:gen} остаётся {target} появляются мерцающие искры, вьющиеся кверху",
-      "weight": 5
-    },
-    {
-      "id": "results_085",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} затвердевает в {target:acc} поверхность покрывается белым налётом",
-      "weight": 5
-    },
-    {
-      "id": "results_086",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} затвердевает в {target:acc} жидкость мутнеет и густеет на глазах",
-      "weight": 5
-    },
-    {
-      "id": "results_087",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} затвердевает в {target:acc} из сосуда поднимается тонкий золотистый пар",
-      "weight": 5
-    },
-    {
-      "id": "results_088",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} затвердевает в {target:acc} на дне остаётся тёмный осадок",
-      "weight": 5
-    },
-    {
-      "id": "results_089",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} затвердевает в {target:acc} вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 5
-    },
-    {
-      "id": "results_090",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} затвердевает в {target:acc} появляются мерцающие искры, вьющиеся кверху",
-      "weight": 5
-    },
-    {
-      "id": "results_091",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} испаряется, и остаётся {target} поверхность покрывается белым налётом",
-      "weight": 5
-    },
-    {
-      "id": "results_092",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} испаряется, и остаётся {target} жидкость мутнеет и густеет на глазах",
-      "weight": 5
-    },
-    {
-      "id": "results_093",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} испаряется, и остаётся {target} из сосуда поднимается тонкий золотистый пар",
-      "weight": 5
-    },
-    {
-      "id": "results_094",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} испаряется, и остаётся {target} на дне остаётся тёмный осадок",
-      "weight": 5
-    },
-    {
-      "id": "results_095",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} испаряется, и остаётся {target} вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 5
-    },
-    {
-      "id": "results_096",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} испаряется, и остаётся {target} появляются мерцающие искры, вьющиеся кверху",
-      "weight": 5
-    },
-    {
-      "id": "results_097",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} покрывается сетью трещин, поверхность покрывается белым налётом",
-      "weight": 5
-    },
-    {
-      "id": "results_098",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} покрывается сетью трещин, жидкость мутнеет и густеет на глазах",
-      "weight": 5
-    },
-    {
-      "id": "results_099",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} покрывается сетью трещин, из сосуда поднимается тонкий золотистый пар",
-      "weight": 5
-    },
-    {
-      "id": "results_100",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} покрывается сетью трещин, на дне остаётся тёмный осадок",
-      "weight": 5
-    },
-    {
-      "id": "results_101",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} покрывается сетью трещин, вещество вспыхивает и гаснет, оставляя пепел",
-      "weight": 5
-    },
-    {
-      "id": "results_102",
-      "slot": "results",
-      "tags": {
-        "elements": [],
-        "process": [
-          "calcinatio",
-          "putrefactio",
-          "distillatio",
-          "sublimatio",
-          "coniunctio"
-        ],
-        "safety": "",
-        "stage": [
-          "nigredo",
-          "albedo",
-          "rubedo",
-          "citrinitas"
-        ],
-        "vessel": []
-      },
-      "text": "{source} покрывается сетью трещин, появляются мерцающие искры, вьющиеся кверху",
-      "weight": 5
-    }
-  ],
-  "version": 1
+ "fragments": [
+  {
+   "id": "results_001",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_00",
+    "motif": "results_lead_00",
+    "track": []
+   },
+   "text": "{source} обращается в {target:acc}: поверхность покрывается белым налётом.",
+   "weight": 7
+  },
+  {
+   "id": "results_002",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_01",
+    "motif": "results_lead_00",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{source} обращается в {target:acc}: жидкость мутнеет и густеет на глазах.",
+   "weight": 7
+  },
+  {
+   "id": "results_003",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_02",
+    "motif": "results_lead_00",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{source} обращается в {target:acc}: из сосуда поднимается тонкий золотистый пар.",
+   "weight": 7
+  },
+  {
+   "id": "results_004",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_03",
+    "motif": "results_lead_00",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{source} обращается в {target:acc}: на дне остаётся тёмный осадок.",
+   "weight": 7
+  },
+  {
+   "id": "results_005",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_04",
+    "motif": "results_lead_00",
+    "track": []
+   },
+   "text": "{source} обращается в {target:acc}: вещество вспыхивает и гаснет, оставляя пепел.",
+   "weight": 7
+  },
+  {
+   "id": "results_006",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_05",
+    "motif": "results_lead_00",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{source} обращается в {target:acc}: по краям бегут мерцающие искры.",
+   "weight": 7
+  },
+  {
+   "id": "results_007",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_06",
+    "motif": "results_lead_01",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "На {source:prep} проступает {target}: запах становится резким и сладковатым.",
+   "weight": 6
+  },
+  {
+   "id": "results_008",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_07",
+    "motif": "results_lead_01",
+    "track": [
+     "water",
+     "void"
+    ]
+   },
+   "text": "На {source:prep} проступает {target}: смесь на миг зеленеет, потом бледнеет.",
+   "weight": 6
+  },
+  {
+   "id": "results_009",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_08",
+    "motif": "results_lead_01",
+    "track": [
+     "water",
+     "air",
+     "void"
+    ]
+   },
+   "text": "На {source:prep} проступает {target}: стенки сосуда покрываются мелкой испариной.",
+   "weight": 6
+  },
+  {
+   "id": "results_010",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_09",
+    "motif": "results_lead_01",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "На {source:prep} проступает {target}: объём убывает, а вес почти не меняется.",
+   "weight": 6
+  },
+  {
+   "id": "results_011",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_10",
+    "motif": "results_lead_01",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "На {source:prep} проступает {target}: по поверхности расходится рябь от невидимого толчка.",
+   "weight": 6
+  },
+  {
+   "id": "results_012",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_11",
+    "motif": "results_lead_01",
+    "track": [
+     "water",
+     "void"
+    ]
+   },
+   "text": "На {source:prep} проступает {target}: осадок собирается в тугие тёмные зёрна.",
+   "weight": 6
+  },
+  {
+   "id": "results_013",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_12",
+    "motif": "results_lead_02",
+    "track": [
+     "fire",
+     "water",
+     "water",
+     "water"
+    ]
+   },
+   "text": "{source} растворяется, давая {target:acc}: жидкость светлеет изнутри, будто её промыли.",
+   "weight": 6
+  },
+  {
+   "id": "results_014",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_13",
+    "motif": "results_lead_02",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{source} растворяется, давая {target:acc}: огонь под сосудом становится ровнее и тише.",
+   "weight": 6
+  },
+  {
+   "id": "results_015",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_14",
+    "motif": "results_lead_02",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{source} растворяется, давая {target:acc}: кристаллы проступают из мутной каши.",
+   "weight": 6
+  },
+  {
+   "id": "results_016",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_15",
+    "motif": "results_lead_02",
+    "track": [
+     "fire",
+     "earth"
+    ]
+   },
+   "text": "{source} растворяется, давая {target:acc}: цвет уходит в медь, а потом в золото.",
+   "weight": 6
+  },
+  {
+   "id": "results_017",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_16",
+    "motif": "results_lead_02",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{source} растворяется, давая {target:acc}: из горлышка тянется нить белого дыма.",
+   "weight": 6
+  },
+  {
+   "id": "results_018",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_17",
+    "motif": "results_lead_02",
+    "track": []
+   },
+   "text": "{source} растворяется, давая {target:acc}: капля на крышке высыхает в соляную корку.",
+   "weight": 6
+  },
+  {
+   "id": "results_019",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_18",
+    "motif": "results_lead_03",
+    "track": [
+     "earth"
+    ]
+   },
+   "text": "Из {source:gen} выходит {target}: смесь идёт пузырями снизу, как ключ из земли.",
+   "weight": 6
+  },
+  {
+   "id": "results_020",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_19",
+    "motif": "results_lead_03",
+    "track": []
+   },
+   "text": "Из {source:gen} выходит {target}: муть оседает слоями, и слои не смешиваются.",
+   "weight": 6
+  },
+  {
+   "id": "results_021",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_20",
+    "motif": "results_lead_03",
+    "track": []
+   },
+   "text": "Из {source:gen} выходит {target}: по срезу видно, что вещество стало плотнее.",
+   "weight": 6
+  },
+  {
+   "id": "results_022",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_21",
+    "motif": "results_lead_03",
+    "track": [
+     "water",
+     "air"
+    ]
+   },
+   "text": "Из {source:gen} выходит {target}: пар конденсируется обратно и падает дождём.",
+   "weight": 6
+  },
+  {
+   "id": "results_023",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_22",
+    "motif": "results_lead_03",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "Из {source:gen} выходит {target}: появляется тонкая плёнка, радужная на просвет.",
+   "weight": 6
+  },
+  {
+   "id": "results_024",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_23",
+    "motif": "results_lead_03",
+    "track": [
+     "air",
+     "void",
+     "void"
+    ]
+   },
+   "text": "Из {source:gen} выходит {target}: смесь темнеет до цвета ночного неба.",
+   "weight": 6
+  },
+  {
+   "id": "results_025",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_24",
+    "motif": "results_lead_04",
+    "track": []
+   },
+   "text": "{source} теряет прежний вид: нижний слой затвердевает раньше верхнего.",
+   "weight": 6
+  },
+  {
+   "id": "results_026",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_25",
+    "motif": "results_lead_04",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{source} теряет прежний вид: в массе проступает тонкая сетка жил.",
+   "weight": 6
+  },
+  {
+   "id": "results_027",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_26",
+    "motif": "results_lead_04",
+    "track": []
+   },
+   "text": "{source} теряет прежний вид: что-то поёт в сосуде, если приложить ухо.",
+   "weight": 6
+  },
+  {
+   "id": "results_028",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_27",
+    "motif": "results_lead_04",
+    "track": [
+     "water",
+     "water"
+    ]
+   },
+   "text": "{source} теряет прежний вид: движение в сосуде идёт сверху вниз, вопреки ожиданию.",
+   "weight": 6
+  },
+  {
+   "id": "results_029",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_28",
+    "motif": "results_lead_04",
+    "track": []
+   },
+   "text": "{source} теряет прежний вид: стекло теплеет само по себе.",
+   "weight": 6
+  },
+  {
+   "id": "results_030",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_29",
+    "motif": "results_lead_04",
+    "track": []
+   },
+   "text": "{source} теряет прежний вид: смесь принимает форму посуды и так застывает.",
+   "weight": 6
+  },
+  {
+   "id": "results_031",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_30",
+    "motif": "results_lead_05",
+    "track": []
+   },
+   "text": "{source} становится {target:ins}: из смеси уходит всё лишнее, оставляя плотное ядро.",
+   "weight": 6
+  },
+  {
+   "id": "results_032",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_31",
+    "motif": "results_lead_05",
+    "track": []
+   },
+   "text": "{source} становится {target:ins}: остаётся вещество, которое тянется как воск.",
+   "weight": 6
+  },
+  {
+   "id": "results_033",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_32",
+    "motif": "results_lead_05",
+    "track": [
+     "earth"
+    ]
+   },
+   "text": "{source} становится {target:ins}: вещество блестит сильнее, чем должно при таком свете.",
+   "weight": 6
+  },
+  {
+   "id": "results_034",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_33",
+    "motif": "results_lead_05",
+    "track": []
+   },
+   "text": "{source} становится {target:ins}: на поверхности остаются трещины в форме ветвей.",
+   "weight": 6
+  },
+  {
+   "id": "results_035",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_00",
+    "motif": "results_lead_05",
+    "track": []
+   },
+   "text": "{source} становится {target:ins}: поверхность покрывается белым налётом.",
+   "weight": 6
+  },
+  {
+   "id": "results_036",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_01",
+    "motif": "results_lead_05",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{source} становится {target:ins}: жидкость мутнеет и густеет на глазах.",
+   "weight": 6
+  },
+  {
+   "id": "results_037",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_02",
+    "motif": "results_lead_06",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "В {source:prep} зарождается {target}: из сосуда поднимается тонкий золотистый пар.",
+   "weight": 5
+  },
+  {
+   "id": "results_038",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_03",
+    "motif": "results_lead_06",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "В {source:prep} зарождается {target}: на дне остаётся тёмный осадок.",
+   "weight": 5
+  },
+  {
+   "id": "results_039",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_04",
+    "motif": "results_lead_06",
+    "track": []
+   },
+   "text": "В {source:prep} зарождается {target}: вещество вспыхивает и гаснет, оставляя пепел.",
+   "weight": 5
+  },
+  {
+   "id": "results_040",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_05",
+    "motif": "results_lead_06",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "В {source:prep} зарождается {target}: по краям бегут мерцающие искры.",
+   "weight": 5
+  },
+  {
+   "id": "results_041",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_06",
+    "motif": "results_lead_06",
+    "track": []
+   },
+   "text": "В {source:prep} зарождается {target}: запах становится резким и сладковатым.",
+   "weight": 5
+  },
+  {
+   "id": "results_042",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_07",
+    "motif": "results_lead_06",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "В {source:prep} зарождается {target}: смесь на миг зеленеет, потом бледнеет.",
+   "weight": 5
+  },
+  {
+   "id": "results_043",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_08",
+    "motif": "results_lead_07",
+    "track": [
+     "air",
+     "void"
+    ]
+   },
+   "text": "{source} вспыхивает, оставляя {target:acc}: стенки сосуда покрываются мелкой испариной.",
+   "weight": 5
+  },
+  {
+   "id": "results_044",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_09",
+    "motif": "results_lead_07",
+    "track": []
+   },
+   "text": "{source} вспыхивает, оставляя {target:acc}: объём убывает, а вес почти не меняется.",
+   "weight": 5
+  },
+  {
+   "id": "results_045",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_10",
+    "motif": "results_lead_07",
+    "track": []
+   },
+   "text": "{source} вспыхивает, оставляя {target:acc}: по поверхности расходится рябь от невидимого толчка.",
+   "weight": 5
+  },
+  {
+   "id": "results_046",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_11",
+    "motif": "results_lead_07",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{source} вспыхивает, оставляя {target:acc}: осадок собирается в тугие тёмные зёрна.",
+   "weight": 5
+  },
+  {
+   "id": "results_047",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_12",
+    "motif": "results_lead_07",
+    "track": [
+     "fire",
+     "water",
+     "water",
+     "water"
+    ]
+   },
+   "text": "{source} вспыхивает, оставляя {target:acc}: жидкость светлеет изнутри, будто её промыли.",
+   "weight": 5
+  },
+  {
+   "id": "results_048",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_13",
+    "motif": "results_lead_07",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{source} вспыхивает, оставляя {target:acc}: огонь под сосудом становится ровнее и тише.",
+   "weight": 5
+  },
+  {
+   "id": "results_049",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_14",
+    "motif": "results_lead_08",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "Остаётся лишь {target} из {source:gen}: кристаллы проступают из мутной каши.",
+   "weight": 5
+  },
+  {
+   "id": "results_050",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_15",
+    "motif": "results_lead_08",
+    "track": [
+     "fire",
+     "earth"
+    ]
+   },
+   "text": "Остаётся лишь {target} из {source:gen}: цвет уходит в медь, а потом в золото.",
+   "weight": 5
+  },
+  {
+   "id": "results_051",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_16",
+    "motif": "results_lead_08",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "Остаётся лишь {target} из {source:gen}: из горлышка тянется нить белого дыма.",
+   "weight": 5
+  },
+  {
+   "id": "results_052",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_17",
+    "motif": "results_lead_08",
+    "track": []
+   },
+   "text": "Остаётся лишь {target} из {source:gen}: капля на крышке высыхает в соляную корку.",
+   "weight": 5
+  },
+  {
+   "id": "results_053",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_18",
+    "motif": "results_lead_08",
+    "track": [
+     "earth"
+    ]
+   },
+   "text": "Остаётся лишь {target} из {source:gen}: смесь идёт пузырями снизу, как ключ из земли.",
+   "weight": 5
+  },
+  {
+   "id": "results_054",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_19",
+    "motif": "results_lead_08",
+    "track": []
+   },
+   "text": "Остаётся лишь {target} из {source:gen}: муть оседает слоями, и слои не смешиваются.",
+   "weight": 5
+  },
+  {
+   "id": "results_055",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_20",
+    "motif": "results_lead_09",
+    "track": []
+   },
+   "text": "{source} и {target} соединяются: по срезу видно, что вещество стало плотнее.",
+   "weight": 6
+  },
+  {
+   "id": "results_056",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_21",
+    "motif": "results_lead_09",
+    "track": [
+     "water",
+     "air"
+    ]
+   },
+   "text": "{source} и {target} соединяются: пар конденсируется обратно и падает дождём.",
+   "weight": 6
+  },
+  {
+   "id": "results_057",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_22",
+    "motif": "results_lead_09",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{source} и {target} соединяются: появляется тонкая плёнка, радужная на просвет.",
+   "weight": 6
+  },
+  {
+   "id": "results_058",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_23",
+    "motif": "results_lead_09",
+    "track": [
+     "air",
+     "void",
+     "void"
+    ]
+   },
+   "text": "{source} и {target} соединяются: смесь темнеет до цвета ночного неба.",
+   "weight": 6
+  },
+  {
+   "id": "results_059",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_24",
+    "motif": "results_lead_09",
+    "track": []
+   },
+   "text": "{source} и {target} соединяются: нижний слой затвердевает раньше верхнего.",
+   "weight": 6
+  },
+  {
+   "id": "results_060",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_25",
+    "motif": "results_lead_09",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{source} и {target} соединяются: в массе проступает тонкая сетка жил.",
+   "weight": 6
+  },
+  {
+   "id": "results_061",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_26",
+    "motif": "results_lead_10",
+    "track": []
+   },
+   "text": "{source} оседает на дно, и встаёт {target}: что-то поёт в сосуде, если приложить ухо.",
+   "weight": 5
+  },
+  {
+   "id": "results_062",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_27",
+    "motif": "results_lead_10",
+    "track": [
+     "water",
+     "water"
+    ]
+   },
+   "text": "{source} оседает на дно, и встаёт {target}: движение в сосуде идёт сверху вниз, вопреки ожиданию.",
+   "weight": 5
+  },
+  {
+   "id": "results_063",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_28",
+    "motif": "results_lead_10",
+    "track": []
+   },
+   "text": "{source} оседает на дно, и встаёт {target}: стекло теплеет само по себе.",
+   "weight": 5
+  },
+  {
+   "id": "results_064",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_29",
+    "motif": "results_lead_10",
+    "track": []
+   },
+   "text": "{source} оседает на дно, и встаёт {target}: смесь принимает форму посуды и так застывает.",
+   "weight": 5
+  },
+  {
+   "id": "results_065",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_30",
+    "motif": "results_lead_10",
+    "track": []
+   },
+   "text": "{source} оседает на дно, и встаёт {target}: из смеси уходит всё лишнее, оставляя плотное ядро.",
+   "weight": 5
+  },
+  {
+   "id": "results_066",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_31",
+    "motif": "results_lead_10",
+    "track": []
+   },
+   "text": "{source} оседает на дно, и встаёт {target}: остаётся вещество, которое тянется как воск.",
+   "weight": 5
+  },
+  {
+   "id": "results_067",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_32",
+    "motif": "results_lead_11",
+    "track": [
+     "earth",
+     "void"
+    ]
+   },
+   "text": "{source} бледнеет, превращаясь в {target:acc}: вещество блестит сильнее, чем должно при таком свете.",
+   "weight": 5
+  },
+  {
+   "id": "results_068",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_33",
+    "motif": "results_lead_11",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{source} бледнеет, превращаясь в {target:acc}: на поверхности остаются трещины в форме ветвей.",
+   "weight": 5
+  },
+  {
+   "id": "results_069",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_00",
+    "motif": "results_lead_11",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{source} бледнеет, превращаясь в {target:acc}: поверхность покрывается белым налётом.",
+   "weight": 5
+  },
+  {
+   "id": "results_070",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_01",
+    "motif": "results_lead_11",
+    "track": [
+     "water",
+     "void"
+    ]
+   },
+   "text": "{source} бледнеет, превращаясь в {target:acc}: жидкость мутнеет и густеет на глазах.",
+   "weight": 5
+  },
+  {
+   "id": "results_071",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_02",
+    "motif": "results_lead_11",
+    "track": [
+     "fire",
+     "void"
+    ]
+   },
+   "text": "{source} бледнеет, превращаясь в {target:acc}: из сосуда поднимается тонкий золотистый пар.",
+   "weight": 5
+  },
+  {
+   "id": "results_072",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_03",
+    "motif": "results_lead_11",
+    "track": [
+     "void",
+     "void"
+    ]
+   },
+   "text": "{source} бледнеет, превращаясь в {target:acc}: на дне остаётся тёмный осадок.",
+   "weight": 5
+  },
+  {
+   "id": "results_073",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_04",
+    "motif": "results_lead_12",
+    "track": []
+   },
+   "text": "{source} отдаёт {target:acc}: вещество вспыхивает и гаснет, оставляя пепел.",
+   "weight": 5
+  },
+  {
+   "id": "results_074",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_05",
+    "motif": "results_lead_12",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{source} отдаёт {target:acc}: по краям бегут мерцающие искры.",
+   "weight": 5
+  },
+  {
+   "id": "results_075",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_06",
+    "motif": "results_lead_12",
+    "track": []
+   },
+   "text": "{source} отдаёт {target:acc}: запах становится резким и сладковатым.",
+   "weight": 5
+  },
+  {
+   "id": "results_076",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_07",
+    "motif": "results_lead_12",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{source} отдаёт {target:acc}: смесь на миг зеленеет, потом бледнеет.",
+   "weight": 5
+  },
+  {
+   "id": "results_077",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_08",
+    "motif": "results_lead_12",
+    "track": [
+     "air",
+     "void"
+    ]
+   },
+   "text": "{source} отдаёт {target:acc}: стенки сосуда покрываются мелкой испариной.",
+   "weight": 5
+  },
+  {
+   "id": "results_078",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_09",
+    "motif": "results_lead_12",
+    "track": []
+   },
+   "text": "{source} отдаёт {target:acc}: объём убывает, а вес почти не меняется.",
+   "weight": 5
+  },
+  {
+   "id": "results_079",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_10",
+    "motif": "results_lead_13",
+    "track": []
+   },
+   "text": "Вместо {source:gen} остаётся {target}: по поверхности расходится рябь от невидимого толчка.",
+   "weight": 5
+  },
+  {
+   "id": "results_080",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_11",
+    "motif": "results_lead_13",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "Вместо {source:gen} остаётся {target}: осадок собирается в тугие тёмные зёрна.",
+   "weight": 5
+  },
+  {
+   "id": "results_081",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_12",
+    "motif": "results_lead_13",
+    "track": [
+     "fire",
+     "water",
+     "water",
+     "water"
+    ]
+   },
+   "text": "Вместо {source:gen} остаётся {target}: жидкость светлеет изнутри, будто её промыли.",
+   "weight": 5
+  },
+  {
+   "id": "results_082",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_13",
+    "motif": "results_lead_13",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "Вместо {source:gen} остаётся {target}: огонь под сосудом становится ровнее и тише.",
+   "weight": 5
+  },
+  {
+   "id": "results_083",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_14",
+    "motif": "results_lead_13",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "Вместо {source:gen} остаётся {target}: кристаллы проступают из мутной каши.",
+   "weight": 5
+  },
+  {
+   "id": "results_084",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_15",
+    "motif": "results_lead_13",
+    "track": [
+     "fire",
+     "earth"
+    ]
+   },
+   "text": "Вместо {source:gen} остаётся {target}: цвет уходит в медь, а потом в золото.",
+   "weight": 5
+  },
+  {
+   "id": "results_085",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_16",
+    "motif": "results_lead_14",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{source} затвердевает в {target:acc}: из горлышка тянется нить белого дыма.",
+   "weight": 5
+  },
+  {
+   "id": "results_086",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_17",
+    "motif": "results_lead_14",
+    "track": []
+   },
+   "text": "{source} затвердевает в {target:acc}: капля на крышке высыхает в соляную корку.",
+   "weight": 5
+  },
+  {
+   "id": "results_087",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_18",
+    "motif": "results_lead_14",
+    "track": [
+     "earth"
+    ]
+   },
+   "text": "{source} затвердевает в {target:acc}: смесь идёт пузырями снизу, как ключ из земли.",
+   "weight": 5
+  },
+  {
+   "id": "results_088",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_19",
+    "motif": "results_lead_14",
+    "track": []
+   },
+   "text": "{source} затвердевает в {target:acc}: муть оседает слоями, и слои не смешиваются.",
+   "weight": 5
+  },
+  {
+   "id": "results_089",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_20",
+    "motif": "results_lead_14",
+    "track": []
+   },
+   "text": "{source} затвердевает в {target:acc}: по срезу видно, что вещество стало плотнее.",
+   "weight": 5
+  },
+  {
+   "id": "results_090",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_21",
+    "motif": "results_lead_14",
+    "track": [
+     "water",
+     "air"
+    ]
+   },
+   "text": "{source} затвердевает в {target:acc}: пар конденсируется обратно и падает дождём.",
+   "weight": 5
+  },
+  {
+   "id": "results_091",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_22",
+    "motif": "results_lead_15",
+    "track": [
+     "water",
+     "air"
+    ]
+   },
+   "text": "{source} испаряется, и остаётся {target}: появляется тонкая плёнка, радужная на просвет.",
+   "weight": 5
+  },
+  {
+   "id": "results_092",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_23",
+    "motif": "results_lead_15",
+    "track": [
+     "air",
+     "air",
+     "void",
+     "void"
+    ]
+   },
+   "text": "{source} испаряется, и остаётся {target}: смесь темнеет до цвета ночного неба.",
+   "weight": 5
+  },
+  {
+   "id": "results_093",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_24",
+    "motif": "results_lead_15",
+    "track": [
+     "air"
+    ]
+   },
+   "text": "{source} испаряется, и остаётся {target}: нижний слой затвердевает раньше верхнего.",
+   "weight": 5
+  },
+  {
+   "id": "results_094",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_25",
+    "motif": "results_lead_15",
+    "track": [
+     "water",
+     "air"
+    ]
+   },
+   "text": "{source} испаряется, и остаётся {target}: в массе проступает тонкая сетка жил.",
+   "weight": 5
+  },
+  {
+   "id": "results_095",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_26",
+    "motif": "results_lead_15",
+    "track": [
+     "air"
+    ]
+   },
+   "text": "{source} испаряется, и остаётся {target}: что-то поёт в сосуде, если приложить ухо.",
+   "weight": 5
+  },
+  {
+   "id": "results_096",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_27",
+    "motif": "results_lead_15",
+    "track": [
+     "water",
+     "water",
+     "air"
+    ]
+   },
+   "text": "{source} испаряется, и остаётся {target}: движение в сосуде идёт сверху вниз, вопреки ожиданию.",
+   "weight": 5
+  },
+  {
+   "id": "results_097",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_28",
+    "motif": "results_lead_16",
+    "track": []
+   },
+   "text": "{source} покрывается сетью трещин: стекло теплеет само по себе.",
+   "weight": 5
+  },
+  {
+   "id": "results_098",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_29",
+    "motif": "results_lead_16",
+    "track": []
+   },
+   "text": "{source} покрывается сетью трещин: смесь принимает форму посуды и так застывает.",
+   "weight": 5
+  },
+  {
+   "id": "results_099",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_30",
+    "motif": "results_lead_16",
+    "track": []
+   },
+   "text": "{source} покрывается сетью трещин: из смеси уходит всё лишнее, оставляя плотное ядро.",
+   "weight": 5
+  },
+  {
+   "id": "results_100",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_31",
+    "motif": "results_lead_16",
+    "track": []
+   },
+   "text": "{source} покрывается сетью трещин: остаётся вещество, которое тянется как воск.",
+   "weight": 5
+  },
+  {
+   "id": "results_101",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_32",
+    "motif": "results_lead_16",
+    "track": [
+     "earth"
+    ]
+   },
+   "text": "{source} покрывается сетью трещин: вещество блестит сильнее, чем должно при таком свете.",
+   "weight": 5
+  },
+  {
+   "id": "results_102",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "safety": "",
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "vessel": [],
+    "variant": "results_tail_33",
+    "motif": "results_lead_16",
+    "track": []
+   },
+   "text": "{source} покрывается сетью трещин: на поверхности остаются трещины в форме ветвей.",
+   "weight": 5
+  },
+  {
+   "id": "results_103",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_34",
+    "motif": "results_lead_17",
+    "track": []
+   },
+   "text": "На {source:prep} оседает {target}: по стеклу расходится тонкая паутина.",
+   "weight": 5
+  },
+  {
+   "id": "results_104",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_35",
+    "motif": "results_lead_17",
+    "track": [
+     "air"
+    ]
+   },
+   "text": "На {source:prep} оседает {target}: из глубины поднимается мутное облако.",
+   "weight": 5
+  },
+  {
+   "id": "results_105",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_36",
+    "motif": "results_lead_17",
+    "track": [
+     "earth"
+    ]
+   },
+   "text": "На {source:prep} оседает {target}: цвет уходит в сторону меди.",
+   "weight": 5
+  },
+  {
+   "id": "results_106",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_37",
+    "motif": "results_lead_17",
+    "track": []
+   },
+   "text": "На {source:prep} оседает {target}: объём прибавляется без всякой причины.",
+   "weight": 5
+  },
+  {
+   "id": "results_107",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_38",
+    "motif": "results_lead_17",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "На {source:prep} оседает {target}: на дне собирается тяжёлая тёмная масса.",
+   "weight": 5
+  },
+  {
+   "id": "results_108",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_39",
+    "motif": "results_lead_17",
+    "track": [
+     "water",
+     "void"
+    ]
+   },
+   "text": "На {source:prep} оседает {target}: поверхность берётся коркой, как лёд на луже.",
+   "weight": 5
+  },
+  {
+   "id": "results_109",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_40",
+    "motif": "results_lead_18",
+    "track": [
+     "earth"
+    ]
+   },
+   "text": "{source} отдаёт {target:dat} форму: запах становится сухим и пыльным.",
+   "weight": 5
+  },
+  {
+   "id": "results_110",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_41",
+    "motif": "results_lead_18",
+    "track": [
+     "water",
+     "air"
+    ]
+   },
+   "text": "{source} отдаёт {target:dat} форму: жидкость идёт вниз, а пар — вверх.",
+   "weight": 5
+  },
+  {
+   "id": "results_111",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_42",
+    "motif": "results_lead_18",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{source} отдаёт {target:dat} форму: стенки сосуда начинают потеть.",
+   "weight": 5
+  },
+  {
+   "id": "results_112",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_43",
+    "motif": "results_lead_18",
+    "track": []
+   },
+   "text": "{source} отдаёт {target:dat} форму: масса тянется за ложкой, как мёд.",
+   "weight": 5
+  },
+  {
+   "id": "results_113",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_44",
+    "motif": "results_lead_18",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{source} отдаёт {target:dat} форму: появляется тонкая золотая нить.",
+   "weight": 5
+  },
+  {
+   "id": "results_114",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_45",
+    "motif": "results_lead_18",
+    "track": []
+   },
+   "text": "{source} отдаёт {target:dat} форму: осадок всплывает против всякого ожидания.",
+   "weight": 5
+  },
+  {
+   "id": "results_115",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_46",
+    "motif": "results_lead_19",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "Тень {source:gen} ложится на {target:acc}: смесь затихает и становится гладкой.",
+   "weight": 5
+  },
+  {
+   "id": "results_116",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_47",
+    "motif": "results_lead_19",
+    "track": [
+     "earth",
+     "void"
+    ]
+   },
+   "text": "Тень {source:gen} ложится на {target:acc}: на поверхности видны круги, будто от камня.",
+   "weight": 5
+  },
+  {
+   "id": "results_117",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_48",
+    "motif": "results_lead_19",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "Тень {source:gen} ложится на {target:acc}: вещество уплотняется на глазах.",
+   "weight": 5
+  },
+  {
+   "id": "results_118",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_49",
+    "motif": "results_lead_19",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "Тень {source:gen} ложится на {target:acc}: что-то тихо звенит внутри.",
+   "weight": 5
+  },
+  {
+   "id": "results_119",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_50",
+    "motif": "results_lead_19",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "Тень {source:gen} ложится на {target:acc}: сосуд тяжелеет на руках.",
+   "weight": 5
+  },
+  {
+   "id": "results_120",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_51",
+    "motif": "results_lead_19",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "Тень {source:gen} ложится на {target:acc}: цвет становится ровным, без пятен.",
+   "weight": 5
+  },
+  {
+   "id": "results_121",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_52",
+    "motif": "results_lead_20",
+    "track": []
+   },
+   "text": "Из {source:gen} выцветает {target}: из крышки идёт тонкий свист.",
+   "weight": 5
+  },
+  {
+   "id": "results_122",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_53",
+    "motif": "results_lead_20",
+    "track": []
+   },
+   "text": "Из {source:gen} выцветает {target}: смесь распадается на два слоя.",
+   "weight": 5
+  },
+  {
+   "id": "results_123",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_54",
+    "motif": "results_lead_20",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "Из {source:gen} выцветает {target}: на просвет видно тонкие жилки.",
+   "weight": 5
+  },
+  {
+   "id": "results_124",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_55",
+    "motif": "results_lead_20",
+    "track": [
+     "air"
+    ]
+   },
+   "text": "Из {source:gen} выцветает {target}: в массе появляется прохлада.",
+   "weight": 5
+  },
+  {
+   "id": "results_125",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_56",
+    "motif": "results_lead_20",
+    "track": []
+   },
+   "text": "Из {source:gen} выцветает {target}: остаётся чистое зерно без шелухи.",
+   "weight": 5
+  },
+  {
+   "id": "results_126",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_57",
+    "motif": "results_lead_20",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "Из {source:gen} выцветает {target}: жидкость перестаёт мутить.",
+   "weight": 5
+  },
+  {
+   "id": "results_127",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_58",
+    "motif": "results_lead_21",
+    "track": [
+     "air"
+    ]
+   },
+   "text": "{source} делится с {target:ins} весом: вещество принимает цвет вечернего неба.",
+   "weight": 5
+  },
+  {
+   "id": "results_128",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_59",
+    "motif": "results_lead_21",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{source} делится с {target:ins} весом: с краёв идёт лёгкий дымок.",
+   "weight": 5
+  },
+  {
+   "id": "results_129",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_60",
+    "motif": "results_lead_21",
+    "track": []
+   },
+   "text": "{source} делится с {target:ins} весом: появляется запах свежего хлеба.",
+   "weight": 5
+  },
+  {
+   "id": "results_130",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_61",
+    "motif": "results_lead_21",
+    "track": []
+   },
+   "text": "{source} делится с {target:ins} весом: смесь густеет так, что ложка стоит.",
+   "weight": 5
+  },
+  {
+   "id": "results_131",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_62",
+    "motif": "results_lead_21",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{source} делится с {target:ins} весом: верхний слой светлеет до прозрачности.",
+   "weight": 5
+  },
+  {
+   "id": "results_132",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_63",
+    "motif": "results_lead_21",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{source} делится с {target:ins} весом: в глубине загорается слабый огонёк.",
+   "weight": 5
+  },
+  {
+   "id": "results_133",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_64",
+    "motif": "results_lead_22",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "В {source:prep} просыпается {target}: появляется тонкая соляная кромка.",
+   "weight": 5
+  },
+  {
+   "id": "results_134",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_65",
+    "motif": "results_lead_22",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "В {source:prep} просыпается {target}: вещество идёт мелкими пузырями.",
+   "weight": 5
+  },
+  {
+   "id": "results_135",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_66",
+    "motif": "results_lead_22",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "В {source:prep} просыпается {target}: муть опадает ровным слоем.",
+   "weight": 5
+  },
+  {
+   "id": "results_136",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_67",
+    "motif": "results_lead_22",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "В {source:prep} просыпается {target}: смесь теплеет сама по себе.",
+   "weight": 5
+  },
+  {
+   "id": "results_137",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_68",
+    "motif": "results_lead_22",
+    "track": [
+     "water",
+     "earth",
+     "earth"
+    ]
+   },
+   "text": "В {source:prep} просыпается {target}: на дне проступает металлический блеск.",
+   "weight": 5
+  },
+  {
+   "id": "results_138",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_69",
+    "motif": "results_lead_22",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "В {source:prep} просыпается {target}: поверхность становится зеркальной.",
+   "weight": 5
+  },
+  {
+   "id": "results_139",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_70",
+    "motif": "results_lead_23",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{source} отступает перед {target:ins}: жидкость набирает тяжесть.",
+   "weight": 5
+  },
+  {
+   "id": "results_140",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_71",
+    "motif": "results_lead_23",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{source} отступает перед {target:ins}: запах уходит, остаётся сухая пустота.",
+   "weight": 5
+  },
+  {
+   "id": "results_141",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_72",
+    "motif": "results_lead_23",
+    "track": []
+   },
+   "text": "{source} отступает перед {target:ins}: вещество крошится под ножом.",
+   "weight": 5
+  },
+  {
+   "id": "results_142",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_73",
+    "motif": "results_lead_23",
+    "track": []
+   },
+   "text": "{source} отступает перед {target:ins}: из горлышка выходит белый хлопок.",
+   "weight": 5
+  },
+  {
+   "id": "results_143",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_74",
+    "motif": "results_lead_23",
+    "track": []
+   },
+   "text": "{source} отступает перед {target:ins}: смесь принимает форму сосуда.",
+   "weight": 5
+  },
+  {
+   "id": "results_144",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_75",
+    "motif": "results_lead_23",
+    "track": []
+   },
+   "text": "{source} отступает перед {target:ins}: появляется радужная плёнка.",
+   "weight": 5
+  },
+  {
+   "id": "results_145",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_76",
+    "motif": "results_lead_24",
+    "track": []
+   },
+   "text": "{target} забирает у {source:gen} цвет: масса разогревается изнутри.",
+   "weight": 5
+  },
+  {
+   "id": "results_146",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_77",
+    "motif": "results_lead_24",
+    "track": []
+   },
+   "text": "{target} забирает у {source:gen} цвет: стекло покрывается изнутри каплями.",
+   "weight": 5
+  },
+  {
+   "id": "results_147",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_78",
+    "motif": "results_lead_24",
+    "track": []
+   },
+   "text": "{target} забирает у {source:gen} цвет: осадок собирается в комья.",
+   "weight": 5
+  },
+  {
+   "id": "results_148",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_79",
+    "motif": "results_lead_24",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{target} забирает у {source:gen} цвет: жидкость идёт волной от края к краю.",
+   "weight": 5
+  },
+  {
+   "id": "results_149",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_80",
+    "motif": "results_lead_24",
+    "track": []
+   },
+   "text": "{target} забирает у {source:gen} цвет: вещество светится ровным светом.",
+   "weight": 5
+  },
+  {
+   "id": "results_150",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_81",
+    "motif": "results_lead_24",
+    "track": [
+     "void",
+     "void"
+    ]
+   },
+   "text": "{target} забирает у {source:gen} цвет: оттенок густеет до тёмной охры.",
+   "weight": 5
+  },
+  {
+   "id": "results_151",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_82",
+    "motif": "results_lead_25",
+    "track": []
+   },
+   "text": "{source} выдыхает {target:acc}: на поверхности лопаются крупные пузыри.",
+   "weight": 5
+  },
+  {
+   "id": "results_152",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_83",
+    "motif": "results_lead_25",
+    "track": []
+   },
+   "text": "{source} выдыхает {target:acc}: смесь отдаёт тепло и успокаивается.",
+   "weight": 5
+  },
+  {
+   "id": "results_153",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_84",
+    "motif": "results_lead_25",
+    "track": [
+     "air"
+    ]
+   },
+   "text": "{source} выдыхает {target:acc}: в сосуде появляется слабый ток воздуха.",
+   "weight": 5
+  },
+  {
+   "id": "results_154",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_85",
+    "motif": "results_lead_25",
+    "track": []
+   },
+   "text": "{source} выдыхает {target:acc}: вещество разделяется по зерну.",
+   "weight": 5
+  },
+  {
+   "id": "results_155",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_86",
+    "motif": "results_lead_25",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{source} выдыхает {target:acc}: жидкость становится маслянистой на вид.",
+   "weight": 5
+  },
+  {
+   "id": "results_156",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_87",
+    "motif": "results_lead_25",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{source} выдыхает {target:acc}: на стенках оседает плотный налёт.",
+   "weight": 5
+  },
+  {
+   "id": "results_157",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_88",
+    "motif": "results_lead_26",
+    "track": []
+   },
+   "text": "{source} и {target} спорят за одно место: масса тянется вверх по стеклу.",
+   "weight": 5
+  },
+  {
+   "id": "results_158",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_89",
+    "motif": "results_lead_26",
+    "track": []
+   },
+   "text": "{source} и {target} спорят за одно место: смесь принимает запах гари и мёда.",
+   "weight": 5
+  },
+  {
+   "id": "results_159",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_00",
+    "motif": "results_lead_26",
+    "track": []
+   },
+   "text": "{source} и {target} спорят за одно место: поверхность покрывается белым налётом.",
+   "weight": 5
+  },
+  {
+   "id": "results_160",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_01",
+    "motif": "results_lead_26",
+    "track": [
+     "water"
+    ]
+   },
+   "text": "{source} и {target} спорят за одно место: жидкость мутнеет и густеет на глазах.",
+   "weight": 5
+  },
+  {
+   "id": "results_161",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_02",
+    "motif": "results_lead_26",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{source} и {target} спорят за одно место: из сосуда поднимается тонкий золотистый пар.",
+   "weight": 5
+  },
+  {
+   "id": "results_162",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_03",
+    "motif": "results_lead_26",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "{source} и {target} спорят за одно место: на дне остаётся тёмный осадок.",
+   "weight": 5
+  },
+  {
+   "id": "results_163",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_04",
+    "motif": "results_lead_27",
+    "track": []
+   },
+   "text": "В {source:prep} узнаётся {target}: вещество вспыхивает и гаснет, оставляя пепел.",
+   "weight": 5
+  },
+  {
+   "id": "results_164",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_05",
+    "motif": "results_lead_27",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "В {source:prep} узнаётся {target}: по краям бегут мерцающие искры.",
+   "weight": 5
+  },
+  {
+   "id": "results_165",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_06",
+    "motif": "results_lead_27",
+    "track": []
+   },
+   "text": "В {source:prep} узнаётся {target}: запах становится резким и сладковатым.",
+   "weight": 5
+  },
+  {
+   "id": "results_166",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_07",
+    "motif": "results_lead_27",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "В {source:prep} узнаётся {target}: смесь на миг зеленеет, потом бледнеет.",
+   "weight": 5
+  },
+  {
+   "id": "results_167",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_08",
+    "motif": "results_lead_27",
+    "track": [
+     "air",
+     "void"
+    ]
+   },
+   "text": "В {source:prep} узнаётся {target}: стенки сосуда покрываются мелкой испариной.",
+   "weight": 5
+  },
+  {
+   "id": "results_168",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_09",
+    "motif": "results_lead_27",
+    "track": []
+   },
+   "text": "В {source:prep} узнаётся {target}: объём убывает, а вес почти не меняется.",
+   "weight": 5
+  },
+  {
+   "id": "results_169",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_10",
+    "motif": "results_lead_28",
+    "track": [
+     "void"
+    ]
+   },
+   "text": "От {source:gen} в наследство идёт {target}: по поверхности расходится рябь от невидимого толчка.",
+   "weight": 5
+  },
+  {
+   "id": "results_170",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_11",
+    "motif": "results_lead_28",
+    "track": [
+     "void",
+     "void"
+    ]
+   },
+   "text": "От {source:gen} в наследство идёт {target}: осадок собирается в тугие тёмные зёрна.",
+   "weight": 5
+  },
+  {
+   "id": "results_171",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_12",
+    "motif": "results_lead_28",
+    "track": [
+     "fire",
+     "water",
+     "water",
+     "water",
+     "void"
+    ]
+   },
+   "text": "От {source:gen} в наследство идёт {target}: жидкость светлеет изнутри, будто её промыли.",
+   "weight": 5
+  },
+  {
+   "id": "results_172",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_13",
+    "motif": "results_lead_28",
+    "track": [
+     "fire",
+     "void"
+    ]
+   },
+   "text": "От {source:gen} в наследство идёт {target}: огонь под сосудом становится ровнее и тише.",
+   "weight": 5
+  },
+  {
+   "id": "results_173",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_14",
+    "motif": "results_lead_28",
+    "track": [
+     "water",
+     "void"
+    ]
+   },
+   "text": "От {source:gen} в наследство идёт {target}: кристаллы проступают из мутной каши.",
+   "weight": 5
+  },
+  {
+   "id": "results_174",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_15",
+    "motif": "results_lead_28",
+    "track": [
+     "fire",
+     "earth",
+     "void"
+    ]
+   },
+   "text": "От {source:gen} в наследство идёт {target}: цвет уходит в медь, а потом в золото.",
+   "weight": 5
+  },
+  {
+   "id": "results_175",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_16",
+    "motif": "results_lead_29",
+    "track": [
+     "fire"
+    ]
+   },
+   "text": "{source} уступает место {target:dat}: из горлышка тянется нить белого дыма.",
+   "weight": 5
+  },
+  {
+   "id": "results_176",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_17",
+    "motif": "results_lead_29",
+    "track": []
+   },
+   "text": "{source} уступает место {target:dat}: капля на крышке высыхает в соляную корку.",
+   "weight": 5
+  },
+  {
+   "id": "results_177",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_18",
+    "motif": "results_lead_29",
+    "track": [
+     "earth"
+    ]
+   },
+   "text": "{source} уступает место {target:dat}: смесь идёт пузырями снизу, как ключ из земли.",
+   "weight": 5
+  },
+  {
+   "id": "results_178",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_19",
+    "motif": "results_lead_29",
+    "track": []
+   },
+   "text": "{source} уступает место {target:dat}: муть оседает слоями, и слои не смешиваются.",
+   "weight": 5
+  },
+  {
+   "id": "results_179",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_20",
+    "motif": "results_lead_29",
+    "track": []
+   },
+   "text": "{source} уступает место {target:dat}: по срезу видно, что вещество стало плотнее.",
+   "weight": 5
+  },
+  {
+   "id": "results_180",
+   "slot": "results",
+   "tags": {
+    "elements": [],
+    "process": [
+     "calcinatio",
+     "putrefactio",
+     "distillatio",
+     "sublimatio",
+     "coniunctio"
+    ],
+    "stage": [
+     "nigredo",
+     "albedo",
+     "rubedo",
+     "citrinitas"
+    ],
+    "safety": "",
+    "vessel": [],
+    "variant": "results_tail_21",
+    "motif": "results_lead_29",
+    "track": [
+     "water",
+     "air"
+    ]
+   },
+   "text": "{source} уступает место {target:dat}: пар конденсируется обратно и падает дождём.",
+   "weight": 5
+  }
+ ],
+ "version": 1
 }

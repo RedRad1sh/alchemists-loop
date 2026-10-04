@@ -4661,7 +4661,7 @@ def _collected_card_ids(conn, device_id: str) -> set:
 
 
 def _generate_sigil_daily(device_id: str, day: str, collected,
-                          extra_slots: int = 0) -> list[dict]:
+                          extra_slots: int = 0, salt: int = 0) -> list[dict]:
     """Сгенерировать оффер дня: 3 слота, слот 0 — гарантия несобранной карты.
 
     Per-player seed = sha256(device_id#day)[:8]. Карты берутся из каталога,
@@ -4673,7 +4673,7 @@ def _generate_sigil_daily(device_id: str, day: str, collected,
     уже сгенерированный оффер дня не пересобирается, поэтому четвёртый слот
     появляется у игрока только с оффером следующего дня.
     """
-    seed_val = int(hashlib.sha256(f"{device_id}#{day}".encode()).hexdigest()[:8], 16)
+    seed_val = int(hashlib.sha256(f"{device_id}#{day}#{salt}".encode()).hexdigest()[:8], 16)
     rng = random.Random(seed_val)
     collected = set(collected or ())
 
@@ -4716,7 +4716,7 @@ def _sigil_daily_is_current(crafts_data) -> bool:
     )
 
 
-def _ensure_sigil_daily(conn, device_id: str, day: str) -> list[dict]:
+def _ensure_sigil_daily(conn, device_id: str, day: str, salt: int = 0) -> list[dict]:
     """Прочитать оффер дня или создать его. Единственная точка генерации."""
     row = conn.execute(
         "SELECT crafts_json FROM sigil_daily WHERE device_id=? AND day=?",
@@ -4737,7 +4737,7 @@ def _ensure_sigil_daily(conn, device_id: str, day: str) -> list[dict]:
     ).fetchone()[0]
     crafts_data = _generate_sigil_daily(
         device_id, day, _collected_card_ids(conn, device_id),
-        extra_slots=1 if has_full_set else 0,
+        extra_slots=1 if has_full_set else 0, salt=salt,
     )
     conn.execute(
         """INSERT INTO sigil_daily (device_id, day, crafts_json, generated_at)
@@ -4959,8 +4959,34 @@ def admin_sigil_rotate(device_id: str = Query("", max_length=128)):
         today = date.today().isoformat()
         conn.execute("DELETE FROM sigil_daily WHERE device_id=? AND day=?", (device_id, today))
         conn.commit()
-        crafts_data = _ensure_sigil_daily(conn, device_id, today)
+        # salt = мс-время: каждая ротация даёт НОВЫЙ оффер (иначе sha256(device#day)
+        # снова возвращает тот же набор — «ротация» ничего не меняла).
+        crafts_data = _ensure_sigil_daily(
+            conn, device_id, today, salt=int(time.time() * 1000) & 0x7FFFFFFF)
         return {"ok": True, "crafts": crafts_data}
+    finally:
+        conn.close()
+
+
+@app.post("/api/admin/sigil/reset")
+def admin_sigil_reset(device_id: str = Query("", max_length=128)):
+    """Админ: полный сброс Аркана Сигилов игрока.
+
+    Чистит sigil_crafts (коллекция + хроматические) и sigil_milestones —
+    сервер авторитетен, после этого /api/sigil/collection вернёт пусто.
+    Оффер дня не трогаем (ротация отдельно — /api/admin/sigil/rotate).
+    """
+    if not device_id:
+        return {"ok": False, "error": "missing_device_id"}
+    conn = get_db()
+    try:
+        cur1 = conn.execute("DELETE FROM sigil_crafts WHERE device_id=?", (device_id,))
+        cur2 = conn.execute("DELETE FROM sigil_milestones WHERE device_id=?", (device_id,))
+        conn.commit()
+        return {"ok": True, "crafts_deleted": cur1.rowcount, "milestones_deleted": cur2.rowcount}
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 

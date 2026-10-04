@@ -111,6 +111,10 @@ func _gui_input(event: InputEvent) -> void:
 			var was_dragging := _dragging
 			_pressed = false
 			_dragging = false
+			# Восстанавливаем непрозрачность сразу при отпускании: иначе орб
+			# оставался бледным (modulate 0.35) до следующего queue_redraw.
+			modulate.a = 1.0
+			queue_redraw()
 			if was_dragging:
 				drag_ended.emit(self, get_global_mouse_position())
 			else:

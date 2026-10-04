@@ -6,6 +6,23 @@ extends Control
 ## анимируйте uniform вручную: get_shader_parameter/set_shader_parameter.
 
 var _rect: ColorRect
+var _t := 0.0
+var _base_pulse := 0.0
+## Число слоёв ауры из палитры. Кэшируется здесь, потому что _process
+## не имеет доступа к palette (setup его не сохраняет).
+var _aura_layers := 0
+
+
+func _process(delta: float) -> void:
+	# Живое «дыхание» ауры для открытой карточки: равномерно колеблем pulse.
+	if _rect == null or _rect.material == null:
+		return
+	_t += delta
+	# Амплитуда растёт с редкостью: common пульсирует едва, legendary/mythic —
+	# заметно. 0.24 — базовый шум, +0.20 на пике слоёв ауры.
+	var amp := 0.24 + 0.20 * clampf(float(_aura_layers) / 5.0, 0.0, 1.0)
+	var p := _base_pulse + amp * (0.5 + 0.5 * sin(_t * 2.4))
+	(_rect.material as ShaderMaterial).set_shader_parameter("pulse", p)
 
 
 func setup(options: SigilOptions, palette: SigilPalette, circle_center: Vector2,
@@ -19,8 +36,11 @@ func setup(options: SigilOptions, palette: SigilPalette, circle_center: Vector2,
 		_rect = ColorRect.new()
 		_rect.name = "AuraRect"
 		_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 		add_child(_rect)
+	# Размер прямо, без anchors: PRESET_FULL_RECT ДО add_child не растягивается
+	# (anchors от 0x0-родителя), rect оставался 2x и свечение уезжало в угол.
+	_rect.position = Vector2.ZERO
+	_rect.size = Vector2(options.card_size)
 	var sh := SigilAssets.shader_file("shaders/sigil_aura.gdshader")
 	if sh == null:
 		visible = false
@@ -28,8 +48,11 @@ func setup(options: SigilOptions, palette: SigilPalette, circle_center: Vector2,
 	var mat := ShaderMaterial.new()
 	mat.shader = sh
 
-	var uv_center := Vector2(circle_center.x / float(maxi(size.x, 1)),
-		circle_center.y / float(maxi(size.y, 1)))
+	# UV считаем от геометрии карточки (options.card_size), а НЕ от size узла:
+	# в момент setup размер узла ещё не разложен контейнером (0x0), и center_uv
+	# уезжал в правый нижний угол (пятно света в углу вместо кольца вокруг круга).
+	var uv_center := Vector2(circle_center.x / float(maxi(options.card_size.x, 1)),
+		circle_center.y / float(maxi(options.card_size.y, 1)))
 	# Радиус в UV-координатах с поправкой на соотношение сторон.
 	var aspect := float(options.card_size.x) / float(maxi(options.card_size.y, 1))
 	var r_uv_y := circle_radius / float(maxi(options.card_size.y, 1))
@@ -44,8 +67,13 @@ func setup(options: SigilOptions, palette: SigilPalette, circle_center: Vector2,
 	mat.set_shader_parameter("glow_color", palette.aura_color)
 	mat.set_shader_parameter("intensity", palette.aura_intensity)
 	mat.set_shader_parameter("pulse", palette.aura_pulse)
+	_base_pulse = palette.aura_pulse
+	_aura_layers = palette.aura_layers
+	set_process(true)
 	mat.set_shader_parameter("sparkle", clampf(0.15 + float(palette.aura_layers) * 0.12, 0.0, 0.85))
 	mat.set_shader_parameter("rays", float(layout_rays(options)))
+	_rect.position = Vector2.ZERO
+	_rect.size = Vector2(options.card_size)
 	_rect.material = mat
 
 
