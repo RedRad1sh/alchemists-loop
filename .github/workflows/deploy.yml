@@ -55,7 +55,7 @@ jobs:
             # Run migrations if needed
             if [ -f "migrations.py" ]; then
               echo "🗄️ Running migrations..."
-              python3 migrations.py || echo "No migrations to run"
+              .venv/bin/python migrations.py || echo "No migrations to run"
             fi
             
             # Restart service
