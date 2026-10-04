@@ -16,11 +16,6 @@ static func apply(game: Control) -> void:
 	if root == null:
 		return
 	_restyle_header(root)
-	# UX-31: различимый disabled у кнопок (текстуры Kenney без disabled-варианта).
-	if game.get_node_or_null("UiStateTick") == null:
-		var tick := UiStateTick.new()
-		tick.name = "UiStateTick"
-		game.add_child(tick)
 	var tabs := root.get_node_or_null("Tabs") as TabContainer
 	if tabs == null:
 		return
@@ -30,8 +25,9 @@ static func apply(game: Control) -> void:
 			tabs.set_tab_icon(i, tex)
 
 
-# Блок 1, вариант A: иконки вместо глифов ✦▲♪Ж, тач 44×44, бейдж-пилюля.
-# Цвета кнопок игры (gold/secondary) не меняются — только содержимое и размер.
+# Блок 1, вариант A (согласован по мок-кадру): иконки вместо глифов ✦▲♪Ж,
+# тач 44×44. Цвета кнопок игры (gold/secondary) не меняются — только
+# содержимое и размер. Бейдж счётчика — UiIcon.badge (исправленная пилюля).
 static func _restyle_header(root: Control) -> void:
 	var head := root.get_child(0) as HBoxContainer
 	if head == null:

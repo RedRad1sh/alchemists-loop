@@ -164,10 +164,9 @@ func _draw() -> void:
 		var txt := str(count)
 		var fs := 15
 		var ts2 := f2.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
-		# Блок 2, вариант B: пилюля счётчика ВНУТРИ орба (низ по центру),
-		# радиус ограничен кругом, чтобы число не вылезало за орб.
-		var br := clampf(ts2.x * 0.5 + 4.5, r * 0.34, r * 0.52)
-		var bc := Vector2(c.x, c.y + r * 0.52)
+		# радиус бейджа — по фактической ширине числа, чтобы «12» и «100» не вылезали
+		var br := clampf(ts2.x * 0.5 + 4.5, r * 0.42, r * 0.70)
+		var bc := Vector2(c.x + r * 0.70, c.y + r * 0.70)
 		draw_circle(bc, br, Color(0.03, 0.05, 0.07, 0.92))
 		draw_arc(bc, br, 0, TAU, 24, Color(1, 1, 1, 0.22), 1.5)
 		var asc := f2.get_ascent(fs)

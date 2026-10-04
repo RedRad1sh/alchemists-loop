@@ -616,7 +616,7 @@ func _vein_find_exists(cycle_id: String, pair_key: String) -> bool:
 	return false
 
 
-func _vein_find_entry(pair_key: String, cycle_id: String = "") -> Dictionary:
+func _vein_find_entry(pair_key: String, cycle_id: String = "", require_pending := true) -> Dictionary:
 	for f in _vein_finds:
 		if typeof(f) != TYPE_DICTIONARY:
 			continue
@@ -624,7 +624,11 @@ func _vein_find_entry(pair_key: String, cycle_id: String = "") -> Dictionary:
 			continue
 		if cycle_id != "" and String(f.get("cycle_id", "")) != cycle_id:
 			continue
-		if cycle_id == "" and String(f.get("status", "")) != "pending_server":
+		# Без cycle_id брать можно любую запись, если вызывающий не требует
+		# pending: серверные ошибки (cycle_mismatch/unknown_pair) приходят и на
+		# registered-находке — хендлеру её нужно найти, чтобы пересоздать/снять
+		# (T4 personal find: remade/dropped падали на фильтре pending-only).
+		if require_pending and cycle_id == "" and String(f.get("status", "")) != "pending_server":
 			continue
 		return f
 	return {}
@@ -674,7 +678,7 @@ func _vein_add_from_discover(pair_key: String, out: String, vein: Dictionary) ->
 func _on_net_vein_find_result(pair_key: String, result: Dictionary) -> void:
 	if result.get("offline", false) == true:
 		return
-	var f := _vein_find_entry(pair_key)
+	var f := _vein_find_entry(pair_key, "", false)  # любая запись пары, любой статус
 	if f.is_empty():
 		return
 	if result.get("ok", false) != true:

@@ -12,6 +12,10 @@ discovery-server/server/tests/*.db-wal
 discovery-server/server/tests/*.db-shm
 discovery-server/server/tests/*.sqlite
 
+# Визуальный регресс UI (tools/shots.py): локальные артефакты съёмки/диффа
+alchemists-loop/previews/shots/
+docs/ui-ux/shots-diff/
+
 # Godot: генерируемые метаданные импорта/uid (regenerable locally)
 *.import
 *.uid

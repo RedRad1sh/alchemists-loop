@@ -124,7 +124,7 @@ func say(text: String, mood: String = "idle") -> void:
 	_bubble.reset_size()
 	var ms := _bubble.get_combined_minimum_size()
 	_bubble.size = Vector2(maxf(ms.x, 150.0), ms.y)
-	# Блок 1 (вариант A): пузырь ниже компаньона, чтобы не перекрывать
+	# Блок 1 (вариант A): пузырь ниже компаньона, чтобы не перекрывал
 	# кнопки шапки и строку ресурсов (ранее рисовался поверх них).
 	_bubble.position = Vector2(clampf(size.x - _bubble.size.x, 8.0, size.x),
 		size.y + 12.0)
