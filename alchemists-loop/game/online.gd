@@ -36,6 +36,8 @@ var _server_tag: Dictionary = {}   # slug → тег природы (для /api
 var _rating_list: VBoxContainer = null
 var _rating_status: Label = null
 var _rating_me: Label = null
+var _rating_cache: Dictionary = {}
+var _rating_cache_at_ms := 0
 var _pending_requests: Dictionary = {}
 # U11 (T14): корреляция запрос↔ответ. Pending хранится словарём
 # pair_key → {"a": String, "b": String, "experiment": bool, "at": int}
@@ -142,8 +144,23 @@ func _on_net_rating_result(result: Dictionary) -> void:
 		_rating_list.remove_child(child)
 		child.queue_free()
 	if result.get("ok", false) != true:
-		_rating_status.text = "Сервер недоступен — рейтинг появится позже."
+		if not _rating_cache.is_empty():
+			_rating_status.text = "Сервер недоступен · показаны данные от %ds назад" % int((Time.get_ticks_msec() - _rating_cache_at_ms) / 1000)
+			_render_rating_rows(_rating_cache)
+		else:
+			_rating_status.text = "Сервер недоступен — рейтинг появится позже."
 		return
+	_rating_cache = result.duplicate(true)
+	_rating_cache_at_ms = Time.get_ticks_msec()
+	_render_rating_rows(result)
+
+
+func _render_rating_rows(result: Dictionary) -> void:
+	if _rating_list == null:
+		return
+	for child in _rating_list.get_children():
+		_rating_list.remove_child(child)
+		child.queue_free()
 	var rows: Array = result.get("rows", [])
 	if rows.is_empty():
 		_rating_status.text = "Пока никто ничего не открыл. Стань первым!"
@@ -203,7 +220,15 @@ func _on_net_house_result(result: Dictionary) -> void:
 		return
 	if bool(result.get("_saved", false)):
 		return  # эхо собственной выгрузки — гостевой попап не трогаем
+	# p3 (батч 4): задержанный ответ ЗА другой домик не должен перетирать тот,
+	# что игрок уже смотрит.
 	var nick := g._clean_str(result.get("nick", ""))
+	if g._home._house_popup == null or not g._home._house_popup.visible:
+		return
+	if nick != "" and nick != g._home._house_popup_nick:
+		print("HOUSE stale: ответ для ", nick, " — попап открыт на ",
+			g._home._house_popup_nick)
+		return
 	var house_raw = result.get("house")
 	if not result.get("found", true):
 		# кнопка визита видима уже с момента открытия попапа (_open_player_house):
@@ -593,6 +618,15 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 		var db := g._clean_str(disc.get("b", ""))
 		if da == "" or db == "" or g._pair_key(da, db) != pair_key:
 			print("NETDISCOVER dropped: discovery pair mismatch for pair=", pair_key)
+			# p2 (батч 4): ошибочный ответ НЕ должен оставлять эксперимент висеть
+			# навсегда. Если pending-пара эксперимента ещё совпадает с висящей —
+			# возвращаем реагенты/эфир ровно один раз (U9-контракт: не трогаем
+			# чужой/сброшенный эксперимент).
+			if is_experiment and _experiment_pending_matches(a, b):
+				g._engine._finish_experiment_inputs(a, b, true)
+				_set_status("Эксперимент отменён: мир ответил некорректно. Ресурсы возвращены.")
+				_toast("Эксперимент отменён: ответ мира повреждён. Ресурсы возвращены.",
+					NoticeKind.WARNING, 4.0)
 			return
 	if is_experiment and not _experiment_pending_matches(a, b):
 		print("NETEXPERIMENT stale pair=", a, " + ", b)
