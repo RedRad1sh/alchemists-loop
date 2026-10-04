@@ -17,7 +17,7 @@ extends Node
 ## инвалидирует старые картинки автоматически.
 
 const CACHE_DIR := "user://sigils"
-const FORMAT_VERSION := 1
+const FORMAT_VERSION := 2  # 2: новый фоновый шейдер + приглушённая аура
 const FRAMES_PER_RENDER := 2
 
 var viewport: SubViewport
