@@ -3,7 +3,9 @@ extends RefCounted
 ## StyleBox-фабрики меню вкладок «Atheneum» (pill-сегмент). Всё остальное
 ## оформление откатано к исходному виду до следующей итерации редизайна.
 
-const T := DesignTokens
+## Алиас через preload: `const T := DesignTokens` — Parse Error в Godot 4.7.2
+## (не constant expression), см. комментарий в ui_theme.gd.
+const T := preload("res://game/ui/design_tokens.gd")
 
 static func _box(bg: Color, radius: int, border: Color = Color(0, 0, 0, 0), bw: int = 0,
 		pad: Vector4 = Vector4(4, 6, 4, 6)) -> StyleBoxFlat:

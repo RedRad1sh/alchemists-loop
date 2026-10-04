@@ -4,7 +4,11 @@ extends RefCounted
 ## чтобы подмена theme не сбросила Manrope). Остальной UI откатан к исходному
 ## оформлению до следующей итерации редизайна.
 
-const T := DesignTokens
+## Алиас через preload, а не class_name: `const T := DesignTokens` в Godot 4.7.2
+## даёт Parse Error "Assigned value for constant "T" isn't a constant expression"
+## → ui_theme/ui_style не компилируются → каскад 'build'/'enabled'/'font'
+## nonexistent (CI-аннотации прогона 37219793721).
+const T := preload("res://game/ui/design_tokens.gd")
 
 static var enabled := true
 static var _fonts: Array = []
