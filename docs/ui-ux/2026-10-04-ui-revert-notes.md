@@ -95,3 +95,41 @@
   конфликта с анимациями (не глобально перетирать `modulate`), fade вкладок
   UX-32 — с гарантией, что страница не стартует прозрачной.
 - Шрифт бренда, motion-пакет, нижняя навигация — см. план итерации-1.
+
+## Итог починки CI (2026-10-04, ветка arena/01a1072d)
+
+Прогон `05d6d85` (run `37229333898`): **selftest 726/726 зелёный, ни одного
+`SCRIPT ERROR`**. Три реальные причины провалов, найденные по аннотациям CI:
+
+1. **`const T := DesignTokens` (ui_theme.gd / ui_style.gd) — Parse Error
+   «Assigned value for constant "T" isn't a constant expression» в Godot
+   4.7.2.** Голый class_name в `const` не является constant expression; из-за
+   этого весь UI-слой не компилировался, а симптомы выглядели как рантайм
+   «Nonexistent function 'font'/'build' in base 'GDScript'» (каскад по
+   зависящим скриптам). Лечение: `const T := preload("res://game/ui/design_tokens.gd")`.
+   Правило: member-access `Balance.X` в const — легален; голый class_name —
+   нет; `gdparse` (syntax-only) это не ловит — ловит только job `selftest`.
+2. **`_vein_find_entry` с фильтром `status == "pending_server"`** — серверные
+   ошибки `cycle_mismatch`/`unknown_pair` приходят и на registered-находке:
+   хендлер не находил запись и рано выходил, поэтому в T4 падали
+   `remade`/`dropped`. Лечение: параметр `require_pending := false` в
+   `_on_net_vein_find_result` (единственный вызывающий).
+3. **`Online._item_name` без guard'а на `ITEMS.has`** — фейковые ключи
+   инвентаря `st_ep_*` (тест U9 кладёт их в inventory, не в ITEMS) давали
+   `SCRIPT ERROR` на каждом обращении. Лечение: guard как в `_item_glyph`.
+
+Как читать падения из песочницы (CDN логов GitHub Actions недоступен —
+только API):
+
+```bash
+gh api repos/<owner>/<repo>/commits/<sha>/check-runs \
+  --jq '[.check_runs[]|select(.name|test("selftest"))][0].id'
+gh api repos/<owner>/<repo>/check-runs/<id>/annotations \
+  --jq '.[]|.annotation_level+" | "+.message'
+```
+
+Аннотации содержат `[FAIL]`, диагностику `VEIN T4 debug` / `UI statics debug`,
+`SCRIPT ERROR` со строкой `at:` (file:line), счётчики OK/FAIL/ERROR и хвост
+лога. Job `selftest` краснеет и при 726/726, если есть хоть один
+`SCRIPT ERROR`: рантайм-ошибки скриптов не дают `[FAIL]`, но ломают игру.
+Проверка UI-статики — первый чек селфтеста (`ui statics: build/font/tab/svg/badge`).

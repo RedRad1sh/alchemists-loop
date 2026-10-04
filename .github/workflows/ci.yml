@@ -2,7 +2,10 @@ name: CI
 
 on:
   pull_request:
-    branches: [ master ]
+    # arena/** — PR между аренными ветками (например, arena/… → arena/…):
+    # без этого фильтра PR-ивенты для таких PR не запускались вовсе и
+    # ui-shots (кадры приёмки) были недоступны до мержа в master.
+    branches: [ master, 'arena/**' ]
   push:
     branches: [ master, init, 'arena/**' ]
   workflow_dispatch:
