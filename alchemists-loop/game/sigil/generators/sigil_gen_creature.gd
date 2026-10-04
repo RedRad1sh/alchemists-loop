@@ -145,7 +145,7 @@ func draw_icon(ci: CanvasItem, rect: Rect2, rng: SigilRng, ctx: Dictionary) -> v
 			c.set_px(int(floorf(p4.x)), int(floorf(p4.y - h)), accent)
 
 	# Контур: обводим всё, что уже нарисовано, тёмным.
-	_outline(c, outline)
+	c.outline(outline, true)  # тонкая обводка (единый стиль)
 
 	c.draw(ci, rect)
 

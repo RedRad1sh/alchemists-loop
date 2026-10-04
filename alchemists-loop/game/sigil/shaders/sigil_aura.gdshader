@@ -36,11 +36,11 @@ void fragment() {
 
 	// Каустики: редкие яркие точки на самом кольце. Среднее ~1,
 	// поэтому общая энергия почти та же.
-	float caust = 0.88 + 0.12 * pow(hash21(vec2(floor(a * 24.0), floor(r * 40.0))), 2.0);
+	float caust = 0.94 + 0.06 * pow(hash21(vec2(floor(a * 24.0), floor(r * 40.0))), 2.0);
 	float on_ring = smoothstep(ring_width * 3.0, 0.0, abs(r - ring_radius));
-	breakup *= mix(1.0, caust, on_ring * sparkle);
+	breakup *= mix(1.0, caust, on_ring * sparkle * 0.5);
 
-	float amt = (ring * 0.55 + halo * 1.05 + inner) * intensity * breakup * (1.0 + pulse);
+	float amt = (ring * 0.55 + halo * 1.05 + inner) * intensity * breakup * (1.0 + pulse) * 0.5;
 	amt *= smoothstep(0.0, 0.04, UV.x) * smoothstep(0.0, 0.04, 1.0 - UV.x);
 	amt *= smoothstep(0.0, 0.04, UV.y) * smoothstep(0.0, 0.04, 1.0 - UV.y);
 

@@ -119,7 +119,7 @@ const EVENT_WINDOW := 8.0
 # so 3–4 reagents can be added later without changing saved pair identity.
 const EXPERIMENT_ARITY_MIN := 2
 const EXPERIMENT_ARITY_MAX := 2
-const EXPERIMENT_COOLDOWN_SEC := 5.0
+const EXPERIMENT_COOLDOWN_SEC := 1.0  # сек между экспериментами (было 5)
 const EXPERIMENT_DAILY_LIMIT := 200
 const EXPERIMENT_COST := BREW_COST
 const EXPERIMENT_FAILURE_REFUND := FAILURE_REFUND

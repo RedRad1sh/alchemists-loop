@@ -44,6 +44,7 @@ func draw_icon(ci: CanvasItem, rect: Rect2, rng: SigilRng, ctx: Dictionary) -> v
 	var high := _color(ctx, "high", land.lerp(Color(0.85, 0.86, 0.80), 0.45))
 	var ice := _color(ctx, "ice", Color(0.92, 0.95, 0.98))
 	var atmos := _color(ctx, "atmosphere", deep.lerp(Color(0.6, 0.8, 1.0), 0.6))
+	var outline_col := _color(ctx, "outline", Color(0.05, 0.06, 0.10))
 
 	match subtype:
 		"desert":
@@ -156,6 +157,7 @@ func draw_icon(ci: CanvasItem, rect: Rect2, rng: SigilRng, ctx: Dictionary) -> v
 							c.set_px(xx, yy, Color(ring_col.r * shade, ring_col.g * shade,
 								ring_col.b * shade, 0.9))
 
+	c.outline(outline_col, true)
 	c.draw(ci, rect)
 
 
