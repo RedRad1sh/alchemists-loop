@@ -3434,8 +3434,6 @@ func _show_sigil_craft_ritual(rarity: String) -> void:
 		
 	var r := SigilCraftRitual.new()
 	r.accent = _rarity_color(rarity)
-	if r.accent.r < 0.75 and r.accent.g < 0.75:
-		r.accent = Color(1.0, 0.75, 0.25)
 	r.strength = strength
 	
 	# КЛЮЧЕВОЕ: Подключаем сигнал показа карты и автозакрытие
