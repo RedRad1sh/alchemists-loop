@@ -45,8 +45,12 @@ jobs:
             # Install/update dependencies
             echo "📦 Installing dependencies..."
             cd discovery-server/server
-            python3 -m pip install --upgrade pip
-            python3 -m pip install -r requirements.txt --user
+            if [ ! -d ".venv" ]; then
+              echo "🐍 Creating virtualenv..."
+              python3 -m venv .venv
+            fi
+            .venv/bin/pip install --upgrade pip
+            .venv/bin/pip install -r requirements.txt
             
             # Run migrations if needed
             if [ -f "migrations.py" ]; then
