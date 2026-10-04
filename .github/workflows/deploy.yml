@@ -66,7 +66,7 @@ jobs:
             sleep 3
             
             # Check service status
-            if sudo systemctl is-active --quiet discovery-server; then
+            if sudo systemctl is-active discovery-server > /dev/null; then
               echo "✅ Deployment successful!"
               sudo systemctl status discovery-server --no-pager
             else
