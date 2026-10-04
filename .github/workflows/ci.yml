@@ -111,8 +111,10 @@ jobs:
           # SCRIPT ERROR ломает прогон даже при 725/725: рантайм-ошибки скриптов
           # (вроде несуществующей функции) не дают [FAIL], но ломают игру.
           if [ "$status" -ne 0 ] || grep -q 'SCRIPT ERROR' "$RUNNER_TEMP/selftest.log"; then
-            while IFS= read -r line; do echo "::error::$line"; done \
-              < <(grep -E '^\[FAIL\]|SCRIPT ERROR|VEIN T4 debug|UI statics debug' "$RUNNER_TEMP/selftest.log" | head -40)
+            # -A1: под SCRIPT ERROR захватываем строку "at:" с file:line.
+            while IFS= read -r line; do
+              [ "$line" != "--" ] && echo "::$line"
+            done < <(grep -E -A1 '^\[FAIL\]|SCRIPT ERROR|VEIN T4 debug|UI statics debug' "$RUNNER_TEMP/selftest.log" | head -60)
             echo "selftest: статус=$status, SCRIPT ERROR присутствует — прогон красный"
             exit 1
           fi
