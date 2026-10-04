@@ -58,7 +58,11 @@ SCENARIOS: dict[str, list[str]] = {
     "modal_companion": ["--action=companion"],
 }
 
-SHOT_TIMEOUT_S = 240
+# Таймауты настраиваются из env: CI снимает базовые ветки с заведомо
+# нерабочей сборкой (итерация-2) — там каждая сцена ждёт весь таймаут,
+# и 10 x 240s роняют джобу по лимиту 40 минут вместо аккуратного [FAIL].
+SHOT_TIMEOUT_S = int(os.environ.get("SHOTS_TIMEOUT_S", "240"))
+IMPORT_TIMEOUT_S = int(os.environ.get("SHOTS_IMPORT_TIMEOUT_S", "600"))
 
 
 def find_godot() -> str:
@@ -113,7 +117,7 @@ def run_scenarios(label: str, only: list[str] | None, plain: bool,
         try:
             subprocess.run(
                 [godot, "--headless", "--import", "--path", str(project)],
-                capture_output=True, text=True, timeout=600,
+                capture_output=True, text=True, timeout=IMPORT_TIMEOUT_S,
             )
         except (subprocess.TimeoutExpired, OSError) as exc:
             print(f"[warn] import не прошёл ({exc}) — пробуем снимать как есть")

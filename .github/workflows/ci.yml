@@ -166,10 +166,18 @@ jobs:
             (sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0)
       - name: Shots — head (эта ревизия)
         run: python3 alchemists-loop/tools/shots.py run head
+      # База может быть нерабочей (аренные PR с откатываемой итерацией):
+      # каждая сцена упирается в таймаут, и без continue-on-error джоба
+      # уходит в красный/40-мин лимит. Head — истина приёмки, base — контекст.
       - name: Shots — base (базовая ветка)
+        continue-on-error: true
+        env:
+          SHOTS_TIMEOUT_S: '60'
+          SHOTS_IMPORT_TIMEOUT_S: '240'
         run: python3 alchemists-loop/tools/shots.py run base --project "$GITHUB_WORKSPACE/base/alchemists-loop"
       - name: Compare base→head (report.md + montage)
         if: always()
+        continue-on-error: true
         run: python3 alchemists-loop/tools/shots.py compare base head
       - name: Upload кадры и отчёт
         if: always()
