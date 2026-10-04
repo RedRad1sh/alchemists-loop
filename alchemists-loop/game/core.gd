@@ -901,7 +901,7 @@ func _refresh_header() -> void:
 			var uid := String(u["id"])
 			if _up_unlocked(uid) and _up_lvl(uid) < int(u["max"]) and _available_ether() >= _up_cost(uid):
 				affordable += 1
-		UiIcon.badge(g._hub._up_btn, affordable)
+				UiIcon.badge(g._hub._up_btn, affordable)
 		g._hub._up_btn.add_theme_color_override("font_color",
 			Color(1.0, 0.88, 0.45) if affordable > 0 else Color(0.8, 0.85, 0.9))
 
@@ -1270,7 +1270,7 @@ func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
 	_auto_cancel = false
 	_auto_new.clear()
 	if _auto_stop_btn != null:
-		_auto_stop_btn.disabled = false
+		_auto_stop_btn.visible = true
 	var steps := 0
 	var cancelled := false
 	var paused_reason := ""
@@ -1314,7 +1314,7 @@ func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
 				_auto = false
 				_production_discount = 1.0
 				if _auto_stop_btn != null:
-					_auto_stop_btn.disabled = true
+					_auto_stop_btn.visible = false
 				return false
 			if bool(brew_res.get("failed", true)):
 				# U9 (T11): упавший шаг не двигает completed; производство
@@ -1332,7 +1332,7 @@ func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
 	_auto = false
 	_production_discount = 1.0
 	if _auto_stop_btn != null:
-		_auto_stop_btn.disabled = true
+		_auto_stop_btn.visible = false
 	if cancelled:
 		_craft_job["status"] = "paused_user"
 		Analytics.track("craft_job_cancel", {

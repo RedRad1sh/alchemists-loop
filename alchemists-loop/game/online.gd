@@ -87,36 +87,15 @@ func _build_rating_page(page: VBoxContainer) -> void:
 	sub.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
 	page.add_child(sub)
 	_rating_me = g._label("", 12)
-	_rating_me.add_theme_color_override("font_color", Color(0.66, 0.91, 0.80))
-	# Блок 5: своя строка — закреплённой чип-карточкой с бирюзовой обводкой.
-	var me_sb := StyleBoxFlat.new()
-	me_sb.bg_color = Color(0.09, 0.13, 0.12, 0.9)
-	me_sb.set_corner_radius_all(12)
-	me_sb.border_color = Color(0.35, 0.88, 0.84, 0.8)
-	me_sb.set_border_width_all(1)
-	me_sb.content_margin_left = 12
-	me_sb.content_margin_right = 12
-	me_sb.content_margin_top = 8
-	me_sb.content_margin_bottom = 8
-	_rating_me.add_theme_stylebox_override("normal", me_sb)
+	_rating_me.add_theme_color_override("font_color", Color(0.95, 0.9, 0.75))
 	page.add_child(_rating_me)
-	var status_row := HBoxContainer.new()
-	status_row.add_theme_constant_override("separation", 8)
-	page.add_child(status_row)
 	_rating_status = g._label("Связываемся с миром…", 13)
 	_rating_status.add_theme_color_override("font_color", Color(0.62, 0.74, 0.82))
-	_rating_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	status_row.add_child(_rating_status)
-	# «Обновить» — иконкой 44×40 вместо кнопки во всю ширину.
-	var refresh := g._small_button("", Vector2(44, 40), 1)
-	UiIcon.into_button(refresh, "repeat", 18, Color(0.9, 0.95, 1.0))
-	# UX-31: loading-состояние сетевой кнопки — disabled на время запроса.
-	refresh.pressed.connect(func() -> void:
-		refresh.disabled = true
-		refresh.tooltip_text = "Обновляю…"
-		Net.rating(_device_id))
-	refresh.name = "RatingRefresh"
-	status_row.add_child(refresh)
+	page.add_child(_rating_status)
+	var refresh := g._small_button("Обновить", Vector2(0, 40), 1)
+	refresh.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	refresh.pressed.connect(func() -> void: Net.rating(_device_id))
+	page.add_child(refresh)
 	_rating_list = VBoxContainer.new()
 	_rating_list.add_theme_constant_override("separation", 6)
 	page.add_child(_rating_list)
@@ -131,13 +110,6 @@ func _refresh_rating() -> void:
 
 
 func _on_net_rating_result(result: Dictionary) -> void:
-	var refresh: Button = null
-	for b in g.find_children("RatingRefresh", "Button", true, false):
-		refresh = b as Button
-		break
-	if refresh != null:
-		refresh.disabled = false
-		refresh.tooltip_text = "Обновить рейтинг"
 	if _rating_list == null:
 		return
 	for child in _rating_list.get_children():
@@ -176,27 +148,11 @@ func _on_net_rating_result(result: Dictionary) -> void:
 		var elems := int(d.get("elements", 0))
 		var pts := int(d.get("points", 0))
 		var has_house := bool(d.get("house_built", false))
-		# Блок 5: строка рейтинга — карточка; топ-3 с «медальным» цветом места.
-		var card := PanelContainer.new()
-		var csb := StyleBoxFlat.new()
-		csb.bg_color = Color(0.07, 0.10, 0.14, 0.9)
-		csb.set_corner_radius_all(12)
-		csb.content_margin_left = 10
-		csb.content_margin_right = 10
-		csb.content_margin_top = 8
-		csb.content_margin_bottom = 8
-		if nick == _net_nick:
-			csb.border_color = Color(0.35, 0.88, 0.84, 0.9)
-			csb.set_border_width_all(1)
-		card.add_theme_stylebox_override("panel", csb)
-		_rating_list.add_child(card)
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
-		card.add_child(row)
+		_rating_list.add_child(row)
 		var rl := g._label("#%d" % rank, 15)
 		rl.custom_minimum_size = Vector2(40, 0)
-		var medal := [Color(1.0, 0.85, 0.44), Color(0.78, 0.82, 0.86), Color(0.80, 0.59, 0.39)]
-		rl.add_theme_color_override("font_color", medal[rank - 1] if rank in [1, 2, 3] else Color(0.49, 0.55, 0.61))
 		row.add_child(rl)
 		row.add_child(g._make_avatar(nick, 20))
 		var v := VBoxContainer.new()
@@ -210,17 +166,6 @@ func _on_net_rating_result(result: Dictionary) -> void:
 		var st := g._label("открытий %d · веществ %d · очки %d%s" % [disc, elems, pts, extra], 11)
 		st.add_theme_color_override("font_color", Color(0.55, 0.62, 0.68))
 		v.add_child(st)
-		var chip := g._label("%d ⚡" % pts, 12)
-		chip.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
-		var chsb := StyleBoxFlat.new()
-		chsb.bg_color = Color(0.15, 0.20, 0.26, 0.9)
-		chsb.set_corner_radius_all(13)
-		chsb.content_margin_left = 10
-		chsb.content_margin_right = 10
-		chsb.content_margin_top = 4
-		chsb.content_margin_bottom = 4
-		chip.add_theme_stylebox_override("normal", chsb)
-		row.add_child(chip)
 		if has_house:
 			var btn := g._small_button("Домик", Vector2(80, 36), 1)
 			btn.pressed.connect(g._home._open_player_house.bind(nick))
@@ -938,21 +883,9 @@ func _rebuild_world_grid() -> void:
 	for i in range(from, to):
 		var item_id: String = ids[i]
 		var sid := String(item_id)
-		var card := PanelContainer.new()
-		var csb := StyleBoxFlat.new()
-		csb.bg_color = Color(0.05, 0.08, 0.11, 0.9)
-		csb.set_corner_radius_all(12)
-		csb.content_margin_left = 10
-		csb.content_margin_right = 10
-		csb.content_margin_top = 8
-		csb.content_margin_bottom = 8
-		card.add_theme_stylebox_override("panel", csb)
-		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_world_grid.add_child(card)
 		var row := HBoxContainer.new()
 		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_theme_constant_override("separation", 8)
-		card.add_child(row)
 		var orb := g._make_orb(sid, 34)
 		orb.interactive = false
 		row.add_child(orb)
@@ -983,6 +916,7 @@ func _rebuild_world_grid() -> void:
 			dl.add_theme_color_override("font_color", Color(0.45, 0.52, 0.60))
 			v.add_child(dl)
 		row.add_child(v)
+		_world_grid.add_child(row)
 	if _world_page_label != null:
 		if total == 0:
 			_world_page_label.text = "0 веществ"
@@ -1076,24 +1010,14 @@ func _on_net_events_result(result: Dictionary) -> void:
 		var who := nick if nick != "" else "кто-то"
 		var parts := "«%s» + «%s»" % [a_name, b_name]
 		var txt := "%s открыл «%s» (%s) · %s" % [who, out_name, parts, _ago_text(ago)]
-		var card := PanelContainer.new()
-		var csb := StyleBoxFlat.new()
-		csb.bg_color = Color(0.05, 0.08, 0.11, 0.9)
-		csb.set_corner_radius_all(10)
-		csb.content_margin_left = 10
-		csb.content_margin_right = 10
-		csb.content_margin_top = 6
-		csb.content_margin_bottom = 6
-		card.add_theme_stylebox_override("panel", csb)
-		g._feed_list.add_child(card)
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
-		card.add_child(row)
 		row.add_child(g._make_avatar(nick, 18))
 		var lbl := g._label(txt, 12)
 		lbl.add_theme_color_override("font_color", Color(0.62, 0.74, 0.82))
 		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(lbl)
+		g._feed_list.add_child(row)
 
 func _on_net_challenge_result(result: Dictionary) -> void:
 	if _challenge_label == null:

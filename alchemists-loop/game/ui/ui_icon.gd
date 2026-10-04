@@ -44,6 +44,8 @@ static func into_button(btn: Button, name: String, size_px: int = 20,
 	btn.add_child(center)
 
 ## Пилюля-бейдж со счётчиком поверх кнопки (вместо «▲N» в тексте).
+## ВАЖНО: фон пилюли рисует PanelContainer (у Label нет stylebox — прежняя
+## версия с Label тихо не показывала фон, а тёмный текст терялся на тёмном).
 static func badge(btn: Button, count: int) -> void:
 	if btn == null:
 		return
@@ -52,13 +54,17 @@ static func badge(btn: Button, count: int) -> void:
 		if existing != null:
 			existing.queue_free()
 		return
+	var holder: PanelContainer
 	var lbl: Label
-	if existing != null:
-		lbl = existing as Label
+	if existing is PanelContainer and (existing as PanelContainer).get_node_or_null("BadgeLabel") != null:
+		holder = existing as PanelContainer
+		lbl = holder.get_node_or_null("BadgeLabel") as Label
 	else:
-		lbl = Label.new()
-		lbl.name = "CountBadge"
-		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if existing != null:
+			existing.queue_free()
+		holder = PanelContainer.new()
+		holder.name = "CountBadge"
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = DesignTokens.c(DesignTokens.GOLD)
 		sb.set_corner_radius_all(DesignTokens.R_PILL)
@@ -66,17 +72,22 @@ static func badge(btn: Button, count: int) -> void:
 		sb.content_margin_right = 6
 		sb.content_margin_top = 2
 		sb.content_margin_bottom = 2
-		lbl.add_theme_stylebox_override("normal", sb)
+		holder.add_theme_stylebox_override("panel", sb)
+		lbl = Label.new()
+		lbl.name = "BadgeLabel"
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		lbl.add_theme_font_size_override("font_size", 11)
 		var f := UiTheme.font(2)
 		if f != null:
 			lbl.add_theme_font_override("font", f)
-		lbl.add_theme_color_override("font_color", DesignTokens.c(DesignTokens.GOLD_INK))
+		lbl.add_theme_color_override("font_color", DesignTokens.GOLD_INK)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lbl.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-		lbl.offset_left = -6
-		lbl.offset_top = -6
-		lbl.offset_right = 24
-		lbl.offset_bottom = 12
-		btn.add_child(lbl)
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		holder.add_child(lbl)
+		holder.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+		holder.offset_left = -30
+		holder.offset_top = -6
+		holder.offset_right = -6
+		holder.offset_bottom = 12
+		btn.add_child(holder)
 	lbl.text = str(count)

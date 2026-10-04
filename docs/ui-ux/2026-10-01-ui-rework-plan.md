@@ -1,5 +1,13 @@
 # UI/UX-переработка «Alchemist's Loop» — план (design system v2 «Atheneum»)
 
+> **⚠️ 2026-10-04: итерация-2 откачена.** Приёмка по мокам (`tools/ui-preview/`)
+> не выдержала проверки реальной игрой: parse-ошибка `home.gd`, no-op чипы
+> (styleBox на `Label`), глобальные побочные эффекты (safe-area/`UiStateTick`).
+> В коде оставлены сет иконок, меню вкладок и иконки шапки. Дальше — только по
+> реальным кадрам (`tools/shots.py`) и с selftest в CI:
+> `docs/ui-ux/2026-10-04-ui-revert-notes.md`. Пункты этого плана читать как
+> бэклог, а не как сделанное.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 > Steps use checkbox (`- [ ]`) syntax for tracking.

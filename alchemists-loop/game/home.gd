@@ -34,8 +34,7 @@ var _cosmetic_wall := Color("#5a4d40")
 var _cosmetic_floor := Color("#5d452f")
 var _decor_cat_btns := {}
 var _decor_cat_thumbs := {}   # категория -> HouseView-превью текущего варианта
-var _decor_cat_labels := {}
-var _decor_cat_chips := {}
+var _decor_cat_labels := {}   # категория -> Label («Ковёр · 3/10»)
 var _collection_lbl: Label = null
 var _decor_cat_open := ""
 var _decor_popup: Control = null
@@ -306,69 +305,35 @@ func _build_house_page(page: VBoxContainer) -> void:
 	_collection_lbl = g._label("", 12)
 	_collection_lbl.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
 	page.add_child(_collection_lbl)
-	# Блок 4 (согласовано): категории обстановки — карточками 2×N:
-	# превью текущего варианта, имя, чип «куплено: N», кнопка «Выбрать».
-	# Ценников на карточках нет — цены только в магазине вариантов.
-	_furniture_shop = GridContainer.new()
-	_furniture_shop.columns = 2
-	_furniture_shop.add_theme_constant_override("h_separation", 10)
-	_furniture_shop.add_theme_constant_override("v_separation", 10)
+	_furniture_shop = VBoxContainer.new()
+	_furniture_shop.add_theme_constant_override("separation", 6)
 	page.add_child(_furniture_shop)
 	for c in Game.DECOR:
 		var cid := String(c["id"])
-		var card := PanelContainer.new()
-		var csb := StyleBoxFlat.new()
-		csb.bg_color = Color(0.05, 0.08, 0.12, 0.9)
-		csb.set_corner_radius_all(12)
-		csb.content_margin_left = 8
-		csb.content_margin_right = 8
-		csb.content_margin_top = 8
-		csb.content_margin_bottom = 8
-		card.add_theme_stylebox_override("panel", csb)
-		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_furniture_shop.add_child(card)
-		var ccol := VBoxContainer.new()
-		ccol.add_theme_constant_override("separation", 8)
-		card.add_child(ccol)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		_furniture_shop.add_child(row)
 		var frame := PanelContainer.new()
-		frame.custom_minimum_size = Vector2(0, 70)
+		frame.custom_minimum_size = Vector2(76, 50)
 		var fsb := StyleBoxFlat.new()
-		fsb.bg_color = Color(0.02, 0.03, 0.05, 0.9)
+		fsb.bg_color = Color(0.05, 0.08, 0.12, 0.9)
 		fsb.set_corner_radius_all(8)
 		frame.add_theme_stylebox_override("panel", fsb)
-		ccol.add_child(frame)
+		row.add_child(frame)
 		var thumb := Game.HouseViewScript.new()
 		thumb.animate = false
 		thumb.set_editable(false)
-		thumb.custom_minimum_size = Vector2(0, 70)
-		thumb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		thumb.custom_minimum_size = Vector2(76, 50)
 		frame.add_child(thumb)
 		_decor_cat_thumbs[cid] = thumb
-		var brow := HBoxContainer.new()
-		brow.add_theme_constant_override("separation", 8)
-		ccol.add_child(brow)
-		var lcol := VBoxContainer.new()
-		lcol.add_theme_constant_override("separation", 4)
-		lcol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		brow.add_child(lcol)
 		var lbl := g._label(String(c["label"]), 14)
-		lcol.add_child(lbl)
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(lbl)
 		_decor_cat_labels[cid] = lbl
-		var chip := g._label("", 11)
-		var chsb := StyleBoxFlat.new()
-		chsb.bg_color = Color(0.15, 0.20, 0.26, 0.9)
-		chsb.set_corner_radius_all(10)
-		chsb.content_margin_left = 8
-		chsb.content_margin_right = 8
-		chsb.content_margin_top = 3
-		chsb.content_margin_bottom = 3
-		chip.add_theme_stylebox_override("normal", chsb)
-		chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-		lcol.add_child(chip)
-		_decor_cat_chips[cid] = chip
-		var b := g._small_button("Выбрать", Vector2(96, 40), 1)
+		var b := g._small_button("Выбрать", Vector2(160, 40), 1)
 		b.pressed.connect(_open_decor_shop.bind(cid))
-		brow.add_child(b)
+		row.add_child(b)
 		_decor_cat_btns[cid] = b
 
 	page.add_child(g._label("Поручения Светика", 14))
@@ -513,16 +478,10 @@ func _refresh_house_page() -> void:
 		var cidx := String(id)
 		var b: Button = _decor_cat_btns[id]
 		b.disabled = not _cosmetic_house
-		b.text = "Выбрать"
+		b.text = "%s ✓" % _decor_label(cidx, _decor_current(cidx))
 		if _decor_cat_labels.has(cidx):
 			var cat := _decor_cat(cidx)
-			(_decor_cat_labels[cidx] as Label).text = String(cat.get("label", cidx))
-		if _decor_cat_chips.has(cidx):
-			var owned := _decor_owned_count(cidx)
-			var chip_lbl: Label = _decor_cat_chips[cidx]
-			chip_lbl.text = "куплено: %d" % owned
-			chip_lbl.add_theme_color_override("font_color",
-				Color(0.66, 0.91, 0.66) if owned > 0 else Color(0.49, 0.55, 0.61))
+			(_decor_cat_labels[cidx] as Label).text = "%s · %d/%d" % [String(cat.get("label", cidx)), _decor_owned_count(cidx), (cat.get("items", []) as Array).size()]
 		if _decor_cat_thumbs.has(cidx):
 			var th = _decor_cat_thumbs[cidx]
 			th.set_solo(_decor_current(cidx))
