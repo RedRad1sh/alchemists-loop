@@ -411,17 +411,20 @@ static func run(g: Game) -> void:
 	sm._save_cached_image("clay", sb6_blank)
 
 	g._open_sigil_modal("crafts")
-	var sb6_bar := g._sigil_coll.find_child("SigilTabBar", true, false) as HBoxContainer
-	var sb6_tabs := 0
-	if sb6_bar != null:
-		for c in sb6_bar.get_children():
-			if c is Button:
-				sb6_tabs += 1
-	var sb6_old := g._sigil_tab_content.get_child(0)
+	# Аркан — книга: вкладки стали страницами BookPager (3 страницы).
+	var sb6_book: BookPager = g._sigil_book
+	var sb6_pages := 0
+	if sb6_book != null:
+		sb6_pages = sb6_book._pages.size()
+	var sb6_old: Node = null
+	var sb6_page: Control = g._sigil_pages.get("crafts", null)
+	if sb6_page != null and sb6_page.get_child_count() > 0:
+		sb6_old = sb6_page.get_child(0)
 	g._sigil_show_tab("collection")
-	var sb6_moved := sb6_old.is_queued_for_deletion() and g._sigil_tab == "collection"
+	var sb6_moved := g._sigil_tab == "collection" \
+		and (sb6_old == null or sb6_old.is_queued_for_deletion())
 	Selftest.check("sb6 modal builds three tabs",
-		g._sigil_coll != null and sb6_tabs == 3 and g._sigil_tab_content != null
+		g._sigil_coll != null and sb6_pages == 3 and g._sigil_tab_content != null
 		and sb6_moved)
 
 	var sb6_grid := g._sigil_tab_content.find_child("SigilCollGrid", true, false) as GridContainer

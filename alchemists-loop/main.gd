@@ -432,6 +432,8 @@ var _sigil_tab_content: Control = null  # контейнер активной в
 var _sigil_tab: String = "crafts"  # активная вкладка: crafts | collection | sets
 var _sigil_tab_btns: Array = []  # кнопки вкладок; подсветка активной в _sigil_show_tab
 var _sigil_tab_seq := 0  # поколение вкладки: гасит корутины билдеров при переключении
+var _sigil_book: BookPager = null      # книга-Аркан (страницы-вкладки)
+var _sigil_pages: Dictionary = {}     # tab -> страница (VBoxContainer)
 var _sigil_fullscreen: Control = null  # полноэкранный просмотр карты; != null ⇒ открыт
 ## Живая карточка фуллскрина — для подачи tilt из _process. Обнуляется
 ## при закрытии, чтобы _process не дёргал удалённую ноду.
@@ -2048,72 +2050,76 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	panel.add_child(vbox)
 
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
-	vbox.add_child(head)
-	var title := _label("АРКАН СИГИЛОВ", 24)
-	title.autowrap_mode = TextServer.AUTOWRAP_OFF
-	title.add_theme_color_override("font_color", Color(0.90, 0.82, 0.56))
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(title)
-	var close_btn := _small_button("✕", Vector2(46, 40))
-	close_btn.tooltip_text = "Закрыть"
-	close_btn.pressed.connect(_close_sigil_collection)
-	head.add_child(close_btn)
-
-	var tabbar := HBoxContainer.new()
-	tabbar.name = "SigilTabBar"
-	tabbar.add_theme_constant_override("separation", 8)
-	vbox.add_child(tabbar)
+	# Аркан — КНИГА (BookPager): вкладки стали страницами, переход — листание.
+	var book := BookPager.new()
+	book.name = "SigilBook"
+	book.accent = Color(0.85, 0.72, 0.42)
+	book.offset_left = 0
+	book.offset_right = 0
+	book.offset_top = 0
+	book.offset_bottom = 0
+	book.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	book.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	book.close_requested.connect(_close_sigil_collection)
+	book.flipped.connect(func(_a: int, _b: int) -> void: Sfx.click())
+	vbox.add_child(book)
+	_sigil_book = book
 	_sigil_tab_btns = []
-	for tab_def in [["crafts", "КРАФТЫ ДНЯ"], ["collection", "КОЛЛЕКЦИЯ"], ["sets", "КОМПЛЕКТЫ"]]:
-		var tb := _small_button(str(tab_def[1]), Vector2(0, 38))
-		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		tb.set_meta("tab", str(tab_def[0]))
-		tb.set_meta("sb_idle", tb.get_theme_stylebox("normal"))
-		var sb_act: StyleBox = _stylebox_9("res://assets/ui/btn_gold.png", Vector4(10, 7, 10, 7))
-		if sb_act == null:
-			var fb := StyleBoxFlat.new()
-			fb.bg_color = Color(0.85, 0.72, 0.35, 1.0)
-			fb.set_corner_radius_all(8)
-			sb_act = fb
-		tb.set_meta("sb_active", sb_act)
-		tb.pressed.connect(_sigil_show_tab.bind(str(tab_def[0])))
-		tabbar.add_child(tb)
-		_sigil_tab_btns.append(tb)
 
-	var content := VBoxContainer.new()
-	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(content)
-	_sigil_tab_content = content
+	# Страницы-вкладки: Крафты дня, Коллекция, Комплекты. Билдеры ожидают
+	# VBoxContainer (content) — страницы делаем VBoxContainer.
+	var craft_page := VBoxContainer.new()
+	var coll_page := VBoxContainer.new()
+	var sets_page := VBoxContainer.new()
+	craft_page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	craft_page.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	coll_page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	coll_page.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sets_page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sets_page.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	book.add_page("КРАФТЫ ДНЯ", craft_page)
+	book.add_page("КОЛЛЕКЦИЯ", coll_page)
+	book.add_page("КОМПЛЕКТЫ", sets_page)
+	_sigil_pages = {"crafts": craft_page, "collection": coll_page, "sets": sets_page}
+	_sigil_tab_content = craft_page
+	# Интро-задержки билдеров ждут открытия книги (обложка откидывается).
+	_open_sigil_book.call_deferred()
 	_sigil_show_tab(start_tab)
 
 
 ## Показать вкладку модалки: старое содержимое сносится целиком, билдер
 ## строит заново. Поколение _sigil_tab_seq гасит корутины билдеров, чтобы
 ## предыдущая вкладка не достраивалась поверх новой после своего await.
+## Открыть книгу Аркана (обложка откидывается). Корутина — await в месте вызова.
+func _open_sigil_book() -> void:
+	if _sigil_book != null and is_instance_valid(_sigil_book):
+		await _sigil_book.open_book()
+
+
 func _sigil_show_tab(tab: String) -> void:
-	if _sigil_coll == null or _sigil_tab_content == null:
+	if _sigil_coll == null:
 		return
 	if tab != "crafts" and tab != "collection" and tab != "sets":
 		tab = "crafts"
+	# Страница-вкладка книги: билдеры строят в неё.
+	var page: Control = _sigil_pages.get(tab)
+	if page == null:
+		return
+	# Сносим содержимое СТАРОЙ страницы (билдер асинхронный — мог оставить
+	# статус-лейбл/демо-контент), затем строим новую.
+	var prev: Control = _sigil_pages.get(_sigil_tab, page)
+	if prev != page and prev != null:
+		for c in prev.get_children():
+			(c as Node).queue_free()
 	_sigil_tab = tab
 	_sigil_tab_seq += 1
-	for c in _sigil_tab_content.get_children():
+	_sigil_tab_content = page
+	for c in page.get_children():
 		(c as Node).queue_free()
-	for b in _sigil_tab_btns:
-		if b is Button and is_instance_valid(b):
-			var btn := b as Button
-			var active := str(btn.get_meta("tab", "")) == tab
-			var sb: StyleBox = btn.get_meta("sb_active") if active else btn.get_meta("sb_idle")
-			btn.add_theme_stylebox_override("normal", sb)
-			btn.add_theme_stylebox_override("hover", sb)
-			btn.add_theme_stylebox_override("pressed", sb)
-			btn.add_theme_stylebox_override("disabled", sb)
-			var fg := Color(0.16, 0.12, 0.03) if active else Color(0.88, 0.94, 0.96)
-			btn.add_theme_color_override("font_color", fg)
-			btn.add_theme_color_override("font_hover_color", fg)
+	# Перелистывание книги к нужной странице.
+	if _sigil_book != null and is_instance_valid(_sigil_book):
+		var idx: int = {"crafts": 0, "collection": 1, "sets": 2}[tab]
+		_sigil_book.go_to(idx)
 	match tab:
 		"collection":
 			_sigil_build_collection_tab(_sigil_tab_content)
@@ -3656,6 +3662,8 @@ func _close_sigil_collection() -> void:
 	d.queue_free()
 	_sigil_tab_content = null
 	_sigil_tab_btns = []
+	_sigil_book = null
+	_sigil_pages = {}
 	Sfx.click()
 
 func _sigil_thumb(item: Dictionary) -> Control:
