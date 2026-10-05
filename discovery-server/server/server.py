@@ -4832,6 +4832,16 @@ def sigil_craft(req: SigilCraftRequest):
             conn.rollback()
             raise
         if not inserted:
+            # Крафт уже закреплён (старый оффер дня / повторный запрос):
+            # обновляем поля из ТЕКУЩЕГО daily, чтобы «превью legendary →
+            # выпала rare» не случалось после ротации оффера.
+            conn.execute(
+                "UPDATE sigil_crafts SET rarity=?, llm_name=?, is_chromatic=?, card_id=?"
+                " WHERE device_id=? AND craft_id=?",
+                (rarity, llm_name, int(is_chromatic), card_id,
+                 req.device_id, req.craft_id),
+            )
+            conn.commit()
             existing = conn.execute(
                 "SELECT rarity, llm_name, is_chromatic, card_id FROM sigil_crafts"
                 " WHERE device_id=? AND craft_id=?",
@@ -4971,14 +4981,12 @@ def admin_sigil_rotate(device_id: str = Query("", max_length=128)):
     conn = get_db()
     try:
         today = _now_dt().date().isoformat()
-        # Чистим и старые крафты дня: иначе INSERT OR IGNORE вернёт запись
-        # прежнего оффера (старая rarity/card_id) — «превью legendary,
-        # выпала rare» и прочие рассинхроны.
+        # Чистим старый дневной оффер. Любые УЖЕ скрафченные карточки дня
+        # (sigil_crafts) НЕ трогаем — они лежат в коллекции игрока и удаление
+        # их тут обнулило бы прогресс. Рассинхрон «превью vs результат»
+        # закрывается на уровне крафта: сервер отвечает из текущего daily,
+        # а не из старой строки crafts (см. sigil_craft ниже).
         conn.execute("DELETE FROM sigil_daily WHERE device_id=? AND day=?", (device_id, today))
-        conn.execute(
-            "DELETE FROM sigil_crafts WHERE device_id=? AND craft_id LIKE ?",
-            (device_id, today + "_%"),
-        )
         conn.commit()
         # salt = мс-время: каждая ротация даёт НОВЫЙ оффер (иначе sha256(device#day)
         # снова возвращает тот же набор — «ротация» ничего не меняла).
