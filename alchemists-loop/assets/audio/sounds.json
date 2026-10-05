@@ -1,0 +1,148 @@
+{
+  "comment": "Центральный конфиг звуков. Ключ = имя события (вызов Sfx.play_event('имя') или Sfx.<имя>() в коде). Значение: file (путь к wav/ogg, опционально), volume_db, pitch (скорость), delay (сек до проигрывания), about (пояснение). Если file пуст/не найден — используется процедурный звук как раньше. Класть wav в res://assets/audio/ и писать путь в file (res://assets/audio/имя.wav).",
+  "events": {
+    "click": {
+      "file": "res://assets/audio/ui/click-5.wav",
+      "volume_db": -12.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "UI-клик: кнопки, ячейки, закрытие окон — базовый щелчок интерфейса"
+    },
+    "error": {
+      "file": "res://assets/audio/craft/nope.wav",
+      "volume_db": -12.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Ошибка: неудачное действие, отказ, крафт не прошёл — низкий тревожный тон"
+    },
+    "bubble": {
+      "file": "res://assets/audio/ui/click-4.wav",
+      "volume_db": -12.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Пузырёк/варка в котле: добавление элемента в слоты эксперимента"
+    },
+    "divide": {
+      "file": "",
+      "volume_db": -6.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Деление/трансмутация: разделение субстанции — свип вверх"
+    },
+    "morph": {
+      "file": "",
+      "volume_db": -6.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Морфинг: преобразование формы — долгий свип"
+    },
+    "draft_open": {
+      "file": "res://assets/audio/ritual/mixkit-magic-potion-music-and-fx-2831.wav",
+      "volume_db": -12.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Открытие чертежа/рецепта: панель крафта, дневной оффер"
+    },
+    "legendary": {
+      "file": "res://assets/audio/ritual/mixkit-fairy-sparkle-whoosh-869.wav",
+      "volume_db": -2.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Открытие новой карты (легендарная)"
+    },
+    "discovery": {
+      "file": "res://assets/audio/ritual/mixkit-magic-swoosh-1460.wav",
+      "volume_db": -3.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Открытие новой карты (обычная)"
+    },
+    "mystic": {
+      "file": "",
+      "volume_db": -2.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Мистическое событие (мир/QTE): нарастающий глиссандо + мерцание"
+    },
+    "stage_up": {
+      "file": "",
+      "volume_db": -2.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Повышение стадии/уровня: восходящее трезвучие"
+    },
+    "pet": {
+      "file": "res://assets/audio/lighty.mp3",
+      "volume_db": -12.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Питомец/ласка: короткий весёлый свип"
+    },
+    "ritual_phase": {
+      "file": "res://assets/audio/ritual/ignite-6.wav",
+      "volume_db": -15.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Ритуал: смена фазы (призыв -> стихии -> форма -> вспышка)"
+    },
+    "ritual_rune": {
+      "file": "res://assets/audio/ritual/ignite-4.wav",
+      "volume_db": -12.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Ритуал: нажатие руны на круге трансмутации — тихий отклик"
+    },
+    "ritual_spin": {
+      "file": "res://assets/audio/ritual/mixkit-strong-wild-wind-in-a-storm-2407.wav",
+      "volume_db": -10.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "start_sec": 5.0,
+      "len_sec": 0.8,
+      "loop": true,
+      "about": "TODO(звук): верчение ОТКЛЮЧЕНО в ritual.gd (loop-кусок подобран плохо). Доделать: подобрать start_sec/len_sec под ритм, фейд петли"
+    },
+    "ritual_reveal": {
+      "file": "res://assets/audio/ritual/mixkit-arcane-chain-spell-879.wav",
+      "volume_db": -4.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Хроматик: раскрытие карты (фуллскрин) — торжественный звук вместо click"
+    },
+    "achievement": {
+      "file": "res://assets/audio/achivement-2.wav",
+      "volume_db": -4.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Достижение: клейм награды комплекта (милстоун Аркана) — торжественный аккорд"
+    },
+    "game_start": {
+      "file": "res://assets/audio/enter.wav",
+      "volume_db": -4.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Вход в игру: приветственный аккорд при старте (не в selftest)"
+    },
+    "brew_discover": {
+      "file": "res://assets/audio/craft/mixkit-video-game-magic-potion-2830.wav",
+      "volume_db": -3.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Эксперимент в котле: найдено новое сочетание (попап нового рецепта)"
+    },
+    "craft_start": {
+      "file": "",
+      "volume_db": -8.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Старт крафта: подтверждение на доске (списание ингредиентов, начало ритуала)"
+    },
+    "music": {
+      "file": "",
+      "volume_db": -10.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Фоновая музыка: если file задан — играет его по кругу, иначе процедурный эмбиент"
+    }
+  }
+}

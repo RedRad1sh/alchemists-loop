@@ -865,6 +865,9 @@ func _ready() -> void:
 			Net.week_status(_online._device_id)
 	if _selftest:
 		_run_selftest()
+	else:
+		# Вход в игру: приветственный звук (не в selftest-прогоне).
+		Sfx.game_start()
 
 # ---------- R14: см. game/demo.gd (616-620) ----------
 
@@ -1724,7 +1727,7 @@ func _present_popup(item_id: String, subtext: String, title: String = "", title_
 	_popup.scale = Vector2(0.7, 0.7)
 	var tw := create_tween()
 	tw.tween_property(_popup, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
-	Sfx.discovery()
+	Sfx.brew_discover()
 
 func _hide_popup() -> void:
 	_popup_dim.visible = false
@@ -1988,29 +1991,30 @@ func _demo_seed_sigil_coll() -> void:
 	if _demo_harness._shot_path != "" or _demo_harness._gif_dir != "":
 		var demo_entry := _sigil_catalog_entry("clay", {"copies": 2, "first_at": "2026-09-28T10:00:00"})
 		_open_sigil_fullscreen(demo_entry)
-	_open_sigil_modal()
-	# --sigiltab=collection|fullscreen|sets|set_grid: один show_tab на ветку,
-	# чтобы вкладку не ребилдить дважды (set_grid поверх «sets» открывает
-	# экран комплекта — Task 7b).
+	# --sigiltab=collection|fullscreen|sets|set_grid: стартовую вкладку отдаём
+	# книге (_open_sigil_modal строит страницу сразу, а перелистывает уже после
+	# открытия обложки) — иначе _sigil_show_tab и open_book делят busy/_shield.
+	var initial_tab := "crafts"
 	match _demo_harness._sigil_tab:
 		"collection", "fullscreen":
-			_sigil_show_tab("collection")
-			if _demo_harness._sigil_tab == "fullscreen":
-				# Task 5C: для lore-скриншота открываем stone (валидный
-				# process/stage/seed), иначе первую собранную карту.
-				var target := "stone" if _sigil._server_collection.has("stone") else ""
-				if target == "":
-					for k in _sigil._server_collection:
-						target = str(k)
-						break
-				if target != "":
-					_open_sigil_fullscreen(_sigil_catalog_entry(target,
-						_sigil._server_collection[target]))
-
-		"sets":
-			_sigil_show_tab("sets")
+			initial_tab = "collection"
+		"sets", "set_grid":
+			initial_tab = "sets"
+	_open_sigil_modal(initial_tab)
+	# Всё, что поверх книги: set_grid открывает экран комплекта (Task 7b).
+	match _demo_harness._sigil_tab:
+		"fullscreen":
+			# Task 5C: для lore-скриншота открываем stone (валидный
+			# process/stage/seed), иначе первую собранную карту.
+			var target := "stone" if _sigil._server_collection.has("stone") else ""
+			if target == "":
+				for k in _sigil._server_collection:
+					target = str(k)
+					break
+			if target != "":
+				_open_sigil_fullscreen(_sigil_catalog_entry(target,
+					_sigil._server_collection[target]))
 		"set_grid":
-			_sigil_show_tab("sets")
 			_open_sigil_set_screen("earth")
 		_:
 			pass
@@ -2110,21 +2114,33 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 		p.offset_top = 8.0
 		p.offset_bottom = -12.0
 	_sigil_tab_content = craft_page
-	# Интро-задержки билдеров ждут открытия книги (обложка откидывается).
-	_open_sigil_book.call_deferred()
-	_sigil_show_tab(start_tab)
+	# Контент стартовой страницы строим сразу (книга ещё закрыта, но к первому
+	# снимку листа страница обязана быть готова). Обложка и перелистывание — в
+	# _open_sigil_book_and_show_tab: open_book() и go_to() оба владеют
+	# busy/_shield, поэтому запускать их одновременно нельзя.
+	_sigil_build_page(start_tab)
+	_open_sigil_book_and_show_tab.call_deferred(start_tab)
 
 
-## Показать вкладку модалки: старое содержимое сносится целиком, билдер
-## строит заново. Поколение _sigil_tab_seq гасит корутины билдеров, чтобы
-## предыдущая вкладка не достраивалась поверх новой после своего await.
+## Открыть книгу Аркана (обложка откидывается) и показать стартовую страницу.
+## Перелистывание — строго после open_book(): если запустить go_to() во время
+## открытия, щит одного гаснет, пока второй ещё анимируется, и ввод попадает в
+## книгу. Корутина — await в месте вызова.
+func _open_sigil_book_and_show_tab(tab: String) -> void:
+	await _open_sigil_book()
+	_sigil_show_tab(tab)
+
+
 ## Открыть книгу Аркана (обложка откидывается). Корутина — await в месте вызова.
 func _open_sigil_book() -> void:
 	if _sigil_book != null and is_instance_valid(_sigil_book):
 		await _sigil_book.open_book()
 
 
-## Программный переход на вкладку: строит контент и листает книгу.
+## Программный переход на вкладку: строит контент и листает книгу. Старое
+## содержимое сносится целиком, билдер строит заново; поколение _sigil_tab_seq
+## гасит корутины билдеров, чтобы предыдущая вкладка не достраивалась поверх
+## новой после своего await.
 func _sigil_show_tab(tab: String) -> void:
 	if _sigil_coll == null:
 		return
@@ -2724,6 +2740,7 @@ func _on_sigil_milestone_result(result: Dictionary) -> void:
 	if not result.get("ok", false) or not result.get("claimed", false):
 		return
 	var tier := int(result.get("tier", 0))
+	Sfx.achievement()
 	_sigil_claim_popup(tier)
 	_sigil.request_collection(_online._device_id)
 
@@ -2885,8 +2902,12 @@ func _sigil_date_ru(iso: String) -> String:
 func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	if entry.is_empty() or _sigil_fullscreen != null or _sigil == null:
 		return
-	Sfx.click()
 	var rarity := str(entry.get("rarity", "common"))
+	# Хроматик — своё «раскрытие карты» (торжественный звук вместо клика).
+	if rarity == "chromatic":
+		Sfx.ritual_reveal()
+	else:
+		Sfx.click()
 	var accent := _rarity_color(rarity)
 	var root := Control.new()
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -3175,8 +3196,12 @@ func _close_sigil_fullscreen() -> void:
 ## Ждать ежедневные крафты, но не вечно: офлайн не должен вешать меню.
 ## Settled-флаг гасит ожидание сразу после офлайн-ответа, не по полному таймауту.
 func _await_daily_crafts(timeout: float) -> bool:
+	# Ждём ОТВЕТА сервера (daily_settled), а не просто непустого кэша: иначе
+	# экран строится из устаревшего sigil_daily_cache.json раньше, чем придёт
+	# свежий оффер («превью хроматик, крафт обычка» после ротации).
+	# Кэш — только офлайн-фолбэк по таймауту.
 	var waited := 0.0
-	while _sigil._daily_crafts.is_empty() and not _sigil.daily_settled() and waited < timeout:
+	while not _sigil.daily_settled() and waited < timeout:
 		await get_tree().process_frame
 		waited += get_process_delta_time()
 	return not _sigil._daily_crafts.is_empty()
@@ -3600,7 +3625,7 @@ func _on_sigil_board_confirmed(craft: Dictionary) -> void:
 		var have := int(_engine.inventory.get(elem_id, 0))
 		_engine.inventory[elem_id] = max(0, have - needed)
 	_saves._save_game()
-	Sfx.discovery()
+	Sfx.craft_start()
 	var craft_id := str(craft.get("id", ""))
 	_sigil_pending_craft = craft.duplicate(true)
 	_sigil.craft_card(_online._device_id, craft_id)

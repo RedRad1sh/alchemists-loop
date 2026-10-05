@@ -1,170 +1,118 @@
-Я сделал `BookPager` — отдельный класс-«книгу». Обложка открывается при показе экрана, вкладки вверху страницы, переход между ними идёт перелистыванием, а свайп от левого или правого края страницы листает так же. Код не запускал, на Godot 4.x не проверял.
+# BookPager — книга с перелистыванием (интеграция)
 
+`BookPager` — отдельный класс-«книга» (`game/sigil/book_pager.gd`). Обложка
+открывается при показе экрана, вкладки вверху страницы, переход между ними идёт
+перелистыванием, а свайп от левого или правого края страницы листает так же.
 
+Статус: класс лежит в репозитории и уже подключён — Аркан Сигилов открывается
+книгой (`main.gd`: `_open_sigil_modal()` собирает страницы, `_sigil_show_tab()`
+листает, `_open_sigil_book_and_show_tab()` дожидается открытия обложки). Ниже —
+как переиспользовать книгу в `SigilCraftBoard`.
 
 Перелистывание идёт так:
 
-1\. Страница снимается в текстуру.
+1. Страница снимается в текстуру.
+2. Текстура становится «листом» с шейдером: он вращается вокруг корешка с перспективой и затемнением.
+3. Под листом уже лежит следующая страница с падающей тенью.
 
-2\. Текстура становится «листом» с шейдером: он вращается вокруг корешка с перспективой и затемнением.
+Обложка рисуется в том же шейдере процедурно (кожа, золотая рамка, рунный круг
+цвета акцента), без текстур. Положи `book_pager.gd` рядом с `SigilCraftBoard`. В
+самом `SigilCraftBoard` нужны точечные правки, логику драга и дропа трогать не
+надо.
 
-3\. Под листом уже лежит следующая страница с падающей тенью.
-
-
-
-Обложка рисуется в том же шейдере процедурно (кожа, золотая рамка, рунный круг цвета акцента), без текстур.Положи `book\_pager.gd` рядом с `SigilCraftBoard`. В самом `SigilCraftBoard` нужны точечные правки, логику драга и дропа трогать не надо.
-
-
-
-\*\*1. Новые поля и константа\*\*
+## 1. Новые поля и константа
 
 ```gdscript
+const INTRO_DELAY := BookPager.INTRO_TIME   # интро ждёт открытия книги
 
-const INTRO\_DELAY := BookPager.INTRO\_TIME   # интро ждёт открытия книги
-
-var \_book: BookPager
-
-var \_page: Control
-
+var _book: BookPager
+var _page: Control
 ```
 
-В четырёх `tween\_interval` (шапка `0.12`, ячейки `0.1 + …`, орбы `0.25 + …`, кнопка `0.3`) прибавь `INTRO\_DELAY + …`. Иначе анимации появления отыграют, пока обложка ещё закрыта.
+В четырёх `tween_interval` (шапка `0.12`, ячейки `0.1 + …`, орбы `0.25 + …`,
+кнопка `0.3`) прибавь `INTRO_DELAY + …`. Иначе анимации появления отыграют,
+пока обложка ещё закрыта.
 
-
-
-\*\*2. В `\_build`, сразу после фона `bg`\*\*
+## 2. В `_build`, сразу после фона `bg`
 
 ```gdscript
+_book = BookPager.new()
+_book.name = "Book"
+_book.accent = _accent
+_book.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+_book.offset_left = 14.0
+_book.offset_right = -14.0
+_book.offset_top = 28.0
+_book.offset_bottom = -28.0
+_book.close_requested.connect(func() -> void: closed.emit())
+_book.flipped.connect(func(_a: int, _b: int) -> void: Sfx.click())
+add_child(_book)
 
-\_book = BookPager.new()
-
-\_book.name = "Book"
-
-\_book.accent = \_accent
-
-\_book.set\_anchors\_and\_offsets\_preset(Control.PRESET\_FULL\_RECT)
-
-\_book.offset\_left = 14.0
-
-\_book.offset\_right = -14.0
-
-\_book.offset\_top = 28.0
-
-\_book.offset\_bottom = -28.0
-
-\_book.close\_requested.connect(func() -> void: closed.emit())
-
-\_book.flipped.connect(func(\_a: int, \_b: int) -> void: Sfx.click())
-
-add\_child(\_book)
-
-\_page = Control.new()
-
-\_page.name = "CraftPage"
-
-\_book.add\_page("Круг", \_page)
-
-\_book.add\_page("Рецепт", \_build\_recipe\_page(game))
-
-\_book.open\_book()
-
+_page = Control.new()
+_page.name = "CraftPage"
+_book.add_page("Круг", _page)
+_book.add_page("Рецепт", _build_recipe_page(game))
+_book.open_book()
 ```
 
+## 3. Родители у существующих узлов
 
+- `add_child(head)` меняется на `_page.add_child(head)`.
+- `add_child(_board)` меняется на `_page.add_child(_board)`.
+- `add_child(_craft_btn)` меняется на `_page.add_child(_craft_btn)`.
+- Блок `close_btn` из шапки удали: «✕» теперь в книге.
+- У кнопки `offset_left = 28` и `offset_right = -28` вместо 120.
 
-\*\*3. Родители у существующих узлов\*\*
+## 4. `close()`
 
-\- `add\_child(head)` меняется на `\_page.add\_child(head)`.
-
-\- `add\_child(\_board)` меняется на `\_page.add\_child(\_board)`.
-
-\- `add\_child(\_craft\_btn)` меняется на `\_page.add\_child(\_craft\_btn)`.
-
-\- Блок `close\_btn` из шапки удали: «✕» теперь в книге.
-
-\- У кнопки `offset\_left = 28` и `offset\_right = -28` вместо 120.
-
-
-
-\*\*4. `close()`.\*\* Вместо tween по `modulate:a` сделай так:
+Вместо tween по `modulate:a` сделай так:
 
 ```gdscript
-
-await \_book.close\_book()
-
-queue\_free()
-
+await _book.close_book()
+queue_free()
 ```
 
+## 5. Вторая страница-вкладка
 
-
-\*\*5. Вторая страница-вкладка.\*\* Это пример, ключи `craft` подставь свои.
+Это пример, ключи `craft` подставь свои.
 
 ```gdscript
-
-func \_build\_recipe\_page(game: Node) -> Control:
-
-&#x09;var page := MarginContainer.new()
-
-&#x09;for side in \["left", "right", "top", "bottom"]:
-
-&#x09;	page.add\_theme\_constant\_override("margin\_" + side, 24)
-
-&#x09;var col := VBoxContainer.new()
-
-&#x09;col.add\_theme\_constant\_override("separation", 14)
-
-&#x09;page.add\_child(col)
-
-&#x09;var h := Label.new()
-
-&#x09;h.text = str(craft.get("name", "Рецепт"))
-
-&#x09;h.add\_theme\_font\_size\_override("font\_size", 22)
-
-&#x09;col.add\_child(h)
-
-&#x09;var ings: Array = craft.get("ingredients", \[])
-
-&#x09;for i in ings.size():
-
-&#x09;	var d := ing\_item(ings, i)
-
-&#x09;	var row := HBoxContainer.new()
-
-&#x09;	var orb: ElementOrb = game.\_make\_orb(d.id, 44)
-
-&#x09;	orb.interactive = false
-
-&#x09;	orb.custom\_minimum\_size = Vector2(44, 44)
-
-&#x09;	row.add\_child(orb)
-
-&#x09;	var l := Label.new()
-
-&#x09;	l.text = "  ×%d" % d.qty
-
-&#x09;	row.add\_child(l)
-
-&#x09;	col.add\_child(row)
-
-&#x09;return page
-
+func _build_recipe_page(game: Node) -> Control:
+	var page := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		page.add_theme_constant_override("margin_" + side, 24)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 14)
+	page.add_child(col)
+	var h := Label.new()
+	h.text = str(craft.get("name", "Рецепт"))
+	h.add_theme_font_size_override("font_size", 22)
+	col.add_child(h)
+	var ings: Array = craft.get("ingredients", [])
+	for i in ings.size():
+		var d := ing_item(ings, i)
+		var row := HBoxContainer.new()
+		var orb: ElementOrb = game._make_orb(d.id, 44)
+		orb.interactive = false
+		orb.custom_minimum_size = Vector2(44, 44)
+		row.add_child(orb)
+		var l := Label.new()
+		l.text = "  ×%d" % d.qty
+		row.add_child(l)
+		col.add_child(row)
+	return page
 ```
 
+## Что нужно учесть
 
+- **Размеры.** Геометрия доски рассчитана на страницу шириной около 640 px (орбы на радиусе 220 плюс размер орба дают примерно 500 px). Для этого в проекте нужна базовая портретная база вроде 720×1280 со stretch `canvas_items`. Если база меньше, радиусы надо масштабировать.
+- **Свайп.** Он срабатывает только от края страницы (36 px), чтобы не конфликтовать с драгом орбов. Орбы, лежащие у самого края, могут случайно запустить листание.
+- **Снимок страницы.** Лист берёт снимок экрана, поэтому при листании назад целевая страница на один кадр показывается целиком, это может дать лёгкое мерцание. Лечится кэшем снимков или отдельным `SubViewport` на страницу.
+- **Открытие и перелистывание.** `open_book()` и `go_to()` оба владеют `busy`/`_shield`: перелистывание запускай только после завершения открытия (`await _book.open_book()`), иначе щит одного гаснет, пока второй ещё анимируется, и ввод попадает в книгу.
+- **Окно с letterbox.** Если окно с letterbox-полями (stretch mode `keep`), в `_snapshot` может понадобиться поправка на смещение вьюпорта.
 
-Что нужно учесть:
+## Дальше
 
-\- \*\*Размеры.\*\* Геометрия доски рассчитана на страницу шириной около 640 px (орбы на радиусе 220 плюс размер орба дают примерно 500 px). Для этого в проекте нужна базовая портретная база вроде 720×1280 со stretch `canvas\_items`. Если база меньше, радиусы надо масштабировать.
-
-\- \*\*Свайп.\*\* Он срабатывает только от края страницы (36 px), чтобы не конфликтовать с драгом орбов. Орбы, лежащие у самого края, могут случайно запустить листание.
-
-\- \*\*Снимок страницы.\*\* Лист берёт снимок экрана, поэтому при листании назад целевая страница на один кадр показывается целиком, это может дать лёгкое мерцание. Лечится кэшем снимков или отдельным `SubViewport` на страницу.
-
-\- \*\*Окно с letterbox.\*\* Если окно с letterbox-полями (stretch mode `keep`), в `\_snapshot` может понадобиться поправка на смещение вьюпорта.
-
-
-
-Если хочешь, добавлю полноценный разворот на два листа для планшетов и бумажные текстуры страниц.
-
+Первая версия — интеграция в `SigilCraftBoard` (шапка/доска/кнопка крафта
+первой страницей, рецепт второй). Если понадобится, добавлю полноценный разворот
+на два листа для планшетов и бумажные текстуры страниц.

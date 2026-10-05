@@ -98,13 +98,13 @@ func _ensure_nodes() -> void:
 		title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		title.ellipsis_char = "…"
 		title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
-	title.add_theme_constant_override("outline_size", 6)
-	# Название карточки — «display»-шрифт (Divagon из theme.json), fallback default.
-	var disp := get_theme_default_font()
-	if has_theme_font("display", "Label"):
-		disp = get_theme_font("display", "Label")
-	title.add_theme_font_override("font", disp)
-	add_child(title)
+		title.add_theme_constant_override("outline_size", 6)
+		# Название карточки — «display»-шрифт (Divagon из theme.json), fallback default.
+		var disp := get_theme_default_font()
+		if has_theme_font("display", "Label"):
+			disp = get_theme_font("display", "Label")
+		title.add_theme_font_override("font", disp)
+		add_child(title)
 	if glitch == null:
 		glitch = SigilGlitchView.new()
 		glitch.name = "Glitch"
