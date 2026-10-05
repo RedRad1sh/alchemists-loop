@@ -2066,7 +2066,6 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 	tabbar.add_theme_constant_override("separation", 8)
 	vbox.add_child(tabbar)
 	_sigil_tab_btns = []
-	# Вкладки-«закладки» книги: КРАФТЫ · КОЛЛЕКЦИЯ · КОМПЛЕКТЫ.
 	for tab_def in [["crafts", "КРАФТЫ ДНЯ"], ["collection", "КОЛЛЕКЦИЯ"], ["sets", "КОМПЛЕКТЫ"]]:
 		var tb := _small_button(str(tab_def[1]), Vector2(0, 38))
 		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2083,32 +2082,10 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 		tabbar.add_child(tb)
 		_sigil_tab_btns.append(tb)
 
-	# Бумажная страница-подложка: текстура пергамента (шейдер) вместо голого
-	# тёмного панельного фона — «Аркан как раскрытая книга».
-	var paper := PanelContainer.new()
-	paper.name = "SigilPaper"
-	paper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	paper.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var paper_sb := StyleBoxFlat.new()
-	var paper_tex := preload("res://game/sigil/shaders/sigil_paper.gdshader")
-	var paper_mat := ShaderMaterial.new()
-	paper_mat.shader = paper_tex
-	# Шейдер рисует бумагу сам: материал — на узле панели, стиль прозрачный.
-	paper_sb.bg_color = Color(1, 1, 1, 1)
-	paper_sb.draw_center = true
-	paper_sb.border_color = Color(0.35, 0.28, 0.18, 0.9)
-	paper_sb.set_border_width_all(2)
-	paper_sb.set_corner_radius_all(6)
-	paper.add_theme_stylebox_override("panel", paper_sb)
-	paper.material = paper_mat
-	vbox.add_child(paper)
-
 	var content := VBoxContainer.new()
-	content.name = "SigilContent"
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	paper.add_child(content)
+	vbox.add_child(content)
 	_sigil_tab_content = content
 	_sigil_show_tab(start_tab)
 
@@ -2121,11 +2098,10 @@ func _sigil_show_tab(tab: String) -> void:
 		return
 	if tab != "crafts" and tab != "collection" and tab != "sets":
 		tab = "crafts"
-	# Снос старого содержимого — синхронный (sb6 требует мгновенный free).
-	for c in _sigil_tab_content.get_children():
-		(c as Node).queue_free()
 	_sigil_tab = tab
 	_sigil_tab_seq += 1
+	for c in _sigil_tab_content.get_children():
+		(c as Node).queue_free()
 	for b in _sigil_tab_btns:
 		if b is Button and is_instance_valid(b):
 			var btn := b as Button
