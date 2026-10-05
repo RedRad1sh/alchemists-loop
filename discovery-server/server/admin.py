@@ -155,6 +155,38 @@ def setup_admin(app, get_db):
             conn.close()
         return RedirectResponse("/admin/players", status_code=303)
 
+    @app.post("/admin/players/{device_id}/craft-chromatic")
+    @_require_auth
+    def admin_craft_chromatic(request: Request, device_id: str):
+        """Выдать игроку хроматический сигил (внекомплектную карту).
+
+        Создаёт запись sigil_crafts с уникальным seed и сгенерированным
+        именем/лором (LLM-identity с шаблон-фолбэком), как при настоящем крафте.
+        """
+        from server import _generate_chromatic_identity, _now_iso
+        import time
+        conn = get_db()
+        try:
+            today = _now_iso()[:10]
+            craft_id = f"{today}_{device_id[:16]}_chroma"
+            seed = int(time.time() * 1000) % 0x7FFFFFFF
+            rows = conn.execute(
+                "SELECT slug FROM elements ORDER BY RANDOM() LIMIT 4"
+            ).fetchall()
+            ing_names = [r["slug"] for r in rows]
+            ident = _generate_chromatic_identity(
+                {"ingredients": [{"item_id": n} for n in ing_names]}, "chromatic")
+            conn.execute(
+                "INSERT OR IGNORE INTO sigil_crafts"
+                " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, seed, lore, crafted_at)"
+                " VALUES (?, ?, 'chromatic', ?, 1, '', ?, ?, ?)",
+                (device_id, craft_id, ident["name"], seed, ident["lore"], _now_iso()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return RedirectResponse("/admin/players", status_code=303)
+
     @app.get("/admin/elements", response_class=HTMLResponse)
     @_require_auth
     def admin_elements(request: Request, q: str = ""):

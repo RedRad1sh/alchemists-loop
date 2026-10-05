@@ -3004,6 +3004,19 @@ def discover(req: DiscoverRequest):
             # не меняет — семантика скоринга та же (нужны только target/day).
             _ensure_challenge(conn)
 
+            # Эксперимент с ингредиентом, которого нет в базе элементов
+            # (клиентский инвентарь шире серверного каталога): мягкий отказ
+            # вместо 400 — иначе «часто падает 400 при эксперименте».
+            a_row = conn.execute(
+                "SELECT 1 FROM elements WHERE slug = ?", (req.a,)).fetchone()
+            b_row = conn.execute(
+                "SELECT 1 FROM elements WHERE slug = ?", (req.b,)).fetchone()
+            if a_row is None or b_row is None:
+                return DiscoverResponse(
+                    ok=True, status="not_combinable", discovery=None, already_known=False,
+                    message=f"Туман рассеялся: «{req.a}» и «{req.b}» не сочетаются — элемент не создан.",
+                )
+
             kind, discovery = _generate_for_pair(
                 conn, req.a, req.b, pair_key, nick, req.device_id)
 
