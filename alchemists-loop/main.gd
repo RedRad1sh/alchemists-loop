@@ -1729,7 +1729,7 @@ func _show_sigil_card(tex: ImageTexture, item_id: String, display_name: String, 
 	decor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(decor)
 	decor.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	decor.start(is_special, Vector2(300.0, 400.0))
+	decor.start(is_special, Vector2(320.0, 427.0))
 
 	# ── Центр экрана ──
 	var center := CenterContainer.new()
@@ -1758,7 +1758,7 @@ func _show_sigil_card(tex: ImageTexture, item_id: String, display_name: String, 
 	img_rect.texture = tex
 	img_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	img_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	img_rect.custom_minimum_size = Vector2(256, 341)
+	img_rect.custom_minimum_size = Vector2(320, 427)
 	img_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	vbox.add_child(img_rect)
 
@@ -2869,10 +2869,10 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	# Переворачиваемая карточка: лицо = живой рендер, оборот = лор.
 	var card_flip := Control.new()
 	card_flip.name = "SigilCardFlip"
-	card_flip.custom_minimum_size = Vector2(300, 400)
-	card_flip.size = Vector2(300, 400)
+	card_flip.custom_minimum_size = Vector2(405, 540)
+	card_flip.size = Vector2(405, 540)
 	card_flip.mouse_filter = Control.MOUSE_FILTER_STOP
-	card_flip.pivot_offset = Vector2(150, 200)
+	card_flip.pivot_offset = Vector2(202, 270)
 	card_flip.set_meta("flipped", false)
 	card_flip.set_meta("busy", false)
 	vbox.add_child(card_flip)
@@ -2887,7 +2887,7 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 		_live_card_node.play_reveal.call_deferred()
 	# SubViewportContainer нельзя растягивать preset-ом: он сам задаёт размер
 	# вьюпорту. Фикс. размер 300x540, центрирование — через size_flags.
-	face.size = Vector2(300, 400)
+	face.size = Vector2(405, 540)
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card_flip.add_child(face)
 
@@ -3229,7 +3229,7 @@ func _sigil_live_card(entry: Dictionary) -> Control:
 			"shattered_glass", "laser_refraction", "glitch"]
 		prism_eff = effs[recipe.compute_seed() % effs.size()]
 	var opts := SigilOptions.make({
-		"card_size": Vector2i(300, 400),
+		"card_size": Vector2i(405, 540),
 		"show_name": true,
 		"show_frame": true,
 		"show_icon": true,
@@ -3238,7 +3238,7 @@ func _sigil_live_card(entry: Dictionary) -> Control:
 		"prism_phase": -1.0,
 	})
 	var box := SubViewportContainer.new()
-	box.custom_minimum_size = Vector2(300, 400)
+	box.custom_minimum_size = Vector2(405, 540)
 	box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -3246,7 +3246,7 @@ func _sigil_live_card(entry: Dictionary) -> Control:
 	box.stretch = true
 	var vp := SubViewport.new()
 	vp.name = "LiveCardViewport"
-	vp.size = Vector2i(300, 400)
+	vp.size = Vector2i(405, 540)
 	vp.transparent_bg = true
 	vp.disable_3d = true
 	vp.gui_disable_input = true
