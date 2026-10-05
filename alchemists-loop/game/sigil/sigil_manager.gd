@@ -35,6 +35,9 @@ var _player_salt: String = ""
 var _daily_crafts: Array = []  ## кэш ежедневных крафтов
 ## Хэш оффера дня с сервера (по нему клиент решает, актуален ли кэш после ротации).
 var _daily_offer_hash: String = ""
+## Доп. соль кэша карточек: редкость+имя последнего запрошенного крафта
+## (чтобы слот дня с новой картой не отдавал старый PNG).
+var _cache_extra: String = ""
 var _daily_day: String = ""  ## день кэша
 var _preview_cache: Dictionary = {}  ## key -> ImageTexture
 ## Каталог карт: card_id -> словарь карты. Общий для всех игроков.
@@ -102,6 +105,7 @@ func generate_card(item_id: String, ingredients: PackedStringArray,
 func get_card(item_id: String, ingredients: PackedStringArray,
 		rarity: StringName = &"common", result_type: StringName = &"object",
 		display_name: String = "") -> Image:
+	_cache_extra = "%s|%s|%s" % [str(rarity), result_type, display_name]
 	var cached := _load_cached_image(item_id)
 	if cached != null:
 		return cached
@@ -473,7 +477,11 @@ func preview_texture(craft: Dictionary) -> ImageTexture:
 
 ## Кэширование PNG на диске.
 func _cached_path(item_id: String) -> String:
-	return "%s/%s.png" % [CACHE_DIR, item_id]
+	# Ключ кэша — НЕ craft_id слота, а его содержимое: ротация дня меняет
+	# карту/редкость на том же слоте, и по craft_id вернулся бы старый PNG
+	# («скрафтил Глину, внизу Фермер»). Соль из редкости + отображаемого
+	# имени, чтобы разные офферы одного слота не пересекались.
+	return "%s/c_%s.png" % [CACHE_DIR, (item_id + "|" + _cache_extra).sha256_text().substr(0, 24)]
 
 
 func _load_cached_image(item_id: String) -> Image:
