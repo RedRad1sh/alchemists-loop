@@ -24,8 +24,12 @@ signal closed
 const ORB_SIZE := 56
 const GHOST_SIZE := 62
 const CELL_SIZE := 64
-const CELL_RADIUS := 150.0   # радиус окружности ячеек от центра круга
-const ORB_RADIUS := 220.0    # радиус, на котором лежат свободные орбы
+# Радиусы масштабируются под ширину страницы книги (страница ~470px vs
+# исходные ~620 в INTEGRATION): константы — «эталон» на широкой базе.
+const CELL_RADIUS_BASE := 150.0
+const ORB_RADIUS_BASE := 220.0
+var _cell_radius := 150.0
+var _orb_radius := 220.0
 
 ## Фоновый шейдер: градиент + акцентное «дыхание» от центра + виньетка
 ## + два слоя дрейфующих пылинок. Процедурно, без текстур.
@@ -82,6 +86,11 @@ var _drag_ok := false
 var _craft_btn: Button
 var _drag_pos := Vector2.ZERO  # текущая позиция мыши во время переноса
 
+const INTRO_DELAY := BookPager.INTRO_TIME   # интро ждёт открытия книги
+
+var _book: BookPager
+var _page: Control                  # страница книги («Круг»)
+
 var _board: Control                 # поле с орбами и кругом
 var _circle: TextureRect            # круг (текстура рецепта)
 var _glow: TextureRect              # мягкое свечение за кругом (градиент-текстура)
@@ -108,6 +117,8 @@ func show_craft(p_craft: Dictionary, game: Node) -> void:
 	_accent = Color(1.0, 0.55, 0.12) if bool(craft.get("is_chromatic", false)) \
 		else game._rarity_color(str(craft.get("rarity", "common")))
 	_build(game)
+	# Книга откроется в _ready (после add_child в дерево) — обложка откидывается,
+	# интро-задержки (INTRO_DELAY) ждут этого, чтобы анимации не прошли под обложкой.
 	# Плавное открытие экрана
 	var tw := create_tween()
 	tw.tween_property(self, "modulate:a", 1.0, 0.35) \
@@ -116,6 +127,17 @@ func show_craft(p_craft: Dictionary, game: Node) -> void:
 	var tex: Texture2D = await game._sigil.preview_texture(craft)
 	if is_instance_valid(_circle) and tex != null:
 		_circle.texture = tex
+
+
+## _ready: ждём, пока show_craft построит книгу (_book появляется в _build),
+## затем открываем её. await в _ready — легален.
+func _ready() -> void:
+	for i in 300:
+		if _book != null and is_instance_valid(_book):
+			break
+		await get_tree().process_frame
+	if _book != null and is_instance_valid(_book):
+		await _book.open_book()
 
 
 func _build(game: Node) -> void:
@@ -138,14 +160,33 @@ func _build(game: Node) -> void:
 	)
 	add_child(bg)
 
-	# --- Шапка: заголовок со свечением + закрыть ---
+	# --- Книга-пейджер: обложка, страницы, перелистывание ---
+	_book = BookPager.new()
+	_book.name = "Book"
+	_book.accent = _accent
+	_book.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_book.offset_left = 14.0
+	_book.offset_right = -14.0
+	_book.offset_top = 28.0
+	_book.offset_bottom = -28.0
+	_book.close_requested.connect(func() -> void: closed.emit())
+	_book.flipped.connect(func(_a: int, _b: int) -> void: Sfx.click())
+	add_child(_book)
+
+	_page = Control.new()
+	_page.name = "CraftPage"
+	_book.add_page("Круг", _page)
+	_book.add_page("Рецепт", _build_recipe_page(game))
+	# Книга открывается после построения (обложка откидывается).
+
+	# --- Шапка: заголовок со свечением (без кнопки закрытия — она в книге) ---
 	var head := HBoxContainer.new()
 	head.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	head.offset_left = 24
 	head.offset_right = -24
 	head.offset_top = 16
 	head.modulate.a = 0.0
-	add_child(head)
+	_page.add_child(head)
 	var title := Label.new()
 	title.text = "ТРАНСМУТАЦИЯ"
 	title.add_theme_font_size_override("font_size", 22)
@@ -158,14 +199,8 @@ func _build(game: Node) -> void:
 	title.add_theme_constant_override("shadow_outline_size", 10)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(title)
-	var close_btn := Button.new()
-	close_btn.text = "Закрыть"
-	close_btn.custom_minimum_size = Vector2(96, 38)
-	close_btn.add_theme_font_size_override("font_size", 13)
-	close_btn.pressed.connect(func() -> void: closed.emit())
-	head.add_child(close_btn)
 	var ht := create_tween()
-	ht.tween_interval(0.12)
+	ht.tween_interval(INTRO_DELAY + 0.12)
 	ht.tween_property(head, "modulate:a", 1.0, 0.4) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
@@ -176,8 +211,9 @@ func _build(game: Node) -> void:
 	_board.offset_top = 64
 	_board.offset_bottom = -110
 	_board.mouse_filter = Control.MOUSE_FILTER_PASS
-	add_child(_board)
+	_page.add_child(_board)
 	_board.resized.connect(_on_board_resized)
+	_board.resized.connect(_adapt_radii)
 
 	# Пульсирующее свечение ЗА кругом (радиальная градиент-текстура, без _draw)
 	var grad := Gradient.new()
@@ -233,7 +269,7 @@ func _build(game: Node) -> void:
 		_board.add_child(cell)
 		_cells[d.id] = cell
 		var ct := create_tween()
-		ct.tween_interval(0.1 + 0.06 * float(i))
+		ct.tween_interval(INTRO_DELAY + 0.1 + 0.06 * float(i))
 		ct.tween_property(cell, "modulate:a", 1.0, 0.25) \
 			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		ct.parallel().tween_property(cell, "scale", Vector2.ONE, 0.4) \
@@ -247,7 +283,7 @@ func _build(game: Node) -> void:
 		orb.interactive = true
 		orb.pivot_offset = Vector2(ORB_SIZE, ORB_SIZE) * 0.5
 		var ang := TAU * float(i) / float(n) - PI / 2.0 + PI / float(n)
-		var home := _board.size * 0.5 + Vector2(cos(ang), sin(ang)) * ORB_RADIUS \
+		var home := _board.size * 0.5 + Vector2(cos(ang), sin(ang)) * _orb_radius \
 			- Vector2(ORB_SIZE, ORB_SIZE) * 0.5
 		_orb_home[d.id] = home
 		_orb_phase[d.id] = float(i) * 1.7
@@ -260,7 +296,7 @@ func _build(game: Node) -> void:
 		_board.add_child(orb)
 		_orbs[d.id] = orb
 		var ot := create_tween()
-		ot.tween_interval(0.25 + 0.08 * float(i))
+		ot.tween_interval(INTRO_DELAY + 0.25 + 0.08 * float(i))
 		ot.tween_property(orb, "modulate:a", 1.0, 0.3) \
 			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		ot.parallel().tween_property(orb, "scale", Vector2.ONE, 0.45) \
@@ -274,8 +310,8 @@ func _build(game: Node) -> void:
 	_craft_btn = Button.new()
 	_craft_btn.text = "НАЧАТЬ ТРАНСМУТАЦИЮ"
 	_craft_btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	_craft_btn.offset_left = 120
-	_craft_btn.offset_right = -120
+	_craft_btn.offset_left = 28
+	_craft_btn.offset_right = -28
 	_craft_btn.offset_top = -92
 	_craft_btn.offset_bottom = -36
 	_craft_btn.add_theme_font_size_override("font_size", 17)
@@ -290,13 +326,54 @@ func _build(game: Node) -> void:
 	_craft_btn.pressed.connect(func() -> void:
 		print("CRAFT-BOARD: confirmed pressed, placed=", _placed.size(), "/", _cells.size())
 		confirmed.emit(craft))
-	add_child(_craft_btn)
+	_page.add_child(_craft_btn)
 	var bt := create_tween()
-	bt.tween_interval(0.3)
+	bt.tween_interval(INTRO_DELAY + 0.3)
 	bt.tween_property(_craft_btn, "modulate:a", 1.0, 0.35) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 	_update_button()
+
+
+## Вторая страница книги «Рецепт»: ингредиенты с орбами и количествами.
+func _build_recipe_page(game: Node) -> Control:
+	var page := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		page.add_theme_constant_override("margin_" + side, 24)
+	page.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 14)
+	page.add_child(col)
+	var h := Label.new()
+	h.text = str(craft.get("llm_name", craft.get("fallback_name", "Рецепт")))
+	h.add_theme_font_size_override("font_size", 22)
+	h.add_theme_color_override("font_color", Color(0.9, 0.83, 0.6))
+	col.add_child(h)
+	var ings: Array = craft.get("ingredients", [])
+	for i in ings.size():
+		var d := ing_item(ings, i)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		var orb: ElementOrb = game._make_orb(d.id, 44)
+		orb.interactive = false
+		orb.custom_minimum_size = Vector2(44, 44)
+		orb.size = Vector2(44, 44)
+		row.add_child(orb)
+		var l := Label.new()
+		l.text = "  ×%d" % d.qty
+		l.add_theme_font_size_override("font_size", 18)
+		l.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
+		l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(l)
+		col.add_child(row)
+	# Редкость и стоимость эфира.
+	var meta := Label.new()
+	meta.text = "%s%s" % [str(craft.get("rarity", "")).to_upper(),
+		" · %d эфира" % int(craft.get("ether_cost", 0)) if craft.get("ether_cost") else ""]
+	meta.add_theme_font_size_override("font_size", 14)
+	meta.add_theme_color_override("font_color", Color(0.72, 0.74, 0.8))
+	col.add_child(meta)
+	return page
 
 
 ## Ячейка: полупрозрачный круг с фантомным орбом нужного элемента.
@@ -410,9 +487,18 @@ func _layout_cells() -> void:
 		if cell == null:
 			continue
 		var ang := TAU * float(i) / float(n) - PI / 2.0
-		cell.position = center + Vector2(cos(ang), sin(ang)) * CELL_RADIUS \
+		cell.position = center + Vector2(cos(ang), sin(ang)) * _cell_radius \
 			- Vector2(CELL_SIZE, CELL_SIZE) * 0.5
 
+
+## Масштаб радиусов под ширину страницы: круг и орбы не должны вылезать
+## за края книги. Эталон — 620px (INTEGRATION.md); меньше — пропорционально.
+func _adapt_radii() -> void:
+	if _board == null or _board.size.x <= 0.0:
+		return
+	var k := clampf(_board.size.x / 620.0, 0.6, 1.2)
+	_cell_radius = CELL_RADIUS_BASE * k
+	_orb_radius = ORB_RADIUS_BASE * k
 
 ## При resize доски: ячейки и «домики» свободных орбов пересчитываются.
 func _on_board_resized() -> void:
@@ -427,7 +513,7 @@ func _on_board_resized() -> void:
 			continue
 		var ang := TAU * float(i) / float(n) - PI / 2.0 + PI / float(n)
 		_orb_home[d.id] = _board.size * 0.5 \
-			+ Vector2(cos(ang), sin(ang)) * ORB_RADIUS \
+			+ Vector2(cos(ang), sin(ang)) * _orb_radius \
 			- Vector2(ORB_SIZE, ORB_SIZE) * 0.5
 
 
@@ -617,10 +703,9 @@ func close() -> void:
 	# Сразу убираем из обработки ввода, чтобы фейд не блокировал UI
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_process(false)
-	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 0.0, 0.22) \
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	tw.tween_callback(queue_free)
+	if _book != null and is_instance_valid(_book):
+		await _book.close_book()
+	queue_free()
 
 
 ## =====================================================================
