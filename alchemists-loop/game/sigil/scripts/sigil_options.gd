@@ -29,6 +29,11 @@ var fluid_enabled: bool = true
 var fluid_cpu_fallback: bool = false
 var aura_enabled: bool = true
 var save_png: bool = true
+## Prism-эффект поверх фона (превью-интеграция): galaxy/oil/foil/glass/laser/glitch.
+## Пусто — выключено; не входит в релизный рендер, только для контакт-листа.
+var prism_effect: String = ""
+## Фаза Prism-эффекта (0..1). -1 = детерминированная фаза из seed карточки.
+var prism_phase: float = -1.0
 ## Сторона PNG центрального элемента, когда рендерят иконку отдельно
 ## от карточки. На саму карточку не влияет.
 var icon_size: int = 256
@@ -56,6 +61,8 @@ static func make(p: Dictionary = {}) -> SigilOptions:
 	o.fluid_enabled = bool(p.get("fluid_enabled", o.fluid_enabled))
 	o.fluid_cpu_fallback = bool(p.get("fluid_cpu_fallback", o.fluid_cpu_fallback))
 	o.aura_enabled = bool(p.get("aura_enabled", o.aura_enabled))
+	o.prism_effect = str(p.get("prism_effect", ""))
+	o.prism_phase = float(p.get("prism_phase", -1.0))
 	o.save_png = bool(p.get("save_png", o.save_png))
 	return o
 
@@ -73,7 +80,7 @@ func to_dict() -> Dictionary:
 		"show_icon": show_icon,
 		"glyph_rotation": glyph_rotation, "ring_count": ring_count, "render_scale": render_scale,
 		"fluid_enabled": fluid_enabled, "fluid_cpu_fallback": fluid_cpu_fallback,
-		"aura_enabled": aura_enabled, "save_png": save_png,
+		"aura_enabled": aura_enabled, "prism_effect": prism_effect, "prism_phase": prism_phase, "save_png": save_png,
 	}
 
 
@@ -89,6 +96,7 @@ func cache_salt() -> String:
 		"rc=%d" % ring_count,
 		"fl=%d%d" % [int(fluid_enabled), int(fluid_cpu_fallback)],
 		"au=%d" % int(aura_enabled),
+		"pr=%s:%.3f" % [prism_effect, prism_phase],
 	]))
 
 

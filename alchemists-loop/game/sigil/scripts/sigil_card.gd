@@ -35,6 +35,7 @@ var _tilt_target := Vector2.ZERO
 const PARALLAX_PX := 10.0
 
 var bg: SigilFluidBg
+var prism: ColorRect  # Prism-эффект (превью); null когда выключен
 var aura: SigilAuraView
 var circle: SigilCircleView
 var foil: SigilFinishView
@@ -74,6 +75,11 @@ func _ensure_nodes() -> void:
 		bg = SigilFluidBg.new()
 		bg.name = "FluidArt"
 		add_child(bg)
+	if prism == null:
+		prism = ColorRect.new()
+		prism.name = "Prism"
+		prism.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(prism)
 	if aura == null:
 		aura = SigilAuraView.new()
 		aura.name = "Aura"
@@ -117,7 +123,7 @@ func _ensure_nodes() -> void:
 
 func _place_nodes(cr: Rect2) -> void:
 	var s := options.effective_size()
-	for c in [bg, aura, foil, circle, sparkles, frame]:
+	for c in [bg, prism, aura, foil, circle, sparkles, frame]:
 		(c as Control).set_anchors_preset(Control.PRESET_FULL_RECT)
 		(c as Control).position = Vector2.ZERO
 		(c as Control).size = s
@@ -143,6 +149,7 @@ func _place_nodes(cr: Rect2) -> void:
 
 func _refresh() -> void:
 	bg.setup(options, palette, seed_value)
+	_setup_prism()
 	aura.setup(options, palette, layout.center, layout.radius, seed_value)
 	foil.setup(SigilFinishView.Part.FOIL, options, palette, seed_value,
 		layout.icon_center(), layout.radius)
@@ -263,6 +270,44 @@ static func build_icon_ctx(seed_value: int, recipe: SigilRecipe,
 func set_debug_slots(v: bool) -> void:
 	circle.set_debug_slots(v)
 	circle.queue_redraw()
+
+
+## Prism-превью: кладёт поверх фона canvas_item-шейдер из пакета card_beatify.
+## Только для контакт-листа — в релизном рендере options.prism_effect пуст,
+## узел скрыт и в кэш не влияет.
+func _setup_prism() -> void:
+	if prism == null:
+		return
+	var eff := String(options.prism_effect).strip_edges()
+	if eff == "":
+		prism.visible = false
+		prism.material = null
+		return
+	var sh := load("res://game/sigil/shaders/prism/%s.gdshader" % eff)
+	if sh == null:
+		prism.visible = false
+		prism.material = null
+		return
+	# galaxy — надстройка ПОД кругом/объектом (сразу после фона);
+	# остальные — текстура ПОВЕРХ карты (последний слой).
+	if eff == "galaxy":
+		move_child(prism, 1)  # [bg, prism, aura, circle, ...]
+	else:
+		move_child(prism, get_child_count() - 1)  # поверх frame/title
+	# Статичная фаза из seed (PNG детерминирован) либо явная из опций (анимации).
+	var ph := options.prism_phase
+	if ph < 0.0:
+		ph = float(seed_value % 1000) / 1000.0
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	prism.material = mat
+	prism.visible = true
+	prism.color = Color(1, 1, 1, 1)
+	prism.self_modulate.a = 1.0
+	# Параметры ПОСЛЕ назначения material — иначе Godot может не применить их
+	# к свежему ShaderMaterial на CanvasItem.
+	mat.set_shader_parameter("phase", ph)
+	prism.queue_redraw()
 	
 	
 # В SigilCard.gd

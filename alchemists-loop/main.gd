@@ -3220,16 +3220,25 @@ func _sigil_flip_card(ev: InputEvent, card_flip: Control) -> void:
 func _sigil_live_card(entry: Dictionary) -> Control:
 	# Свой SubViewport, а не общий вьюпорт SigilRenderService: общий занят
 	# статичными рендерами (UPDATE_DISABLED) и не может быть переподключён.
+	var recipe := _sigil.card_recipe_for(entry)
+	var rarity := str(entry.get("rarity", recipe.rarity))
+	var prism_eff := ""
+	# Хроматики — космос/призма поверх (Prism-эффекты card_beatify).
+	if rarity == "chromatic":
+		var effs := ["galaxy", "oil_slick", "textured_foil",
+			"shattered_glass", "laser_refraction", "glitch"]
+		prism_eff = effs[recipe.compute_seed() % effs.size()]
 	var opts := SigilOptions.make({
 		"card_size": Vector2i(300, 400),
 		"show_name": true,
 		"show_frame": true,
 		"show_icon": true,
 		"render_scale": 1,
+		"prism_effect": prism_eff,
+		"prism_phase": -1.0,
 	})
-	var recipe := _sigil.card_recipe_for(entry)
 	var box := SubViewportContainer.new()
-	box.custom_minimum_size = Vector2(300, 540)
+	box.custom_minimum_size = Vector2(300, 400)
 	box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -3237,7 +3246,7 @@ func _sigil_live_card(entry: Dictionary) -> Control:
 	box.stretch = true
 	var vp := SubViewport.new()
 	vp.name = "LiveCardViewport"
-	vp.size = Vector2i(300, 540)
+	vp.size = Vector2i(300, 400)
 	vp.transparent_bg = true
 	vp.disable_3d = true
 	vp.gui_disable_input = true

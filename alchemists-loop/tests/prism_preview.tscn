@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://bm1uvbsyj3e8w"]
+
+[ext_resource type="Script" path="res://tests/prism_preview_runner.gd" id="1_prism"]
+
+[node name="PrismPreview" type="Node"]
+script = ExtResource("1_prism")

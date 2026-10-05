@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://bvb87tfq7iyy"]
+
+[ext_resource type="Script" path="res://tests/prism_gif_runner.gd" id="1_gif"]
+
+[node name="PrismGifPreview" type="Node"]
+script = ExtResource("1_gif")
