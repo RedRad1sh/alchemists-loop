@@ -353,6 +353,8 @@ var _font_reg: Font = null
 var _font_semi: Font = null
 var _font_bold: Font = null
 var _font_xbold: Font = null
+var _font_display: Font = null  # Divagon: названия (заголовки карточек)
+var _font_lore: Font = null     # Manasco: лор/описания карточек
 var _ui_tex: Dictionary = {}   # path -> Texture2D (кэш)
 var _tabs_ref: TabContainer
 # F1 (раунд правки U18): признак достроенного UI. tabs.tab_changed срабатывает
@@ -1014,16 +1016,33 @@ func _init_new_game() -> bool:
 
 func _build_ui() -> void:
 	_online._init_colors()
-	_font_reg = _load_font("res://assets/fonts/Manrope-Regular.ttf")
-	_font_semi = _load_font("res://assets/fonts/Manrope-SemiBold.ttf")
-	_font_bold = _load_font("res://assets/fonts/Manrope-Bold.ttf")
-	_font_xbold = _load_font("res://assets/fonts/Manrope-ExtraBold.ttf")
+	# Шрифты централизованно: assets/ui/theme.json (как звуки — sounds.json).
+	var th_cfg: Dictionary = {}
+	if FileAccess.file_exists("res://assets/ui/theme.json"):
+		var thf := FileAccess.open("res://assets/ui/theme.json", FileAccess.READ)
+		if thf != null:
+			var parsed: Variant = JSON.parse_string(thf.get_as_text())
+			if parsed is Dictionary:
+				th_cfg = parsed
+	var fonts_cfg: Dictionary = th_cfg.get("fonts", {})
+	_font_reg = _load_font(str(fonts_cfg.get("default", "res://assets/fonts/Manrope-Regular.ttf")))
+	_font_semi = _load_font(str(fonts_cfg.get("semi", "res://assets/fonts/Manrope-SemiBold.ttf")))
+	_font_bold = _load_font(str(fonts_cfg.get("bold", "res://assets/fonts/Manrope-Bold.ttf")))
+	_font_xbold = _load_font(str(fonts_cfg.get("xbold", "res://assets/fonts/Manrope-ExtraBold.ttf")))
+	_font_display = _load_font(str(fonts_cfg.get("display", "")))
+	_font_lore = _load_font(str(fonts_cfg.get("lore", "")))
 	var th := Theme.new()
 	# Базовый размер рассчитан под Android portrait: иерархия строится
 	# размерами конкретных заголовков, а не крупным шрифтом по умолчанию.
-	th.default_font_size = 16
+	th.default_font_size = int(th_cfg.get("sizes", {}).get("default", 16))
 	if _font_reg != null:
 		th.default_font = _font_reg
+	# Роли шрифтов: "display" — названия (Divagon), "lore" — описания (Manasco).
+	# Потомки берут их через get_theme_font("display"/"lore", "Label", default).
+	if _font_display != null:
+		th.set_font("display", "Label", _font_display)
+	if _font_lore != null:
+		th.set_font("lore", "Label", _font_lore)
 	theme = th
 
 	var bg := ColorRect.new()
@@ -2061,9 +2080,9 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 	book.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	book.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	book.close_requested.connect(_close_sigil_collection)
-	book.flipped.connect(func(_a: int, to_i: int) -> void:
-		Sfx.click()
-		_sigil_show_tab(["crafts", "collection", "sets"][to_i]))
+	book.page_requested.connect(func(to_i: int) -> void:
+		_sigil_build_page(["crafts", "collection", "sets"][to_i]))
+	book.flipped.connect(func(_a: int, _b: int) -> void: Sfx.click())
 	vbox.add_child(book)
 	_sigil_book = book
 	_sigil_tab_btns = []
@@ -2105,14 +2124,30 @@ func _open_sigil_book() -> void:
 		await _sigil_book.open_book()
 
 
+## Программный переход на вкладку: строит контент и листает книгу.
 func _sigil_show_tab(tab: String) -> void:
+	if _sigil_coll == null:
+		return
+	_sigil_build_page(tab)
+	if _sigil_book != null and is_instance_valid(_sigil_book):
+		var idx: int = {"crafts": 0, "collection": 1, "sets": 2}[tab]
+		_sigil_book.go_to(idx)
+
+
+## Строит контент страницы-вкладки книги (без перелистывания).
+## Вызывается из page_requested — до снимка листа, чтобы новая страница
+## уже была отрендерена, когда лист откроет её.
+func _sigil_build_page(tab: String) -> void:
 	if _sigil_coll == null:
 		return
 	if tab != "crafts" and tab != "collection" and tab != "sets":
 		tab = "crafts"
-	# Страница-вкладка книги: билдеры строят в неё.
 	var page: Control = _sigil_pages.get(tab)
 	if page == null:
+		return
+	# Уже активная и построенная страница — не перестраиваем (page_requested
+	# при программном go_to не должен дублировать контент).
+	if tab == _sigil_tab and page.get_child_count() > 0:
 		return
 	# Сносим содержимое СТАРОЙ страницы (билдер асинхронный — мог оставить
 	# статус-лейбл/демо-контент), затем строим новую.
@@ -2125,10 +2160,6 @@ func _sigil_show_tab(tab: String) -> void:
 	_sigil_tab_content = page
 	for c in page.get_children():
 		(c as Node).queue_free()
-	# Перелистывание книги к нужной странице.
-	if _sigil_book != null and is_instance_valid(_sigil_book):
-		var idx: int = {"crafts": 0, "collection": 1, "sets": 2}[tab]
-		_sigil_book.go_to(idx)
 	match tab:
 		"collection":
 			_sigil_build_collection_tab(_sigil_tab_content)
@@ -2995,24 +3026,32 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	if not card_lore.is_empty():
 		var lt := _label(str(card_lore.get("title", "")), 16)
 		lt.name = "SigilLoreTitle"
+		if _font_lore != null:
+			lt.add_theme_font_override("font", _font_lore)
 		lt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lt.add_theme_color_override("font_color", Color(0.85, 0.85, 0.90))
 		lore_v.add_child(lt)
 		var ld := _label(str(card_lore.get("description", "")), 13)
 		ld.name = "SigilLoreDesc"
+		if _font_lore != null:
+			ld.add_theme_font_override("font", _font_lore)
 		ld.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		ld.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		ld.add_theme_color_override("font_color", Color(0.70, 0.72, 0.78))
 		lore_v.add_child(ld)
 		var le := _label(str(card_lore.get("effect_hint", "")), 12)
 		le.name = "SigilLoreEffect"
+		if _font_lore != null:
+			le.add_theme_font_override("font", _font_lore)
 		le.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		le.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		le.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
 		lore_v.add_child(le)
 		var lw := _label(str(card_lore.get("warning", "")), 12)
 		lw.name = "SigilLoreWarn"
+		if _font_lore != null:
+			lw.add_theme_font_override("font", _font_lore)
 		lw.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lw.add_theme_color_override("font_color", Color(0.8, 0.45, 0.4))

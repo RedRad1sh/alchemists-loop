@@ -1,0 +1,22 @@
+{
+  "fonts": {
+    "default": "res://assets/fonts/Manrope-Regular.ttf",
+    "semi": "res://assets/fonts/Manrope-SemiBold.ttf",
+    "bold": "res://assets/fonts/Manrope-Bold.ttf",
+    "xbold": "res://assets/fonts/Manrope-ExtraBold.ttf",
+    "display": "res://assets/fonts/Divagon.otf",
+    "lore": "res://assets/fonts/Manasco (sherbackoffalex).otf"
+  },
+  "sizes": {
+    "default": 16,
+    "title": 24,
+    "card_title": 20,
+    "card_lore": 13,
+    "credits_title": 22
+  },
+  "colors": {
+    "title": "#f0f7ff",
+    "accent": "#e6bd6b",
+    "card_ink": "#1a1a1a"
+  }
+}

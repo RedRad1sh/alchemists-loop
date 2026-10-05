@@ -11,6 +11,7 @@ extends Control
 ## шейдером, который вращает квад вокруг левого края с перспективой.
 
 signal flipped(from_index: int, to_index: int)
+signal page_requested(to_index: int)  # до перелистывания: строй контент заранее
 signal close_requested
 
 const INTRO_TIME := 1.3        # когда содержимое книги готово (для задержек интро)
@@ -232,6 +233,7 @@ func go_to(idx: int) -> void:
 	var from_i := current
 	var forward := idx > from_i
 	_refresh_tabs(idx)
+	page_requested.emit(idx)   # дать шанс построить контент ДО снимка/листа
 
 	# Вперёд — лист несёт уходящую страницу, назад — приходящую.
 	var tex: ImageTexture = await _snapshot(_pages[from_i] if forward else _pages[idx])

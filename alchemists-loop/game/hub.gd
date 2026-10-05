@@ -32,6 +32,8 @@ var _journal_popup: CenterContainer = null
 var _journal_list: VBoxContainer = null
 var _settings_dim: ColorRect = null
 var _settings_popup: CenterContainer = null
+var _credits_dim: ColorRect = null
+var _credits_popup: CenterContainer = null
 var _sfx_slider: HSlider = null
 var _music_slider: HSlider = null
 var _music_toggle: Button = null
@@ -259,6 +261,10 @@ func _build_craftable_popup() -> void:
 	_craftable_list.add_theme_constant_override("separation", 6)
 	_craftable_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_craftable_list)
+	var credits_btn := g._small_button("О игре / Credits", Vector2(0, 40))
+	credits_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	credits_btn.pressed.connect(_open_credits)
+	col.add_child(credits_btn)
 	var close := g._small_button("Закрыть", Vector2(150, 44))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.pressed.connect(func() -> void:
@@ -393,6 +399,73 @@ func _open_settings() -> void:
 	_music_slider.value = Sfx.music_volume
 	_settings_dim.visible = true
 	_settings_popup.visible = true
+	Sfx.click()
+
+# ---------- О игре / Credits (заглушка) ----------
+
+func _build_credits_popup() -> void:
+	var dim := ColorRect.new()
+	dim.name = "CreditsDim"
+	dim.color = Color(0, 0, 0, 0.6)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.z_index = 30
+	dim.visible = false
+	g.add_child(dim)
+	_credits_dim = dim
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.z_index = 31
+	center.visible = false
+	g.add_child(center)
+	_credits_popup = center
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", g._panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
+	center.add_child(card)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	col.custom_minimum_size = Vector2(340, 0)
+	card.add_child(col)
+	var ttl := g._label("О ИГРЕ / CREDITS", 20)
+	ttl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ttl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
+	col.add_child(ttl)
+	# Заглушка: централизованное место про шрифты/тему, чтобы не забыть.
+	# Дальше — дизайн (портрет авторов, лицензии, ссылки).
+	var fonts_line := "Шрифты: Manrope (UI), Divagon (названия), Manasco (лор)"
+	var fl := g._label(fonts_line, 12)
+	fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	fl.add_theme_color_override("font_color", Color(0.7, 0.75, 0.8))
+	col.add_child(fl)
+	var ver := g._label("Версия: MVP", 12)
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ver.add_theme_color_override("font_color", Color(0.55, 0.6, 0.65))
+	col.add_child(ver)
+	# Превью шрифтов: Divagon на названии, Manasco на лоре.
+	var prev1 := g._label("Алхимический Сигил", 18)
+	prev1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if g._font_display != null:
+		prev1.add_theme_font_override("font", g._font_display)
+	col.add_child(prev1)
+	var prev2 := g._label("Лор: зелье, сплавленное из огня и тени…", 12)
+	prev2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prev2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	if g._font_lore != null:
+		prev2.add_theme_font_override("font", g._font_lore)
+	col.add_child(prev2)
+	var close := g._small_button("Закрыть", Vector2(140, 42))
+	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close.pressed.connect(func() -> void:
+		_credits_dim.visible = false
+		_credits_popup.visible = false
+		Sfx.click())
+	col.add_child(close)
+
+func _open_credits() -> void:
+	if _credits_dim == null:
+		_build_credits_popup()
+	_credits_dim.visible = true
+	_credits_popup.visible = true
 	Sfx.click()
 
 # ---------- журнал событий ----------
