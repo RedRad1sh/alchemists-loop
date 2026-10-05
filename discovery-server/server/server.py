@@ -750,6 +750,7 @@ class SigilCollectionExtra(BaseModel):
     llm_name: str = ""
     crafted_at: str = ""
     seed: int = 0
+    lore: str = ""
 
 
 class SigilCollectionResponse(BaseModel):
@@ -975,6 +976,8 @@ def init_db():
             conn.execute("ALTER TABLE sigil_crafts ADD COLUMN card_id TEXT NOT NULL DEFAULT ''")
         if "seed" not in sg_cols:
             conn.execute("ALTER TABLE sigil_crafts ADD COLUMN seed INTEGER NOT NULL DEFAULT 0")
+        if "lore" not in sg_cols:
+            conn.execute("ALTER TABLE sigil_crafts ADD COLUMN lore TEXT NOT NULL DEFAULT ''")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS ix_sigil_crafts_card"
             " ON sigil_crafts(device_id, card_id)"
@@ -4663,6 +4666,20 @@ def _chromatic_craft(rng, day: str, device_id: str, index: int) -> dict:
         "is_chromatic": True,
     }
 
+def _generate_chromatic_identity(craft: dict, rarity: str) -> dict:
+    """Уникальные имя + лор для хроматика (LLM, шаблонный fallback)."""
+    ing_names = []
+    for ing in craft.get("ingredients", []):
+        if isinstance(ing, dict):
+            ing_names.append(str(ing.get("item_id", "")))
+    try:
+        ident = get_llm().generate_card_identity(ing_names, rarity)
+        return {"name": str(ident.get("name", "")).strip() or "Хроматический сигил",
+                "lore": str(ident.get("lore", "")).strip()}
+    except Exception:
+        return {"name": "Хроматический сигил",
+                "lore": "Внекомплектная карта: создана из случайного сочетания стихий."}
+
 
 def _collected_card_ids(conn, device_id: str) -> set:
     rows = conn.execute(
@@ -4833,6 +4850,13 @@ def sigil_craft(req: SigilCraftRequest):
         rarity = str(craft.get("rarity", "common"))
         llm_name = str(craft.get("llm_name", ""))
         is_chromatic = bool(craft.get("is_chromatic", False))
+        lore = ""
+        # Хроматик: генерируем уникальные имя+лор (LLM с шаблонным fallback),
+        # чтобы карточка не звалась константой «Хроматический сигил».
+        if is_chromatic:
+            ident = _generate_chromatic_identity(craft, rarity)
+            llm_name = ident["name"]
+            lore = ident["lore"]
 
         # Атомарно (D7, по образцу _ensure_letter/_ensure_atlas): под BEGIN
         # IMMEDIATE два потока на один (device_id, craft_id) не вставят две
@@ -4842,10 +4866,10 @@ def sigil_craft(req: SigilCraftRequest):
         try:
             cur = conn.execute(
                 "INSERT OR IGNORE INTO sigil_crafts"
-                " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, seed, crafted_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, seed, lore, crafted_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (req.device_id, req.craft_id, rarity, llm_name,
-                 int(is_chromatic), card_id, int(craft.get("seed", 0)), _now_iso()),
+                 int(is_chromatic), card_id, int(craft.get("seed", 0)), lore, _now_iso()),
             )
             inserted = cur.rowcount == 1
             conn.commit()
@@ -4857,10 +4881,10 @@ def sigil_craft(req: SigilCraftRequest):
             # обновляем поля из ТЕКУЩЕГО daily, чтобы «превью legendary →
             # выпала rare» не случалось после ротации оффера.
             conn.execute(
-                "UPDATE sigil_crafts SET rarity=?, llm_name=?, is_chromatic=?, card_id=?, seed=?"
+                "UPDATE sigil_crafts SET rarity=?, llm_name=?, is_chromatic=?, card_id=?, seed=?, lore=?"
                 " WHERE device_id=? AND craft_id=?",
                 (rarity, llm_name, int(is_chromatic), card_id,
-                 int(craft.get("seed", 0)), req.device_id, req.craft_id),
+                 int(craft.get("seed", 0)), lore, req.device_id, req.craft_id),
             )
             conn.commit()
             existing = conn.execute(
@@ -4899,7 +4923,7 @@ def sigil_collection(device_id: str = Query("", max_length=128)):
     conn = get_db()
     try:
         rows = conn.execute(
-            "SELECT craft_id, rarity, llm_name, card_id, seed, crafted_at FROM sigil_crafts"
+            "SELECT craft_id, rarity, llm_name, card_id, seed, lore, crafted_at FROM sigil_crafts"
             " WHERE device_id=? ORDER BY crafted_at ASC, craft_id ASC",
             (device_id,),
         ).fetchall()
@@ -4919,7 +4943,7 @@ def sigil_collection(device_id: str = Query("", max_length=128)):
             extras.append(SigilCollectionExtra(
                 craft_id=row["craft_id"], rarity=row["rarity"],
                 llm_name=row["llm_name"], crafted_at=row["crafted_at"],
-                seed=row["seed"],
+                seed=row["seed"], lore=row["lore"],
             ))
             continue
         entry = cards.get(card_id)

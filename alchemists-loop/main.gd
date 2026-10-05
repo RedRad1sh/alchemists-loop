@@ -2257,6 +2257,7 @@ func _sigil_build_collection_tab(container: Control) -> void:
 				"set_title": "Вне комплектов",
 				"first_at": str(xe.get("crafted_at", "")), "copies": 1,
 				"seed": int(xe.get("seed", 0)),
+				"lore": str(xe.get("lore", "")),
 			}
 			var ccell := _sigil_collection_cell(entry)
 			cgrid.add_child(ccell)
@@ -2915,6 +2916,8 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	lore_v.add_theme_constant_override("margin_top", 12)
 	lore_v.add_theme_constant_override("margin_bottom", 12)
 	lore.add_child(lore_v)
+	# Лор: серверный (для хроматиков из extras) или из каталога; иначе дефолт.
+	var srv_lore := str(entry.get("lore", ""))
 	var card_lore := SigilLore.generate({
 		"id": str(entry.get("card_id", "")),
 		"process": str(entry.get("process", "")),
@@ -2922,17 +2925,23 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 		"seed": int(entry.get("seed", 0)),
 		"recipe": entry.get("recipe", []),
 	})
-	# Внекомплектные (хроматик): лора из каталога нет — даём собственный,
-	# чтобы оборот карты не оставался пустым.
 	if card_lore.is_empty() and rarity == "chromatic":
-		card_lore = {
-			"title": "Внекомплектный сигил",
-			"description": "Эта карта не входит ни в один комплект стихий. "
-				+ "Её создали из случайного сочетания ингредиентов — "
-				+ "призма редкости, светящаяся вне обычных графов трансмутации.",
-			"effect_hint": "Не влияет на комплекты; коллекционная ценность.",
-			"warning": "",
-		}
+		if srv_lore != "":
+			card_lore = {
+				"title": str(entry.get("name", "Внекомплектный сигил")),
+				"description": srv_lore,
+				"effect_hint": "Не влияет на комплекты; коллекционная ценность.",
+				"warning": "",
+			}
+		else:
+			card_lore = {
+				"title": "Внекомплектный сигил",
+				"description": "Эта карта не входит ни в один комплект стихий. "
+					+ "Её создали из случайного сочетания ингредиентов — "
+					+ "призма редкости, светящаяся вне обычных графов трансмутации.",
+				"effect_hint": "Не влияет на комплекты; коллекционная ценность.",
+				"warning": "",
+			}
 	if not card_lore.is_empty():
 		var lt := _label(str(card_lore.get("title", "")), 16)
 		lt.name = "SigilLoreTitle"
@@ -3535,6 +3544,20 @@ func _show_pending_craft_card(craft_id: String, rarity: String, llm_name: String
 		if str((c as Dictionary).get("id", "")) == craft_id:
 			craft = c
 			break
+	# Хроматик: показываем ТУ ЖЕ живую карточку, что и в коллекции
+	# (с Prism-эффектом, анимированная) — не статичный PNG.
+	if rarity == "chromatic":
+		var entry := {
+			"card_id": "", "craft_id": craft_id,
+			"rarity": "chromatic",
+			"name": llm_name if llm_name != "" else str(craft.get("fallback_name", "")),
+			"set": "", "set_title": "Вне комплектов",
+			"first_at": "", "copies": 1,
+			"seed": int(craft.get("seed", 0)),
+			"lore": str(craft.get("lore", "")),
+		}
+		_open_sigil_fullscreen(entry)
+		return
 	var img := await _sigil.get_card(craft_id, SigilManager.craft_ingredients(craft),
 		StringName(rarity), &"object", _sigil_craft_title(craft))
 	if img == null:

@@ -618,6 +618,107 @@ class LLMGenerator:
                   a_name, b_name, time.time() - t_start, "; ".join(errors))
         raise LLMError("; ".join(errors) or "нет ответа от моделей")
 
+    # ------------------------------------------------------------------
+    def generate_card_identity(self, ingredient_names: list[str], rarity: str) -> dict:
+        """Имя + лор для внекомплектной (хроматической) карты.
+
+        Возвращает {"name": "...", "lore": "..."}. LLM недоступна/ошибка →
+        детерминированный шаблон по именам ингредиентов (игра не блокируется).
+        """
+        if self.provider in ("off", ""):
+            return self._template_identity(ingredient_names, rarity)
+        if self.provider in ("mock", "local"):
+            return self._template_identity(ingredient_names, rarity)
+        if not self.api_key or not self.models:
+            return self._template_identity(ingredient_names, rarity)
+
+        # Одна попытка LLM с коротким таймаутом: ритуал крафта не должен
+        # ждать 3 ретрая (qwen локальная часто отвечает не по формату).
+        t_start = time.time()
+        log.info("identity для хроматика (ингредиенты: %s): генерирую",
+                 ", ".join(ingredient_names))
+        errors: list[str] = []
+        for attempt in range(1):
+            model = self.models[(self._rot + attempt) % len(self.models)]
+            try:
+                raw = self._call_identity_once(model, ingredient_names, rarity)
+            except LLMError as e:
+                log.warning("identity: %s → %s", model, e)
+                errors.append(f"{model}: {e}")
+                break
+            try:
+                data = _extract_json(raw)
+                name = str(data.get("name", "")).strip()
+                lore = str(data.get("lore", "")).strip()
+                if not name or not lore:
+                    raise ValueError("пустой name/lore")
+            except Exception:
+                log.warning("identity: %s → ответ не по формату", model)
+                errors.append(f"{model}: не по формату")
+                break
+            self._rot = (self._rot + attempt + 1) % len(self.models)
+            log.info("identity готов (модель %s, %.1fs)", model, time.time() - t_start)
+            return {"name": name[:80], "lore": lore[:400]}
+        log.warning("identity: не удался (%.1fs): %s; шаблон-фолбэк",
+                    time.time() - t_start, "; ".join(errors))
+        return self._template_identity(ingredient_names, rarity)
+
+    def _call_identity_once(self, model: str, ingredient_names: list[str],
+                            rarity: str) -> str:
+        """Один вызов модели за identity; вернуть сырой текст (или LLMError)."""
+        t0 = time.time()
+        ing = ", ".join(ingredient_names) or "неизвестные стихии"
+        messages = [
+            {"role": "system", "content":
+                "Ты — мастер-алхимик в мире алхимии. Отвечай строго JSON."},
+            {"role": "user", "content":
+                "Придумай НАЗВАНИЕ (до 4 слов) и КОРОТКИЙ ЛОР (1-2 предложения, "
+                "30-60 слов) для редкой хроматической карты-сигила, созданной из: "
+                + ing + ". Редкость: " + rarity + ". "
+                'Формат: {"name": "...", "lore": "..."}'},
+        ]
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0.7,
+            "max_tokens": 512,
+            "max_completion_tokens": 512,
+            "reasoning_effort": "none",
+            "response_format": {"type": "json_object"},
+        }
+        url, headers = self._endpoint(model)
+        try:
+            r = requests.post(url, json=payload, headers=headers, timeout=self.timeout)
+        except Exception as e:
+            raise LLMError(f"сеть: {e}") from e
+        if r.status_code != 200:
+            text = (r.text or "")[:200].strip()
+            raise LLMError(f"HTTP {r.status_code}: {text}")
+        # Ответ — полный OpenAI-конверт: извлекаем content из choices.
+        try:
+            envelope = r.json()
+            content = envelope["choices"][0]["message"]["content"]
+        except Exception as e:
+            raise LLMError(f"битый ответ: {e}") from e
+        log.info("IDENTITY-RAW (id=%s): %.400s", model, content or "")
+        return content
+
+    def _template_identity(self, ingredient_names: list[str], rarity: str) -> dict:
+        """Детерминированная идентичность без LLM (mock/local/офлайн)."""
+        if not ingredient_names:
+            return {"name": "Хроматический сигил",
+                    "lore": "Внекомплектная карта: создана из случайного сочетания стихий."}
+        parts = []
+        for n in ingredient_names[:3]:
+            w = n.strip()
+            if w and w not in parts:
+                parts.append(w)
+        joined = " и ".join(parts) if len(parts) > 1 else (parts[0] if parts else "стихий")
+        name = "Сигил %s" % joined.capitalize()
+        lore = ("Хроматическая карта, рождённая из «%s». Призма редкости, "
+                "светящаяся вне обычных графов трансмутации.") % joined
+        return {"name": name, "lore": lore}
+
     def _template_hint(self, a_name: str, b_name: str) -> str:
         """Детерминированный намёк без LLM (mock/local, тесты, офлайн)."""
         a0 = (a_name.strip()[:1] or "?").upper()
