@@ -1,0 +1,71 @@
+{
+  "comment": "Центральный конфиг звуков. Ключ = имя события (вызов Sfx.<event>() в коде). Значение: file (путь к wav/ogg, опционально), volume_db, pitch (скорость), delay (сек до проигрывания). Если file пуст/не найден — используется процедурный звук как раньше. Класть wav в res://assets/audio/ и писать путь в file.",
+  "events": {
+    "click": {
+      "file": "",
+      "volume_db": -12.0,
+      "pitch": 1.0,
+      "delay": 0.0
+    },
+    "error": {
+      "file": "",
+      "volume_db": -12.0,
+      "pitch": 1.0,
+      "delay": 0.0
+    },
+    "bubble": {
+      "file": "",
+      "volume_db": -12.0,
+      "pitch": 1.0,
+      "delay": 0.0
+    },
+    "divide": {
+      "file": "",
+      "volume_db": -6.0,
+      "pitch": 1.0,
+      "delay": 0.0
+    },
+    "morph": {
+      "file": "",
+      "volume_db": -6.0,
+      "pitch": 1.0,
+      "delay": 0.0
+    },
+    "draft_open": {
+      "file": "",
+      "volume_db": -12.0,
+      "pitch": 1.0,
+      "delay": 0.0
+    },
+    "legendary": {
+      "file": "",
+      "volume_db": -2.0,
+      "pitch": 1.0,
+      "delay": 0.0
+    },
+    "discovery": {
+      "file": "",
+      "volume_db": -3.0,
+      "pitch": 1.0,
+      "delay": 0.0
+    },
+    "mystic": {
+      "file": "",
+      "volume_db": -2.0,
+      "pitch": 1.0,
+      "delay": 0.0
+    },
+    "stage_up": {
+      "file": "",
+      "volume_db": -2.0,
+      "pitch": 1.0,
+      "delay": 0.0
+    },
+    "pet": {
+      "file": "",
+      "volume_db": -12.0,
+      "pitch": 1.0,
+      "delay": 0.0
+    }
+  }
+}
