@@ -121,7 +121,13 @@ static func run(g: Game) -> void:
 	g._engine.inventory["person"] = maxi(int(g._engine.inventory.get("person", 0)), 1)
 	g._engine._refresh()
 	Selftest.check("mode bench unlocked", g._engine._mode_unlocked("bench"))
+	# resonance = _ach_world_first >= 1; счётчик персистится в сейве, поэтому
+	# изолируем его: сейв прошлого прогона мог принести >0 (иначе кейс краснел
+	# бы от чужого прогресса, а не от мутации кода).
+	var awf_snapshot: int = g._progress_ui._ach_world_first
+	g._progress_ui._ach_world_first = 0
 	Selftest.check("mode resonance locked w/o discovery", not g._engine._mode_unlocked("resonance"))
+	g._progress_ui._ach_world_first = maxi(awf_snapshot, 1)
 	g._progress_ui._ach_world_first = 1
 	# Late systems are deliberately staged by collection depth; make the fixture
 	# represent a late-mid-game laboratory before checking lazy page creation.

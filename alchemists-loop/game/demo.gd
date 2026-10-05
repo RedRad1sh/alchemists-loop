@@ -347,7 +347,7 @@ func _tick_demo() -> bool:
 				if err != OK:
 					push_error("GIF frame save failed: %s (%d)" % [fp, err])
 					g.get_tree().quit(1)
-					return
+					return true
 		if _gif_frame >= 240:  # ~80 кадров GIF (~4 с анимации)
 			g.get_tree().quit(0)
 		return true

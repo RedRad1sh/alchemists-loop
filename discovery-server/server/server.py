@@ -718,6 +718,9 @@ class SigilDailyResponse(BaseModel):
     crafts: list[SigilCraft] = []
     # Версия каталога на момент выдачи: клиент по ней решает докачку каталога.
     catalog_version: str = ""
+    # Хэш оффера дня: меняется при ротации (salt). Клиент сверяет его со
+    # своим кэшем — если совпал, кэш актуален, лишних перезапросов нет.
+    offer_hash: str = ""
     error: str = ""
 
 
@@ -733,6 +736,8 @@ class SigilCraftResponse(BaseModel):
     llm_name: str = ""
     is_chromatic: bool = False
     card_id: str = ""
+    seed: int = 0
+    lore: str = ""
     error: str = ""
 
 
@@ -746,6 +751,9 @@ class SigilCollectionExtra(BaseModel):
     rarity: str = ""
     llm_name: str = ""
     crafted_at: str = ""
+    seed: int = 0
+    lore: str = ""
+    ingredients: list[dict] = []
 
 
 class SigilCollectionResponse(BaseModel):
@@ -969,6 +977,12 @@ def init_db():
         sg_cols = {r["name"] for r in conn.execute("PRAGMA table_info(sigil_crafts)").fetchall()}
         if "card_id" not in sg_cols:
             conn.execute("ALTER TABLE sigil_crafts ADD COLUMN card_id TEXT NOT NULL DEFAULT ''")
+        if "seed" not in sg_cols:
+            conn.execute("ALTER TABLE sigil_crafts ADD COLUMN seed INTEGER NOT NULL DEFAULT 0")
+        if "lore" not in sg_cols:
+            conn.execute("ALTER TABLE sigil_crafts ADD COLUMN lore TEXT NOT NULL DEFAULT ''")
+        if "ingredients_json" not in sg_cols:
+            conn.execute("ALTER TABLE sigil_crafts ADD COLUMN ingredients_json TEXT NOT NULL DEFAULT ''")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS ix_sigil_crafts_card"
             " ON sigil_crafts(device_id, card_id)"
@@ -980,6 +994,7 @@ def init_db():
             tier INTEGER NOT NULL, claimed_at TEXT NOT NULL,
             PRIMARY KEY (device_id, set_id, tier)
         )""")
+        # F2 (по конвенции init_db для старых БД, дубль см. в schema.sql):
         # F2 (по конвенции init_db для старых БД, дубль см. в schema.sql):
         # частичный UNIQUE — не более одного открытого (active/spread) цикла.
         # Константа-ключ: все подходящие строки делят один ключ индекса.
@@ -1826,7 +1841,8 @@ async def startup():
         admin.setup_admin(app, get_db)
         _dashboard_setup = True
         print("[world] Дашборд: /dashboard")
-        if os.environ.get("ADMIN_PASS"):
+        if os.environ.get("ADMIN_PASS") or os.environ.get("ALCHEMY_DEBUG") == "1" \
+                or os.environ.get("ALCHEMY_ADMIN_OPEN") == "1":
             print("[world] Админ-панель: /admin")
         else:
             print("[world] Админ-панель: /admin (ADMIN_PASS не задан — вход заблокирован)")
@@ -2993,6 +3009,19 @@ def discover(req: DiscoverRequest):
             # materialize/scoring. _ensure_challenge не читает пару и дни цели
             # не меняет — семантика скоринга та же (нужны только target/day).
             _ensure_challenge(conn)
+
+            # Эксперимент с ингредиентом, которого нет в базе элементов
+            # (клиентский инвентарь шире серверного каталога): мягкий отказ
+            # вместо 400 — иначе «часто падает 400 при эксперименте».
+            a_row = conn.execute(
+                "SELECT 1 FROM elements WHERE slug = ?", (req.a,)).fetchone()
+            b_row = conn.execute(
+                "SELECT 1 FROM elements WHERE slug = ?", (req.b,)).fetchone()
+            if a_row is None or b_row is None:
+                return DiscoverResponse(
+                    ok=True, status="not_combinable", discovery=None, already_known=False,
+                    message=f"Туман рассеялся: «{req.a}» и «{req.b}» не сочетаются — элемент не создан.",
+                )
 
             kind, discovery = _generate_for_pair(
                 conn, req.a, req.b, pair_key, nick, req.device_id)
@@ -4552,10 +4581,14 @@ _SIGIL_BASE_ITEMS = [
 # Каталог назначает редкость карте по глубине рецептурного графа, здесь
 # тянется только «желанная» редкость слота.
 _SIGIL_RARITY_WEIGHTS = [
-    ("common", 70),
+    ("common", 55),
+    ("uncommon", 15),
     ("rare", 20),
     ("epic", 8),
     ("legendary", 4),
+    # Хроматик во всех слотах: маленький вес (3 из ~105 ≈ 2.9% на слот).
+    # В дополнение к 2%-броску слота 0.
+    ("chromatic", 3),
 ]
 _SIGIL_CHROMATIC_CHANCE = 0.02  # 2% шанс на хроматическую внекомплектную
 
@@ -4632,25 +4665,47 @@ def _catalog_craft(card: dict, day: str, device_id: str, index: int) -> dict:
 
 
 def _chromatic_craft(rng, day: str, device_id: str, index: int) -> dict:
-    """Внекомплектная карта: ингредиенты случайные, картинка — по соли игрока."""
+    """Внекомплектная карта: ингредиенты случайные, уникальные имя/лор/seed.
+
+    Имя и лор генерируются по составу (LLM, шаблон-фолбэк) — у каждого
+    хроматика своё, а не константа «Хроматический сигил».
+    """
     pool = list(_SIGIL_BASE_ITEMS)
     chosen = rng.sample(pool, min(_SIGIL_CHROMATIC_INGREDIENTS, len(pool)))
     lo, hi = _SIGIL_CHROMATIC_QTY
+    ingredients = [{"item_id": item_id, "qty": rng.randint(lo, hi)} for item_id in chosen]
+    seed = int(time.time() * 1000) % 0x7FFFFFFF if index == 0 else int(time.time_ns()) % 0x7FFFFFFF
+    ident = _generate_chromatic_identity({"ingredients": ingredients}, "chromatic")
     return {
         "id": f"{day}_{device_id[:8]}_{index}",
         "card_id": "",
         "set": "",
         "rarity": "chromatic",
-        "ingredients": [{"item_id": item_id, "qty": rng.randint(lo, hi)} for item_id in chosen],
+        "ingredients": ingredients,
         "ether_cost": _SIGIL_ETHER_COST["chromatic"],
         "process": "",
         "stage": "",
         "object_type": "object",
-        "seed": 0,
-        "fallback_name": _SIGIL_CHROMATIC_NAME,
-        "llm_name": _SIGIL_CHROMATIC_NAME,
+        "seed": seed,
+        "fallback_name": ident["name"],
+        "llm_name": ident["name"],
+        "lore": ident["lore"],
         "is_chromatic": True,
     }
+
+def _generate_chromatic_identity(craft: dict, rarity: str) -> dict:
+    """Уникальные имя + лор для хроматика (LLM, шаблонный fallback)."""
+    ing_names = []
+    for ing in craft.get("ingredients", []):
+        if isinstance(ing, dict):
+            ing_names.append(str(ing.get("item_id", "")))
+    try:
+        ident = get_llm().generate_card_identity(ing_names, rarity)
+        return {"name": str(ident.get("name", "")).strip() or "Хроматический сигил",
+                "lore": str(ident.get("lore", "")).strip()}
+    except Exception:
+        return {"name": "Хроматический сигил",
+                "lore": "Внекомплектная карта: создана из случайного сочетания стихий."}
 
 
 def _collected_card_ids(conn, device_id: str) -> set:
@@ -4695,7 +4750,13 @@ def _generate_sigil_daily(device_id: str, day: str, collected,
     # Слоты 1..N: N растёт на extra_slots (4-й слот за клейм комплекта).
     for index in range(1, _SIGIL_SLOTS + extra_slots):
         # Слоты 1–2 предлагают и собранные карты (дубли — спека: copies++), исключая только предложенные сегодня.
-        card = _pick_card(rng, _pick_rarity(rng), frozenset(), offered)
+        roll_rarity = _pick_rarity(rng)
+        if roll_rarity == "chromatic":
+            # Хроматик выпал из весов: в каталоге его нет (внекомплектный),
+            # поэтому создаём явно, а не через _pick_card.
+            crafts.append(_chromatic_craft(rng, day, device_id, index))
+            continue
+        card = _pick_card(rng, roll_rarity, frozenset(), offered)
         if card is None:
             card = _pick_uncollected(rng, collected, offered)
         if card is None:
@@ -4774,9 +4835,15 @@ def sigil_daily(device_id: str = Query("", max_length=128)):
     try:
         today = _now_dt().date().isoformat()
         crafts_data = _ensure_sigil_daily(conn, device_id, today)
+        canon = "\n".join(
+            "%s|%s|%s|%s" % (c.get("id"), c.get("rarity"), c.get("card_id"), c.get("llm_name"))
+            for c in crafts_data
+        )
+        offer_hash = hashlib.sha256(canon.encode("utf-8")).hexdigest()
         return SigilDailyResponse(
             ok=True, day=today, catalog_version=_sigil_catalog()["version"],
             crafts=[SigilCraft(**c) for c in crafts_data],
+            offer_hash=offer_hash,
         )
     finally:
         conn.close()
@@ -4810,6 +4877,18 @@ def sigil_craft(req: SigilCraftRequest):
         rarity = str(craft.get("rarity", "common"))
         llm_name = str(craft.get("llm_name", ""))
         is_chromatic = bool(craft.get("is_chromatic", False))
+        lore = ""
+        # Хроматик: имя+лор берём из оффера дня (он уже сгенерирован при
+        # создании крафта с уникальным составом). Повторный LLM-вызов здесь
+        # дал бы ДРУГОЕ имя — «превью Хрустальный Рой, выпал Дыхание Пыли».
+        if is_chromatic:
+            if not llm_name or llm_name == _SIGIL_CHROMATIC_NAME:
+                ident = _generate_chromatic_identity(craft, rarity)
+                llm_name = ident["name"]
+                lore = ident["lore"]
+            else:
+                llm_name = str(craft.get("llm_name", llm_name))
+                lore = str(craft.get("lore", ""))
 
         # Атомарно (D7, по образцу _ensure_letter/_ensure_atlas): под BEGIN
         # IMMEDIATE два потока на один (device_id, craft_id) не вставят две
@@ -4819,10 +4898,11 @@ def sigil_craft(req: SigilCraftRequest):
         try:
             cur = conn.execute(
                 "INSERT OR IGNORE INTO sigil_crafts"
-                " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, crafted_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, seed, lore, ingredients_json, crafted_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (req.device_id, req.craft_id, rarity, llm_name,
-                 int(is_chromatic), card_id, _now_iso()),
+                 int(is_chromatic), card_id, int(craft.get("seed", 0)), lore,
+                 json.dumps(craft.get("ingredients", []), ensure_ascii=False), _now_iso()),
             )
             inserted = cur.rowcount == 1
             conn.commit()
@@ -4830,8 +4910,20 @@ def sigil_craft(req: SigilCraftRequest):
             conn.rollback()
             raise
         if not inserted:
+            # Крафт уже закреплён (старый оффер дня / повторный запрос):
+            # обновляем поля из ТЕКУЩЕГО daily, чтобы «превью legendary →
+            # выпала rare» не случалось после ротации оффера.
+            conn.execute(
+                "UPDATE sigil_crafts SET rarity=?, llm_name=?, is_chromatic=?, card_id=?, seed=?, lore=?, ingredients_json=?"
+                " WHERE device_id=? AND craft_id=?",
+                (rarity, llm_name, int(is_chromatic), card_id,
+                 int(craft.get("seed", 0)), lore,
+                 json.dumps(craft.get("ingredients", []), ensure_ascii=False),
+                 req.device_id, req.craft_id),
+            )
+            conn.commit()
             existing = conn.execute(
-                "SELECT rarity, llm_name, is_chromatic, card_id FROM sigil_crafts"
+                "SELECT rarity, llm_name, is_chromatic, card_id, seed, lore FROM sigil_crafts"
                 " WHERE device_id=? AND craft_id=?",
                 (req.device_id, req.craft_id),
             ).fetchone()
@@ -4840,11 +4932,13 @@ def sigil_craft(req: SigilCraftRequest):
                 rarity=existing["rarity"], llm_name=existing["llm_name"],
                 is_chromatic=bool(existing["is_chromatic"]),
                 card_id=str(existing["card_id"] or ""),
+                seed=int(existing["seed"] or 0), lore=str(existing["lore"] or ""),
             )
 
         return SigilCraftResponse(
             ok=True, craft_id=req.craft_id, rarity=rarity, llm_name=llm_name,
             is_chromatic=is_chromatic, card_id=card_id,
+            seed=int(craft.get("seed", 0)), lore=lore,
         )
     except Exception:
         conn.rollback()
@@ -4866,7 +4960,7 @@ def sigil_collection(device_id: str = Query("", max_length=128)):
     conn = get_db()
     try:
         rows = conn.execute(
-            "SELECT craft_id, rarity, llm_name, card_id, crafted_at FROM sigil_crafts"
+            "SELECT craft_id, rarity, llm_name, card_id, seed, lore, ingredients_json, crafted_at FROM sigil_crafts"
             " WHERE device_id=? ORDER BY crafted_at ASC, craft_id ASC",
             (device_id,),
         ).fetchall()
@@ -4886,6 +4980,8 @@ def sigil_collection(device_id: str = Query("", max_length=128)):
             extras.append(SigilCollectionExtra(
                 craft_id=row["craft_id"], rarity=row["rarity"],
                 llm_name=row["llm_name"], crafted_at=row["crafted_at"],
+                seed=row["seed"], lore=row["lore"],
+                ingredients=json.loads(row["ingredients_json"] or "[]"),
             ))
             continue
         entry = cards.get(card_id)
@@ -4954,6 +5050,10 @@ def sigil_milestone(req: SigilMilestoneRequest):
 
 def _require_admin_token(x_admin_token: str = Header("")) -> None:
     # No default credentials; disabled unless explicitly configured server-side.
+    # Исключение: локальный/dev-режим — ALCHEMY_DEBUG=1 или ALCHEMY_ADMIN_OPEN=1
+    # открывают админ-эндпоинты БЕЗ токена (удобно для ручной проверки).
+    if os.environ.get("ALCHEMY_DEBUG") == "1" or os.environ.get("ALCHEMY_ADMIN_OPEN") == "1":
+        return
     expected = os.environ.get("ADMIN_API_TOKEN", "")
     if not expected or not secrets.compare_digest(x_admin_token.encode("utf-8"), expected.encode("utf-8")):
         raise HTTPException(status_code=403, detail="forbidden")
@@ -4965,6 +5065,11 @@ def admin_sigil_rotate(device_id: str = Query("", max_length=128)):
     conn = get_db()
     try:
         today = _now_dt().date().isoformat()
+        # Чистим старый дневной оффер. Любые УЖЕ скрафченные карточки дня
+        # (sigil_crafts) НЕ трогаем — они лежат в коллекции игрока и удаление
+        # их тут обнулило бы прогресс. Рассинхрон «превью vs результат»
+        # закрывается на уровне крафта: сервер отвечает из текущего daily,
+        # а не из старой строки crafts (см. sigil_craft ниже).
         conn.execute("DELETE FROM sigil_daily WHERE device_id=? AND day=?", (device_id, today))
         conn.commit()
         # salt = мс-время: каждая ротация даёт НОВЫЙ оффер (иначе sha256(device#day)
@@ -5033,6 +5138,120 @@ def admin_sigil_free_craft(device_id: str = Query("", max_length=128), craft_ind
         conn.commit()
 
         return {"ok": True, "craft": craft}
+    finally:
+        conn.close()
+
+
+
+def _bump_chroma_seq(conn, device_id: str, day: str) -> int:
+    """Монотонный счётчик админ-вызовов chroma-slot (уникальные id).
+
+    Счётчик в БД (таблица admin_counters) — не зависит от фактических
+    крафтов, поэтому два вызова до крафта дают разные craft_id.
+    """
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS admin_counters ("
+        " key TEXT PRIMARY KEY, val INTEGER NOT NULL DEFAULT 0)")
+    key = f"chroma_slot:{device_id}:{day}"
+    conn.execute(
+        "INSERT INTO admin_counters (key, val) VALUES (?, 1)"
+        " ON CONFLICT(key) DO UPDATE SET val = val + 1", (key,))
+    conn.commit()
+    row = conn.execute(
+        "SELECT val FROM admin_counters WHERE key=?", (key,)).fetchone()
+    return int(row["val"]) if row else 1
+
+
+@app.post("/api/admin/sigil/chroma-slot", dependencies=[Depends(_require_admin_token)])
+def admin_sigil_chroma_slot(device_id: str = Query("", max_length=128)):
+    """Админ: поставить в слот 0 оффера дня НОВЫЙ уникальный хроматик.
+
+    Пересобирает дневной оффер так, чтобы слот 0 был хроматическим крафтом
+    (свежие ингредиенты/seed/имя/лор) — его можно скрафтить как обычный.
+    """
+    import random
+    if not device_id:
+        return {"ok": False, "error": "missing_device_id"}
+    conn = get_db()
+    try:
+        today = _now_dt().date().isoformat()
+        # Читаем текущий оффер дня (или генерируем).
+        row = conn.execute(
+            "SELECT crafts_json FROM sigil_daily WHERE device_id=? AND day=?",
+            (device_id, today),
+        ).fetchone()
+        if row:
+            crafts_data = json.loads(row[0])
+        else:
+            rng0 = random.Random(int(time.time() * 1000) & 0x7FFFFFFF)
+            collected = _collected_card_ids(conn, device_id)
+            crafts_data = _generate_sigil_daily(
+                device_id, today, collected, salt=rng0.randrange(1 << 30))
+        # УНИКАЛЬНЫЙ craft_id каждый вызов (seed от времени) + ЗАМЕНА видимого
+        # слота: клиент показывает только _SIGIL_SLOTS=3 слотов, поэтому добавка
+        # в конец не была бы видна. Заменяем слот 1 (слот 0 может быть уже
+        # скрафчен — INSERT OR IGNORE вернул бы старое).
+        # Уникальный id: счётчик вызовов по этому device за день (counter в БД),
+        # чтобы даже до крафта каждый вызов давал НОВЫЙ craft_id.
+        seq = 100 + _bump_chroma_seq(conn, device_id, today)
+        rng = random.Random(int(time.time_ns()) & 0x7FFFFFFF)
+        chroma = _chromatic_craft(rng, today, device_id, seq)
+        if len(crafts_data) >= 3:
+            crafts_data[1] = chroma
+        else:
+            crafts_data.append(chroma)
+        # Перезаписать кэш daily обновлённым оффером.
+        conn.execute(
+            "INSERT INTO sigil_daily (device_id, day, crafts_json, generated_at)"
+            " VALUES (?, ?, ?, ?) ON CONFLICT(device_id, day)"
+            " DO UPDATE SET crafts_json=excluded.crafts_json, generated_at=excluded.generated_at",
+            (device_id, today, json.dumps(crafts_data, ensure_ascii=False), _now_iso()),
+        )
+        conn.commit()
+        return {"ok": True, "crafts": crafts_data}
+    finally:
+        conn.close()
+
+
+@app.post("/api/admin/sigil/craft-chromatic", dependencies=[Depends(_require_admin_token)])
+def admin_sigil_craft_chromatic(device_id: str = Query("", max_length=128)):
+    """Админ: выдать игроку хроматический сигил (внекомплектный) с
+    уникальным seed и сгенерированным LLM-именем/лором."""
+    if not device_id:
+        return {"ok": False, "error": "missing_device_id"}
+    conn = get_db()
+    try:
+        today = _now_dt().date().isoformat()
+        craft_id = f"{today}_{device_id[:16]}_chroma"
+        # Идемпотентно: повторный вызов не плодит копии, а возвращает уже созданный.
+        existing = conn.execute(
+            "SELECT llm_name, seed, lore FROM sigil_crafts WHERE device_id=? AND craft_id=?",
+            (device_id, craft_id),
+        ).fetchone()
+        if existing:
+            return {"ok": True, "already_crafted": True, "craft": {
+                "id": craft_id, "rarity": "chromatic",
+                "llm_name": existing["llm_name"], "seed": existing["seed"],
+                "lore": existing["lore"],
+            }}
+        seed = int(time.time() * 1000) % 0x7FFFFFFF
+        rows = conn.execute(
+            "SELECT slug FROM elements ORDER BY RANDOM() LIMIT 4"
+        ).fetchall()
+        ing_names = [r["slug"] for r in rows]
+        ident = _generate_chromatic_identity(
+            {"ingredients": [{"item_id": n} for n in ing_names]}, "chromatic")
+        conn.execute(
+            "INSERT INTO sigil_crafts"
+            " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, seed, lore, crafted_at)"
+            " VALUES (?, ?, 'chromatic', ?, 1, '', ?, ?, ?)",
+            (device_id, craft_id, ident["name"], seed, ident["lore"], _now_iso()),
+        )
+        conn.commit()
+        return {"ok": True, "craft": {
+            "id": craft_id, "rarity": "chromatic",
+            "llm_name": ident["name"], "seed": seed, "lore": ident["lore"],
+        }}
     finally:
         conn.close()
 

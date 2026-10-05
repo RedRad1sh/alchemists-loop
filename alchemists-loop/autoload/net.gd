@@ -64,6 +64,8 @@ signal sigil_collection_result(result: Dictionary)
 signal sigil_milestone_result(result: Dictionary)
 signal sigil_admin_reset_result(result: Dictionary)
 signal sigil_admin_rotate_result(result: Dictionary)
+signal sigil_admin_chromatic_result(result: Dictionary)
+signal sigil_admin_chroma_slot_result(result: Dictionary)
 signal error(message: String)
 
 var base_url := DEFAULT_BASE
@@ -301,6 +303,20 @@ func sigil_admin_rotate(device_id: String) -> void:
 		"body": {"device_id": device_id},  # body => POST (без body ушёл бы GET = 405)
 	})
 
+func sigil_admin_chromatic(device_id: String) -> void:
+	_enqueue({
+		"kind": "sigil_admin_chromatic",
+		"path": "/admin/sigil/craft-chromatic?device_id=" + device_id.uri_encode(),
+		"body": {"device_id": device_id},
+	})
+
+func sigil_admin_chroma_slot(device_id: String) -> void:
+	_enqueue({
+		"kind": "sigil_admin_chroma_slot",
+		"path": "/admin/sigil/chroma-slot?device_id=" + device_id.uri_encode(),
+		"body": {"device_id": device_id},
+	})
+
 func receipt_verify(device_id: String, provider: String, sku: String, receipt_token: String) -> void:
 	_enqueue({
 		"kind": "receipt_verify", "path": "/receipt/verify",
@@ -523,3 +539,7 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 			sigil_admin_reset_result.emit(parsed)
 		"sigil_admin_rotate":
 			sigil_admin_rotate_result.emit(parsed)
+		"sigil_admin_chromatic":
+			sigil_admin_chromatic_result.emit(parsed)
+		"sigil_admin_chroma_slot":
+			sigil_admin_chromatic_result.emit(parsed)

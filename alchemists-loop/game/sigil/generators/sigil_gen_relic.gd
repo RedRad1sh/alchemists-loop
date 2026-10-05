@@ -82,4 +82,8 @@ func draw_icon(ci: CanvasItem, rect: Rect2, rng: SigilRng, ctx: Dictionary) -> v
 	# Мягкий блик сверху слева — общий приём всех пиксельных объектов.
 	c.shade_highlight(Vector2(cx, cy), r, hi, 0.12, 0.55)
 
+	# Тонкая внешняя обводка — единый стиль с остальными генераторами.
+	var outline_col := palette(ctx, "outline", Color(0.16, 0.09, 0.05))
+	c.outline(outline_col, true)
+
 	c.draw(ci, rect)

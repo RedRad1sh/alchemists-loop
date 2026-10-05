@@ -195,15 +195,27 @@ func shade_highlight(center: Vector2, radius: float, color: Color,
 
 
 ## Обводка: пиксель рядом с закрашенным, но сам пустой, получает цвет контура.
-func outline(color: Color) -> void:
+## thin=true — «более тонкая» обводка: закрашиваются только смещения по главной
+## диагонали (2 соседа вместо 4), т.е. контур пунктирной плотности — визуально
+## легче и не «обводит» каждый пиксель в сплошную линию. По умолчанию — полная
+## обводка (сохранено прежнее поведение для существующих генераторов).
+func outline(color: Color, thin: bool = false) -> void:
 	var filled := {}
 	for k in _px.keys():
 		filled[k] = true
+	var offsets := [
+		Vector2i(0, 1), Vector2i(2, 1), Vector2i(1, 0), Vector2i(1, 2),
+	]
+	if thin:
+		# Тонкая: только угловые соседи — контур тоньше по плотности пикселей.
+		offsets = [
+			Vector2i(1, 0), Vector2i(1, 2),
+		]
 	for y in range(-1, grid + 1):
 		for x in range(-1, grid + 1):
 			if filled.has(Vector2i(x, y)):
 				continue
-			for o in [Vector2i(0, 1), Vector2i(2, 1), Vector2i(1, 0), Vector2i(1, 2)]:
+			for o in offsets:
 				if filled.has(Vector2i(x, y) + o):
 					if not filled.has(Vector2i(x, y)):
 						set_px(x, y, color)

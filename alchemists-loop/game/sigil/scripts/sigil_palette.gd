@@ -31,9 +31,9 @@ static func preset(rarity_name: StringName) -> Dictionary:
 		&"epic":
 			return {"h": 0.76, "aura": Color(0.62, 0.36, 0.92), "i": 0.70, "l": 4, "p": 0.45}
 		&"legendary":
-			return {"h": 0.10, "aura": Color(0.98, 0.70, 0.22), "i": 0.95, "l": 5, "p": 0.70, "g": 0.25}
+			return {"h": 0.10, "aura": Color(0.98, 0.70, 0.22), "i": 0.31, "l": 5, "p": 0.55, "g": 0.25}
 		&"mythic":
-			return {"h": 0.98, "aura": Color(0.92, 0.24, 0.36), "i": 1.20, "l": 6, "p": 0.90, "g": 1.0}
+			return {"h": 0.98, "aura": Color(0.92, 0.24, 0.36), "i": 0.39, "l": 6, "p": 0.72, "g": 1.0}
 		_:
 			return {"h": 0.60, "aura": Color(0.48, 0.54, 0.62), "i": 0.18, "l": 1, "p": 0.06, "g": 0.0}
 

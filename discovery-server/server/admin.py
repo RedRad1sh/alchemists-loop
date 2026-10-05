@@ -20,9 +20,17 @@ _sessions: dict[str, float] = {}
 
 
 def _check_auth(username: str, password: str) -> bool:
+    # Dev-режим (ALCHEMY_DEBUG=1 / ALCHEMY_ADMIN_OPEN=1): админка открыта
+    # без пароля — удобно для локальной ручной проверки.
+    if _admin_open():
+        return True
     if not ADMIN_PASS:
         return False
     return secrets.compare_digest(username, ADMIN_USER) and secrets.compare_digest(password, ADMIN_PASS)
+
+
+def _admin_open() -> bool:
+    return os.environ.get("ALCHEMY_DEBUG") == "1" or os.environ.get("ALCHEMY_ADMIN_OPEN") == "1"
 
 
 def _is_authenticated(request: Request) -> bool:
@@ -142,6 +150,38 @@ def setup_admin(app, get_db):
         try:
             conn.execute("DELETE FROM sigil_crafts WHERE device_id=?", (device_id,))
             conn.execute("DELETE FROM sigil_milestones WHERE device_id=?", (device_id,))
+            conn.commit()
+        finally:
+            conn.close()
+        return RedirectResponse("/admin/players", status_code=303)
+
+    @app.post("/admin/players/{device_id}/craft-chromatic")
+    @_require_auth
+    def admin_craft_chromatic(request: Request, device_id: str):
+        """Выдать игроку хроматический сигил (внекомплектную карту).
+
+        Создаёт запись sigil_crafts с уникальным seed и сгенерированным
+        именем/лором (LLM-identity с шаблон-фолбэком), как при настоящем крафте.
+        """
+        from server import _generate_chromatic_identity, _now_iso
+        import time
+        conn = get_db()
+        try:
+            today = _now_iso()[:10]
+            craft_id = f"{today}_{device_id[:16]}_chroma"
+            seed = int(time.time() * 1000) % 0x7FFFFFFF
+            rows = conn.execute(
+                "SELECT slug FROM elements ORDER BY RANDOM() LIMIT 4"
+            ).fetchall()
+            ing_names = [r["slug"] for r in rows]
+            ident = _generate_chromatic_identity(
+                {"ingredients": [{"item_id": n} for n in ing_names]}, "chromatic")
+            conn.execute(
+                "INSERT OR IGNORE INTO sigil_crafts"
+                " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, seed, lore, crafted_at)"
+                " VALUES (?, ?, 'chromatic', ?, 1, '', ?, ?, ?)",
+                (device_id, craft_id, ident["name"], seed, ident["lore"], _now_iso()),
+            )
             conn.commit()
         finally:
             conn.close()

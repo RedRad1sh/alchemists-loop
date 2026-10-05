@@ -14,6 +14,7 @@ signal daily_crafts_ready(crafts: Array)
 signal craft_completed(craft_id: String, rarity: String, llm_name: String)
 signal sigil_admin_reset_result(result: Dictionary)
 signal sigil_admin_rotate_result(result: Dictionary)
+signal sigil_admin_chromatic_result(result: Dictionary)
 signal craft_failed(error: String)
 signal catalog_ready(cards: Dictionary)
 signal collection_ready(collection: Dictionary)
@@ -33,6 +34,16 @@ var _options: SigilOptions
 var _collection: Dictionary = {}  ## craft_id -> {seed, rarity, card_id, discovered_at}
 var _player_salt: String = ""
 var _daily_crafts: Array = []  ## кэш ежедневных крафтов
+## Хэш оффера дня с сервера (по нему клиент решает, актуален ли кэш после ротации).
+var _daily_offer_hash: String = ""
+## Доп. соль кэша карточек: редкость+имя последнего запрошенного крафта
+## (чтобы слот дня с новой картой не отдавал старый PNG).
+var _cache_extra: String = ""
+## Явный seed для следующего _make_recipe (хроматики из экстрас сервера).
+var _pending_seed: int = 0
+# Последний крафт: seed/лор из ответа сервера (источник правды, не daily).
+var _last_craft_seed: int = 0
+var _last_craft_lore: String = ""
 var _daily_day: String = ""  ## день кэша
 var _preview_cache: Dictionary = {}  ## key -> ImageTexture
 ## Каталог карт: card_id -> словарь карты. Общий для всех игроков.
@@ -62,7 +73,7 @@ func _ready() -> void:
 	_svc.name = "SigilRenderService"
 	add_child(_svc)
 	_options = SigilOptions.make({
-		"card_size": Vector2i(512, 1024),
+		"card_size": Vector2i(512, 683),
 		"show_name": true,
 		"show_frame": true,
 		"render_scale": 1,
@@ -100,6 +111,7 @@ func generate_card(item_id: String, ingredients: PackedStringArray,
 func get_card(item_id: String, ingredients: PackedStringArray,
 		rarity: StringName = &"common", result_type: StringName = &"object",
 		display_name: String = "") -> Image:
+	_cache_extra = "%s|%s|%s" % [str(rarity), result_type, display_name]
 	var cached := _load_cached_image(item_id)
 	if cached != null:
 		return cached
@@ -130,19 +142,34 @@ func _make_recipe(item_id: String, ingredients: PackedStringArray,
 	r.result_id = StringName(item_id)
 	r.rarity = rarity
 	r.display_name = display_name if display_name != "" else item_id
+	# Явный seed (внекомплектные/хроматики): сервер даёт уникальный seed,
+	# иначе canonical у хроматиков без ингредиентов одинаков → карта одна.
+	var had_seed := _pending_seed != 0
+	if had_seed:
+		r.seed_override = _pending_seed
+		_pending_seed = 0
 	# Соль игрока домешивается к канонической строке рецепта, а не подменяет её:
 	# иначе два рецепта с одним id давали бы одинаковый круг независимо от
-	# состава и редкости.
-	if _player_salt != "":
+	# состава и редкости. Для хроматиков с серверным seed — НЕ перезаписываем:
+	# иначе уникальный seed сервера терялся бы за хэшем canonical (у хроматиков
+	# canonical почти одинаков → одна и та же картинка).
+	if not had_seed and _player_salt != "":
 		r.seed_override = SigilRng.seed_from_string(r.canonical_string() + "#" + _player_salt)
 	return r
 
 
 ## Рецепт ежедневного крафта из словаря ответа сервера.
 func make_craft_recipe(craft: Dictionary) -> SigilRecipe:
-	return _make_recipe(str(craft.get("id", "")), craft_ingredients(craft),
+	var display_name := str(craft.get("llm_name", ""))
+	if display_name == "":
+		# Имя из каталога (fallback_name) — достойное название вместо id крафта.
+		display_name = str(craft.get("fallback_name", ""))
+	_pending_seed = int(craft.get("seed", 0))
+	var r := _make_recipe(str(craft.get("id", "")), craft_ingredients(craft),
 		StringName(str(craft.get("rarity", "common"))), &"object",
-		str(craft.get("llm_name", "")))
+		display_name)
+	_pending_seed = 0
+	return r
 
 
 ## Список id ингредиентов крафта (без количеств).
@@ -430,13 +457,19 @@ func _on_milestone_result(result: Dictionary) -> void:
 
 ## Опции квадратного превью: круг целиком, без рамки, подписи и объекта.
 ## Центральный объект на 280 px превращается в шум, круг остаётся узнаваемым.
-func preview_options() -> SigilOptions:
+func preview_options(is_chromatic := false, seed_value := 0) -> SigilOptions:
+	var prism_eff := ""
+	if is_chromatic:
+		var effs := ["galaxy", "oil_slick", "textured_foil",
+			"shattered_glass", "laser_refraction", "glitch"]
+		prism_eff = effs[(seed_value if seed_value != 0 else 7) % effs.size()]
 	return SigilOptions.make({
 		"card_size": Vector2i(PREVIEW_SIZE, PREVIEW_SIZE),
 		"show_name": false,
 		"show_frame": false,
 		"show_icon": false,
 		"render_scale": 1,
+		"prism_effect": prism_eff,
 	})
 
 
@@ -451,7 +484,8 @@ func preview_texture(craft: Dictionary) -> ImageTexture:
 	if _preview_cache.has(key):
 		return _preview_cache[key]
 	var recipe := card_recipe_for(craft)
-	var opts := preview_options()
+	var ch := bool(craft.get("is_chromatic", false)) or str(craft.get("rarity", "")) == "chromatic"
+	var opts := preview_options(ch, recipe.compute_seed())
 	var img: Image = null
 	var path := await _svc.export_cached(recipe, opts)
 	if path != "" and FileAccess.file_exists(path):
@@ -467,7 +501,11 @@ func preview_texture(craft: Dictionary) -> ImageTexture:
 
 ## Кэширование PNG на диске.
 func _cached_path(item_id: String) -> String:
-	return "%s/%s.png" % [CACHE_DIR, item_id]
+	# Ключ кэша — НЕ craft_id слота, а его содержимое: ротация дня меняет
+	# карту/редкость на том же слоте, и по craft_id вернулся бы старый PNG
+	# («скрафтил Глину, внизу Фермер»). Соль из редкости + отображаемого
+	# имени, чтобы разные офферы одного слота не пересекались.
+	return "%s/c_%s.png" % [CACHE_DIR, (item_id + "|" + _cache_extra).sha256_text().substr(0, 24)]
 
 
 func _load_cached_image(item_id: String) -> Image:
@@ -529,7 +567,13 @@ func build_collection_view() -> Array:
 		var img := _load_cached_image(id)
 		if img == null:
 			var rarity := StringName(str(entry.get("rarity", "common")))
+			# Миниатюра коллекции: рендер по сохранённому seed (уникальность картинки),
+			# а не по canonical с пустыми ингредиентами (у хроматиков был бы одинаков).
+			var seed := int(entry.get("seed", 0))
+			if seed != 0:
+				_cache_extra = "%s|%s|%d" % [rarity, &"object", seed]
 			img = await generate_card(id, PackedStringArray(), rarity, &"object", "", false)
+			_cache_extra = ""
 			if img != null:
 				_save_cached_image(id, img)
 		if img == null:
@@ -561,6 +605,25 @@ func request_admin_rotate(device_id: String) -> void:
 	if not Net.sigil_admin_rotate_result.is_connected(_on_admin_rotate_result):
 		Net.sigil_admin_rotate_result.connect(_on_admin_rotate_result, CONNECT_ONE_SHOT)
 	Net.sigil_admin_rotate(device_id)
+
+
+## Админ: поставить в слот 0 оффера дня НОВЫЙ уникальный хроматик
+## (сервер генерирует ингредиенты/seed/имя/лор) — его можно скрафтить.
+func request_admin_chroma_slot(device_id: String) -> void:
+	if not Net.sigil_admin_chroma_slot_result.is_connected(_on_admin_chromatic_result):
+		Net.sigil_admin_chroma_slot_result.connect(_on_admin_chromatic_result, CONNECT_ONE_SHOT)
+	Net.sigil_admin_chroma_slot(device_id)
+
+
+func _on_admin_chromatic_result(result: Dictionary) -> void:
+	sigil_admin_chromatic_result.emit(result)
+	# Новый оффер с хроматиком в слоте 0: перезапросить daily, чтобы
+	# экран крафта показал свежий слот.
+	if bool(result.get("ok", false)) and result.has("crafts"):
+		_daily_crafts = result.get("crafts", [])
+		_daily_day = _today_string()
+		_save_daily_cache()
+		daily_crafts_ready.emit(_daily_crafts)
 
 
 func _on_admin_rotate_result(result: Dictionary) -> void:
@@ -599,10 +662,11 @@ func clear_image_cache() -> void:
 
 
 func request_daily(device_id: String) -> void:
-	var today := _today_string()
-	if _daily_day == today and not _daily_crafts.is_empty():
-		daily_crafts_ready.emit(_daily_crafts)
-		return
+	# Сверка с сервером по offer_hash: клиент хранит хэш последнего оффера.
+	# Сервер вернёт текущий — если совпал с нашим, кэш актуален и не
+	# перезапрашиваем (нет лишнего ререндера); если ротация сменила оффер —
+	# хэш другой, идём на сервер и обновляем кэш. Так устаревший оффер
+	# («превью common, выпала epic») не показывается.
 	_daily_settled = false
 	Net.sigil_daily(device_id)
 
@@ -613,6 +677,7 @@ func _on_daily_result(result: Dictionary) -> void:
 	_daily_settled = true
 	if not result.get("ok", false):
 		return
+	_daily_offer_hash = str(result.get("offer_hash", _daily_offer_hash))
 	# M2: daily пришёл под новой версией каталога — локальная копия устарела
 	# для card_id этих крафтов, перевыпускаем докачку (спека §1).
 	var srv_ver := str(result.get("catalog_version", ""))
@@ -637,6 +702,7 @@ func _on_daily_result(result: Dictionary) -> void:
 			"object_type": str(c.get("object_type", "object")),
 			"seed": int(c.get("seed", 0)),
 			"fallback_name": str(c.get("fallback_name", "")),
+			"lore": str(c.get("lore", "")),
 		})
 	_save_daily_cache()
 	daily_crafts_ready.emit(_daily_crafts)
@@ -657,17 +723,27 @@ func _on_craft_result(result: Dictionary) -> void:
 	var rarity := str(result.get("rarity", "common"))
 	var llm_name := str(result.get("llm_name", ""))
 	var card_id := str(result.get("card_id", ""))
+	var seed_override := int(result.get("seed", 0))
+	var lore := str(result.get("lore", ""))
+	_last_craft_seed = seed_override
+	_last_craft_lore = lore
 	if not _collection.has(craft_id):
 		var craft := _daily_craft_by_id(craft_id)
 		craft["rarity"] = rarity
 		craft["llm_name"] = llm_name
 		if card_id != "":
 			craft["card_id"] = card_id
+		if seed_override != 0:
+			craft["seed"] = seed_override
+		if lore != "":
+			craft["lore"] = lore
 		var recipe := card_recipe_for(craft)
 		_collection[craft_id] = {
 			"seed": recipe.compute_seed(),
 			"rarity": rarity,
 			"card_id": card_id,
+			"llm_name": llm_name,
+			"lore": lore,
 			"discovered_at": Time.get_unix_time_from_system(),
 		}
 		_save_collection()
@@ -686,6 +762,7 @@ func _daily_craft_by_id(craft_id: String) -> Dictionary:
 			return (c as Dictionary).duplicate(true)
 	return {"id": craft_id, "ingredients": [], "ether_cost": 0,
 		"rarity": "common", "llm_name": "", "is_chromatic": false,
+		"lore": "",
 		"card_id": "", "set": "", "process": "", "stage": "",
 		"object_type": "object", "seed": 0, "fallback_name": ""}
 
@@ -695,7 +772,7 @@ func _save_daily_cache() -> void:
 	var f := FileAccess.open(DAILY_CACHE_FILE, FileAccess.WRITE)
 	if f == null:
 		return
-	var data := {"day": _daily_day, "crafts": _daily_crafts}
+	var data := {"day": _daily_day, "crafts": _daily_crafts, "offer_hash": _daily_offer_hash}
 	f.store_string(JSON.stringify(data, "  "))
 	f.close()
 
@@ -711,6 +788,7 @@ func _load_daily_cache() -> void:
 	if parsed is Dictionary:
 		_daily_day = str(parsed.get("day", ""))
 		_daily_crafts = parsed.get("crafts", [])
+		_daily_offer_hash = str(parsed.get("offer_hash", ""))
 
 
 func _today_string() -> String:

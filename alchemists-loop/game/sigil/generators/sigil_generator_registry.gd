@@ -15,11 +15,19 @@ static func _ensure() -> void:
 	if _ready:
 		return
 	_ready = true
-	register(&"object", SigilGenObject.new())
+	# Универсальный «предмет» использует морфный генератор (новые силуэты:
+	# машины/глина/минералы и прежние формы). Старый пиксельный объект доступен
+	# как "legacy_object".
+	register(&"object", SigilGenMorphObject.new())
+	register(&"legacy_object", SigilGenObject.new())
 	register(&"abstraction", SigilGenAbstraction.new())
 	register(&"planet", SigilGenPlanet.new())
 	register(&"creature", SigilGenCreature.new())
 	register(&"relic", SigilGenRelic.new())
+	# Морфный генератор: структурные машины/глина/минералы вместо готовых иконок.
+	# Регистрируется для result_type, где нужна новая грамматика (например
+	# "machine" / "clay" / "morph_object").
+	# (морф зарегистрирован как "object" выше)
 
 
 static func register(type_name: StringName, generator: SigilIconGenerator) -> void:

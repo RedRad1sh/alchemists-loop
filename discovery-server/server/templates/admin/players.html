@@ -26,11 +26,15 @@
                 <td>{{ p.discovery_count }}</td>
                 <td>{{ p.created_at }}</td>
                 <td>
-                    <form method="post" action="/admin/players/{{ p.device_id }}/sigil-reset"
-                          onsubmit="return confirm('Сбросить все Сигилы этого игрока?');">
-                        <button class="outline secondary">Сбросить Сигилы</button>
-                    </form>
-                </td>
+                                    <form method="post" action="/admin/players/{{ p.device_id }}/sigil-reset"
+                                          onsubmit="return confirm('Сбросить все Сигилы этого игрока?');">
+                                        <button class="outline secondary">Сбросить Сигилы</button>
+                                    </form>
+                                    <form method="post" action="/admin/players/{{ p.device_id }}/craft-chromatic"
+                                          onsubmit="return confirm('Выдать этому игроку хроматический сигил?');">
+                                        <button class="outline">Выдать хроматик</button>
+                                    </form>
+                                </td>
             </tr>
             {% endfor %}
             {% if not players %}

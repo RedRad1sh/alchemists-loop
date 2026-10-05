@@ -49,7 +49,7 @@ func draw_icon(ci: CanvasItem, rect: Rect2, rng: SigilRng, ctx: Dictionary) -> v
 			_relic(c, cx, cy, r, rng, body, deep, dark, hi, accent)
 
 	c.shade_highlight(Vector2(cx, cy), r, hi, 0.12, 0.55)
-	c.outline(deep)
+	c.outline(deep, true)  # тонкая обводка (единый стиль)
 	c.draw(ci, rect)
 
 

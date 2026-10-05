@@ -1160,6 +1160,8 @@ func _build_ui() -> void:
 	tabs.z_index = 0
 	_tabs_ref = tabs
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# Нижняя навигация: QTE-событие не должно появляться поверх вкладок (док §7).
+	tabs.add_to_group("qte_exclusion")
 	tabs.add_theme_stylebox_override("panel", _panel_style(Color(0.10, 0.13, 0.18, 0.35), 14))
 	# Вкладки должны помещаться на portrait-экране целиком: «Эксперимент»
 	# нельзя терять из видимой навигации при переходе в Лабораторию.
@@ -1201,6 +1203,13 @@ func _build_ui() -> void:
 	_home._build_house_popup()
 	# Событие мира — глобальный QTE поверх текущей вкладки, не кнопка в «Мире».
 	_online._build_event_qte()
+	# UX-слой онлайн-части (тосты + индикатор сети) — поверх страниц,
+	# ниже модалок (док «refactor online.gd.md» §16).
+	# UX-слой онлайн-части (тосты + индикатор сети) — поверх страниц, ниже модалок
+	# (док «refactor online.gd.md» §16). В selftest не строится: сюита UX строит
+	# и сносит слой сама, а «фоновый» CanvasLayer менял замер троттла redraw (u14).
+	if not _selftest:
+		_online._build_online_ux()
 	_home._apply_cosmetic()
 	_update_brew_bar_visibility()
 	_spirit._refresh_companion_visible()
@@ -1228,6 +1237,8 @@ func _build_brew_bar() -> void:
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := _panel_style(Color(0.07, 0.10, 0.15, 0.96), 18)
 	bar.add_theme_stylebox_override("panel", sb)
+	# QTE-событие не должно появляться поверх панели варки (док §7).
+	bar.add_to_group("qte_exclusion")
 	add_child(bar)
 	_brew_bar = bar
 
@@ -1587,6 +1598,7 @@ func _build_popup() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	dim.z_index = 20
 	dim.visible = false
+	dim.add_to_group("modal_ui")
 	add_child(dim)
 	_popup_dim = dim
 	var center := CenterContainer.new()
@@ -1637,6 +1649,8 @@ func _build_popup() -> void:
 	actions.add_child(close)
 	card.gui_input.connect(_on_popup_card_input)
 	_popup = center
+	# Модальное окно блокирует спавн и активацию QTE (док §8).
+	center.add_to_group("modal_ui")
 
 func _show_challenge_win_popup(item_id: String, target_name: String, a: String, b: String, first: bool = false) -> void:
 	_popup_title.text = "ЕЖЕДНЕВНАЯ ЦЕЛЬ!"
@@ -1715,7 +1729,7 @@ func _show_sigil_card(tex: ImageTexture, item_id: String, display_name: String, 
 	decor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(decor)
 	decor.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	decor.start(is_special, Vector2(300.0, 560.0))
+	decor.start(is_special, Vector2(320.0, 427.0))
 
 	# ── Центр экрана ──
 	var center := CenterContainer.new()
@@ -1744,7 +1758,7 @@ func _show_sigil_card(tex: ImageTexture, item_id: String, display_name: String, 
 	img_rect.texture = tex
 	img_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	img_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	img_rect.custom_minimum_size = Vector2(256, 512)
+	img_rect.custom_minimum_size = Vector2(320, 427)
 	img_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	vbox.add_child(img_rect)
 
@@ -2242,12 +2256,28 @@ func _sigil_build_collection_tab(container: Control) -> void:
 				"name": str(xe.get("llm_name", "")), "set": "",
 				"set_title": "Вне комплектов",
 				"first_at": str(xe.get("crafted_at", "")), "copies": 1,
+				"seed": int(xe.get("seed", 0)),
+				"lore": str(xe.get("lore", "")),
+				# Ингредиенты хроматика (сервер хранит их при крафте) — тот же
+				# SigilLore.generate, что у комплектных карт, работает от recipe.
+				"recipe": xe.get("ingredients", []),
 			}
 			var ccell := _sigil_collection_cell(entry)
 			cgrid.add_child(ccell)
-			# Ре-рендер невозможен — у extras нет ингредиентов: только дисковый
-			# кэш по craft_id, промах остаётся плейсхолдером «…» из слота.
+			# Экстрас (хроматик): уникальная картинка по seed. Ключ дискового кэша
+			# зависит от _cache_extra — ставим его по seed, чтобы разные хроматики
+			# не коллизировали в один PNG (глобальный _cache_extra это ломал).
+			var xseed := int(xe.get("seed", 0))
+			if xseed != 0:
+				_sigil._cache_extra = "chromatic|object|%d" % xseed
 			var cimg := _sigil._load_cached_image(str(xe.get("craft_id", "")))
+			if cimg == null:
+				cimg = await _sigil.generate_card(
+					str(xe.get("craft_id", "")), PackedStringArray(),
+					&"chromatic", &"object", str(xe.get("llm_name", "")))
+				if cimg != null:
+					_sigil._save_cached_image(str(xe.get("craft_id", "")), cimg)
+					_sigil._cache_extra = ""
 			if cimg != null:
 				_sigil_fill_preview(ccell.get_meta("preview"),
 					ImageTexture.create_from_image(cimg))
@@ -2727,7 +2757,7 @@ func _sigil_collection_cell(entry: Dictionary) -> Control:
 	var accent := _rarity_color(rarity)
 	var copies := int(entry.get("copies", 1))
 	var cell := Button.new()
-	cell.custom_minimum_size = Vector2(0, 124)
+	cell.custom_minimum_size = Vector2(0, 200)
 	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cell.clip_contents = true
 	cell.add_theme_stylebox_override("normal", _sigil_row_style(accent, 0.0))
@@ -2747,7 +2777,7 @@ func _sigil_collection_cell(entry: Dictionary) -> Control:
 	holder.offset_right = -8
 	holder.offset_bottom = -8
 
-	var shot := _sigil_preview_slot(accent, 96)
+	var shot := _sigil_preview_slot(accent, 150)
 	holder.add_child(shot)
 	shot.set_anchors_preset(Control.PRESET_FULL_RECT)
 	cell.set_meta("preview", shot)
@@ -2855,10 +2885,10 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	# Переворачиваемая карточка: лицо = живой рендер, оборот = лор.
 	var card_flip := Control.new()
 	card_flip.name = "SigilCardFlip"
-	card_flip.custom_minimum_size = Vector2(300, 540)
-	card_flip.size = Vector2(300, 540)
+	card_flip.custom_minimum_size = Vector2(405, 540)
+	card_flip.size = Vector2(405, 540)
 	card_flip.mouse_filter = Control.MOUSE_FILTER_STOP
-	card_flip.pivot_offset = Vector2(150, 270)
+	card_flip.pivot_offset = Vector2(202, 270)
 	card_flip.set_meta("flipped", false)
 	card_flip.set_meta("busy", false)
 	vbox.add_child(card_flip)
@@ -2873,7 +2903,7 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 		_live_card_node.play_reveal.call_deferred()
 	# SubViewportContainer нельзя растягивать preset-ом: он сам задаёт размер
 	# вьюпорту. Фикс. размер 300x540, центрирование — через size_flags.
-	face.size = Vector2(300, 540)
+	face.size = Vector2(405, 540)
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card_flip.add_child(face)
 
@@ -2900,13 +2930,53 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	lore_v.add_theme_constant_override("margin_top", 12)
 	lore_v.add_theme_constant_override("margin_bottom", 12)
 	lore.add_child(lore_v)
+	# Лор: тот же детерминированный генератор, что у комплектных карт
+	# (SigilLore.generate от (id, seed)). Хроматики получают seed и ингредиенты
+	# с сервера — SigilLore даёт такой же структурированный текст {title,
+	# description, effect_hint, warning}, как у комплектов, а не плоский
+	# LLM-абзац. Серверный lore больше не используется как source — только
+	# как fallback при пустом seed.
+	var srv_lore := str(entry.get("lore", ""))
+	# Процесс/стадия у внекомплектных — детерминированные от seed, иначе
+	# SigilLore (тот же генератор, что у комплектных) не найдёт совместимых
+	# слотов и вернёт пустоту.
+	var ps_pairs := [
+		["calcinatio", "nigredo"], ["putrefactio", "nigredo"],
+		["sublimatio", "albedo"], ["coniunctio", "albedo"],
+		["coniunctio", "rubedo"], ["calcinatio", "rubedo"],
+		["sublimatio", "citrinitas"], ["coniunctio", "citrinitas"],
+	]
+	var _entry_seed := int(entry.get("seed", 0))
+	var _ps: Array = ps_pairs[abs(_entry_seed) % ps_pairs.size()]
+	# id для лора: у каталожных карт — card_id (craft_id пуст), у хроматиков —
+	# craft_id (card_id пуст). Пустой craft_id НЕ должен маскировать card_id.
+	var _lore_id := str(entry.get("craft_id", ""))
+	if _lore_id == "":
+		_lore_id = str(entry.get("card_id", ""))
 	var card_lore := SigilLore.generate({
-		"id": str(entry.get("card_id", "")),
-		"process": str(entry.get("process", "")),
-		"stage": str(entry.get("stage", "")),
-		"seed": int(entry.get("seed", 0)),
+		"id": _lore_id,
+		"process": str(entry.get("process", _ps[0])),
+		"stage": str(entry.get("stage", _ps[1])),
+		"seed": _entry_seed,
 		"recipe": entry.get("recipe", []),
 	})
+	if card_lore.is_empty() and rarity == "chromatic":
+		if srv_lore != "":
+			card_lore = {
+				"title": str(entry.get("name", "Внекомплектный сигил")),
+				"description": srv_lore,
+				"effect_hint": "Не влияет на комплекты; коллекционная ценность.",
+				"warning": "",
+			}
+		else:
+			card_lore = {
+				"title": "Внекомплектный сигил",
+				"description": "Эта карта не входит ни в один комплект стихий. "
+					+ "Её создали из случайного сочетания ингредиентов — "
+					+ "призма редкости, светящаяся вне обычных графов трансмутации.",
+				"effect_hint": "Не влияет на комплекты; коллекционная ценность.",
+				"warning": "",
+			}
 	if not card_lore.is_empty():
 		var lt := _label(str(card_lore.get("title", "")), 16)
 		lt.name = "SigilLoreTitle"
@@ -3093,10 +3163,10 @@ func _sigil_craft_row(craft: Dictionary) -> Control:
 	btn.custom_minimum_size = Vector2(0, maxi(176, row_h))
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.clip_contents = true
-	btn.add_theme_stylebox_override("normal", _sigil_row_style(accent, 0.0))
-	btn.add_theme_stylebox_override("hover", _sigil_row_style(accent, 0.05))
-	btn.add_theme_stylebox_override("pressed", _sigil_row_style(accent, 0.09))
-	btn.add_theme_stylebox_override("disabled", _sigil_row_style(accent, 0.0))
+	btn.add_theme_stylebox_override("normal", _sigil_row_style(accent, 0.0, is_chromatic))
+	btn.add_theme_stylebox_override("hover", _sigil_row_style(accent, 0.05, is_chromatic))
+	btn.add_theme_stylebox_override("pressed", _sigil_row_style(accent, 0.09, is_chromatic))
+	btn.add_theme_stylebox_override("disabled", _sigil_row_style(accent, 0.0, is_chromatic))
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	if can_afford:
 		btn.pressed.connect(_open_sigil_craft.bind(craft))
@@ -3206,16 +3276,25 @@ func _sigil_flip_card(ev: InputEvent, card_flip: Control) -> void:
 func _sigil_live_card(entry: Dictionary) -> Control:
 	# Свой SubViewport, а не общий вьюпорт SigilRenderService: общий занят
 	# статичными рендерами (UPDATE_DISABLED) и не может быть переподключён.
+	var recipe := _sigil.card_recipe_for(entry)
+	var rarity := str(entry.get("rarity", recipe.rarity))
+	var prism_eff := ""
+	# Хроматики — космос/призма поверх (Prism-эффекты card_beatify).
+	if rarity == "chromatic":
+		var effs := ["galaxy", "oil_slick", "textured_foil",
+			"shattered_glass", "laser_refraction", "glitch"]
+		prism_eff = effs[recipe.compute_seed() % effs.size()]
 	var opts := SigilOptions.make({
-		"card_size": Vector2i(300, 540),
+		"card_size": Vector2i(405, 540),
 		"show_name": true,
 		"show_frame": true,
 		"show_icon": true,
 		"render_scale": 1,
+		"prism_effect": prism_eff,
+		"prism_phase": -1.0,
 	})
-	var recipe := _sigil.card_recipe_for(entry)
 	var box := SubViewportContainer.new()
-	box.custom_minimum_size = Vector2(300, 540)
+	box.custom_minimum_size = Vector2(405, 540)
 	box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -3223,7 +3302,7 @@ func _sigil_live_card(entry: Dictionary) -> Control:
 	box.stretch = true
 	var vp := SubViewport.new()
 	vp.name = "LiveCardViewport"
-	vp.size = Vector2i(300, 540)
+	vp.size = Vector2i(405, 540)
 	vp.transparent_bg = true
 	vp.disable_3d = true
 	vp.gui_disable_input = true
@@ -3281,13 +3360,23 @@ func _sigil_fill_preview(box: Control, tex: ImageTexture) -> void:
 		ph.visible = false
 
 
-func _sigil_row_style(accent: Color, lift: float) -> StyleBox:
+func _sigil_row_style(accent: Color, lift: float, is_chromatic: bool = false) -> StyleBox:
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.075 + accent.r * 0.10 + lift, 0.085 + accent.g * 0.10 + lift,
-		0.12 + accent.b * 0.10 + lift, 1.0)
-	sb.border_color = Color(accent.r, accent.g, accent.b, 0.45 + lift)
-	sb.set_border_width_all(1)
-	sb.border_width_left = 4
+	if is_chromatic:
+		# Хроматик выделяется: тёплый фон и золотая рамка потолще.
+		sb.bg_color = Color(0.16 + lift, 0.11 + lift, 0.06 + lift, 1.0)
+		sb.border_color = Color(1.0, 0.72, 0.25, 0.95)
+		sb.set_border_width_all(2)
+		sb.border_width_left = 5
+		# Лёгкое свечение: внешний контур рамки (имитация ореола).
+		sb.shadow_color = Color(1.0, 0.6, 0.15, 0.35)
+		sb.shadow_size = 6
+	else:
+		sb.bg_color = Color(0.075 + accent.r * 0.10 + lift, 0.085 + accent.g * 0.10 + lift,
+			0.12 + accent.b * 0.10 + lift, 1.0)
+		sb.border_color = Color(accent.r, accent.g, accent.b, 0.45 + lift)
+		sb.set_border_width_all(1)
+		sb.border_width_left = 4
 	sb.set_corner_radius_all(14)
 	sb.content_margin_left = 14
 	sb.content_margin_right = 14
@@ -3363,6 +3452,9 @@ func _sigil_craft_title(craft: Dictionary) -> String:
 	var llm_name := str(craft.get("llm_name", ""))
 	if llm_name != "":
 		return llm_name
+	var fb := str(craft.get("fallback_name", ""))
+	if fb != "":
+		return fb
 	return "Сигил «%s»" % _sigil_rarity_title(str(craft.get("rarity", "common"))).capitalize()
 
 
@@ -3417,8 +3509,6 @@ func _show_sigil_craft_ritual(rarity: String) -> void:
 		
 	var r := SigilCraftRitual.new()
 	r.accent = _rarity_color(rarity)
-	if r.accent.r < 0.75 and r.accent.g < 0.75:
-		r.accent = Color(1.0, 0.75, 0.25)
 	r.strength = strength
 	
 	# КЛЮЧЕВОЕ: Подключаем сигнал показа карты и автозакрытие
@@ -3489,8 +3579,27 @@ func _show_pending_craft_card(craft_id: String, rarity: String, llm_name: String
 		if str((c as Dictionary).get("id", "")) == craft_id:
 			craft = c
 			break
+	# Хроматик: показываем ТУ ЖЕ живую карточку, что и в коллекции
+	# (с Prism-эффектом, анимированная) — не статичный PNG.
+	if rarity == "chromatic":
+		var entry := {
+			"card_id": "", "craft_id": craft_id,
+			"rarity": "chromatic",
+			"name": llm_name if llm_name != "" else str(craft.get("fallback_name", "")),
+			"set": "", "set_title": "Вне комплектов",
+			"first_at": "", "copies": 1,
+			# Seed и лор — из ответа крафта (сервер — источник правды), а не из
+			# _daily_crafts: клиентский daily мог устареть (кэш/старый оффер),
+			# тогда seed=0 -> все хроматики рендерились бы одной картинкой.
+			"seed": _sigil._last_craft_seed if _sigil._last_craft_seed != 0 \
+				else int(craft.get("seed", 0)),
+			"lore": _sigil._last_craft_lore if _sigil._last_craft_lore != "" \
+				else str(craft.get("lore", "")),
+		}
+		_open_sigil_fullscreen(entry)
+		return
 	var img := await _sigil.get_card(craft_id, SigilManager.craft_ingredients(craft),
-		StringName(rarity), &"object", llm_name)
+		StringName(rarity), &"object", _sigil_craft_title(craft))
 	if img == null:
 		return
 	_show_sigil_card(ImageTexture.create_from_image(img), craft_id,
@@ -3556,7 +3665,7 @@ func _sigil_thumb(item: Dictionary) -> Control:
 	cell.add_theme_constant_override("separation", 2)
 	cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(100, 200)
+	b.custom_minimum_size = Vector2(100, 133)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.05, 0.05, 0.08, 1)
 	sb.border_color = _rarity_color(rar)
@@ -3804,6 +3913,7 @@ func _build_confirm() -> void:
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.z_index = 20
 	dim.visible = false
+	dim.add_to_group("modal_ui")
 	add_child(dim)
 	_confirm_dim = dim
 
@@ -3811,6 +3921,7 @@ func _build_confirm() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	center.z_index = 21
 	center.visible = false
+	center.add_to_group("modal_ui")
 	add_child(center)
 	_confirm = center
 
@@ -4020,7 +4131,7 @@ class SigilCardRevealDecor:
 		set_process(true)
 
 		# ── God-rays: часть «длинные-редкие», часть «короткие-частые» ──
-		var ray_count := 18 if is_special else 11
+		var ray_count := 10 if is_special else 6
 		for i in ray_count:
 			var long_ray := i % 3 == 0
 			_rays.append({
@@ -4033,12 +4144,12 @@ class SigilCardRevealDecor:
 			})
 
 		# ── Искры ──
-		var count := 90 if is_special else 42
+		var count := 45 if is_special else 22
 		for _i in count:
 			_sparks.append(_make_spark(_rng.randf_range(0.0, 0.25)))
 
 		# ── Орбитальные мотыльки (медленно кружат вокруг карты) ──
-		var mote_count := 22 if is_special else 10
+		var mote_count := 12 if is_special else 6
 		for _i in mote_count:
 			_motes.append({
 				"ang": _rng.randf() * TAU,
@@ -4116,14 +4227,14 @@ class SigilCardRevealDecor:
 			var f := float(i) / 7.0
 			draw_circle(center, diag * 1.6 * f,
 				Color(rc.r, rc.g, rc.b,
-					0.075 * pulse * fade_in * (1.0 - f * 0.70) + 0.10 * burst * (1.0 - f)))
+					0.038 * pulse * fade_in * (1.0 - f * 0.70) + 0.05 * burst * (1.0 - f)))
 
 		# ── Вертикальный столб света (только для особых) ──
 		if _special:
 			var pw := _card_half.x * (0.85 + 0.1 * sin(_t * 1.7))
 			for i in 4:
 				var g := 1.0 - float(i) / 4.0
-				var a_p := 0.055 * fade_in * g * pulse
+				var a_p := 0.028 * fade_in * g * pulse
 				draw_colored_polygon(PackedVector2Array([
 					center + Vector2(-pw * g, -size.y),
 					center + Vector2(pw * g, -size.y),
@@ -4187,7 +4298,7 @@ class SigilCardRevealDecor:
 				var a_near := (1.0 - t0) * (1.0 - t0)
 				var a_far := (1.0 - t1) * (1.0 - t1)
 				var col := Color(rc_mix(0.35).r, rc_mix(0.35).g, rc_mix(0.35).b, 1.0)
-				var alpha := 0.13 * flick * fade_in * (0.6 + 0.9 * burst)
+				var alpha := 0.065 * flick * fade_in * (0.6 + 0.9 * burst)
 				var w0 := 1.0 + t0 * 1.8   # конус расширяется
 				var w1 := 1.0 + t1 * 1.8
 				draw_colored_polygon(PackedVector2Array([
@@ -4229,7 +4340,7 @@ class SigilCardRevealDecor:
 				# Искра ещё «под» карточкой — сдвигаем на её край, чтобы
 				# рождалась из-за силуэта, а не в центре.
 				draw_pos = center + dir_s * edge
-			var a_sp := pow(1.0 - lt, 1.5) * 0.95 * fade_in
+			var a_sp := pow(1.0 - lt, 1.5) * 0.55 * fade_in
 			var core := Color(1.0, 0.96, 0.88) if bool(s["hot"]) else rc_mix(0.55)
 
 			# Трейл: ломаная из истории позиций, сужающаяся к хвосту.
@@ -4244,7 +4355,7 @@ class SigilCardRevealDecor:
 						float(s["size"]) * seg_a * 0.9, true)
 
 			draw_circle(draw_pos, float(s["size"]) * 3.4 * (1.0 - lt),
-				Color(rarity_color.r, rarity_color.g, rarity_color.b, a_sp * 0.28))
+				Color(rarity_color.r, rarity_color.g, rarity_color.b, a_sp * 0.16))
 			draw_circle(draw_pos, float(s["size"]) * (1.0 - lt * 0.4),
 				Color(core.r, core.g, core.b, a_sp))
 
@@ -4270,9 +4381,9 @@ class SigilCardRevealDecor:
 			for sgn in [1.0, -1.0]:
 				draw_colored_polygon(PackedVector2Array([
 					center + n * w, center - n * w, center + d * l * sgn,
-				]), Color(1.0, 0.98, 0.92, 0.55 * k))
+				]), Color(1.0, 0.98, 0.92, 0.28 * k))
 				draw_colored_polygon(PackedVector2Array([
 					center + n * w * 2.2, center - n * w * 2.2, center + d * l * 0.7 * sgn,
-				]), Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.35 * k))
+				]), Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.18 * k))
 		draw_circle(center, diag * 0.55 * k, Color(1.0, 1.0, 1.0, 0.35 * k))
 		draw_circle(center, diag * 0.28 * k, Color(1.0, 1.0, 1.0, 0.55 * k))

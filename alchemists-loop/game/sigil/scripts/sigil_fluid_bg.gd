@@ -47,7 +47,7 @@ func setup(options: SigilOptions, palette: SigilPalette, seed_value: int) -> voi
 		# имеет размер карточки — ставим его явно.
 		_rect.position = Vector2.ZERO
 		_rect.size = Vector2(options.card_size)
-	var sh := SigilAssets.shader_file("shaders/sigil_fluid_bg.gdshader")
+	var sh := SigilAssets.shader_file("shaders/sigil_fluid_bg_focus.gdshader")
 	if sh == null:
 		options.fluid_cpu_fallback = true
 		queue_redraw()
@@ -57,6 +57,16 @@ func setup(options: SigilOptions, palette: SigilPalette, seed_value: int) -> voi
 	for k in palette.to_shader_uniforms():
 		mat.set_shader_parameter(k, palette.to_shader_uniforms()[k])
 	mat.set_shader_parameter("card_size", Vector2(options.card_size))
+	# Фокус вокруг центра круга и внутренний кант по рамке (новый шейдер).
+	var circle := options.circle_rect()
+	mat.set_shader_parameter("focus_uv", Vector2(
+		circle.get_center().x / maxf(float(options.card_size.x), 1.0),
+		circle.get_center().y / maxf(float(options.card_size.y), 1.0)))
+	mat.set_shader_parameter("focus_radius", circle.size.x * 0.5
+		/ maxf(float(options.card_size.x), 1.0) * 2.4)
+	mat.set_shader_parameter("rim_offset_px", options.frame_margin)
+	mat.set_shader_parameter("rim_width_px", 7.0)
+	mat.set_shader_parameter("rim_strength", 0.06)
 	_phase = float(SigilRng.new(seed_value).fork("bg").randf() * 100.0)
 	# Скорость дрейфа из палитры: warp 0.6 (common) → 1.25 (mythic).
 	# 0.05 — базовый коэффициент, подобранный по ощущению «застывшая жидкость».

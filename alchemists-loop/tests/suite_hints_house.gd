@@ -244,9 +244,13 @@ static func run(g: Game) -> void:
 	# кейс красный, а не зелёный молча
 	Selftest.check("u14 view really redraws while shown", u14_draws[0] >= 3
 		and u14_elapsed > 0)
-	# +150 мс — три кадра на границы окна (redraw приходит на кадр позже queue_redraw)
-	Selftest.check("u14 redraw rate stays at or below 20 fps",
-		u14_draws[0] * 50 <= u14_elapsed + 150)
+	# +150 мс — три кадра на границы окна (redraw приходит на кадр позже queue_redraw).
+	# Троттл house_view — 0.033с (~30 к/с, фикс 6d31b35): граница от факта длительности
+	# окна — draws*34 <= elapsed+150. Безгейтная версия на 30-60 к/с даёт 15-30 redraw'ов
+	# и краснеет; троттл (≤30 к/с) проходит с запасом (15 draws за 500 мс → 510 <= 650).
+	# (Старая граница *50 писалась под троттл 0.05 и ложно-краснела на 26-27 к/с.)
+	Selftest.check("u14 redraw rate stays at or below 30 fps",
+		u14_draws[0] * 34 <= u14_elapsed + 150)
 	Selftest.check("u14 shown view really ticks", u14_view._phase > 0.0)
 	# и прямое свойство самого троттла: аккумулятор после каждого тика ниже порога
 	# (ловит вариант «копить, но не обнулять», который счётчик выше не заметит)
