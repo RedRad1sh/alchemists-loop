@@ -2843,8 +2843,12 @@ func _sigil_date_ru(iso: String) -> String:
 func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	if entry.is_empty() or _sigil_fullscreen != null or _sigil == null:
 		return
-	Sfx.click()
 	var rarity := str(entry.get("rarity", "common"))
+	# Хроматик — своё «раскрытие карты» (торжественный звук вместо клика).
+	if rarity == "chromatic":
+		Sfx.ritual_reveal()
+	else:
+		Sfx.click()
 	var accent := _rarity_color(rarity)
 	var root := Control.new()
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
