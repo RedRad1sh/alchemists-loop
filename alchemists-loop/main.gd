@@ -1025,6 +1025,7 @@ func _build_ui() -> void:
 	th.default_font_size = 16
 	if _font_reg != null:
 		th.default_font = _font_reg
+	UIStyle.apply_theme(th)
 	theme = th
 
 	var bg := ColorRect.new()
@@ -1033,6 +1034,7 @@ func _build_ui() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 	_bg_rect = bg
+	UIFx.ambient_bg(bg)
 
 	# Используем обычный Control-хост вместо MarginContainer: контейнеры не должны
 	# раздувать корневой экран до высоты своего прокручиваемого содержимого.
@@ -1165,12 +1167,9 @@ func _build_ui() -> void:
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	# Нижняя навигация: QTE-событие не должно появляться поверх вкладок (док §7).
 	tabs.add_to_group("qte_exclusion")
-	tabs.add_theme_stylebox_override("panel", _panel_style(Color(0.10, 0.13, 0.18, 0.35), 14))
-	# Вкладки должны помещаться на portrait-экране целиком: «Эксперимент»
-	# нельзя терять из видимой навигации при переходе в Лабораторию.
+	UIStyle.style_tabs(tabs)
 	tabs.add_theme_font_size_override("font_size", 14)
-	tabs.add_theme_constant_override("tab_hseparation", 6)
-	tabs.add_theme_constant_override("tab_vseparation", 4)
+	tabs.add_theme_constant_override("tab_hseparation", 4)
 	tabs.tab_changed.connect(_on_tab_changed)
 	root.add_child(tabs)
 
@@ -1388,23 +1387,7 @@ func _stylebox_9(path: String, m: Vector4, mod: Color = Color(1, 1, 1, 1)) -> St
 	return sb
 
 func _panel_style(bg_col: Color, radius: int) -> StyleBox:
-	var sb := _stylebox_9("res://assets/ui/panel.png",
-		Vector4(16, 14, 16, 14), Color(1, 1, 1, bg_col.a))
-	if sb == null:
-		var fb := StyleBoxFlat.new()
-		fb.bg_color = bg_col
-		fb.set_corner_radius_all(radius)
-		fb.content_margin_left = 10
-		fb.content_margin_right = 10
-		fb.content_margin_top = 8
-		fb.content_margin_bottom = 8
-		return fb
-	sb.content_margin_left = 12
-	sb.content_margin_right = 12
-	sb.content_margin_top = 10
-	sb.content_margin_bottom = 10
-	return sb
-
+	return UIStyle.panel(bg_col, radius)
 func _make_page(tabs: TabContainer, title: String) -> VBoxContainer:
 	var scroll := ScrollContainer.new()
 	scroll.name = title
@@ -1449,48 +1432,16 @@ func _make_slot(letter: String) -> SlotWell:
 func _round_brew_button(text: String) -> Button:
 	var b := Button.new()
 	b.text = text
-	# Большая кнопка остаётся только для главного действия, но больше не
-	# занимает пол-экрана: touch-зона сохраняется через сам Control.
-	b.custom_minimum_size = Vector2(140, 52)  # увеличен hitbox для надёжного клика
+	b.custom_minimum_size = Vector2(140, 52)
 	b.pivot_offset = Vector2(70, 26)
 	b.add_theme_font_size_override("font_size", 16)
 	if _font_semi != null:
 		b.add_theme_font_override("font", _font_semi)
-	var brew_margins := Vector4(14, 10, 14, 10)
-	var sb := _stylebox_9("res://assets/ui/btn_primary.png", brew_margins)
-	var sb_h := _stylebox_9("res://assets/ui/btn_primary.png", brew_margins, Color(1.18, 1.18, 1.16, 1))
-	var sb_p := _stylebox_9("res://assets/ui/btn_primary.png", brew_margins, Color(0.72, 0.82, 0.8, 1))
-	var sb_dis := _stylebox_9("res://assets/ui/btn_secondary.png", brew_margins, Color(1, 1, 1, 0.72))
-	if sb == null:  # фоллбэк на плоский стиль
-		sb = StyleBoxFlat.new()
-		(sb as StyleBoxFlat).bg_color = Color(0.10, 0.35, 0.38, 0.95)
-		(sb as StyleBoxFlat).border_color = Color(0.35, 0.95, 0.9, 0.85)
-		(sb as StyleBoxFlat).set_border_width_all(3)
-		(sb as StyleBoxFlat).set_corner_radius_all(18)
-		sb_h = (sb as StyleBoxFlat).duplicate()
-		(sb_h as StyleBoxFlat).bg_color = Color(0.14, 0.45, 0.47, 1)
-		sb_p = (sb as StyleBoxFlat).duplicate()
-		(sb_p as StyleBoxFlat).bg_color = Color(0.05, 0.15, 0.17, 0.9)
-		sb_dis = (sb as StyleBoxFlat).duplicate()
-		(sb_dis as StyleBoxFlat).bg_color = Color(0.09, 0.12, 0.15, 0.8)
-		(sb_dis as StyleBoxFlat).border_color = Color(0.3, 0.4, 0.45, 0.3)
-	b.add_theme_stylebox_override("normal", sb)
-	b.add_theme_stylebox_override("hover", sb_h)
-	b.add_theme_stylebox_override("pressed", sb_p)
-	b.add_theme_stylebox_override("disabled", sb_dis)
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	b.add_theme_color_override("font_color", Color(0.95, 1.0, 1.0))
-	b.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
-	b.add_theme_color_override("font_disabled_color", Color(0.55, 0.6, 0.62))
+	UIStyle.style_button(b, 1, 16)
 	return b
-
-# kind: 0 — вторичная (тёмно-синяя), 1 — основная (бирюзовая), 2 — золотая
 func _small_button(text: String, min_size: Vector2, kind: int = 0) -> Button:
 	var b := Button.new()
 	b.text = text
-	# Один helper больше не превращает любую служебную кнопку в 46–54 px.
-	# Многострочные подтверждения сохраняют высоту, остальные получают
-	# компактную, но не микроскопическую Android-friendly высоту.
 	var requested_h := min_size.y
 	var compact_h := 38.0 if requested_h <= 0.0 else clampf(requested_h, 38.0, 42.0)
 	if text.contains("\n"):
@@ -1499,35 +1450,8 @@ func _small_button(text: String, min_size: Vector2, kind: int = 0) -> Button:
 	b.add_theme_font_size_override("font_size", 14)
 	if _font_semi != null:
 		b.add_theme_font_override("font", _font_semi)
-	var tex := "res://assets/ui/btn_secondary.png"
-	if kind == 1:
-		tex = "res://assets/ui/btn_primary.png"
-	elif kind == 2:
-		tex = "res://assets/ui/btn_gold.png"
-	var small_margins := Vector4(10, 7, 10, 7)
-	var sb := _stylebox_9(tex, small_margins)
-	var sb_h := _stylebox_9(tex, small_margins, Color(1.2, 1.22, 1.18, 1))
-	if sb == null:  # фоллбэк
-		sb = StyleBoxFlat.new()
-		(sb as StyleBoxFlat).bg_color = Color(0.13, 0.17, 0.23, 0.9)
-		(sb as StyleBoxFlat).set_corner_radius_all(8)
-		sb_h = (sb as StyleBoxFlat).duplicate()
-		(sb_h as StyleBoxFlat).bg_color = Color(0.2, 0.26, 0.33, 1)
-	b.add_theme_stylebox_override("normal", sb)
-	b.add_theme_stylebox_override("hover", sb_h)
-	b.add_theme_stylebox_override("pressed", sb_h)
-	b.add_theme_stylebox_override("disabled", sb)
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	var fg := Color(0.88, 0.94, 0.96)
-	if kind == 2:
-		fg = Color(0.16, 0.12, 0.03)   # тёмный текст на золоте
-	elif kind == 1:
-		fg = Color(0.95, 1.0, 1.0)
-	b.add_theme_color_override("font_color", fg)
-	b.add_theme_color_override("font_hover_color", fg)
+	UIStyle.style_button(b, kind, 10)
 	return b
-
-## Квадратная кнопка для иконок (таро, квесты и т.д.). Фиксированный размер 46x46.
 func _square_button(text: String, kind: int = 0) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -1535,36 +1459,8 @@ func _square_button(text: String, kind: int = 0) -> Button:
 	b.add_theme_font_size_override("font_size", 18)
 	if _font_semi != null:
 		b.add_theme_font_override("font", _font_semi)
-	var tex := "res://assets/ui/btn_secondary.png"
-	if kind == 1:
-		tex = "res://assets/ui/btn_primary.png"
-	elif kind == 2:
-		tex = "res://assets/ui/btn_gold.png"
-	var margins := Vector4(10, 7, 10, 7)
-	var sb := _stylebox_9(tex, margins)
-	var sb_h := _stylebox_9(tex, margins, Color(1.2, 1.22, 1.18, 1))
-	if sb == null:
-		sb = StyleBoxFlat.new()
-		(sb as StyleBoxFlat).bg_color = Color(0.13, 0.17, 0.23, 0.9)
-		(sb as StyleBoxFlat).set_corner_radius_all(8)
-		sb_h = (sb as StyleBoxFlat).duplicate()
-		(sb_h as StyleBoxFlat).bg_color = Color(0.2, 0.26, 0.33, 1)
-	b.add_theme_stylebox_override("normal", sb)
-	b.add_theme_stylebox_override("hover", sb_h)
-	b.add_theme_stylebox_override("pressed", sb_h)
-	b.add_theme_stylebox_override("disabled", sb)
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	var fg := Color(0.88, 0.94, 0.96)
-	if kind == 2:
-		fg = Color(0.16, 0.12, 0.03)
-	elif kind == 1:
-		fg = Color(0.95, 1.0, 1.0)
-	b.add_theme_color_override("font_color", fg)
-	b.add_theme_color_override("font_hover_color", fg)
+	UIStyle.style_button(b, kind, 10)
 	return b
-
-## Кнопка Аркана Сигилов: та же квадратная основа, но вместо глифа — рисованная
-## иконка-таро. Button не Container, поэтому якорь ставится до офсетов.
 func _tarot_button() -> Button:
 	var b := _square_button("", 1)
 	var icon := TarotIcon.new()
@@ -1612,8 +1508,7 @@ func _build_popup() -> void:
 	center.visible = false
 	add_child(center)
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel",
-		_panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
+	card.add_theme_stylebox_override("panel", UIStyle.modal_panel(UIStyle.GOLD))
 	center.add_child(card)
 	var col := VBoxContainer.new()
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -3938,8 +3833,7 @@ func _build_confirm() -> void:
 	_confirm = center
 
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel",
-		_panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
+	card.add_theme_stylebox_override("panel", UIStyle.modal_panel(UIStyle.TEAL))
 	center.add_child(card)
 	var col := VBoxContainer.new()
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
