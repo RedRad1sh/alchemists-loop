@@ -224,7 +224,10 @@ class TestRealCatalogContract:
         monkeypatch.setenv("ADMIN_API_TOKEN", "test-admin-token")
         r = client.post("/api/admin/sigil/rotate", headers={"X-Admin-Token": "test-admin-token"}, params={"device_id": "dev-real"})
         assert r.status_code == 200
-        assert all(c["stage"] in self.STAGES for c in r.json()["crafts"]), r.json()
+        # Хроматик вне комплектов: stage у него пустой по замыслу, как и в daily.
+        assert all(
+            c["stage"] in self.STAGES for c in r.json()["crafts"] if not c["is_chromatic"]
+        ), r.json()
 
 
 import sqlite3  # noqa: E402  (нужен _seed_crafts)
@@ -326,10 +329,12 @@ class TestDailyOffer:
         assert 0 <= hits <= 20, hits
 
     def test_rarity_weights_are_rebalanced(self):
+        # Возврат uncommon (55/15/20/8/4) + хроматик во всех слотах (3/105).
         assert srv._SIGIL_RARITY_WEIGHTS == [
-            ("common", 70), ("rare", 20), ("epic", 8), ("legendary", 4),
+            ("common", 55), ("uncommon", 15), ("rare", 20),
+            ("epic", 8), ("legendary", 4), ("chromatic", 3),
         ]
-        assert sum(w for _, w in srv._SIGIL_RARITY_WEIGHTS) == 102  # 70+20+8+4; бриф говорил "== 100", но с его же весами это недостижимо
+        assert sum(w for _, w in srv._SIGIL_RARITY_WEIGHTS) == 105  # 55+15+20+8+4+3
         assert srv._SIGIL_ETHER_COST["chromatic"] == 1200
 
     def test_legacy_cache_is_regenerated(self, tmp_path, monkeypatch):
@@ -354,7 +359,7 @@ class TestDailyOffer:
         r = client.get("/api/sigil/daily")
         assert r.json() == {
             "ok": False, "day": "", "crafts": [], "catalog_version": "",
-            "error": "missing_device_id",
+            "offer_hash": "", "error": "missing_device_id",
         }
 
     def test_rotate_gives_catalog_cards(self, tmp_path, monkeypatch):
@@ -418,7 +423,8 @@ class TestCraft:
         assert r.json() == {
             "ok": True, "craft_id": target["id"], "rarity": target["rarity"],
             "llm_name": target["llm_name"], "is_chromatic": False,
-            "card_id": target["card_id"], "error": "",
+            "card_id": target["card_id"], "seed": target["seed"], "lore": "",
+            "error": "",
         }
         coll = client.get("/api/sigil/collection", params={"device_id": "dev-a"}).json()
         entry = coll["cards"][target["card_id"]]
@@ -453,7 +459,8 @@ class TestCraft:
         r = client.post("/api/sigil/craft", json={"device_id": "dev-a", "craft_id": "nope"})
         assert r.json() == {
             "ok": False, "craft_id": "nope", "rarity": "", "llm_name": "",
-            "is_chromatic": False, "card_id": "", "error": "craft_not_found",
+            "is_chromatic": False, "card_id": "", "seed": 0, "lore": "",
+            "error": "craft_not_found",
         }
 
     def test_missing_device_id_rejected(self, tmp_path, monkeypatch):
@@ -503,11 +510,12 @@ class TestCraft:
         assert coll["extras"][0]["rarity"] == "chromatic"
         assert len(coll["cards"]) == len(all_ids)
 
-    def test_craft_replay_after_direct_insert_returns_existing(self, tmp_path, monkeypatch):
+    def test_craft_replay_after_direct_insert_resyncs_from_daily(self, tmp_path, monkeypatch):
         """Реплей крафта при уже вставленной строке — ветка re-select, без 500.
 
         card_id оффера ("coal") отличен от card_id прямой вставки ("spark"):
-        ответ обязан прийти из существующей строки, а не из подделанного daily.
+        строка и ответ синхронизируются с ТЕКУЩИМ оффером дня, чтобы после
+        ротации игрок не видел «превью одной карты — выпала другая».
         """
         s = _srv(tmp_path, monkeypatch)
         client = _mini(s, tmp_path, monkeypatch)
@@ -533,14 +541,15 @@ class TestCraft:
         assert r.status_code == 200
         assert r.json() == {
             "ok": True, "craft_id": "replay_0", "rarity": "common", "llm_name": "",
-            "is_chromatic": False, "card_id": "spark", "error": "",
+            "is_chromatic": False, "card_id": "coal", "seed": 0, "lore": "",
+            "error": "",
         }
         conn = sqlite3.connect(s.DB_PATH)
         rows = conn.execute(
-            "SELECT * FROM sigil_crafts WHERE device_id='dev-replay' AND craft_id='replay_0'"
+            "SELECT card_id FROM sigil_crafts WHERE device_id='dev-replay' AND craft_id='replay_0'"
         ).fetchall()
         conn.close()
-        assert len(rows) == 1
+        assert rows == [("coal",)]  # строка ровно одна и пересинхронизирована
 
 
 class TestCollection:

@@ -865,6 +865,9 @@ func _ready() -> void:
 			Net.week_status(_online._device_id)
 	if _selftest:
 		_run_selftest()
+	else:
+		# Вход в игру: приветственный звук (не в selftest-прогоне).
+		Sfx.game_start()
 
 # ---------- R14: см. game/demo.gd (616-620) ----------
 
@@ -1724,7 +1727,7 @@ func _present_popup(item_id: String, subtext: String, title: String = "", title_
 	_popup.scale = Vector2(0.7, 0.7)
 	var tw := create_tween()
 	tw.tween_property(_popup, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
-	Sfx.discovery()
+	Sfx.brew_discover()
 
 func _hide_popup() -> void:
 	_popup_dim.visible = false
@@ -2724,6 +2727,7 @@ func _on_sigil_milestone_result(result: Dictionary) -> void:
 	if not result.get("ok", false) or not result.get("claimed", false):
 		return
 	var tier := int(result.get("tier", 0))
+	Sfx.achievement()
 	_sigil_claim_popup(tier)
 	_sigil.request_collection(_online._device_id)
 
@@ -2885,8 +2889,12 @@ func _sigil_date_ru(iso: String) -> String:
 func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	if entry.is_empty() or _sigil_fullscreen != null or _sigil == null:
 		return
-	Sfx.click()
 	var rarity := str(entry.get("rarity", "common"))
+	# Хроматик — своё «раскрытие карты» (торжественный звук вместо клика).
+	if rarity == "chromatic":
+		Sfx.ritual_reveal()
+	else:
+		Sfx.click()
 	var accent := _rarity_color(rarity)
 	var root := Control.new()
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -3175,8 +3183,12 @@ func _close_sigil_fullscreen() -> void:
 ## Ждать ежедневные крафты, но не вечно: офлайн не должен вешать меню.
 ## Settled-флаг гасит ожидание сразу после офлайн-ответа, не по полному таймауту.
 func _await_daily_crafts(timeout: float) -> bool:
+	# Ждём ОТВЕТА сервера (daily_settled), а не просто непустого кэша: иначе
+	# экран строится из устаревшего sigil_daily_cache.json раньше, чем придёт
+	# свежий оффер («превью хроматик, крафт обычка» после ротации).
+	# Кэш — только офлайн-фолбэк по таймауту.
 	var waited := 0.0
-	while _sigil._daily_crafts.is_empty() and not _sigil.daily_settled() and waited < timeout:
+	while not _sigil.daily_settled() and waited < timeout:
 		await get_tree().process_frame
 		waited += get_process_delta_time()
 	return not _sigil._daily_crafts.is_empty()
@@ -3600,7 +3612,7 @@ func _on_sigil_board_confirmed(craft: Dictionary) -> void:
 		var have := int(_engine.inventory.get(elem_id, 0))
 		_engine.inventory[elem_id] = max(0, have - needed)
 	_saves._save_game()
-	Sfx.discovery()
+	Sfx.craft_start()
 	var craft_id := str(craft.get("id", ""))
 	_sigil_pending_craft = craft.duplicate(true)
 	_sigil.craft_card(_online._device_id, craft_id)
