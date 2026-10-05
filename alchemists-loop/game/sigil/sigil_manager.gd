@@ -603,10 +603,10 @@ func clear_image_cache() -> void:
 
 
 func request_daily(device_id: String) -> void:
-	var today := _today_string()
-	if _daily_day == today and not _daily_crafts.is_empty():
-		daily_crafts_ready.emit(_daily_crafts)
-		return
+	# Всегда перезапрашиваем свежий оффер при открытии экрана крафта:
+	# админ-ротация меняет daily на сервере, и локальный кэш (тот же день)
+	# иначе показывает устаревший оффер → «превью common, выпала epic».
+	# Кэш остаётся для оффлайн-старта (см. _load_daily_cache).
 	_daily_settled = false
 	Net.sigil_daily(device_id)
 
