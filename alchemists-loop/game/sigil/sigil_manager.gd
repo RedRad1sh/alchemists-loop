@@ -690,6 +690,7 @@ func _on_daily_result(result: Dictionary) -> void:
 			"object_type": str(c.get("object_type", "object")),
 			"seed": int(c.get("seed", 0)),
 			"fallback_name": str(c.get("fallback_name", "")),
+			"lore": str(c.get("lore", "")),
 		})
 	_save_daily_cache()
 	daily_crafts_ready.emit(_daily_crafts)
@@ -739,6 +740,7 @@ func _daily_craft_by_id(craft_id: String) -> Dictionary:
 			return (c as Dictionary).duplicate(true)
 	return {"id": craft_id, "ingredients": [], "ether_cost": 0,
 		"rarity": "common", "llm_name": "", "is_chromatic": false,
+		"lore": "",
 		"card_id": "", "set": "", "process": "", "stage": "",
 		"object_type": "object", "seed": 0, "fallback_name": ""}
 

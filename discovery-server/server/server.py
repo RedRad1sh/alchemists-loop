@@ -5130,6 +5130,26 @@ def admin_sigil_free_craft(device_id: str = Query("", max_length=128), craft_ind
         conn.close()
 
 
+
+def _bump_chroma_seq(conn, device_id: str, day: str) -> int:
+    """Монотонный счётчик админ-вызовов chroma-slot (уникальные id).
+
+    Счётчик в БД (таблица admin_counters) — не зависит от фактических
+    крафтов, поэтому два вызова до крафта дают разные craft_id.
+    """
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS admin_counters ("
+        " key TEXT PRIMARY KEY, val INTEGER NOT NULL DEFAULT 0)")
+    key = f"chroma_slot:{device_id}:{day}"
+    conn.execute(
+        "INSERT INTO admin_counters (key, val) VALUES (?, 1)"
+        " ON CONFLICT(key) DO UPDATE SET val = val + 1", (key,))
+    conn.commit()
+    row = conn.execute(
+        "SELECT val FROM admin_counters WHERE key=?", (key,)).fetchone()
+    return int(row["val"]) if row else 1
+
+
 @app.post("/api/admin/sigil/chroma-slot", dependencies=[Depends(_require_admin_token)])
 def admin_sigil_chroma_slot(device_id: str = Query("", max_length=128)):
     """Админ: поставить в слот 0 оффера дня НОВЫЙ уникальный хроматик.
@@ -5143,15 +5163,31 @@ def admin_sigil_chroma_slot(device_id: str = Query("", max_length=128)):
     conn = get_db()
     try:
         today = _now_dt().date().isoformat()
-        # Сброс дневного оффера: слоты 1-2 перегенерируются, слот 0 — хроматик.
-        conn.execute("DELETE FROM sigil_daily WHERE device_id=? AND day=?", (device_id, today))
-        conn.commit()
-        rng = random.Random(int(time.time() * 1000) & 0x7FFFFFFF)
-        collected = _collected_card_ids(conn, device_id)
-        crafts_data = _generate_sigil_daily(device_id, today, collected, salt=rng.randrange(1 << 30))
-        # Гарантированно ставим хроматик в слот 0 (генерация могла не выбросить).
-        chroma = _chromatic_craft(rng, today, device_id, 0)
-        crafts_data[0] = chroma
+        # Читаем текущий оффер дня (или генерируем).
+        row = conn.execute(
+            "SELECT crafts_json FROM sigil_daily WHERE device_id=? AND day=?",
+            (device_id, today),
+        ).fetchone()
+        if row:
+            crafts_data = json.loads(row[0])
+        else:
+            rng0 = random.Random(int(time.time() * 1000) & 0x7FFFFFFF)
+            collected = _collected_card_ids(conn, device_id)
+            crafts_data = _generate_sigil_daily(
+                device_id, today, collected, salt=rng0.randrange(1 << 30))
+        # УНИКАЛЬНЫЙ craft_id каждый вызов (seed от времени) + ЗАМЕНА видимого
+        # слота: клиент показывает только _SIGIL_SLOTS=3 слотов, поэтому добавка
+        # в конец не была бы видна. Заменяем слот 1 (слот 0 может быть уже
+        # скрафчен — INSERT OR IGNORE вернул бы старое).
+        # Уникальный id: счётчик вызовов по этому device за день (counter в БД),
+        # чтобы даже до крафта каждый вызов давал НОВЫЙ craft_id.
+        seq = 100 + _bump_chroma_seq(conn, device_id, today)
+        rng = random.Random(int(time.time_ns()) & 0x7FFFFFFF)
+        chroma = _chromatic_craft(rng, today, device_id, seq)
+        if len(crafts_data) >= 3:
+            crafts_data[1] = chroma
+        else:
+            crafts_data.append(chroma)
         # Перезаписать кэш daily обновлённым оффером.
         conn.execute(
             "INSERT INTO sigil_daily (device_id, day, crafts_json, generated_at)"
