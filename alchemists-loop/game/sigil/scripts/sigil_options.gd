@@ -7,7 +7,7 @@ extends RefCounted
 enum Mode { COMPLETED, DRAFT }
 enum GlyphRotation { UPRIGHT, RADIAL, RANDOM }
 
-var card_size: Vector2i = Vector2i(512, 1024)
+var card_size: Vector2i = Vector2i(512, 683)
 var show_name: bool = true
 var name_text: String = ""
 var name_font_size: int = 30

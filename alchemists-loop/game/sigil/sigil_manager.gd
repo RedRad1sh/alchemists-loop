@@ -62,7 +62,7 @@ func _ready() -> void:
 	_svc.name = "SigilRenderService"
 	add_child(_svc)
 	_options = SigilOptions.make({
-		"card_size": Vector2i(512, 1024),
+		"card_size": Vector2i(512, 683),
 		"show_name": true,
 		"show_frame": true,
 		"render_scale": 1,

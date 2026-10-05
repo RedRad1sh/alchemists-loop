@@ -2869,10 +2869,10 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	# Переворачиваемая карточка: лицо = живой рендер, оборот = лор.
 	var card_flip := Control.new()
 	card_flip.name = "SigilCardFlip"
-	card_flip.custom_minimum_size = Vector2(300, 540)
-	card_flip.size = Vector2(300, 540)
+	card_flip.custom_minimum_size = Vector2(300, 400)
+	card_flip.size = Vector2(300, 400)
 	card_flip.mouse_filter = Control.MOUSE_FILTER_STOP
-	card_flip.pivot_offset = Vector2(150, 270)
+	card_flip.pivot_offset = Vector2(150, 200)
 	card_flip.set_meta("flipped", false)
 	card_flip.set_meta("busy", false)
 	vbox.add_child(card_flip)
@@ -3221,7 +3221,7 @@ func _sigil_live_card(entry: Dictionary) -> Control:
 	# Свой SubViewport, а не общий вьюпорт SigilRenderService: общий занят
 	# статичными рендерами (UPDATE_DISABLED) и не может быть переподключён.
 	var opts := SigilOptions.make({
-		"card_size": Vector2i(300, 540),
+		"card_size": Vector2i(300, 400),
 		"show_name": true,
 		"show_frame": true,
 		"show_icon": true,
@@ -3571,7 +3571,7 @@ func _sigil_thumb(item: Dictionary) -> Control:
 	cell.add_theme_constant_override("separation", 2)
 	cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(100, 200)
+	b.custom_minimum_size = Vector2(100, 133)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.05, 0.05, 0.08, 1)
 	sb.border_color = _rarity_color(rar)

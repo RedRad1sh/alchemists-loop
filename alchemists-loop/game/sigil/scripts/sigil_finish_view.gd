@@ -16,7 +16,7 @@ var tint: Color = Color.WHITE
 var art: Rect2 = Rect2()
 var center: Vector2 = Vector2.ZERO
 var radius: float = 0.0
-var card_size: Vector2 = Vector2(512, 1024)
+var card_size: Vector2 = Vector2(512, 683)
 var seed_value: int = 0
 
 # animated — разрешено ли движение для этой редкости;
