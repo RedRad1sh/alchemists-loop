@@ -119,10 +119,34 @@ func _on_command(text: String) -> void:
 			_cmd_force(parts)
 		"sigil":
 			_cmd_sigil(parts)
+		"sfx":
+			_cmd_sfx(parts)
 		"help":
-			_log_text("Commands: add <id>, unlock <mode>, set ether <N>, reset day, clear inventory, force circle open, sigil rotate|free <0|1|2>|chroma|ritual")
+			_log_text("Commands: add <id>, unlock <mode>, set ether <N>, reset day, clear inventory, force circle open, sigil rotate|free <0|1|2>|chroma|ritual, sfx list|play <name>")
 		_:
 			_log_text("[color=red]Unknown command: %s[/color]" % parts[0])
+
+## Звуковой debug: sfx list (все события конфига) / sfx play <event>.
+func _cmd_sfx(parts: Array) -> void:
+	if OS.has_feature("editor") == false:
+		return
+	if parts.size() < 2:
+		_log_text("[color=red]Usage: sfx list | sfx play <event>[/color]")
+		return
+	var sub: String = str(parts[1])
+	if sub == "list":
+		var names: Array = []
+		for k in Sfx._sound_cfg.keys():
+			names.append(String(k))
+		names.sort()
+		_log_text("Events (%d): %s" % [names.size(), ", ".join(names)])
+		return
+	if sub == "play" and parts.size() >= 3:
+		var ev: String = str(parts[2])
+		Sfx.play_event(ev)
+		_log_text("Playing event: %s" % ev)
+		return
+	_log_text("[color=red]Usage: sfx list | sfx play <event>[/color]")
 
 func _cmd_add(parts: Array) -> void:
 	if parts.size() < 2:

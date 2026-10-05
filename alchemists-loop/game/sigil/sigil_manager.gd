@@ -622,6 +622,11 @@ func _on_admin_chromatic_result(result: Dictionary) -> void:
 	if bool(result.get("ok", false)) and result.has("crafts"):
 		_daily_crafts = result.get("crafts", [])
 		_daily_day = _today_string()
+		# Сервер отдаёт offer_hash (как /api/sigil/daily) — сохраняем, иначе
+		# кэш с хроматиком живёт со старым хэшем и рассинхронится с сервером
+		# («превью хроматик, крафт обычка»).
+		if result.has("offer_hash"):
+			_daily_offer_hash = str(result.get("offer_hash", ""))
 		_save_daily_cache()
 		daily_crafts_ready.emit(_daily_crafts)
 
