@@ -31,24 +31,41 @@ func _draw() -> void:
 	var outer := Rect2(Vector2(pad, pad), size - Vector2(pad, pad) * 2.0)
 	if outer.size.x < 20 or outer.size.y < 20: return
 	var inner := outer.grow(-5.0)
-	
-	# 2. Контуры
-	draw_rect(outer, _ink(0.75), false, 1.7)
-	draw_rect(inner, _ink(0.35), false, 0.9)
+	# Амплитуда среза углов общая для всех контуров — фаски параллельны.
+	var cut := clampf(min(outer.size.x, outer.size.y) * 0.08, 6.0, 18.0)
+
+	# 2. Контуры — срезанные углы (октагон), не прямоугольник.
+	draw_polyline(_cut_path(outer, cut), _ink(0.75), 1.7, true)
+	draw_polyline(_cut_path(inner, cut), _ink(0.35), 0.9, true)
 	if style % 2 == 1:
-		draw_rect(inner.grow(-4.0), _ink(0.16), false, 0.7)
-	
+		draw_polyline(_cut_path(inner.grow(-4.0), cut), _ink(0.16), 0.7, true)
+
 	# Свечение
-	draw_rect(outer.grow(1.5), _ink(0.07), false, 4.0)
+	draw_polyline(_cut_path(outer.grow(1.5), cut + 1.5), _ink(0.07), 4.0, true)
 
 	# 3. Углы - всегда ВНУТРЬ
-	_draw_corners(outer, rng)
+	_draw_corners(outer, rng, cut)
 	# 4. Середины сторон
 	if style >= 1: _draw_mids(outer)
 	# 5. Зоны art/title
 	if options != null: _draw_zones(outer)
 
-func _draw_corners(outer: Rect2, rng: SigilRng) -> void:
+## Контур со срезанными углами: замкнутая полилиния восьмиугольника
+## (прямоугольник за вычетом 45°-фасок по углам). Срез автоматически
+## вписывается в короткую сторону, чтобы фаски не перекрывались.
+static func _cut_path(r: Rect2, cut: float) -> PackedVector2Array:
+	var c := minf(cut, minf(r.size.x, r.size.y) * 0.5 - 2.0)
+	if c < 1.0:
+		return PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y), r.position])
+	return PackedVector2Array([
+		Vector2(r.position.x + c, r.position.y), Vector2(r.end.x - c, r.position.y),
+		Vector2(r.end.x, r.position.y + c), Vector2(r.end.x, r.end.y - c),
+		Vector2(r.end.x - c, r.end.y), Vector2(r.position.x + c, r.end.y),
+		Vector2(r.position.x, r.end.y - c), Vector2(r.position.x, r.position.y + c),
+		Vector2(r.position.x + c, r.position.y),
+	])
+
+func _draw_corners(outer: Rect2, rng: SigilRng, cut: float) -> void:
 	var tick := 13.0 + rng.randf_range(0, 5.0)
 	var corners = [
 		[outer.position, Vector2(1, 1)],
@@ -60,7 +77,10 @@ func _draw_corners(outer: Rect2, rng: SigilRng) -> void:
 	if pool.is_empty(): pool = SigilGlyphs.names()
 
 	for c in corners:
-		var p: Vector2 = c[0]; var d: Vector2 = c[1]
+		# Орнамент якорится к середине фаски (угол срезан), а не к мнимому
+		# прямому углу прямоугольника.
+		var p: Vector2 = c[0] + c[1] * (cut * 0.5)
+		var d: Vector2 = c[1]
 		var h_end := p + Vector2(d.x * tick, 0)
 		var v_end := p + Vector2(0, d.y * tick)
 		# L-засечка

@@ -165,7 +165,14 @@ static func style_tabs(tabs: TabContainer) -> void:
 	tabs.add_theme_stylebox_override("tab_unselected", _tab_box(Color(0.03, 0.05, 0.08, 0.55), Color(0, 0, 0, 0), 0))
 	tabs.add_theme_stylebox_override("tab_hovered", _tab_box(Color(0.08, 0.13, 0.20, 0.85), LINE, 2))
 	tabs.add_theme_stylebox_override("tab_disabled", _tab_box(Color(0.03, 0.05, 0.08, 0.3), Color(0, 0, 0, 0), 0))
-	tabs.add_theme_stylebox_override("tab_focus", StyleBoxEmpty.new())
+	# Видимый фокус-ободок (доступность: навигация с клавиатуры/геймпада):
+	# бирюзовая рамка чуть вокруг вкладки, форма как у tab-бокса — скруглённый
+	# верх и прямой низ. StyleBoxEmpty прятал фокус (Godot документирует это).
+	var tab_focus := box(Color(0, 0, 0, 0), Color(TEAL.r, TEAL.g, TEAL.b, 0.9), 12, 2)
+	tab_focus.corner_radius_bottom_left = 0
+	tab_focus.corner_radius_bottom_right = 0
+	tab_focus.set_expand_margin_all(2.0)
+	tabs.add_theme_stylebox_override("tab_focus", tab_focus)
 	tabs.add_theme_color_override("font_selected_color", TEXT)
 	tabs.add_theme_color_override("font_unselected_color", TEXT_DIM)
 	tabs.add_theme_color_override("font_hovered_color", TEXT)
