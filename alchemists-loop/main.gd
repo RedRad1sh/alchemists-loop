@@ -1729,7 +1729,7 @@ func _show_sigil_card(tex: ImageTexture, item_id: String, display_name: String, 
 	decor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(decor)
 	decor.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	decor.start(is_special, Vector2(300.0, 560.0))
+	decor.start(is_special, Vector2(300.0, 400.0))
 
 	# ── Центр экрана ──
 	var center := CenterContainer.new()
@@ -1758,7 +1758,7 @@ func _show_sigil_card(tex: ImageTexture, item_id: String, display_name: String, 
 	img_rect.texture = tex
 	img_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	img_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	img_rect.custom_minimum_size = Vector2(256, 512)
+	img_rect.custom_minimum_size = Vector2(256, 341)
 	img_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	vbox.add_child(img_rect)
 
@@ -2887,7 +2887,7 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 		_live_card_node.play_reveal.call_deferred()
 	# SubViewportContainer нельзя растягивать preset-ом: он сам задаёт размер
 	# вьюпорту. Фикс. размер 300x540, центрирование — через size_flags.
-	face.size = Vector2(300, 540)
+	face.size = Vector2(300, 400)
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card_flip.add_child(face)
 
