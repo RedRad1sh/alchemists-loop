@@ -2264,8 +2264,23 @@ func _sigil_build_collection_tab(container: Control) -> void:
 			}
 			var ccell := _sigil_collection_cell(entry)
 			cgrid.add_child(ccell)
-			# Экстрас (хроматик): картинка — живая анимированная миниатюра
-			# (_sigil_collection_cell создала live-карточку). PNG не нужен.
+			# Экстрас (хроматик): уникальная картинка по seed. Ключ дискового кэша
+			# зависит от _cache_extra — ставим его по seed, чтобы разные хроматики
+			# не коллизировали в один PNG (глобальный _cache_extra это ломал).
+			var xseed := int(xe.get("seed", 0))
+			if xseed != 0:
+				_sigil._cache_extra = "chromatic|object|%d" % xseed
+			var cimg := _sigil._load_cached_image(str(xe.get("craft_id", "")))
+			if cimg == null:
+				cimg = await _sigil.generate_card(
+					str(xe.get("craft_id", "")), PackedStringArray(),
+					&"chromatic", &"object", str(xe.get("llm_name", "")))
+				if cimg != null:
+					_sigil._save_cached_image(str(xe.get("craft_id", "")), cimg)
+					_sigil._cache_extra = ""
+			if cimg != null:
+				_sigil_fill_preview(ccell.get_meta("preview"),
+					ImageTexture.create_from_image(cimg))
 
 	# Мини-арты дорисовываем по одному, как в списке крафтов: клетки и бейджи
 	# видны сразу, картинки приходят кадром позже.
@@ -2742,7 +2757,7 @@ func _sigil_collection_cell(entry: Dictionary) -> Control:
 	var accent := _rarity_color(rarity)
 	var copies := int(entry.get("copies", 1))
 	var cell := Button.new()
-	cell.custom_minimum_size = Vector2(0, 200)
+	cell.custom_minimum_size = Vector2(0, 124)
 	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cell.clip_contents = true
 	cell.add_theme_stylebox_override("normal", _sigil_row_style(accent, 0.0))
@@ -2762,18 +2777,10 @@ func _sigil_collection_cell(entry: Dictionary) -> Control:
 	holder.offset_right = -8
 	holder.offset_bottom = -8
 
-	# Хроматик — живая анимированная миниатюра (Prism + аура), как в фуллскрине,
-	# но компактная; обычные — статичный PNG-превью.
-	if rarity == "chromatic":
-		var live := _sigil_live_card(entry, Vector2i(150, 200))
-		holder.add_child(live)
-		live.set_anchors_preset(Control.PRESET_FULL_RECT)
-		cell.set_meta("preview", live)
-	else:
-		var shot := _sigil_preview_slot(accent, 150)
-		holder.add_child(shot)
-		shot.set_anchors_preset(Control.PRESET_FULL_RECT)
-		cell.set_meta("preview", shot)
+	var shot := _sigil_preview_slot(accent, 96)
+	holder.add_child(shot)
+	shot.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cell.set_meta("preview", shot)
 
 	if copies > 1:
 		var badge := _sigil_badge("×%d" % copies, accent)
@@ -3261,7 +3268,7 @@ func _sigil_flip_card(ev: InputEvent, card_flip: Control) -> void:
 ## Живая карточка для фуллскрина: SubViewportContainer поверх вьюпорта
 ## SigilRenderService, UPDATE_ALWAYS — чтобы аура/фольга/искры жили.
 ## Редкость/seed берутся из entry, поэтому свечения совпадают с редкостью.
-func _sigil_live_card(entry: Dictionary, card_size: Vector2i = Vector2i(405, 540)) -> Control:
+func _sigil_live_card(entry: Dictionary) -> Control:
 	# Свой SubViewport, а не общий вьюпорт SigilRenderService: общий занят
 	# статичными рендерами (UPDATE_DISABLED) и не может быть переподключён.
 	var recipe := _sigil.card_recipe_for(entry)
@@ -3273,7 +3280,7 @@ func _sigil_live_card(entry: Dictionary, card_size: Vector2i = Vector2i(405, 540
 			"shattered_glass", "laser_refraction", "glitch"]
 		prism_eff = effs[recipe.compute_seed() % effs.size()]
 	var opts := SigilOptions.make({
-		"card_size": card_size,
+		"card_size": Vector2i(405, 540),
 		"show_name": true,
 		"show_frame": true,
 		"show_icon": true,
@@ -3282,7 +3289,7 @@ func _sigil_live_card(entry: Dictionary, card_size: Vector2i = Vector2i(405, 540
 		"prism_phase": -1.0,
 	})
 	var box := SubViewportContainer.new()
-	box.custom_minimum_size = Vector2(card_size)
+	box.custom_minimum_size = Vector2(405, 540)
 	box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -3290,7 +3297,7 @@ func _sigil_live_card(entry: Dictionary, card_size: Vector2i = Vector2i(405, 540
 	box.stretch = true
 	var vp := SubViewport.new()
 	vp.name = "LiveCardViewport"
-	vp.size = card_size
+	vp.size = Vector2i(405, 540)
 	vp.transparent_bg = true
 	vp.disable_3d = true
 	vp.gui_disable_input = true
