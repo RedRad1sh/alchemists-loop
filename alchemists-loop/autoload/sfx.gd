@@ -109,6 +109,23 @@ func _load_sound_cfg() -> void:
 			if parsed is Dictionary and (parsed as Dictionary).has("events"):
 				_sound_cfg = (parsed as Dictionary)["events"] as Dictionary
 
+## ДОСТИЖЕНИЕ: клейм награды комплекта (милстоун Аркана).
+func achievement() -> void:
+	if _check_cfg_event("achievement"):
+		return
+	var a := _bell(659.0, 0.5, 0.12)
+	var b := _bell(987.8, 0.7, 0.08)
+	_play(_mix([a, b]), -4.0)
+
+## ВХОД В ИГРУ: приветственный аккорд при старте (не в selftest).
+func game_start() -> void:
+	if _check_cfg_event("game_start"):
+		return
+	var parts: Array = []
+	for i in 3:
+		parts.append(_tone(220.0 * pow(1.26, i), 0.5, 0.16))
+	_play(_mix(parts), -4.0)
+
 ## РИТУАЛ: фаза сменилась (призыв/стихии/форма/вспышка).
 func ritual_phase() -> void:
 	if _check_cfg_event("ritual_phase"):
@@ -164,6 +181,8 @@ func play_event(event_name: String) -> void:
 		"ritual_rune": ritual_rune()
 		"ritual_spin": ritual_spin()
 		"ritual_reveal": ritual_reveal()
+		"achievement": achievement()
+		"game_start": game_start()
 
 ## Проиграть wav/ogg из файла с volume/pitch/delay (кэш загрузки).
 ## Возвращает true, если файл найден и запущен; false — нет файла/ошибка.

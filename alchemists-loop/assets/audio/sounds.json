@@ -1,15 +1,15 @@
 {
-  "comment": "Центральный конфиг звуков. Ключ = имя события (вызов Sfx.play_event('имя') или Sfx.<имя>() в коде). Значение: file (путь к wav/ogg, опционально), volume_db, pitch (скорость), delay (сек до проигрывания), about (пояснение). Если file пуст/не найден — используется процедурный звук как раньше. Класть wav в res://assets/audio/ и писать путь в file.",
+  "comment": "Центральный конфиг звуков. Ключ = имя события (вызов Sfx.play_event('имя') или Sfx.<имя>() в коде). Значение: file (путь к wav/ogg, опционально), volume_db, pitch (скорость), delay (сек до проигрывания), about (пояснение). Если file пуст/не найден — используется процедурный звук как раньше. Класть wav в res://assets/audio/ и писать путь в file (res://assets/audio/имя.wav).",
   "events": {
     "click": {
-      "file": "",
+      "file": "res://assets/audio/ui/click-5.wav",
       "volume_db": -12.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "UI-клик: кнопки, ячейки, закрытие окон — базовый щелчок интерфейса"
     },
     "error": {
-      "file": "",
+      "file": "res://assets/audio/craft/nope.wav",
       "volume_db": -12.0,
       "pitch": 1.0,
       "delay": 0.0,
@@ -72,39 +72,53 @@
       "about": "Повышение стадии/уровня: восходящее трезвучие"
     },
     "pet": {
-      "file": "",
+      "file": "res://assets/audio/lighty.mp3",
       "volume_db": -12.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Питомец/ласка: короткий весёлый свип"
     },
     "ritual_phase": {
-      "file": "",
+      "file": "res://assets/audio/ritual/ignite-1.wav",
       "volume_db": -8.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Ритуал: смена фазы (призыв -> стихии -> форма -> вспышка)"
     },
     "ritual_rune": {
-      "file": "",
+      "file": "res://assets/audio/ritual/ignite-2.wav",
       "volume_db": -10.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Ритуал: нажатие руны на круге трансмутации — тихий отклик"
     },
     "ritual_spin": {
-      "file": "",
+      "file": "res://assets/audio/ritual/mixkit-cinematic-whoosh-magic-gust-2343.wav",
       "volume_db": -10.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Ритуал: ускорение верчения круга — вращательный свист"
     },
     "ritual_reveal": {
-      "file": "",
+      "file": "res://assets/audio/ritual/mixkit-magic-swoosh-1460.wav",
       "volume_db": -4.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Ритуал: карта раскрыта под вспышкой (успех крафта)"
+    },
+    "achievement": {
+      "file": "res://assets/audio/ritual/achivement.wav",
+      "volume_db": -4.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Достижение: клейм награды комплекта (милстоун Аркана) — торжественный аккорд"
+    },
+    "game_start": {
+      "file": "",
+      "volume_db": -4.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Вход в игру: приветственный аккорд при старте (не в selftest)"
     }
   }
 }

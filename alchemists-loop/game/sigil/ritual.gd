@@ -230,6 +230,7 @@ func _phase_at(time: float) -> int:
 
 func _enter_phase(next: int) -> void:
 	_phase = next
+	Sfx.ritual_phase()
 	match _phase:
 		Phase.SUMMON:
 			_hint.text = "ПРИЗЫВ ПЕЧАТИ"
@@ -263,6 +264,7 @@ func _reveal_card() -> void:
 	_card_revealed = true
 	mouse_filter = Control.MOUSE_FILTER_IGNORE   # отдаём ввод карточке
 	_hover = -1
+	Sfx.ritual_reveal()
 	on_card_reveal.emit(card_rect(), _payload)
 
 
@@ -543,6 +545,7 @@ func _activate_rune(index: int) -> void:
 
 	_rune_active[index] = true
 	_activated += 1
+	Sfx.ritual_rune()
 	on_sigil_activated.emit(index)
 	_spawn_micro_sparks(_rune_pos(index))
 	_spawn_bolt_to_center(_rune_pos(index))

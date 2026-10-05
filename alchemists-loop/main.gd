@@ -861,6 +861,9 @@ func _ready() -> void:
 			Net.week_status(_online._device_id)
 	if _selftest:
 		_run_selftest()
+	else:
+		# Вход в игру: приветственный звук (не в selftest-прогоне).
+		Sfx.game_start()
 
 # ---------- R14: см. game/demo.gd (616-620) ----------
 
@@ -2678,6 +2681,7 @@ func _on_sigil_milestone_result(result: Dictionary) -> void:
 	if not result.get("ok", false) or not result.get("claimed", false):
 		return
 	var tier := int(result.get("tier", 0))
+	Sfx.achievement()
 	_sigil_claim_popup(tier)
 	_sigil.request_collection(_online._device_id)
 
