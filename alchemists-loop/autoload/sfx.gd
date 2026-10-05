@@ -8,6 +8,7 @@ var music_on := true
 var sfx_volume := 1.0
 var music_volume := 1.0
 var _music_player: AudioStreamPlayer
+var _spin_player: AudioStreamPlayer  # зацикленный звук верчения ритуала
 var _players: Array[AudioStreamPlayer] = []
 var _rr := 0
 
@@ -28,6 +29,9 @@ func _ready() -> void:
 	_music_player = AudioStreamPlayer.new()
 	_music_player.volume_db = linear_to_db(maxf(music_volume, 0.001))
 	add_child(_music_player)
+	_spin_player = AudioStreamPlayer.new()
+	_spin_player.volume_db = linear_to_db(maxf(sfx_volume, 0.001))
+	add_child(_spin_player)
 	# Музыка из конфига: {file, volume_db, pitch, delay} в events.music.
 	# Если file задан — грузим (loop); иначе процедурная _build_music().
 	var mcfg: Dictionary = _sound_cfg.get("music", {})
@@ -165,11 +169,30 @@ func ritual_rune() -> void:
 		return
 	_play_ui(_tone(880.0 + randf_range(-60.0, 60.0), 0.06, 0.14, false))
 
-## РИТУАЛ: ускорение верчения круга — вращательный свист.
+## РИТУАЛ: верчение круга. Файл из конфига, при loop:true — зацикленный
+## кусок (start_sec/len_sec), играет пока не вызван ritual_spin_stop().
+## Процедурный fallback — одноразовый свип (loop недоступен без конфига).
 func ritual_spin() -> void:
-	if _check_cfg_event("ritual_spin"):
+	var ev: Dictionary = _sound_cfg.get("ritual_spin", {})
+	var file := str(ev.get("file", ""))
+	if file == "":
+		_play_ui(_sweep(400.0, 1200.0, 0.22, 0.16))
 		return
-	_play_ui(_sweep(400.0, 1200.0, 0.22, 0.16))
+	var stream := _load_event_stream("ritual_spin", file)
+	if stream == null:
+		_play_ui(_sweep(400.0, 1200.0, 0.22, 0.16))
+		return
+	_spin_player.stop()
+	_spin_player.stream = stream
+	_spin_player.volume_db = float(ev.get("volume_db", -10.0)) \
+		+ linear_to_db(maxf(sfx_volume, 0.001))
+	_spin_player.pitch_scale = float(ev.get("pitch", 1.0))
+	_spin_player.play()
+
+## Остановить зацикленное верчение (выход из фазы MATERIALIZE).
+func ritual_spin_stop() -> void:
+	if _spin_player != null:
+		_spin_player.stop()
 
 ## РИТУАЛ: карта раскрыта (успех крафта).
 func ritual_reveal() -> void:
@@ -213,6 +236,28 @@ func play_event(event_name: String) -> void:
 		"brew_discover": brew_discover()
 		"craft_start": craft_start()
 
+## Загрузить поток события с нарезкой (start_sec/len_sec) и loop.
+func _load_event_stream(event_name: String, file: String) -> AudioStream:
+	var ev: Dictionary = _sound_cfg.get(event_name, {})
+	var start_sec := float(ev.get("start_sec", 0.0))
+	var len_sec := float(ev.get("len_sec", 0.0))
+	var loop := bool(ev.get("loop", false))
+	var cache_key := file if (start_sec <= 0.0 and len_sec <= 0.0 and not loop) \
+		else "%s#%s#%s#%s" % [file, start_sec, len_sec, loop]
+	if _stream_cache.has(cache_key) and is_instance_valid(_stream_cache[cache_key]):
+		return _stream_cache[cache_key]
+	var stream: AudioStream = load(file) as AudioStream
+	if stream == null:
+		push_warning("Sfx: файл не найден: %s (событие %s)" % [file, event_name])
+		return null
+	if (start_sec > 0.0 or len_sec > 0.0 or loop) and stream is AudioStreamWAV:
+		stream = _slice_wav(stream as AudioStreamWAV, start_sec, len_sec, file, loop)
+		if stream == null:
+			push_warning("Sfx: не удалось нарезать %s (событие %s)" % [file, event_name])
+			return null
+	_stream_cache[cache_key] = stream
+	return stream
+
 ## Проиграть wav/ogg из файла с volume/pitch/delay (кэш загрузки).
 ## Возвращает true, если файл найден и запущен; false — нет файла/ошибка.
 func _play_file(event_name: String, file: String, vol_db: float, pitch: float, delay: float) -> bool:
@@ -255,7 +300,7 @@ func _play_file(event_name: String, file: String, vol_db: float, pitch: float, d
 ## Нарезать PCM-файл (путь, WAV 16-bit/8-bit) на кусок [start_sec .. start_sec+len_sec]
 ## с коротким фейдом на конце. Читаем файл САМИ (минуя Godot-импорт, который
 ## перекодирует wav в ADPCM — тогда формат неизвестен). Null при ошибке.
-func _slice_wav(w: AudioStreamWAV, start_sec: float, len_sec: float, file_path: String) -> AudioStreamWAV:
+func _slice_wav(w: AudioStreamWAV, start_sec: float, len_sec: float, file_path: String, loop: bool = false) -> AudioStreamWAV:
 	if not FileAccess.file_exists(file_path):
 		return null
 	var f := FileAccess.open(file_path, FileAccess.READ)
@@ -307,7 +352,9 @@ func _slice_wav(w: AudioStreamWAV, start_sec: float, len_sec: float, file_path: 
 	out.format = AudioStreamWAV.FORMAT_16_BITS
 	out.mix_rate = sr
 	out.stereo = ch == 2
-	out.loop_mode = AudioStreamWAV.LOOP_DISABLED
+	out.loop_mode = AudioStreamWAV.LOOP_FORWARD if loop else AudioStreamWAV.LOOP_DISABLED
+	out.loop_begin = 0
+	out.loop_end = sub.size() / frame_bytes
 	out.data = sub
 	return out
 

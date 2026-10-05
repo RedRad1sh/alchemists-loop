@@ -97,9 +97,10 @@
       "volume_db": -10.0,
       "pitch": 1.0,
       "delay": 0.0,
-      "about": "Ритуал: верчение круга — файл нарезан (старт с 5с, длина 1.5с)",
       "start_sec": 5.0,
-      "len_sec": 1.5
+      "len_sec": 0.8,
+      "loop": true,
+      "about": "Ритуал: фаза ВЕРЧЕНИЯ — зацикленный кусок (loop), играет с MATERIALIZE до FLASH"
     },
     "ritual_reveal": {
       "file": "res://assets/audio/ritual/mixkit-arcane-chain-spell-879.wav",

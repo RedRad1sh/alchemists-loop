@@ -67,7 +67,7 @@ var _phase := -1
 var _spin := 0.0
 var _spin2 := 0.0
 var _spin3 := 0.0
-var _spin_sound_played := false
+# (зацикленное верчение управляется фазами: MATERIALIZE->start, FLASH->stop)
 var _flash := 0.0
 var _shake := 0.0
 var _gm := 1.0
@@ -242,11 +242,13 @@ func _enter_phase(next: int) -> void:
 			on_activation.emit()
 		Phase.MATERIALIZE:
 			Sfx.ritual_phase()  # материализация: 1 раз в середине
+			Sfx.ritual_spin()   # зацикленное верчение: играет до выхода из фазы
 			_hint.text = "ФОРМА ОБРЕТАЕТ ПЛОТЬ"
 			_flash = 0.65; _shake = 0.9
 			on_core_morph.emit()
 			_spawn_sparks()
 		Phase.FLASH:
+			Sfx.ritual_spin_stop()  # верчение закончилось
 			_hint.text = "ТРАНСМУТАЦИЯ ЗАВЕРШЕНА"
 			_flash = 1.0; _shake = 1.2
 			on_flash.emit()
@@ -307,6 +309,7 @@ func _process(delta: float) -> void:
 			_t += delta
 
 	if _t >= DURATION:
+		Sfx.ritual_spin_stop()
 		on_complete.emit()
 		queue_free()
 		return
@@ -328,14 +331,7 @@ func _process(delta: float) -> void:
 	_spin  += delta * (0.9 + 1.4 * strength) * spd
 	_spin2 -= delta * (0.5 + 0.8 * strength) * spd
 	_spin3 += delta * (0.3 + 0.55 * strength) * spd
-	# Звук ускорения верчения: разово на пороге (не каждый кадр).
-	# Порог 1.5 — MATERIALIZE разгоняет морф до ~1.8-2.5 в норме; 2.0 не
-	# достигался без удержания, поэтому звук не игрался вообще.
-	if spd > 1.5 and not _spin_sound_played:
-		_spin_sound_played = true
-		Sfx.ritual_spin()
-	elif spd <= 0.9:
-		_spin_sound_played = false
+
 
 	_flash = maxf(0.0, _flash - delta * 1.9)
 	_shake = maxf(0.0, _shake - delta * 1.15)
