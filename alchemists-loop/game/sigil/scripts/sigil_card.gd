@@ -177,6 +177,10 @@ func _process(delta: float) -> void:
 	_time += delta
 	_tilt = _tilt.lerp(_tilt_target, clampf(delta * 7.0, 0.0, 1.0))
 	_apply_parallax()
+	# Prism-эффекты анимируются фазой по времени (сдвиг панхроматики/глитча/масла).
+	if prism != null and prism.visible and prism.material != null:
+		(prism.material as ShaderMaterial).set_shader_parameter(
+			"phase", Time.get_ticks_msec() / 1000.0)
 
 
 ## Нормализованный вектор наклона: -1..1 по X и Y. Вызывается из _process

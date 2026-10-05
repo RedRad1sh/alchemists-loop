@@ -2258,6 +2258,9 @@ func _sigil_build_collection_tab(container: Control) -> void:
 				"first_at": str(xe.get("crafted_at", "")), "copies": 1,
 				"seed": int(xe.get("seed", 0)),
 				"lore": str(xe.get("lore", "")),
+				# Ингредиенты хроматика (сервер хранит их при крафте) — тот же
+				# SigilLore.generate, что у комплектных карт, работает от recipe.
+				"recipe": xe.get("ingredients", []),
 			}
 			var ccell := _sigil_collection_cell(entry)
 			cgrid.add_child(ccell)
@@ -2927,13 +2930,29 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	lore_v.add_theme_constant_override("margin_top", 12)
 	lore_v.add_theme_constant_override("margin_bottom", 12)
 	lore.add_child(lore_v)
-	# Лор: серверный (для хроматиков из extras) или из каталога; иначе дефолт.
+	# Лор: тот же детерминированный генератор, что у комплектных карт
+	# (SigilLore.generate от (id, seed)). Хроматики получают seed и ингредиенты
+	# с сервера — SigilLore даёт такой же структурированный текст {title,
+	# description, effect_hint, warning}, как у комплектов, а не плоский
+	# LLM-абзац. Серверный lore больше не используется как source — только
+	# как fallback при пустом seed.
 	var srv_lore := str(entry.get("lore", ""))
+	# Процесс/стадия у внекомплектных — детерминированные от seed, иначе
+	# SigilLore (тот же генератор, что у комплектных) не найдёт совместимых
+	# слотов и вернёт пустоту.
+	var ps_pairs := [
+		["calcinatio", "nigredo"], ["putrefactio", "nigredo"],
+		["sublimatio", "albedo"], ["coniunctio", "albedo"],
+		["coniunctio", "rubedo"], ["calcinatio", "rubedo"],
+		["sublimatio", "citrinitas"], ["coniunctio", "citrinitas"],
+	]
+	var _entry_seed := int(entry.get("seed", 0))
+	var _ps: Array = ps_pairs[abs(_entry_seed) % ps_pairs.size()]
 	var card_lore := SigilLore.generate({
-		"id": str(entry.get("card_id", "")),
-		"process": str(entry.get("process", "")),
-		"stage": str(entry.get("stage", "")),
-		"seed": int(entry.get("seed", 0)),
+		"id": str(entry.get("craft_id", str(entry.get("card_id", "")))),
+		"process": str(entry.get("process", _ps[0])),
+		"stage": str(entry.get("stage", _ps[1])),
+		"seed": _entry_seed,
 		"recipe": entry.get("recipe", []),
 	})
 	if card_lore.is_empty() and rarity == "chromatic":

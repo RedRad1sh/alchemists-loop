@@ -709,7 +709,15 @@ static func generate(card: Dictionary) -> Dictionary:
 	if source_id.is_empty():
 		return {}
 	var target_id := card_id
+	# Внекомплектные (хроматики): card_id — это craft_id, которого нет в
+	# elements.json. Чтобы переиспользовать ТОТ ЖЕ генератор, что у комплектных
+	# карт, источник и цель сводим к первому ингредиенту: лор получается тем же
+	# механизмом (ритм/слоты/лексикон), но про исходный элемент хроматика.
+	var off_set := false
 	var elems := _load_elements()
+	if not elems.has(target_id):
+		off_set = true
+		target_id = source_id
 	if not elems.has(source_id) or not elems.has(target_id):
 		return {}
 

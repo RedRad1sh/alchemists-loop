@@ -753,6 +753,7 @@ class SigilCollectionExtra(BaseModel):
     crafted_at: str = ""
     seed: int = 0
     lore: str = ""
+    ingredients: list[dict] = []
 
 
 class SigilCollectionResponse(BaseModel):
@@ -980,6 +981,8 @@ def init_db():
             conn.execute("ALTER TABLE sigil_crafts ADD COLUMN seed INTEGER NOT NULL DEFAULT 0")
         if "lore" not in sg_cols:
             conn.execute("ALTER TABLE sigil_crafts ADD COLUMN lore TEXT NOT NULL DEFAULT ''")
+        if "ingredients_json" not in sg_cols:
+            conn.execute("ALTER TABLE sigil_crafts ADD COLUMN ingredients_json TEXT NOT NULL DEFAULT ''")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS ix_sigil_crafts_card"
             " ON sigil_crafts(device_id, card_id)"
@@ -991,6 +994,7 @@ def init_db():
             tier INTEGER NOT NULL, claimed_at TEXT NOT NULL,
             PRIMARY KEY (device_id, set_id, tier)
         )""")
+        # F2 (по конвенции init_db для старых БД, дубль см. в schema.sql):
         # F2 (по конвенции init_db для старых БД, дубль см. в schema.sql):
         # частичный UNIQUE — не более одного открытого (active/spread) цикла.
         # Константа-ключ: все подходящие строки делят один ключ индекса.
@@ -4894,10 +4898,11 @@ def sigil_craft(req: SigilCraftRequest):
         try:
             cur = conn.execute(
                 "INSERT OR IGNORE INTO sigil_crafts"
-                " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, seed, lore, crafted_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, seed, lore, ingredients_json, crafted_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (req.device_id, req.craft_id, rarity, llm_name,
-                 int(is_chromatic), card_id, int(craft.get("seed", 0)), lore, _now_iso()),
+                 int(is_chromatic), card_id, int(craft.get("seed", 0)), lore,
+                 json.dumps(craft.get("ingredients", []), ensure_ascii=False), _now_iso()),
             )
             inserted = cur.rowcount == 1
             conn.commit()
@@ -4909,10 +4914,12 @@ def sigil_craft(req: SigilCraftRequest):
             # обновляем поля из ТЕКУЩЕГО daily, чтобы «превью legendary →
             # выпала rare» не случалось после ротации оффера.
             conn.execute(
-                "UPDATE sigil_crafts SET rarity=?, llm_name=?, is_chromatic=?, card_id=?, seed=?, lore=?"
+                "UPDATE sigil_crafts SET rarity=?, llm_name=?, is_chromatic=?, card_id=?, seed=?, lore=?, ingredients_json=?"
                 " WHERE device_id=? AND craft_id=?",
                 (rarity, llm_name, int(is_chromatic), card_id,
-                 int(craft.get("seed", 0)), lore, req.device_id, req.craft_id),
+                 int(craft.get("seed", 0)), lore,
+                 json.dumps(craft.get("ingredients", []), ensure_ascii=False),
+                 req.device_id, req.craft_id),
             )
             conn.commit()
             existing = conn.execute(
@@ -4953,7 +4960,7 @@ def sigil_collection(device_id: str = Query("", max_length=128)):
     conn = get_db()
     try:
         rows = conn.execute(
-            "SELECT craft_id, rarity, llm_name, card_id, seed, lore, crafted_at FROM sigil_crafts"
+            "SELECT craft_id, rarity, llm_name, card_id, seed, lore, ingredients_json, crafted_at FROM sigil_crafts"
             " WHERE device_id=? ORDER BY crafted_at ASC, craft_id ASC",
             (device_id,),
         ).fetchall()
@@ -4974,6 +4981,7 @@ def sigil_collection(device_id: str = Query("", max_length=128)):
                 craft_id=row["craft_id"], rarity=row["rarity"],
                 llm_name=row["llm_name"], crafted_at=row["crafted_at"],
                 seed=row["seed"], lore=row["lore"],
+                ingredients=json.loads(row["ingredients_json"] or "[]"),
             ))
             continue
         entry = cards.get(card_id)
