@@ -440,13 +440,19 @@ func _on_milestone_result(result: Dictionary) -> void:
 
 ## Опции квадратного превью: круг целиком, без рамки, подписи и объекта.
 ## Центральный объект на 280 px превращается в шум, круг остаётся узнаваемым.
-func preview_options() -> SigilOptions:
+func preview_options(is_chromatic := false, seed_value := 0) -> SigilOptions:
+	var prism_eff := ""
+	if is_chromatic:
+		var effs := ["galaxy", "oil_slick", "textured_foil",
+			"shattered_glass", "laser_refraction", "glitch"]
+		prism_eff = effs[(seed_value if seed_value != 0 else 7) % effs.size()]
 	return SigilOptions.make({
 		"card_size": Vector2i(PREVIEW_SIZE, PREVIEW_SIZE),
 		"show_name": false,
 		"show_frame": false,
 		"show_icon": false,
 		"render_scale": 1,
+		"prism_effect": prism_eff,
 	})
 
 
@@ -461,7 +467,8 @@ func preview_texture(craft: Dictionary) -> ImageTexture:
 	if _preview_cache.has(key):
 		return _preview_cache[key]
 	var recipe := card_recipe_for(craft)
-	var opts := preview_options()
+	var ch := bool(craft.get("is_chromatic", false)) or str(craft.get("rarity", "")) == "chromatic"
+	var opts := preview_options(ch, recipe.compute_seed())
 	var img: Image = null
 	var path := await _svc.export_cached(recipe, opts)
 	if path != "" and FileAccess.file_exists(path):

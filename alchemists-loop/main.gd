@@ -2921,6 +2921,17 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 		"seed": int(entry.get("seed", 0)),
 		"recipe": entry.get("recipe", []),
 	})
+	# Внекомплектные (хроматик): лора из каталога нет — даём собственный,
+	# чтобы оборот карты не оставался пустым.
+	if card_lore.is_empty() and rarity == "chromatic":
+		card_lore = {
+			"title": "Внекомплектный сигил",
+			"description": "Эта карта не входит ни в один комплект стихий. "
+				+ "Её создали из случайного сочетания ингредиентов — "
+				+ "призма редкости, светящаяся вне обычных графов трансмутации.",
+			"effect_hint": "Не влияет на комплекты; коллекционная ценность.",
+			"warning": "",
+		}
 	if not card_lore.is_empty():
 		var lt := _label(str(card_lore.get("title", "")), 16)
 		lt.name = "SigilLoreTitle"
