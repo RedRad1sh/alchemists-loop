@@ -230,9 +230,9 @@ func _phase_at(time: float) -> int:
 
 func _enter_phase(next: int) -> void:
 	_phase = next
-	Sfx.ritual_phase()
 	match _phase:
 		Phase.SUMMON:
+			Sfx.ritual_phase()  # призыв: 1 раз в начале
 			_hint.text = "ПРИЗЫВ ПЕЧАТИ"
 			_flash = 0.85; _shake = 0.8
 		Phase.ELEMENTS:
@@ -241,6 +241,7 @@ func _enter_phase(next: int) -> void:
 			on_circle_complete.emit()
 			on_activation.emit()
 		Phase.MATERIALIZE:
+			Sfx.ritual_phase()  # материализация: 1 раз в середине
 			_hint.text = "ФОРМА ОБРЕТАЕТ ПЛОТЬ"
 			_flash = 0.65; _shake = 0.9
 			on_core_morph.emit()
