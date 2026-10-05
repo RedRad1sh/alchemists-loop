@@ -1826,7 +1826,8 @@ async def startup():
         admin.setup_admin(app, get_db)
         _dashboard_setup = True
         print("[world] Дашборд: /dashboard")
-        if os.environ.get("ADMIN_PASS"):
+        if os.environ.get("ADMIN_PASS") or os.environ.get("ALCHEMY_DEBUG") == "1" \
+                or os.environ.get("ALCHEMY_ADMIN_OPEN") == "1":
             print("[world] Админ-панель: /admin")
         else:
             print("[world] Админ-панель: /admin (ADMIN_PASS не задан — вход заблокирован)")
@@ -4955,6 +4956,10 @@ def sigil_milestone(req: SigilMilestoneRequest):
 
 def _require_admin_token(x_admin_token: str = Header("")) -> None:
     # No default credentials; disabled unless explicitly configured server-side.
+    # Исключение: локальный/dev-режим — ALCHEMY_DEBUG=1 или ALCHEMY_ADMIN_OPEN=1
+    # открывают админ-эндпоинты БЕЗ токена (удобно для ручной проверки).
+    if os.environ.get("ALCHEMY_DEBUG") == "1" or os.environ.get("ALCHEMY_ADMIN_OPEN") == "1":
+        return
     expected = os.environ.get("ADMIN_API_TOKEN", "")
     if not expected or not secrets.compare_digest(x_admin_token.encode("utf-8"), expected.encode("utf-8")):
         raise HTTPException(status_code=403, detail="forbidden")

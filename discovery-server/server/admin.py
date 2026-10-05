@@ -20,9 +20,17 @@ _sessions: dict[str, float] = {}
 
 
 def _check_auth(username: str, password: str) -> bool:
+    # Dev-режим (ALCHEMY_DEBUG=1 / ALCHEMY_ADMIN_OPEN=1): админка открыта
+    # без пароля — удобно для локальной ручной проверки.
+    if _admin_open():
+        return True
     if not ADMIN_PASS:
         return False
     return secrets.compare_digest(username, ADMIN_USER) and secrets.compare_digest(password, ADMIN_PASS)
+
+
+def _admin_open() -> bool:
+    return os.environ.get("ALCHEMY_DEBUG") == "1" or os.environ.get("ALCHEMY_ADMIN_OPEN") == "1"
 
 
 def _is_authenticated(request: Request) -> bool:
