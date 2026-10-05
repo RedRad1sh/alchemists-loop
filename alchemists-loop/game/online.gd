@@ -97,6 +97,9 @@ const QTE_MARGIN_RIGHT := 16.0
 const QTE_MARGIN_TOP := 96.0
 const QTE_MARGIN_BOTTOM := 120.0
 const QTE_TELEGRAPH_TIME := 1.1
+# Всплывающий QTE-пузырь выключен: событие наступает в фоне (статус/toast),
+# без кнопки-пузыря и телеграф-анимации.
+const EVENT_QTE_ENABLED := false
 const QTE_PLACEMENT_ATTEMPTS := 24
 const TOAST_MAX := 4
 
@@ -1417,31 +1420,32 @@ func _spawn_event() -> void:
 	_event_telegraphing = true
 	_event_spawn_token += 1
 	var token := _event_spawn_token
-	_place_event_qte()
-	_event_qte.visible = true
-	_event_card.visible = true
-	_event_card.modulate = Color(1, 1, 1, 0)
-	_event_card.scale = Vector2(0.72, 0.72)
-	_event_card.pivot_offset = _event_card.size * 0.5
-	_event_btn.disabled = true
-	_event_btn.text = _event_symbol()
-	if _event_label != null:
-		_event_label.text = "Событие близко…"
-	if _event_progress != null:
-		_event_progress.value = 0.0
-	Sfx.mystic()
-	_haptic_light()
-	var tween := g.create_tween()
-	tween.set_parallel(true)
-	tween.set_trans(Tween.TRANS_BACK)
-	tween.set_ease(Tween.EASE_OUT)
-	tween.tween_property(_event_card, "modulate:a", 1.0, 0.3)
-	tween.tween_property(_event_card, "scale", Vector2.ONE, 0.35)
-	var pulse := g.create_tween()
-	pulse.set_loops(2)
-	pulse.tween_property(_event_card, "modulate",
-		Color(1.15, 1.05, 0.72, 1.0), 0.22)
-	pulse.tween_property(_event_card, "modulate", Color.WHITE, 0.22)
+	if EVENT_QTE_ENABLED:
+		_place_event_qte()
+		_event_qte.visible = true
+		_event_card.visible = true
+		_event_card.modulate = Color(1, 1, 1, 0)
+		_event_card.scale = Vector2(0.72, 0.72)
+		_event_card.pivot_offset = _event_card.size * 0.5
+		_event_btn.disabled = true
+		_event_btn.text = _event_symbol()
+		if _event_label != null:
+			_event_label.text = "Событие близко…"
+		if _event_progress != null:
+			_event_progress.value = 0.0
+		Sfx.mystic()
+		_haptic_light()
+		var tween := g.create_tween()
+		tween.set_parallel(true)
+		tween.set_trans(Tween.TRANS_BACK)
+		tween.set_ease(Tween.EASE_OUT)
+		tween.tween_property(_event_card, "modulate:a", 1.0, 0.3)
+		tween.tween_property(_event_card, "scale", Vector2.ONE, 0.35)
+		var pulse := g.create_tween()
+		pulse.set_loops(2)
+		pulse.tween_property(_event_card, "modulate",
+			Color(1.15, 1.05, 0.72, 1.0), 0.22)
+		pulse.tween_property(_event_card, "modulate", Color.WHITE, 0.22)
 	var timer := g.get_tree().create_timer(QTE_TELEGRAPH_TIME)
 	timer.timeout.connect(_activate_event.bind(token), CONNECT_ONE_SHOT)
 
@@ -1509,9 +1513,10 @@ func _event_symbol() -> String:
 func _update_event_ui() -> void:
 	if _event_qte == null or _event_btn == null:
 		return
+	var show_bubble := EVENT_QTE_ENABLED
 	if _event_telegraphing:
 		# §12: в телеграфе таймер ещё не идёт — пузырь только показывается.
-		_event_qte.visible = true
+		_event_qte.visible = show_bubble
 		_event_btn.disabled = true
 		return
 	if not _event_active:
@@ -1520,7 +1525,7 @@ func _update_event_ui() -> void:
 		if _event_progress != null:
 			_event_progress.value = 0.0
 		return
-	_event_qte.visible = true
+	_event_qte.visible = show_bubble
 	_event_btn.disabled = false
 	_event_btn.text = _event_symbol()
 	# Цвет таймера: спокойный янтарный → тревожный красный к концу окна.
