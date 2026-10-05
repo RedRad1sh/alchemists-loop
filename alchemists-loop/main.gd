@@ -3129,8 +3129,12 @@ func _close_sigil_fullscreen() -> void:
 ## Ждать ежедневные крафты, но не вечно: офлайн не должен вешать меню.
 ## Settled-флаг гасит ожидание сразу после офлайн-ответа, не по полному таймауту.
 func _await_daily_crafts(timeout: float) -> bool:
+	# Ждём ОТВЕТА сервера (daily_settled), а не просто непустого кэша: иначе
+	# экран строится из устаревшего sigil_daily_cache.json раньше, чем придёт
+	# свежий оффер («превью хроматик, крафт обычка» после ротации).
+	# Кэш — только офлайн-фолбэк по таймауту.
 	var waited := 0.0
-	while _sigil._daily_crafts.is_empty() and not _sigil.daily_settled() and waited < timeout:
+	while not _sigil.daily_settled() and waited < timeout:
 		await get_tree().process_frame
 		waited += get_process_delta_time()
 	return not _sigil._daily_crafts.is_empty()

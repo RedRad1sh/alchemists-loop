@@ -5208,7 +5208,12 @@ def admin_sigil_chroma_slot(device_id: str = Query("", max_length=128)):
             (device_id, today, json.dumps(crafts_data, ensure_ascii=False), _now_iso()),
         )
         conn.commit()
-        return {"ok": True, "crafts": crafts_data}
+        _canon = "\n".join(
+            "%s|%s|%s|%s" % (c.get("id"), c.get("rarity"), c.get("card_id"), c.get("llm_name"))
+            for c in crafts_data
+        )
+        return {"ok": True, "crafts": crafts_data,
+                "offer_hash": hashlib.sha256(_canon.encode("utf-8")).hexdigest()}
     finally:
         conn.close()
 
