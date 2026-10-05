@@ -1084,6 +1084,8 @@ func _build_ui() -> void:
 	title.add_theme_color_override("font_color", Color(0.94, 0.97, 1.0))
 	head.add_child(title)
 	var quests_btn := _small_button("✦", Vector2(46, 36), 2)
+	# Иконка вместо текстового глифа: на золотой кнопке — тёмные чернила.
+	UIIcon.into_button(quests_btn, "star", 20, Color("2a1d05"))
 	quests_btn.tooltip_text = "Задания Светика, достижения, комплекты, заказы"
 	quests_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	quests_btn.pressed.connect(_progress_ui._open_progress_popup)
@@ -1094,17 +1096,24 @@ func _build_ui() -> void:
 	sigil_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	sigil_btn.pressed.connect(_open_sigil_modal)
 	head.add_child(sigil_btn)
-	_hub._up_btn = _small_button("▲", Vector2(46, 36))
+	# «▲N» → родная иконка trend_up + счётчик текстом (core._refresh_header).
+	# Если SVG не импортирован (текстуры нет), _refresh_header оставит глиф «▲».
+	var up_icon := UIIcon.texture("trend_up", true)
+	_hub._up_btn = _small_button("" if up_icon != null else "▲", Vector2(46, 36))
+	if up_icon != null:
+		_hub._up_btn.icon = up_icon
 	_hub._up_btn.tooltip_text = "Улучшения"
 	_hub._up_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_hub._up_btn.pressed.connect(_hub._open_upgrades)
 	head.add_child(_hub._up_btn)
 	_sound_btn = _small_button("♪", Vector2(46, 36))
+	UIIcon.into_button(_sound_btn, "volume", 20)
 	_sound_btn.tooltip_text = "Настройки звука"
 	_sound_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_sound_btn.pressed.connect(_hub._open_settings)
 	head.add_child(_sound_btn)
 	var log_btn := _small_button("Ж", Vector2(46, 36))
+	UIIcon.into_button(log_btn, "book", 20)
 	log_btn.tooltip_text = "Журнал событий"
 	log_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	log_btn.pressed.connect(_hub._open_journal)
@@ -1185,6 +1194,7 @@ func _build_ui() -> void:
 	_online._build_rating_page(rating)
 	var tools := _make_page(tabs, "Инструменты")
 	_pages._build_tools_page(tools)
+	_apply_tab_icons(tabs)
 
 	_build_brew_bar()
 	_spirit._build_companion()
@@ -1218,6 +1228,21 @@ func _build_ui() -> void:
 	# Все поверхности построены — граница навигации имеет право показывать
 	# interstitial (см. _ui_ready в _on_tab_changed).
 	_ui_ready = true
+
+func _apply_tab_icons(tabs: TabContainer) -> void:
+	# Иконки вкладок: набор «Atheneum» 16 px (из PR #32, assets/ui/icons16).
+	# Белая база на тёмной панели читается без тонирования. С иконками вкладки
+	# становятся шире, поэтому кегль заголовков — 11: шесть разделов целиком
+	# помещаются на 540 px.
+	var tab_icons := ["flask", "cauldron", "globe", "home", "trophy", "sliders"]
+	var applied := false
+	for i in mini(tab_icons.size(), tabs.get_tab_count()):
+		var tex := UIIcon.texture(tab_icons[i], true)
+		if tex != null:
+			tabs.set_tab_icon(i, tex)
+			applied = true
+	if applied:
+		tabs.add_theme_font_size_override("font_size", 11)
 
 func _fit_ui_root_after_layout(host: Control, root: Control) -> void:
 	# Два кадра дают всем динамическим страницам посчитать minimum size;

@@ -27,7 +27,7 @@ void fragment() {
 	float r = hash(id);
 	vec2 off = (vec2(hash(id + 3.1), hash(id + 7.7)) - 0.5) * 0.6;
 	float tw = 0.5 + 0.5 * sin(TIME * 1.5 + r * 6.2831);
-	float m = smoothstep(0.07, 0.0, length(f - off)) * step(0.85, r) * tw;
+	float m = (1.0 - smoothstep(0.0, 0.07, length(f - off))) * step(0.85, r) * tw;
 	col += vec3(0.60, 0.95, 0.95) * m * 0.35;
 	// виньетка и зерно против бандинга
 	vec2 v = uv - 0.5;
@@ -49,18 +49,18 @@ void fragment() {
 	float ang = atan(p.y, p.x);
 	// точечная сетка, ярче у центра
 	vec2 g = (fract((p + 14.0) / 28.0) - 0.5) * 28.0;
-	float dots = smoothstep(1.5, 0.5, length(g));
+	float dots = 1.0 - smoothstep(0.5, 1.5, length(g));
 	float fade = 0.30 + 0.70 * exp(-r / 240.0);
 	float a = dots * 0.10 * fade;
 	float spin = TIME * 0.12;
 	// пунктирное кольцо
 	float dash = smoothstep(-0.15, 0.15, sin((ang + spin) * 18.0));
-	a += smoothstep(1.3, 0.0, abs(r - 150.0)) * (0.10 + 0.14 * dash);
+	a += (1.0 - smoothstep(0.0, 1.3, abs(r - 150.0))) * (0.10 + 0.14 * dash);
 	// внешнее тонкое кольцо
-	a += smoothstep(1.0, 0.0, abs(r - 184.0)) * 0.10;
+	a += (1.0 - smoothstep(0.0, 1.0, abs(r - 184.0))) * 0.10;
 	// риски между кольцами
 	float k = fract((ang - spin * 0.6) * 24.0 / 6.2831853);
-	float tick = smoothstep(0.05, 0.0, min(k, 1.0 - k));
+	float tick = 1.0 - smoothstep(0.0, 0.05, min(k, 1.0 - k));
 	a += tick * (1.0 - smoothstep(0.0, 5.0, abs(r - 166.0))) * 0.20;
 	// дыхание вокруг котла
 	a += exp(-abs(r - 150.0) / 26.0) * 0.045 * (0.75 + 0.25 * sin(TIME * 1.2));
