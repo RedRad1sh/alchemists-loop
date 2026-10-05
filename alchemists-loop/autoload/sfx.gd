@@ -109,6 +109,35 @@ func _load_sound_cfg() -> void:
 			if parsed is Dictionary and (parsed as Dictionary).has("events"):
 				_sound_cfg = (parsed as Dictionary)["events"] as Dictionary
 
+## РИТУАЛ: фаза сменилась (призыв/стихии/форма/вспышка).
+func ritual_phase() -> void:
+	if _check_cfg_event("ritual_phase"):
+		return
+	_play(_sweep(200.0, 520.0, 0.5, 0.22) if _rng() else _tone(330.0, 0.4, 0.2))
+
+## РИТУАЛ: нажатие руны — тихий короткий отклик.
+func ritual_rune() -> void:
+	if _check_cfg_event("ritual_rune"):
+		return
+	_play_ui(_tone(880.0 + randf_range(-60.0, 60.0), 0.06, 0.14, false))
+
+## РИТУАЛ: ускорение верчения круга — вращательный свист.
+func ritual_spin() -> void:
+	if _check_cfg_event("ritual_spin"):
+		return
+	_play_ui(_sweep(400.0, 1200.0, 0.22, 0.16))
+
+## РИТУАЛ: карта раскрыта (успех крафта).
+func ritual_reveal() -> void:
+	if _check_cfg_event("ritual_reveal"):
+		return
+	var a := _bell(1046.5, 0.6, 0.12)
+	var b := _bell(1568.0, 0.8, 0.08)
+	_play(_mix([a, b]), -3.0)
+
+func _rng() -> bool:
+	return randf() > 0.5
+
 ## Воспроизвести событие по имени (из конфига или процедурный fallback).
 ## Используется из кода для UI/событий/ритуала и из debug-меню прослушивания.
 func play_event(event_name: String) -> void:
@@ -131,6 +160,10 @@ func play_event(event_name: String) -> void:
 		"stage_up": stage_up()
 		"pet": pet()
 		"error": error()
+		"ritual_phase": ritual_phase()
+		"ritual_rune": ritual_rune()
+		"ritual_spin": ritual_spin()
+		"ritual_reveal": ritual_reveal()
 
 ## Проиграть wav/ogg из файла с volume/pitch/delay (кэш загрузки).
 ## Возвращает true, если файл найден и запущен; false — нет файла/ошибка.

@@ -67,6 +67,7 @@ var _phase := -1
 var _spin := 0.0
 var _spin2 := 0.0
 var _spin3 := 0.0
+var _spin_sound_played := false
 var _flash := 0.0
 var _shake := 0.0
 var _gm := 1.0
@@ -323,6 +324,12 @@ func _process(delta: float) -> void:
 	_spin  += delta * (0.9 + 1.4 * strength) * spd
 	_spin2 -= delta * (0.5 + 0.8 * strength) * spd
 	_spin3 += delta * (0.3 + 0.55 * strength) * spd
+	# Звук ускорения верчения: разово на пороге (не каждый кадр).
+	if spd > 2.0 and not _spin_sound_played:
+		_spin_sound_played = true
+		Sfx.ritual_spin()
+	elif spd <= 1.0:
+		_spin_sound_played = false
 
 	_flash = maxf(0.0, _flash - delta * 1.9)
 	_shake = maxf(0.0, _shake - delta * 1.15)
