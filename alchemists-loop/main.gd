@@ -1706,7 +1706,7 @@ func _present_popup(item_id: String, subtext: String, title: String = "", title_
 	_popup.scale = Vector2(0.7, 0.7)
 	var tw := create_tween()
 	tw.tween_property(_popup, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
-	Sfx.discovery()
+	Sfx.brew_discover()
 
 func _hide_popup() -> void:
 	_popup_dim.visible = false
@@ -3550,7 +3550,7 @@ func _on_sigil_board_confirmed(craft: Dictionary) -> void:
 		var have := int(_engine.inventory.get(elem_id, 0))
 		_engine.inventory[elem_id] = max(0, have - needed)
 	_saves._save_game()
-	Sfx.discovery()
+	Sfx.craft_start()
 	var craft_id := str(craft.get("id", ""))
 	_sigil_pending_craft = craft.duplicate(true)
 	_sigil.craft_card(_online._device_id, craft_id)

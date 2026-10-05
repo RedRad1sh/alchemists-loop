@@ -51,7 +51,7 @@
       "about": "Легендарный крафт: фанфары арпеджио при получении легендарки"
     },
     "discovery": {
-      "file": "",
+      "file": "res://assets/audio/craft/success.wav",
       "volume_db": -3.0,
       "pitch": 1.0,
       "delay": 0.0,
@@ -79,21 +79,21 @@
       "about": "Питомец/ласка: короткий весёлый свип"
     },
     "ritual_phase": {
-      "file": "res://assets/audio/ritual/ignite-1.wav",
-      "volume_db": -8.0,
+      "file": "res://assets/audio/ritual/ignite-6.wav",
+      "volume_db": -15.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Ритуал: смена фазы (призыв -> стихии -> форма -> вспышка)"
     },
     "ritual_rune": {
-      "file": "res://assets/audio/ritual/ignite-2.wav",
-      "volume_db": -10.0,
+      "file": "res://assets/audio/ritual/ignite-4.wav",
+      "volume_db": -12.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Ритуал: нажатие руны на круге трансмутации — тихий отклик"
     },
     "ritual_spin": {
-      "file": "res://assets/audio/ritual/mixkit-cinematic-whoosh-magic-gust-2343.wav",
+      "file": "mixkit-strong-wild-wind-in-a-storm-2407.wav",
       "volume_db": -10.0,
       "pitch": 1.0,
       "delay": 0.0,
@@ -107,18 +107,32 @@
       "about": "Ритуал: карта раскрыта под вспышкой (успех крафта)"
     },
     "achievement": {
-      "file": "res://assets/audio/ritual/achivement.wav",
+      "file": "res://assets/audio/ritual/achivement-2.wav",
       "volume_db": -4.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Достижение: клейм награды комплекта (милстоун Аркана) — торжественный аккорд"
     },
     "game_start": {
-      "file": "",
+      "file": "res://assets/audio/enter.wav",
       "volume_db": -4.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Вход в игру: приветственный аккорд при старте (не в selftest)"
+    },
+    "brew_discover": {
+      "file": "",
+      "volume_db": -3.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Эксперимент в котле: найдено новое сочетание (попап нового рецепта)"
+    },
+    "craft_start": {
+      "file": "",
+      "volume_db": -8.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Старт крафта: подтверждение на доске (списание ингредиентов, начало ритуала)"
     }
   }
 }

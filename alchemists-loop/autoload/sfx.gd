@@ -109,6 +109,20 @@ func _load_sound_cfg() -> void:
 			if parsed is Dictionary and (parsed as Dictionary).has("events"):
 				_sound_cfg = (parsed as Dictionary)["events"] as Dictionary
 
+## ЭКСПЕРИМЕНТ В КОТЛЕ: найдено новое сочетание (попап открытия рецепта).
+func brew_discover() -> void:
+	if _check_cfg_event("brew_discover"):
+		return
+	var a := _bell(784.0, 0.8, 0.12)
+	var b := _bell(1174.7, 1.0, 0.09)
+	_play(_mix([a, b]), -3.0)
+
+## СТАРТ КРАФТА: подтверждение на доске (списание ингредиентов, начало ритуала).
+func craft_start() -> void:
+	if _check_cfg_event("craft_start"):
+		return
+	_play_ui(_sweep(260.0, 620.0, 0.3, 0.22))
+
 ## ДОСТИЖЕНИЕ: клейм награды комплекта (милстоун Аркана).
 func achievement() -> void:
 	if _check_cfg_event("achievement"):
@@ -183,6 +197,8 @@ func play_event(event_name: String) -> void:
 		"ritual_reveal": ritual_reveal()
 		"achievement": achievement()
 		"game_start": game_start()
+		"brew_discover": brew_discover()
+		"craft_start": craft_start()
 
 ## Проиграть wav/ogg из файла с volume/pitch/delay (кэш загрузки).
 ## Возвращает true, если файл найден и запущен; false — нет файла/ошибка.
