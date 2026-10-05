@@ -4659,23 +4659,31 @@ def _catalog_craft(card: dict, day: str, device_id: str, index: int) -> dict:
 
 
 def _chromatic_craft(rng, day: str, device_id: str, index: int) -> dict:
-    """Внекомплектная карта: ингредиенты случайные, картинка — по соли игрока."""
+    """Внекомплектная карта: ингредиенты случайные, уникальные имя/лор/seed.
+
+    Имя и лор генерируются по составу (LLM, шаблон-фолбэк) — у каждого
+    хроматика своё, а не константа «Хроматический сигил».
+    """
     pool = list(_SIGIL_BASE_ITEMS)
     chosen = rng.sample(pool, min(_SIGIL_CHROMATIC_INGREDIENTS, len(pool)))
     lo, hi = _SIGIL_CHROMATIC_QTY
+    ingredients = [{"item_id": item_id, "qty": rng.randint(lo, hi)} for item_id in chosen]
+    seed = int(time.time() * 1000) % 0x7FFFFFFF if index == 0 else int(time.time_ns()) % 0x7FFFFFFF
+    ident = _generate_chromatic_identity({"ingredients": ingredients}, "chromatic")
     return {
         "id": f"{day}_{device_id[:8]}_{index}",
         "card_id": "",
         "set": "",
         "rarity": "chromatic",
-        "ingredients": [{"item_id": item_id, "qty": rng.randint(lo, hi)} for item_id in chosen],
+        "ingredients": ingredients,
         "ether_cost": _SIGIL_ETHER_COST["chromatic"],
         "process": "",
         "stage": "",
         "object_type": "object",
-        "seed": int(time.time() * 1000) % 0x7FFFFFFF if index == 0 else int(time.time_ns()) % 0x7FFFFFFF,
-        "fallback_name": _SIGIL_CHROMATIC_NAME,
-        "llm_name": _SIGIL_CHROMATIC_NAME,
+        "seed": seed,
+        "fallback_name": ident["name"],
+        "llm_name": ident["name"],
+        "lore": ident["lore"],
         "is_chromatic": True,
     }
 
@@ -4864,12 +4872,17 @@ def sigil_craft(req: SigilCraftRequest):
         llm_name = str(craft.get("llm_name", ""))
         is_chromatic = bool(craft.get("is_chromatic", False))
         lore = ""
-        # Хроматик: генерируем уникальные имя+лор (LLM с шаблонным fallback),
-        # чтобы карточка не звалась константой «Хроматический сигил».
+        # Хроматик: имя+лор берём из оффера дня (он уже сгенерирован при
+        # создании крафта с уникальным составом). Повторный LLM-вызов здесь
+        # дал бы ДРУГОЕ имя — «превью Хрустальный Рой, выпал Дыхание Пыли».
         if is_chromatic:
-            ident = _generate_chromatic_identity(craft, rarity)
-            llm_name = ident["name"]
-            lore = ident["lore"]
+            if not llm_name or llm_name == _SIGIL_CHROMATIC_NAME:
+                ident = _generate_chromatic_identity(craft, rarity)
+                llm_name = ident["name"]
+                lore = ident["lore"]
+            else:
+                llm_name = str(craft.get("llm_name", llm_name))
+                lore = str(craft.get("lore", ""))
 
         # Атомарно (D7, по образцу _ensure_letter/_ensure_atlas): под BEGIN
         # IMMEDIATE два потока на один (device_id, craft_id) не вставят две
@@ -5113,6 +5126,41 @@ def admin_sigil_free_craft(device_id: str = Query("", max_length=128), craft_ind
         conn.commit()
 
         return {"ok": True, "craft": craft}
+    finally:
+        conn.close()
+
+
+@app.post("/api/admin/sigil/chroma-slot", dependencies=[Depends(_require_admin_token)])
+def admin_sigil_chroma_slot(device_id: str = Query("", max_length=128)):
+    """Админ: поставить в слот 0 оффера дня НОВЫЙ уникальный хроматик.
+
+    Пересобирает дневной оффер так, чтобы слот 0 был хроматическим крафтом
+    (свежие ингредиенты/seed/имя/лор) — его можно скрафтить как обычный.
+    """
+    import random
+    if not device_id:
+        return {"ok": False, "error": "missing_device_id"}
+    conn = get_db()
+    try:
+        today = _now_dt().date().isoformat()
+        # Сброс дневного оффера: слоты 1-2 перегенерируются, слот 0 — хроматик.
+        conn.execute("DELETE FROM sigil_daily WHERE device_id=? AND day=?", (device_id, today))
+        conn.commit()
+        rng = random.Random(int(time.time() * 1000) & 0x7FFFFFFF)
+        collected = _collected_card_ids(conn, device_id)
+        crafts_data = _generate_sigil_daily(device_id, today, collected, salt=rng.randrange(1 << 30))
+        # Гарантированно ставим хроматик в слот 0 (генерация могла не выбросить).
+        chroma = _chromatic_craft(rng, today, device_id, 0)
+        crafts_data[0] = chroma
+        # Перезаписать кэш daily обновлённым оффером.
+        conn.execute(
+            "INSERT INTO sigil_daily (device_id, day, crafts_json, generated_at)"
+            " VALUES (?, ?, ?, ?) ON CONFLICT(device_id, day)"
+            " DO UPDATE SET crafts_json=excluded.crafts_json, generated_at=excluded.generated_at",
+            (device_id, today, json.dumps(crafts_data, ensure_ascii=False), _now_iso()),
+        )
+        conn.commit()
+        return {"ok": True, "crafts": crafts_data}
     finally:
         conn.close()
 

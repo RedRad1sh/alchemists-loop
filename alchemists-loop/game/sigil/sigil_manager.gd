@@ -595,18 +595,23 @@ func request_admin_rotate(device_id: String) -> void:
 	Net.sigil_admin_rotate(device_id)
 
 
-## Админ: выдать игроку хроматический сигил (сервер генерирует имя/лор/seed).
-func request_admin_chromatic(device_id: String) -> void:
-	if not Net.sigil_admin_chromatic_result.is_connected(_on_admin_chromatic_result):
-		Net.sigil_admin_chromatic_result.connect(_on_admin_chromatic_result, CONNECT_ONE_SHOT)
-	Net.sigil_admin_chromatic(device_id)
+## Админ: поставить в слот 0 оффера дня НОВЫЙ уникальный хроматик
+## (сервер генерирует ингредиенты/seed/имя/лор) — его можно скрафтить.
+func request_admin_chroma_slot(device_id: String) -> void:
+	if not Net.sigil_admin_chroma_slot_result.is_connected(_on_admin_chromatic_result):
+		Net.sigil_admin_chroma_slot_result.connect(_on_admin_chromatic_result, CONNECT_ONE_SHOT)
+	Net.sigil_admin_chroma_slot(device_id)
 
 
 func _on_admin_chromatic_result(result: Dictionary) -> void:
 	sigil_admin_chromatic_result.emit(result)
-	# Новый хроматик — коллекция изменилась: перезапросить, чтобы экстрас появился.
-	# _last_device_id хранит последний device_id запросов крафта/ротации.
-	request_collection(_last_device_id)
+	# Новый оффер с хроматиком в слоте 0: перезапросить daily, чтобы
+	# экран крафта показал свежий слот.
+	if bool(result.get("ok", false)) and result.has("crafts"):
+		_daily_crafts = result.get("crafts", [])
+		_daily_day = _today_string()
+		_save_daily_cache()
+		daily_crafts_ready.emit(_daily_crafts)
 
 
 func _on_admin_rotate_result(result: Dictionary) -> void:

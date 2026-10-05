@@ -252,12 +252,13 @@ func _cmd_sigil(parts: Array) -> void:
 		_g._sigil.request_admin_rotate(dev)
 		_log_text("Sigil reset: rotating daily crafts...")
 	elif sub == "chroma":
-		# Выдача хроматического сигила: сервер генерирует имя/лор/seed.
+		# Подменить слот 0 оффера дня на НОВЫЙ уникальный хроматик —
+		# его можно скрафтить как обычный слот.
 		var dev: String = _g._online._device_id
 		if not _g._sigil.sigil_admin_chromatic_result.is_connected(_on_sigil_chroma_done):
 			_g._sigil.sigil_admin_chromatic_result.connect(_on_sigil_chroma_done, CONNECT_ONE_SHOT)
-		_g._sigil.request_admin_chromatic(dev)
-		_log_text("Sigil chroma: запрошен хроматический сигил...")
+		_g._sigil.request_admin_chroma_slot(dev)
+		_log_text("Sigil chroma: ставлю уникальный хроматик в слот 0...")
 	elif sub == "free":
 		if parts.size() < 3:
 			_log_text("[color=red]Usage: sigil free <0|1|2>[/color]")
@@ -301,15 +302,17 @@ func _on_sigil_rotate_done(result: Dictionary) -> void:
 		_log_text("[color=red]Sigil rotate FAIL: %s[/color]" % str(result.get("error", "?")))
 
 
-## Ответ сервера на выдачу хроматического сигила: лог + обновление коллекции.
+## Ответ сервера на установку хроматика в слот 0: лог + перерисовка крафтов.
 func _on_sigil_chroma_done(result: Dictionary) -> void:
 	if bool(result.get("ok", false)):
-		var craft: Dictionary = result.get("craft", {})
-		_log_text("Хроматик выдан: %s (seed=%s)" % [
-			str(craft.get("llm_name", "?")), str(craft.get("seed", "?"))])
-		# Обновить коллекцию (экстрас) в открытой модалке.
-		if _g._sigil != null:
-			_g._sigil.request_collection(_g._online._device_id)
+		var crafts: Array = result.get("crafts", [])
+		if not crafts.is_empty():
+			var c: Dictionary = crafts[0]
+			_log_text("Хроматик в слоте 0: %s (rarity=%s)" % [
+				str(c.get("llm_name", "?")), str(c.get("rarity", "?"))])
+		else:
+			_log_text("Хроматик поставлен (оффер обновлён)")
+		# Перерисовать открытую вкладку крафтов с новым оффером.
 		if _g._sigil_coll != null and _g._sigil_tab == "crafts":
 			_g._sigil_show_tab.call_deferred("crafts")
 	else:
