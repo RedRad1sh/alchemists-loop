@@ -2256,6 +2256,7 @@ func _sigil_build_collection_tab(container: Control) -> void:
 				"name": str(xe.get("llm_name", "")), "set": "",
 				"set_title": "Вне комплектов",
 				"first_at": str(xe.get("crafted_at", "")), "copies": 1,
+				"seed": int(xe.get("seed", 0)),
 			}
 			var ccell := _sigil_collection_cell(entry)
 			cgrid.add_child(ccell)

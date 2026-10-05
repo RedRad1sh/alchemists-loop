@@ -38,6 +38,8 @@ var _daily_offer_hash: String = ""
 ## Доп. соль кэша карточек: редкость+имя последнего запрошенного крафта
 ## (чтобы слот дня с новой картой не отдавал старый PNG).
 var _cache_extra: String = ""
+## Явный seed для следующего _make_recipe (хроматики из экстрас сервера).
+var _pending_seed: int = 0
 var _daily_day: String = ""  ## день кэша
 var _preview_cache: Dictionary = {}  ## key -> ImageTexture
 ## Каталог карт: card_id -> словарь карты. Общий для всех игроков.
@@ -136,6 +138,11 @@ func _make_recipe(item_id: String, ingredients: PackedStringArray,
 	r.result_id = StringName(item_id)
 	r.rarity = rarity
 	r.display_name = display_name if display_name != "" else item_id
+	# Явный seed (внекомплектные/хроматики): сервер даёт уникальный seed,
+	# иначе canonical у хроматиков без ингредиентов одинаков → карта одна.
+	if _pending_seed != 0:
+		r.seed_override = _pending_seed
+		_pending_seed = 0
 	# Соль игрока домешивается к канонической строке рецепта, а не подменяет её:
 	# иначе два рецепта с одним id давали бы одинаковый круг независимо от
 	# состава и редкости.
@@ -150,9 +157,12 @@ func make_craft_recipe(craft: Dictionary) -> SigilRecipe:
 	if display_name == "":
 		# Имя из каталога (fallback_name) — достойное название вместо id крафта.
 		display_name = str(craft.get("fallback_name", ""))
-	return _make_recipe(str(craft.get("id", "")), craft_ingredients(craft),
+	_pending_seed = int(craft.get("seed", 0))
+	var r := _make_recipe(str(craft.get("id", "")), craft_ingredients(craft),
 		StringName(str(craft.get("rarity", "common"))), &"object",
 		display_name)
+	_pending_seed = 0
+	return r
 
 
 ## Список id ингредиентов крафта (без количеств).
