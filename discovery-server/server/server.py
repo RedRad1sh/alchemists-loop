@@ -4561,6 +4561,9 @@ _SIGIL_RARITY_WEIGHTS = [
     ("rare", 20),
     ("epic", 8),
     ("legendary", 4),
+    # Хроматик во всех слотах: маленький вес (3 из ~105 ≈ 2.9% на слот).
+    # В дополнение к 2%-броску слота 0.
+    ("chromatic", 3),
 ]
 _SIGIL_CHROMATIC_CHANCE = 0.02  # 2% шанс на хроматическую внекомплектную
 
@@ -4700,7 +4703,13 @@ def _generate_sigil_daily(device_id: str, day: str, collected,
     # Слоты 1..N: N растёт на extra_slots (4-й слот за клейм комплекта).
     for index in range(1, _SIGIL_SLOTS + extra_slots):
         # Слоты 1–2 предлагают и собранные карты (дубли — спека: copies++), исключая только предложенные сегодня.
-        card = _pick_card(rng, _pick_rarity(rng), frozenset(), offered)
+        roll_rarity = _pick_rarity(rng)
+        if roll_rarity == "chromatic":
+            # Хроматик выпал из весов: в каталоге его нет (внекомплектный),
+            # поэтому создаём явно, а не через _pick_card.
+            crafts.append(_chromatic_craft(rng, day, device_id, index))
+            continue
+        card = _pick_card(rng, roll_rarity, frozenset(), offered)
         if card is None:
             card = _pick_uncollected(rng, collected, offered)
         if card is None:

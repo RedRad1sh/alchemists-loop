@@ -3107,10 +3107,10 @@ func _sigil_craft_row(craft: Dictionary) -> Control:
 	btn.custom_minimum_size = Vector2(0, maxi(176, row_h))
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.clip_contents = true
-	btn.add_theme_stylebox_override("normal", _sigil_row_style(accent, 0.0))
-	btn.add_theme_stylebox_override("hover", _sigil_row_style(accent, 0.05))
-	btn.add_theme_stylebox_override("pressed", _sigil_row_style(accent, 0.09))
-	btn.add_theme_stylebox_override("disabled", _sigil_row_style(accent, 0.0))
+	btn.add_theme_stylebox_override("normal", _sigil_row_style(accent, 0.0, is_chromatic))
+	btn.add_theme_stylebox_override("hover", _sigil_row_style(accent, 0.05, is_chromatic))
+	btn.add_theme_stylebox_override("pressed", _sigil_row_style(accent, 0.09, is_chromatic))
+	btn.add_theme_stylebox_override("disabled", _sigil_row_style(accent, 0.0, is_chromatic))
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	if can_afford:
 		btn.pressed.connect(_open_sigil_craft.bind(craft))
@@ -3304,13 +3304,23 @@ func _sigil_fill_preview(box: Control, tex: ImageTexture) -> void:
 		ph.visible = false
 
 
-func _sigil_row_style(accent: Color, lift: float) -> StyleBox:
+func _sigil_row_style(accent: Color, lift: float, is_chromatic: bool = false) -> StyleBox:
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.075 + accent.r * 0.10 + lift, 0.085 + accent.g * 0.10 + lift,
-		0.12 + accent.b * 0.10 + lift, 1.0)
-	sb.border_color = Color(accent.r, accent.g, accent.b, 0.45 + lift)
-	sb.set_border_width_all(1)
-	sb.border_width_left = 4
+	if is_chromatic:
+		# Хроматик выделяется: тёплый фон и золотая рамка потолще.
+		sb.bg_color = Color(0.16 + lift, 0.11 + lift, 0.06 + lift, 1.0)
+		sb.border_color = Color(1.0, 0.72, 0.25, 0.95)
+		sb.set_border_width_all(2)
+		sb.border_width_left = 5
+		# Лёгкое свечение: внешний контур рамки (имитация ореола).
+		sb.shadow_color = Color(1.0, 0.6, 0.15, 0.35)
+		sb.shadow_size = 6
+	else:
+		sb.bg_color = Color(0.075 + accent.r * 0.10 + lift, 0.085 + accent.g * 0.10 + lift,
+			0.12 + accent.b * 0.10 + lift, 1.0)
+		sb.border_color = Color(accent.r, accent.g, accent.b, 0.45 + lift)
+		sb.set_border_width_all(1)
+		sb.border_width_left = 4
 	sb.set_corner_radius_all(14)
 	sb.content_margin_left = 14
 	sb.content_margin_right = 14
