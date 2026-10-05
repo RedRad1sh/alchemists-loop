@@ -28,7 +28,20 @@ func _ready() -> void:
 	_music_player = AudioStreamPlayer.new()
 	_music_player.volume_db = linear_to_db(maxf(music_volume, 0.001))
 	add_child(_music_player)
-	_music_player.stream = _build_music()
+	# Музыка из конфига: {file, volume_db, pitch, delay} в events.music.
+	# Если file задан — грузим (loop); иначе процедурная _build_music().
+	var mcfg: Dictionary = _sound_cfg.get("music", {})
+	var mfile := str(mcfg.get("file", ""))
+	if mfile != "":
+		var mst: AudioStream = load(mfile) as AudioStream
+		if mst != null:
+			if mst is AudioStreamWAV:
+				(mst as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+			_music_player.stream = mst
+			_music_player.volume_db = float(mcfg.get("volume_db", 0.0)) \
+				+ linear_to_db(maxf(music_volume, 0.001))
+	else:
+		_music_player.stream = _build_music()
 	if music_on:
 		_music_player.play()
 
