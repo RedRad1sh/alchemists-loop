@@ -718,6 +718,9 @@ class SigilDailyResponse(BaseModel):
     crafts: list[SigilCraft] = []
     # Версия каталога на момент выдачи: клиент по ней решает докачку каталога.
     catalog_version: str = ""
+    # Хэш оффера дня: меняется при ротации (salt). Клиент сверяет его со
+    # своим кэшем — если совпал, кэш актуален, лишних перезапросов нет.
+    offer_hash: str = ""
     error: str = ""
 
 
@@ -4776,9 +4779,15 @@ def sigil_daily(device_id: str = Query("", max_length=128)):
     try:
         today = _now_dt().date().isoformat()
         crafts_data = _ensure_sigil_daily(conn, device_id, today)
+        canon = "\n".join(
+            "%s|%s|%s|%s" % (c.get("id"), c.get("rarity"), c.get("card_id"), c.get("llm_name"))
+            for c in crafts_data
+        )
+        offer_hash = hashlib.sha256(canon.encode("utf-8")).hexdigest()
         return SigilDailyResponse(
             ok=True, day=today, catalog_version=_sigil_catalog()["version"],
             crafts=[SigilCraft(**c) for c in crafts_data],
+            offer_hash=offer_hash,
         )
     finally:
         conn.close()

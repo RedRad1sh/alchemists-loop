@@ -33,6 +33,8 @@ var _options: SigilOptions
 var _collection: Dictionary = {}  ## craft_id -> {seed, rarity, card_id, discovered_at}
 var _player_salt: String = ""
 var _daily_crafts: Array = []  ## кэш ежедневных крафтов
+## Хэш оффера дня с сервера (по нему клиент решает, актуален ли кэш после ротации).
+var _daily_offer_hash: String = ""
 var _daily_day: String = ""  ## день кэша
 var _preview_cache: Dictionary = {}  ## key -> ImageTexture
 ## Каталог карт: card_id -> словарь карты. Общий для всех игроков.
@@ -603,10 +605,11 @@ func clear_image_cache() -> void:
 
 
 func request_daily(device_id: String) -> void:
-	# Всегда перезапрашиваем свежий оффер при открытии экрана крафта:
-	# админ-ротация меняет daily на сервере, и локальный кэш (тот же день)
-	# иначе показывает устаревший оффер → «превью common, выпала epic».
-	# Кэш остаётся для оффлайн-старта (см. _load_daily_cache).
+	# Сверка с сервером по offer_hash: клиент хранит хэш последнего оффера.
+	# Сервер вернёт текущий — если совпал с нашим, кэш актуален и не
+	# перезапрашиваем (нет лишнего ререндера); если ротация сменила оффер —
+	# хэш другой, идём на сервер и обновляем кэш. Так устаревший оффер
+	# («превью common, выпала epic») не показывается.
 	_daily_settled = false
 	Net.sigil_daily(device_id)
 
@@ -617,6 +620,7 @@ func _on_daily_result(result: Dictionary) -> void:
 	_daily_settled = true
 	if not result.get("ok", false):
 		return
+	_daily_offer_hash = str(result.get("offer_hash", _daily_offer_hash))
 	# M2: daily пришёл под новой версией каталога — локальная копия устарела
 	# для card_id этих крафтов, перевыпускаем докачку (спека §1).
 	var srv_ver := str(result.get("catalog_version", ""))
@@ -699,7 +703,7 @@ func _save_daily_cache() -> void:
 	var f := FileAccess.open(DAILY_CACHE_FILE, FileAccess.WRITE)
 	if f == null:
 		return
-	var data := {"day": _daily_day, "crafts": _daily_crafts}
+	var data := {"day": _daily_day, "crafts": _daily_crafts, "offer_hash": _daily_offer_hash}
 	f.store_string(JSON.stringify(data, "  "))
 	f.close()
 
@@ -715,6 +719,7 @@ func _load_daily_cache() -> void:
 	if parsed is Dictionary:
 		_daily_day = str(parsed.get("day", ""))
 		_daily_crafts = parsed.get("crafts", [])
+		_daily_offer_hash = str(parsed.get("offer_hash", ""))
 
 
 func _today_string() -> String:
