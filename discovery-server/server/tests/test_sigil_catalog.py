@@ -20,16 +20,25 @@ GEN = CLIENT_DIR / "tools" / "gen_sigil_catalog.py"
 CATALOG = SERVER_DIR / "data" / "sigil_catalog.json"
 
 SETS = {"fire", "water", "air", "earth"}
-RARITY_COUNTS = {"common": 12, "rare": 7, "epic": 4, "legendary": 2}
+# Редкости глубже нигредо — жёсткая раскладка R2.
+RARITY_COUNTS = {"rare": 7, "epic": 4, "legendary": 2}
+# Нигредо-полоса комплекта = 12 карт: common + зелёный подтир uncommon.
+# uncommon — ручной арт-отбор icon-gen, а не ступень глубины графа, поэтому
+# фиксируем только размер полосы и общее число зелёных (UNCOMMON_TOTAL).
+NIGREDO_SLOTS = 12
+UNCOMMON_TOTAL = 16
 PROCESSES = {"calcinatio", "sublimatio", "distillatio", "putrefactio", "coniunctio"}
 STAGES = {"nigredo", "albedo", "citrinitas", "rubedo"}
 STAGE_BY_RARITY = {
-    "common": "nigredo", "rare": "albedo",
+    "common": "nigredo", "uncommon": "nigredo", "rare": "albedo",
     "epic": "citrinitas", "legendary": "rubedo",
 }
-ETHER_BY_RARITY = {"common": 50, "rare": 150, "epic": 400, "legendary": 800}
+ETHER_BY_RARITY = {
+    "common": 50, "uncommon": 50, "rare": 150, "epic": 400, "legendary": 800,
+}
 QTY_BY_RARITY = {
-    "common": (6, 14), "rare": (8, 20), "epic": (12, 30), "legendary": (18, 45),
+    "common": (6, 14), "uncommon": (6, 14), "rare": (8, 20),
+    "epic": (12, 30), "legendary": (18, 45),
 }
 
 
@@ -109,10 +118,19 @@ def test_card_fields(catalog: dict) -> None:
 def test_rarity_counts_per_set(catalog: dict) -> None:
     by_id = {c["id"]: c for c in catalog["cards"]}
     for s in catalog["sets"]:
-        counts = dict.fromkeys(RARITY_COUNTS, 0)
+        counts = dict.fromkeys(STAGE_BY_RARITY, 0)
         for cid in s["card_ids"]:
             counts[by_id[cid]["rarity"]] += 1
-        assert counts == RARITY_COUNTS, s["id"]
+        # uncommon — подтир нигредо-полосы, глубина карт от него не зависит.
+        assert counts["common"] + counts["uncommon"] == NIGREDO_SLOTS, s["id"]
+        for rarity, want in RARITY_COUNTS.items():
+            assert counts[rarity] == want, s["id"]
+
+
+def test_uncommon_total(catalog: dict) -> None:
+    """uncommon-карт ровно 16: закреплено арт-отбором icon-gen."""
+    got = [c["id"] for c in catalog["cards"] if c["rarity"] == "uncommon"]
+    assert len(got) == UNCOMMON_TOTAL, got
 
 
 def test_excluded_cards_are_not_in_catalog(catalog: dict) -> None:

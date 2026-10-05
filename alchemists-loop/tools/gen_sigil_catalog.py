@@ -15,8 +15,8 @@
   * (всего предметов - 100) самых глубоких «земля» исключаются из каталога;
   * оставшаяся «земля» раздаётся огню/воде/воздуху по близости к предкам
     (вес 0.5**(dist-1)), порядок fire -> water -> air;
-  * редкость внутри комплекта — по глубине: 12 common, 7 rare, 4 epic,
-    2 legendary (R2);
+  * редкость внутри комплекта — по глубине: 12 nigredo-карт (common, часть
+    из них — зелёный подтир uncommon), 7 rare, 4 epic, 2 legendary (R2);
   * seed карты = sha256("sigil-card#<id>")[:12] — без соли игрока (R5),
     поэтому картинка карты одинакова у всех игроков.
 """
@@ -43,16 +43,33 @@ CAT_TO_SET = {"огонь": "fire", "вода": "water", "воздух": "air", 
 SET_TO_CAT = {v: k for k, v in CAT_TO_SET.items()}
 BASE_ORDER = ["fire", "water", "earth", "air"]
 
-# 12 + 7 + 4 + 2 = 25 (R2). Порядок — от глубоких к мелким.
+# 12 + 7 + 4 + 2 = 25 (R2). Порядок — от глубоких к мелким. Двенадцать
+# nigredo-слотов — это common, но часть из них помечена зелёным подтиром
+# uncommon (см. UNCOMMON_IDS): экономика у подтира как у common.
 RARITY_PLAN = [("legendary", 2), ("epic", 4), ("rare", 7), ("common", 12)]
-ETHER_BY_RARITY = {"common": 50, "rare": 150, "epic": 400, "legendary": 800}
+# uncommon — не отдельная полоса графа, а ручной арт-отбор icon-gen: зелёные
+# карты внутри common-полосы (fire 1, water 3, air 5, earth 7 = 16). Набор
+# закреплён в закоммиченном каталоге, поэтому таблица явная — генератор обязан
+# воспроизводить data/sigil_catalog.json байт-в-байт (--check в CI).
+UNCOMMON_IDS = frozenset({
+    "fire",
+    "fish", "dragon", "farmer",
+    "air", "dust", "cloud", "bird", "egg",
+    "earth", "clay", "boulder", "brick", "ash", "beast", "blade",
+})
+ETHER_BY_RARITY = {
+    "common": 50, "uncommon": 50, "rare": 150, "epic": 400, "legendary": 800,
+}
 QTY_BY_RARITY = {
-    "common": (6, 14), "rare": (8, 20), "epic": (12, 30), "legendary": (18, 45),
+    "common": (6, 14), "uncommon": (6, 14), "rare": (8, 20),
+    "epic": (12, 30), "legendary": (18, 45),
 }
 # -1 = «3 или 4 по seed % 2» (R4)
-INGREDIENTS_BY_RARITY = {"common": 3, "rare": 3, "epic": -1, "legendary": 4}
+INGREDIENTS_BY_RARITY = {
+    "common": 3, "uncommon": 3, "rare": 3, "epic": -1, "legendary": 4,
+}
 STAGE_BY_RARITY = {
-    "common": "nigredo", "rare": "albedo",
+    "common": "nigredo", "uncommon": "nigredo", "rare": "albedo",
     "epic": "citrinitas", "legendary": "rubedo",
 }
 # Список для citrinitas — допущение генератора (R3): lore-спека §6 его не
@@ -241,7 +258,7 @@ def assign_sets(item_ids: list, producers: dict, layers: dict, cats: dict) -> tu
 
 
 def assign_rarities(members: list, layers: dict) -> dict:
-    """12 мелких common … 2 самых глубоких legendary (R2)."""
+    """12 мелких nigredo (common, часть — uncommon) … 2 самых глубоких legendary (R2)."""
     ordered = sorted(members, key=lambda i: (layers.get(i, 0), i))
     out: dict = {}
     cursor = 0
@@ -251,6 +268,14 @@ def assign_rarities(members: list, layers: dict) -> dict:
         cursor += count
     if cursor != len(ordered):
         raise SystemExit(f"раскладка редкостей покрыла {cursor} из {len(ordered)}")
+    for iid in members:
+        if iid not in UNCOMMON_IDS:
+            continue
+        # Подтир живёт только внутри common-полосы: если карта не попала туда,
+        # таблица UNCOMMON_IDS устарела относительно ITEMS/RECIPES.
+        if out[iid] != "common":
+            raise SystemExit(f"uncommon-карта «{iid}» не в common-полосе комплекта")
+        out[iid] = "uncommon"
     return out
 
 
@@ -317,12 +342,19 @@ def check_invariants(catalog: dict, excluded: list, items: dict) -> None:
         raise SystemExit("в каталоге есть дубли card id")
     if set(ids) & set(excluded):
         raise SystemExit("исключённый предмет попал в каталог")
+    unknown = UNCOMMON_IDS - set(ids)
+    if unknown:
+        raise SystemExit(f"uncommon-карты отсутствуют в каталоге: {sorted(unknown)}")
     by_id = {c["id"]: c for c in cards}
-    want = dict(RARITY_PLAN)
     for s in catalog["sets"]:
         if len(s["card_ids"]) != SET_SIZE:
             raise SystemExit(
                 f"в комплекте {s['id']} {len(s['card_ids'])} карт, нужно {SET_SIZE}")
+        want = dict(RARITY_PLAN)
+        flips = sum(1 for cid in s["card_ids"] if cid in UNCOMMON_IDS)
+        if flips:
+            want["uncommon"] = flips
+            want["common"] -= flips
         counts: dict = {}
         for cid in s["card_ids"]:
             card = by_id[cid]
@@ -399,7 +431,9 @@ def build_catalog() -> dict:
 
 
 def render(catalog: dict) -> str:
-    return json.dumps(catalog, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    # indent=1 — компактная запись закоммиченного артефакта (2709 строк вместо
+    # 5418 при indent=2): каталог читают машинно, а диффы перегенерации — глазами.
+    return json.dumps(catalog, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
 
 
 def main(argv=None) -> int:
