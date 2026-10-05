@@ -1991,29 +1991,30 @@ func _demo_seed_sigil_coll() -> void:
 	if _demo_harness._shot_path != "" or _demo_harness._gif_dir != "":
 		var demo_entry := _sigil_catalog_entry("clay", {"copies": 2, "first_at": "2026-09-28T10:00:00"})
 		_open_sigil_fullscreen(demo_entry)
-	_open_sigil_modal()
-	# --sigiltab=collection|fullscreen|sets|set_grid: один show_tab на ветку,
-	# чтобы вкладку не ребилдить дважды (set_grid поверх «sets» открывает
-	# экран комплекта — Task 7b).
+	# --sigiltab=collection|fullscreen|sets|set_grid: стартовую вкладку отдаём
+	# книге (_open_sigil_modal строит страницу сразу, а перелистывает уже после
+	# открытия обложки) — иначе _sigil_show_tab и open_book делят busy/_shield.
+	var initial_tab := "crafts"
 	match _demo_harness._sigil_tab:
 		"collection", "fullscreen":
-			_sigil_show_tab("collection")
-			if _demo_harness._sigil_tab == "fullscreen":
-				# Task 5C: для lore-скриншота открываем stone (валидный
-				# process/stage/seed), иначе первую собранную карту.
-				var target := "stone" if _sigil._server_collection.has("stone") else ""
-				if target == "":
-					for k in _sigil._server_collection:
-						target = str(k)
-						break
-				if target != "":
-					_open_sigil_fullscreen(_sigil_catalog_entry(target,
-						_sigil._server_collection[target]))
-
-		"sets":
-			_sigil_show_tab("sets")
+			initial_tab = "collection"
+		"sets", "set_grid":
+			initial_tab = "sets"
+	_open_sigil_modal(initial_tab)
+	# Всё, что поверх книги: set_grid открывает экран комплекта (Task 7b).
+	match _demo_harness._sigil_tab:
+		"fullscreen":
+			# Task 5C: для lore-скриншота открываем stone (валидный
+			# process/stage/seed), иначе первую собранную карту.
+			var target := "stone" if _sigil._server_collection.has("stone") else ""
+			if target == "":
+				for k in _sigil._server_collection:
+					target = str(k)
+					break
+			if target != "":
+				_open_sigil_fullscreen(_sigil_catalog_entry(target,
+					_sigil._server_collection[target]))
 		"set_grid":
-			_sigil_show_tab("sets")
 			_open_sigil_set_screen("earth")
 		_:
 			pass
@@ -2113,21 +2114,33 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 		p.offset_top = 8.0
 		p.offset_bottom = -12.0
 	_sigil_tab_content = craft_page
-	# Интро-задержки билдеров ждут открытия книги (обложка откидывается).
-	_open_sigil_book.call_deferred()
-	_sigil_show_tab(start_tab)
+	# Контент стартовой страницы строим сразу (книга ещё закрыта, но к первому
+	# снимку листа страница обязана быть готова). Обложка и перелистывание — в
+	# _open_sigil_book_and_show_tab: open_book() и go_to() оба владеют
+	# busy/_shield, поэтому запускать их одновременно нельзя.
+	_sigil_build_page(start_tab)
+	_open_sigil_book_and_show_tab.call_deferred(start_tab)
 
 
-## Показать вкладку модалки: старое содержимое сносится целиком, билдер
-## строит заново. Поколение _sigil_tab_seq гасит корутины билдеров, чтобы
-## предыдущая вкладка не достраивалась поверх новой после своего await.
+## Открыть книгу Аркана (обложка откидывается) и показать стартовую страницу.
+## Перелистывание — строго после open_book(): если запустить go_to() во время
+## открытия, щит одного гаснет, пока второй ещё анимируется, и ввод попадает в
+## книгу. Корутина — await в месте вызова.
+func _open_sigil_book_and_show_tab(tab: String) -> void:
+	await _open_sigil_book()
+	_sigil_show_tab(tab)
+
+
 ## Открыть книгу Аркана (обложка откидывается). Корутина — await в месте вызова.
 func _open_sigil_book() -> void:
 	if _sigil_book != null and is_instance_valid(_sigil_book):
 		await _sigil_book.open_book()
 
 
-## Программный переход на вкладку: строит контент и листает книгу.
+## Программный переход на вкладку: строит контент и листает книгу. Старое
+## содержимое сносится целиком, билдер строит заново; поколение _sigil_tab_seq
+## гасит корутины билдеров, чтобы предыдущая вкладка не достраивалась поверх
+## новой после своего await.
 func _sigil_show_tab(tab: String) -> void:
 	if _sigil_coll == null:
 		return
