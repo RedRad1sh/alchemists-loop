@@ -3564,8 +3564,13 @@ func _show_pending_craft_card(craft_id: String, rarity: String, llm_name: String
 			"name": llm_name if llm_name != "" else str(craft.get("fallback_name", "")),
 			"set": "", "set_title": "Вне комплектов",
 			"first_at": "", "copies": 1,
-			"seed": int(craft.get("seed", 0)),
-			"lore": str(craft.get("lore", "")),
+			# Seed и лор — из ответа крафта (сервер — источник правды), а не из
+			# _daily_crafts: клиентский daily мог устареть (кэш/старый оффер),
+			# тогда seed=0 -> все хроматики рендерились бы одной картинкой.
+			"seed": _sigil._last_craft_seed if _sigil._last_craft_seed != 0 \
+				else int(craft.get("seed", 0)),
+			"lore": _sigil._last_craft_lore if _sigil._last_craft_lore != "" \
+				else str(craft.get("lore", "")),
 		}
 		_open_sigil_fullscreen(entry)
 		return

@@ -41,6 +41,9 @@ var _daily_offer_hash: String = ""
 var _cache_extra: String = ""
 ## Явный seed для следующего _make_recipe (хроматики из экстрас сервера).
 var _pending_seed: int = 0
+# Последний крафт: seed/лор из ответа сервера (источник правды, не daily).
+var _last_craft_seed: int = 0
+var _last_craft_lore: String = ""
 var _daily_day: String = ""  ## день кэша
 var _preview_cache: Dictionary = {}  ## key -> ImageTexture
 ## Каталог карт: card_id -> словарь карты. Общий для всех игроков.
@@ -722,6 +725,8 @@ func _on_craft_result(result: Dictionary) -> void:
 	var card_id := str(result.get("card_id", ""))
 	var seed_override := int(result.get("seed", 0))
 	var lore := str(result.get("lore", ""))
+	_last_craft_seed = seed_override
+	_last_craft_lore = lore
 	if not _collection.has(craft_id):
 		var craft := _daily_craft_by_id(craft_id)
 		craft["rarity"] = rarity
