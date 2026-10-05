@@ -8,6 +8,7 @@ var music_on := true
 var sfx_volume := 1.0
 var music_volume := 1.0
 var _music_player: AudioStreamPlayer
+var _music_cfg_db := 0.0  # volume_db музыки из конфига (смещение к громкости настроек)
 var _spin_player: AudioStreamPlayer  # зацикленный звук верчения ритуала
 var _players: Array[AudioStreamPlayer] = []
 var _rr := 0
@@ -33,19 +34,22 @@ func _ready() -> void:
 	_spin_player.volume_db = linear_to_db(maxf(sfx_volume, 0.001))
 	add_child(_spin_player)
 	# Музыка из конфига: {file, volume_db, pitch, delay} в events.music.
-	# Если file задан — грузим (loop); иначе процедурная _build_music().
+	# Если file задан и загрузился — играем его (loop); иначе процедурная
+	# _build_music(): битый путь не должен оставлять игру без музыки.
 	var mcfg: Dictionary = _sound_cfg.get("music", {})
 	var mfile := str(mcfg.get("file", ""))
+	_music_cfg_db = float(mcfg.get("volume_db", 0.0))
+	var mst: AudioStream = null
 	if mfile != "":
-		var mst: AudioStream = load(mfile) as AudioStream
-		if mst != null:
-			if mst is AudioStreamWAV:
-				(mst as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
-			_music_player.stream = mst
-			_music_player.volume_db = float(mcfg.get("volume_db", 0.0)) \
-				+ linear_to_db(maxf(music_volume, 0.001))
-	else:
-		_music_player.stream = _build_music()
+		mst = load(mfile) as AudioStream
+		if mst == null:
+			push_warning("Sfx: музыка не найдена: %s — процедурный fallback" % mfile)
+	if mst == null:
+		mst = _build_music()
+	elif mst is AudioStreamWAV:
+		(mst as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	_music_player.stream = mst
+	_music_player.volume_db = _music_cfg_db + linear_to_db(maxf(music_volume, 0.001))
 	if music_on:
 		_music_player.play()
 
@@ -210,11 +214,11 @@ func _rng() -> bool:
 func play_event(event_name: String) -> void:
 	var ev: Dictionary = _sound_cfg.get(event_name, {})
 	var file := str(ev.get("file", ""))
-	if file != "":
-		_play_file(event_name, file, float(ev.get("volume_db", 0.0)),
-			float(ev.get("pitch", 1.0)), float(ev.get("delay", 0.0)))
+	if file != "" and _play_file(event_name, file, float(ev.get("volume_db", 0.0)),
+			float(ev.get("pitch", 1.0)), float(ev.get("delay", 0.0))):
 		return
-	# Процедурный fallback: тот же звук, что генерировался раньше.
+	# Процедурный fallback (в том числе когда файл из конфига не нашёлся):
+	# тот же звук, что генерировался раньше.
 	match event_name:
 		"bubble": bubble()
 		"click": click()
@@ -281,25 +285,32 @@ func _play_file(event_name: String, file: String, vol_db: float, pitch: float, d
 				push_warning("Sfx: не удалось нарезать %s (событие %s)" % [file, event_name])
 				return false
 		_stream_cache[cache_key] = stream
+	if delay > 0.0:
+		# Отложенный старт без await: функция остаётся синхронной (bool).
+		# Плеер занимаем только в момент срабатывания: до этого его может
+		# переиспользовать другой звук — подмены stream не случится.
+		var timer := get_tree().create_timer(delay)
+		timer.timeout.connect(func() -> void:
+			_play_stream(stream, vol_db, pitch))
+	else:
+		_play_stream(stream, vol_db, pitch)
+	return true
+
+
+## Проиграть готовый поток на очередном плеере (round-robin).
+func _play_stream(stream: AudioStream, vol_db: float, pitch: float) -> void:
 	var p := _players[_rr]
 	_rr = (_rr + 1) % _players.size()
 	p.volume_db = vol_db + linear_to_db(maxf(sfx_volume, 0.001))
 	p.pitch_scale = pitch
 	p.stream = stream
-	if delay > 0.0:
-		# Отложенный старт без await: функция остаётся синхронной (bool).
-		var timer := get_tree().create_timer(delay)
-		timer.timeout.connect(func() -> void:
-			if is_instance_valid(p):
-				p.play())
-	else:
-		p.play()
-	return true
+	p.play()
 
 
-## Нарезать PCM-файл (путь, WAV 16-bit/8-bit) на кусок [start_sec .. start_sec+len_sec]
-## с коротким фейдом на конце. Читаем файл САМИ (минуя Godot-импорт, который
-## перекодирует wav в ADPCM — тогда формат неизвестен). Null при ошибке.
+## Нарезать WAV PCM 16-bit на кусок [start_sec .. start_sec+len_sec] с коротким
+## фейдом на конце. Читаем файл САМИ (минуя Godot-импорт, который перекодирует
+## wav в ADPCM — тогда формат неизвестен). Null при ошибке или чужом формате:
+## 8/24/32-bit и float WAV резать нельзя — арифметика кадров была бы враньём.
 func _slice_wav(w: AudioStreamWAV, start_sec: float, len_sec: float, file_path: String, loop: bool = false) -> AudioStreamWAV:
 	if not FileAccess.file_exists(file_path):
 		return null
@@ -308,28 +319,33 @@ func _slice_wav(w: AudioStreamWAV, start_sec: float, len_sec: float, file_path: 
 		return null
 	var bytes := f.get_buffer(f.get_length())
 	f.close()
-	# Парсим WAV: ищем fmt (mix_rate, stereo) и data (смещение).
+	# Парсим WAV: fmt (audio_format, bits, mix_rate, stereo) и data (смещение).
 	var off := 12
 	var sr := 44100
 	var ch := 1
+	var bits := 0
 	var data_off := -1
 	var data_size := 0
 	while off + 8 <= bytes.size():
 		var ck := bytes.slice(off, off + 4).get_string_from_ascii()
 		var sz := bytes.decode_u32(off + 4)
 		if ck == "fmt ":
+			if sz < 16 or off + 24 > bytes.size():
+				return null
+			if bytes.decode_u16(off + 8) != 1:  # WAVE_FORMAT_PCM
+				return null
 			ch = bytes.decode_u16(off + 10)
 			sr = bytes.decode_u32(off + 12)
+			bits = bytes.decode_u16(off + 22)
 		elif ck == "data":
 			data_off = off + 8
 			data_size = sz
 			off += 8 + sz + (sz & 1)
 			continue
 		off += 8 + sz + (sz & 1)
-	if data_off < 0 or sr <= 0:
+	if data_off < 0 or sr <= 0 or bits != 16:
 		return null
-	var bps := 2  # 16-bit PCM
-	var frame_bytes := bps * ch
+	var frame_bytes := (bits / 8) * ch
 	if data_size <= 0 or frame_bytes <= 0:
 		return null
 	var total_frames := data_size / frame_bytes
@@ -512,4 +528,4 @@ func set_sfx_volume(v: float) -> void:
 
 func set_music_volume(v: float) -> void:
 	music_volume = clampf(v, 0.0, 1.0)
-	_music_player.volume_db = 1.0 + linear_to_db(maxf(music_volume, 0.001))
+	_music_player.volume_db = _music_cfg_db + linear_to_db(maxf(music_volume, 0.001))

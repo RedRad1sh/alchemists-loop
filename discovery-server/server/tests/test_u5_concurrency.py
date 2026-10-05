@@ -13,9 +13,9 @@ uvicorn, без копий логики в тесте).
   устройство и коммитит — он не читающий);
 - две параллельные варки ОДНОЙ новой пары: генерация ровно одна, проигравший
   получает 409 («в обработке») или known — никогда второй created;
-- лок-строка pending_pairs не оставляется ни после успеха, ни после отказа
-  валидации (400), ни после rate_limited — «могилы» state='resolved' больше
-  не плодятся (T08.2);
+- лок-строка pending_pairs не оставляется ни после успеха, ни после мягкого
+  отказа валидации (not_combinable), ни после rate_limited — «могилы»
+  state='resolved' больше не плодятся (T08.2);
 - _ensure_challenge: параллельное создание «дня» без IntegrityError-500 (T08.3);
 - писма: параллельные letter/today одного устройства — одна строка без 500.
 
@@ -297,12 +297,19 @@ def test_rate_limited_leaves_no_lock(app_db, monkeypatch):
 
 
 def test_validation_reject_leaves_no_tombstone(app_db):
-    """«Мусорный» запрос (несуществующий ингредиент → 400) не оставляет строку:
-    раньше finally писал state='resolved' навечно (T08.2)."""
-    db, _ = app_db
-    with pytest.raises(server.HTTPException) as ei:
-        server.discover(_req("gold", "bogusslug"))
-    assert ei.value.status_code == 400
+    """«Мусорный» запрос (несуществующий ингредиент) не оставляет строку.
+
+    Раньше падал 400 и finally писал state='resolved' навечно (T08.2). Теперь
+    клиентский инвентарь шире серверного каталога, поэтому отказ мягкий:
+    not_combinable без вызова LLM, pending_pairs не трогается вовсе.
+    """
+    db, stub = app_db
+    resp = server.discover(_req("gold", "bogusslug"))
+    assert resp.ok is True
+    assert resp.status == "not_combinable"
+    assert resp.discovery is None
+    assert "не сочетаются" in resp.message
+    assert stub.generate_calls == []
     conn = sqlite3.connect(db)
     assert _pending_count(conn) == 0
     conn.close()
