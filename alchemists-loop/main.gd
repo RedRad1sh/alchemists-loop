@@ -2061,7 +2061,9 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 	book.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	book.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	book.close_requested.connect(_close_sigil_collection)
-	book.flipped.connect(func(_a: int, _b: int) -> void: Sfx.click())
+	book.flipped.connect(func(_a: int, to_i: int) -> void:
+		Sfx.click()
+		_sigil_show_tab(["crafts", "collection", "sets"][to_i]))
 	vbox.add_child(book)
 	_sigil_book = book
 	_sigil_tab_btns = []
@@ -2081,6 +2083,13 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 	book.add_page("КОЛЛЕКЦИЯ", coll_page)
 	book.add_page("КОМПЛЕКТЫ", sets_page)
 	_sigil_pages = {"crafts": craft_page, "collection": coll_page, "sets": sets_page}
+	# Отступы контента от рамки бумаги (корешок слева, тени) — иначе
+	# содержимое вплотную к рамке.
+	for p in [craft_page, coll_page, sets_page]:
+		p.offset_left = 18.0
+		p.offset_right = -14.0
+		p.offset_top = 8.0
+		p.offset_bottom = -12.0
 	_sigil_tab_content = craft_page
 	# Интро-задержки билдеров ждут открытия книги (обложка откидывается).
 	_open_sigil_book.call_deferred()
