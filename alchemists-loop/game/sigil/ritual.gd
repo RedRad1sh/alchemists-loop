@@ -265,7 +265,8 @@ func _reveal_card() -> void:
 	_card_revealed = true
 	mouse_filter = Control.MOUSE_FILTER_IGNORE   # отдаём ввод карточке
 	_hover = -1
-	Sfx.ritual_reveal()
+	# Звук карты при завершении играет _show_sigil_card (discovery/legendary).
+	# Отдельный ritual_reveal давал дубль.
 	on_card_reveal.emit(card_rect(), _payload)
 
 
@@ -328,10 +329,12 @@ func _process(delta: float) -> void:
 	_spin2 -= delta * (0.5 + 0.8 * strength) * spd
 	_spin3 += delta * (0.3 + 0.55 * strength) * spd
 	# Звук ускорения верчения: разово на пороге (не каждый кадр).
-	if spd > 2.0 and not _spin_sound_played:
+	# Порог 1.5 — MATERIALIZE разгоняет морф до ~1.8-2.5 в норме; 2.0 не
+	# достигался без удержания, поэтому звук не игрался вообще.
+	if spd > 1.5 and not _spin_sound_played:
 		_spin_sound_played = true
 		Sfx.ritual_spin()
-	elif spd <= 1.0:
+	elif spd <= 0.9:
 		_spin_sound_played = false
 
 	_flash = maxf(0.0, _flash - delta * 1.9)
