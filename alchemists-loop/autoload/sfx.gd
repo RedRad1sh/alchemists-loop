@@ -216,15 +216,26 @@ func play_event(event_name: String) -> void:
 ## Проиграть wav/ogg из файла с volume/pitch/delay (кэш загрузки).
 ## Возвращает true, если файл найден и запущен; false — нет файла/ошибка.
 func _play_file(event_name: String, file: String, vol_db: float, pitch: float, delay: float) -> bool:
+	var ev: Dictionary = _sound_cfg.get(event_name, {})
+	var start_sec := float(ev.get("start_sec", 0.0))
+	var len_sec := float(ev.get("len_sec", 0.0))
+	var cache_key := file if (start_sec <= 0.0 and len_sec <= 0.0) else "%s#%s#%s" % [file, start_sec, len_sec]
 	var stream: AudioStream = null
-	if _stream_cache.has(file) and is_instance_valid(_stream_cache[file]):
-		stream = _stream_cache[file]
+	if _stream_cache.has(cache_key) and is_instance_valid(_stream_cache[cache_key]):
+		stream = _stream_cache[cache_key]
 	else:
 		stream = load(file) as AudioStream
 		if stream == null:
 			push_warning("Sfx: файл не найден: %s (событие %s)" % [file, event_name])
 			return false
-		_stream_cache[file] = stream
+		# Нарезка wav под длину события (start_sec — пропустить интро,
+		# len_sec — длина куска). Режем TOЛЬКО AudioStreamWAV.
+		if (start_sec > 0.0 or len_sec > 0.0) and stream is AudioStreamWAV:
+			stream = _slice_wav(stream as AudioStreamWAV, start_sec, len_sec, file)
+			if stream == null:
+				push_warning("Sfx: не удалось нарезать %s (событие %s)" % [file, event_name])
+				return false
+		_stream_cache[cache_key] = stream
 	var p := _players[_rr]
 	_rr = (_rr + 1) % _players.size()
 	p.volume_db = vol_db + linear_to_db(maxf(sfx_volume, 0.001))
@@ -239,6 +250,66 @@ func _play_file(event_name: String, file: String, vol_db: float, pitch: float, d
 	else:
 		p.play()
 	return true
+
+
+## Нарезать PCM-файл (путь, WAV 16-bit/8-bit) на кусок [start_sec .. start_sec+len_sec]
+## с коротким фейдом на конце. Читаем файл САМИ (минуя Godot-импорт, который
+## перекодирует wav в ADPCM — тогда формат неизвестен). Null при ошибке.
+func _slice_wav(w: AudioStreamWAV, start_sec: float, len_sec: float, file_path: String) -> AudioStreamWAV:
+	if not FileAccess.file_exists(file_path):
+		return null
+	var f := FileAccess.open(file_path, FileAccess.READ)
+	if f == null:
+		return null
+	var bytes := f.get_buffer(f.get_length())
+	f.close()
+	# Парсим WAV: ищем fmt (mix_rate, stereo) и data (смещение).
+	var off := 12
+	var sr := 44100
+	var ch := 1
+	var data_off := -1
+	var data_size := 0
+	while off + 8 <= bytes.size():
+		var ck := bytes.slice(off, off + 4).get_string_from_ascii()
+		var sz := bytes.decode_u32(off + 4)
+		if ck == "fmt ":
+			ch = bytes.decode_u16(off + 10)
+			sr = bytes.decode_u32(off + 12)
+		elif ck == "data":
+			data_off = off + 8
+			data_size = sz
+			off += 8 + sz + (sz & 1)
+			continue
+		off += 8 + sz + (sz & 1)
+	if data_off < 0 or sr <= 0:
+		return null
+	var bps := 2  # 16-bit PCM
+	var frame_bytes := bps * ch
+	if data_size <= 0 or frame_bytes <= 0:
+		return null
+	var total_frames := data_size / frame_bytes
+	var start_f := int(start_sec * sr)
+	var len_f := int(len_sec * sr) if len_sec > 0.0 else total_frames - start_f
+	start_f = clampi(start_f, 0, total_frames - 1)
+	len_f = clampi(len_f, 1, total_frames - start_f)
+	var sub := bytes.slice(data_off + start_f * frame_bytes,
+		data_off + (start_f + len_f) * frame_bytes)
+	# Фейд-аут 10мс.
+	var fade_frames := mini(int(0.010 * sr), len_f)
+	for i in fade_frames:
+		var idx := (len_f - fade_frames + i) * frame_bytes
+		var v := int(sub.decode_s16(idx)) * (fade_frames - i) / fade_frames
+		sub.encode_s16(idx, v)
+		if ch == 2:
+			var v2 := int(sub.decode_s16(idx + 2)) * (fade_frames - i) / fade_frames
+			sub.encode_s16(idx + 2, v2)
+	var out := AudioStreamWAV.new()
+	out.format = AudioStreamWAV.FORMAT_16_BITS
+	out.mix_rate = sr
+	out.stereo = ch == 2
+	out.loop_mode = AudioStreamWAV.LOOP_DISABLED
+	out.data = sub
+	return out
 
 func _play(samples: PackedFloat32Array, vol_db: float = 0.0) -> void:
 	var p := _players[_rr]

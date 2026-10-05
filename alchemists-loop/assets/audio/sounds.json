@@ -97,7 +97,9 @@
       "volume_db": -10.0,
       "pitch": 1.0,
       "delay": 0.0,
-      "about": "Ритуал: ускорение верчения круга — вращательный свист"
+      "about": "Ритуал: верчение круга — файл нарезан (старт с 5с, длина 1.5с)",
+      "start_sec": 5.0,
+      "len_sec": 1.5
     },
     "ritual_reveal": {
       "file": "res://assets/audio/ritual/mixkit-arcane-chain-spell-879.wav",
@@ -121,7 +123,7 @@
       "about": "Вход в игру: приветственный аккорд при старте (не в selftest)"
     },
     "brew_discover": {
-      "file": "res://assets/audio/craft/mixkit-magic-bubbles-spell-2999.wav",
+      "file": "res://assets/audio/craft/mixkit-video-game-magic-potion-2830.wav",
       "volume_db": -3.0,
       "pitch": 1.0,
       "delay": 0.0,
