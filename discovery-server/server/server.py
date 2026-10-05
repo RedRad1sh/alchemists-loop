@@ -4971,7 +4971,14 @@ def admin_sigil_rotate(device_id: str = Query("", max_length=128)):
     conn = get_db()
     try:
         today = _now_dt().date().isoformat()
+        # Чистим и старые крафты дня: иначе INSERT OR IGNORE вернёт запись
+        # прежнего оффера (старая rarity/card_id) — «превью legendary,
+        # выпала rare» и прочие рассинхроны.
         conn.execute("DELETE FROM sigil_daily WHERE device_id=? AND day=?", (device_id, today))
+        conn.execute(
+            "DELETE FROM sigil_crafts WHERE device_id=? AND craft_id LIKE ?",
+            (device_id, today + "_%"),
+        )
         conn.commit()
         # salt = мс-время: каждая ротация даёт НОВЫЙ оффер (иначе sha256(device#day)
         # снова возвращает тот же набор — «ротация» ничего не меняла).
