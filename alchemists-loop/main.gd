@@ -2261,9 +2261,20 @@ func _sigil_build_collection_tab(container: Control) -> void:
 			}
 			var ccell := _sigil_collection_cell(entry)
 			cgrid.add_child(ccell)
-			# Ре-рендер невозможен — у extras нет ингредиентов: только дисковый
-			# кэш по craft_id, промах остаётся плейсхолдером «…» из слота.
+			# Экстрас (хроматик): уникальная картинка по seed. Ключ дискового кэша
+			# зависит от _cache_extra — ставим его по seed, чтобы разные хроматики
+			# не коллизировали в один PNG (глобальный _cache_extra это ломал).
+			var xseed := int(xe.get("seed", 0))
+			if xseed != 0:
+				_sigil._cache_extra = "chromatic|object|%d" % xseed
 			var cimg := _sigil._load_cached_image(str(xe.get("craft_id", "")))
+			if cimg == null:
+				cimg = await _sigil.generate_card(
+					str(xe.get("craft_id", "")), PackedStringArray(),
+					&"chromatic", &"object", str(xe.get("llm_name", "")))
+				if cimg != null:
+					_sigil._save_cached_image(str(xe.get("craft_id", "")), cimg)
+					_sigil._cache_extra = ""
 			if cimg != null:
 				_sigil_fill_preview(ccell.get_meta("preview"),
 					ImageTexture.create_from_image(cimg))

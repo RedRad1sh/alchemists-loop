@@ -141,13 +141,16 @@ func _make_recipe(item_id: String, ingredients: PackedStringArray,
 	r.display_name = display_name if display_name != "" else item_id
 	# Явный seed (внекомплектные/хроматики): сервер даёт уникальный seed,
 	# иначе canonical у хроматиков без ингредиентов одинаков → карта одна.
-	if _pending_seed != 0:
+	var had_seed := _pending_seed != 0
+	if had_seed:
 		r.seed_override = _pending_seed
 		_pending_seed = 0
 	# Соль игрока домешивается к канонической строке рецепта, а не подменяет её:
 	# иначе два рецепта с одним id давали бы одинаковый круг независимо от
-	# состава и редкости.
-	if _player_salt != "":
+	# состава и редкости. Для хроматиков с серверным seed — НЕ перезаписываем:
+	# иначе уникальный seed сервера терялся бы за хэшем canonical (у хроматиков
+	# canonical почти одинаков → одна и та же картинка).
+	if not had_seed and _player_salt != "":
 		r.seed_override = SigilRng.seed_from_string(r.canonical_string() + "#" + _player_salt)
 	return r
 
@@ -561,7 +564,13 @@ func build_collection_view() -> Array:
 		var img := _load_cached_image(id)
 		if img == null:
 			var rarity := StringName(str(entry.get("rarity", "common")))
+			# Миниатюра коллекции: рендер по сохранённому seed (уникальность картинки),
+			# а не по canonical с пустыми ингредиентами (у хроматиков был бы одинаков).
+			var seed := int(entry.get("seed", 0))
+			if seed != 0:
+				_cache_extra = "%s|%s|%d" % [rarity, &"object", seed]
 			img = await generate_card(id, PackedStringArray(), rarity, &"object", "", false)
+			_cache_extra = ""
 			if img != null:
 				_save_cached_image(id, img)
 		if img == null:
@@ -711,17 +720,25 @@ func _on_craft_result(result: Dictionary) -> void:
 	var rarity := str(result.get("rarity", "common"))
 	var llm_name := str(result.get("llm_name", ""))
 	var card_id := str(result.get("card_id", ""))
+	var seed_override := int(result.get("seed", 0))
+	var lore := str(result.get("lore", ""))
 	if not _collection.has(craft_id):
 		var craft := _daily_craft_by_id(craft_id)
 		craft["rarity"] = rarity
 		craft["llm_name"] = llm_name
 		if card_id != "":
 			craft["card_id"] = card_id
+		if seed_override != 0:
+			craft["seed"] = seed_override
+		if lore != "":
+			craft["lore"] = lore
 		var recipe := card_recipe_for(craft)
 		_collection[craft_id] = {
 			"seed": recipe.compute_seed(),
 			"rarity": rarity,
 			"card_id": card_id,
+			"llm_name": llm_name,
+			"lore": lore,
 			"discovered_at": Time.get_unix_time_from_system(),
 		}
 		_save_collection()

@@ -736,6 +736,8 @@ class SigilCraftResponse(BaseModel):
     llm_name: str = ""
     is_chromatic: bool = False
     card_id: str = ""
+    seed: int = 0
+    lore: str = ""
     error: str = ""
 
 
@@ -4914,7 +4916,7 @@ def sigil_craft(req: SigilCraftRequest):
             )
             conn.commit()
             existing = conn.execute(
-                "SELECT rarity, llm_name, is_chromatic, card_id FROM sigil_crafts"
+                "SELECT rarity, llm_name, is_chromatic, card_id, seed, lore FROM sigil_crafts"
                 " WHERE device_id=? AND craft_id=?",
                 (req.device_id, req.craft_id),
             ).fetchone()
@@ -4923,11 +4925,13 @@ def sigil_craft(req: SigilCraftRequest):
                 rarity=existing["rarity"], llm_name=existing["llm_name"],
                 is_chromatic=bool(existing["is_chromatic"]),
                 card_id=str(existing["card_id"] or ""),
+                seed=int(existing["seed"] or 0), lore=str(existing["lore"] or ""),
             )
 
         return SigilCraftResponse(
             ok=True, craft_id=req.craft_id, rarity=rarity, llm_name=llm_name,
             is_chromatic=is_chromatic, card_id=card_id,
+            seed=int(craft.get("seed", 0)), lore=lore,
         )
     except Exception:
         conn.rollback()
