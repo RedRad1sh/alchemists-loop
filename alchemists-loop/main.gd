@@ -353,6 +353,8 @@ var _font_reg: Font = null
 var _font_semi: Font = null
 var _font_bold: Font = null
 var _font_xbold: Font = null
+var _font_display: Font = null  # Divagon: названия (заголовки карточек)
+var _font_lore: Font = null     # Manasco: лор/описания карточек
 var _ui_tex: Dictionary = {}   # path -> Texture2D (кэш)
 var _tabs_ref: TabContainer
 # F1 (раунд правки U18): признак достроенного UI. tabs.tab_changed срабатывает
@@ -432,6 +434,8 @@ var _sigil_tab_content: Control = null  # контейнер активной в
 var _sigil_tab: String = "crafts"  # активная вкладка: crafts | collection | sets
 var _sigil_tab_btns: Array = []  # кнопки вкладок; подсветка активной в _sigil_show_tab
 var _sigil_tab_seq := 0  # поколение вкладки: гасит корутины билдеров при переключении
+var _sigil_book: BookPager = null      # книга-Аркан (страницы-вкладки)
+var _sigil_pages: Dictionary = {}     # tab -> страница (VBoxContainer)
 var _sigil_fullscreen: Control = null  # полноэкранный просмотр карты; != null ⇒ открыт
 ## Живая карточка фуллскрина — для подачи tilt из _process. Обнуляется
 ## при закрытии, чтобы _process не дёргал удалённую ноду.
@@ -1015,16 +1019,33 @@ func _init_new_game() -> bool:
 
 func _build_ui() -> void:
 	_online._init_colors()
-	_font_reg = _load_font("res://assets/fonts/Manrope-Regular.ttf")
-	_font_semi = _load_font("res://assets/fonts/Manrope-SemiBold.ttf")
-	_font_bold = _load_font("res://assets/fonts/Manrope-Bold.ttf")
-	_font_xbold = _load_font("res://assets/fonts/Manrope-ExtraBold.ttf")
+	# Шрифты централизованно: assets/ui/theme.json (как звуки — sounds.json).
+	var th_cfg: Dictionary = {}
+	if FileAccess.file_exists("res://assets/ui/theme.json"):
+		var thf := FileAccess.open("res://assets/ui/theme.json", FileAccess.READ)
+		if thf != null:
+			var parsed: Variant = JSON.parse_string(thf.get_as_text())
+			if parsed is Dictionary:
+				th_cfg = parsed
+	var fonts_cfg: Dictionary = th_cfg.get("fonts", {})
+	_font_reg = _load_font(str(fonts_cfg.get("default", "res://assets/fonts/Manrope-Regular.ttf")))
+	_font_semi = _load_font(str(fonts_cfg.get("semi", "res://assets/fonts/Manrope-SemiBold.ttf")))
+	_font_bold = _load_font(str(fonts_cfg.get("bold", "res://assets/fonts/Manrope-Bold.ttf")))
+	_font_xbold = _load_font(str(fonts_cfg.get("xbold", "res://assets/fonts/Manrope-ExtraBold.ttf")))
+	_font_display = _load_font(str(fonts_cfg.get("display", "")))
+	_font_lore = _load_font(str(fonts_cfg.get("lore", "")))
 	var th := Theme.new()
 	# Базовый размер рассчитан под Android portrait: иерархия строится
 	# размерами конкретных заголовков, а не крупным шрифтом по умолчанию.
-	th.default_font_size = 16
+	th.default_font_size = int(th_cfg.get("sizes", {}).get("default", 16))
 	if _font_reg != null:
 		th.default_font = _font_reg
+	# Роли шрифтов: "display" — названия (Divagon), "lore" — описания (Manasco).
+	# Потомки берут их через get_theme_font("display"/"lore", "Label", default).
+	if _font_display != null:
+		th.set_font("display", "Label", _font_display)
+	if _font_lore != null:
+		th.set_font("lore", "Label", _font_lore)
 	theme = th
 
 	var bg := ColorRect.new()
@@ -1970,29 +1991,30 @@ func _demo_seed_sigil_coll() -> void:
 	if _demo_harness._shot_path != "" or _demo_harness._gif_dir != "":
 		var demo_entry := _sigil_catalog_entry("clay", {"copies": 2, "first_at": "2026-09-28T10:00:00"})
 		_open_sigil_fullscreen(demo_entry)
-	_open_sigil_modal()
-	# --sigiltab=collection|fullscreen|sets|set_grid: один show_tab на ветку,
-	# чтобы вкладку не ребилдить дважды (set_grid поверх «sets» открывает
-	# экран комплекта — Task 7b).
+	# --sigiltab=collection|fullscreen|sets|set_grid: стартовую вкладку отдаём
+	# книге (_open_sigil_modal строит страницу сразу, а перелистывает уже после
+	# открытия обложки) — иначе _sigil_show_tab и open_book делят busy/_shield.
+	var initial_tab := "crafts"
 	match _demo_harness._sigil_tab:
 		"collection", "fullscreen":
-			_sigil_show_tab("collection")
-			if _demo_harness._sigil_tab == "fullscreen":
-				# Task 5C: для lore-скриншота открываем stone (валидный
-				# process/stage/seed), иначе первую собранную карту.
-				var target := "stone" if _sigil._server_collection.has("stone") else ""
-				if target == "":
-					for k in _sigil._server_collection:
-						target = str(k)
-						break
-				if target != "":
-					_open_sigil_fullscreen(_sigil_catalog_entry(target,
-						_sigil._server_collection[target]))
-
-		"sets":
-			_sigil_show_tab("sets")
+			initial_tab = "collection"
+		"sets", "set_grid":
+			initial_tab = "sets"
+	_open_sigil_modal(initial_tab)
+	# Всё, что поверх книги: set_grid открывает экран комплекта (Task 7b).
+	match _demo_harness._sigil_tab:
+		"fullscreen":
+			# Task 5C: для lore-скриншота открываем stone (валидный
+			# process/stage/seed), иначе первую собранную карту.
+			var target := "stone" if _sigil._server_collection.has("stone") else ""
+			if target == "":
+				for k in _sigil._server_collection:
+					target = str(k)
+					break
+			if target != "":
+				_open_sigil_fullscreen(_sigil_catalog_entry(target,
+					_sigil._server_collection[target]))
 		"set_grid":
-			_sigil_show_tab("sets")
 			_open_sigil_set_screen("earth")
 		_:
 			pass
@@ -2051,72 +2073,109 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	panel.add_child(vbox)
 
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
-	vbox.add_child(head)
-	var title := _label("АРКАН СИГИЛОВ", 24)
-	title.autowrap_mode = TextServer.AUTOWRAP_OFF
-	title.add_theme_color_override("font_color", Color(0.90, 0.82, 0.56))
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(title)
-	var close_btn := _small_button("✕", Vector2(46, 40))
-	close_btn.tooltip_text = "Закрыть"
-	close_btn.pressed.connect(_close_sigil_collection)
-	head.add_child(close_btn)
-
-	var tabbar := HBoxContainer.new()
-	tabbar.name = "SigilTabBar"
-	tabbar.add_theme_constant_override("separation", 8)
-	vbox.add_child(tabbar)
+	# Аркан — КНИГА (BookPager): вкладки стали страницами, переход — листание.
+	var book := BookPager.new()
+	book.name = "SigilBook"
+	book.accent = Color(0.85, 0.72, 0.42)
+	book.offset_left = 0
+	book.offset_right = 0
+	book.offset_top = 0
+	book.offset_bottom = 0
+	book.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	book.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	book.close_requested.connect(_close_sigil_collection)
+	book.page_requested.connect(func(to_i: int) -> void:
+		_sigil_build_page(["crafts", "collection", "sets"][to_i]))
+	book.flipped.connect(func(_a: int, _b: int) -> void: Sfx.click())
+	vbox.add_child(book)
+	_sigil_book = book
 	_sigil_tab_btns = []
-	for tab_def in [["crafts", "КРАФТЫ ДНЯ"], ["collection", "КОЛЛЕКЦИЯ"], ["sets", "КОМПЛЕКТЫ"]]:
-		var tb := _small_button(str(tab_def[1]), Vector2(0, 38))
-		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		tb.set_meta("tab", str(tab_def[0]))
-		tb.set_meta("sb_idle", tb.get_theme_stylebox("normal"))
-		var sb_act: StyleBox = _stylebox_9("res://assets/ui/btn_gold.png", Vector4(10, 7, 10, 7))
-		if sb_act == null:
-			var fb := StyleBoxFlat.new()
-			fb.bg_color = Color(0.85, 0.72, 0.35, 1.0)
-			fb.set_corner_radius_all(8)
-			sb_act = fb
-		tb.set_meta("sb_active", sb_act)
-		tb.pressed.connect(_sigil_show_tab.bind(str(tab_def[0])))
-		tabbar.add_child(tb)
-		_sigil_tab_btns.append(tb)
 
-	var content := VBoxContainer.new()
-	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(content)
-	_sigil_tab_content = content
-	_sigil_show_tab(start_tab)
+	# Страницы-вкладки: Крафты дня, Коллекция, Комплекты. Билдеры ожидают
+	# VBoxContainer (content) — страницы делаем VBoxContainer.
+	var craft_page := VBoxContainer.new()
+	var coll_page := VBoxContainer.new()
+	var sets_page := VBoxContainer.new()
+	craft_page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	craft_page.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	coll_page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	coll_page.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sets_page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sets_page.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	book.add_page("КРАФТЫ ДНЯ", craft_page)
+	book.add_page("КОЛЛЕКЦИЯ", coll_page)
+	book.add_page("КОМПЛЕКТЫ", sets_page)
+	_sigil_pages = {"crafts": craft_page, "collection": coll_page, "sets": sets_page}
+	# Отступы контента от рамки бумаги (корешок слева, тени) — иначе
+	# содержимое вплотную к рамке.
+	for p in [craft_page, coll_page, sets_page]:
+		p.offset_left = 18.0
+		p.offset_right = -14.0
+		p.offset_top = 8.0
+		p.offset_bottom = -12.0
+	_sigil_tab_content = craft_page
+	# Контент стартовой страницы строим сразу (книга ещё закрыта, но к первому
+	# снимку листа страница обязана быть готова). Обложка и перелистывание — в
+	# _open_sigil_book_and_show_tab: open_book() и go_to() оба владеют
+	# busy/_shield, поэтому запускать их одновременно нельзя.
+	_sigil_build_page(start_tab)
+	_open_sigil_book_and_show_tab.call_deferred(start_tab)
 
 
-## Показать вкладку модалки: старое содержимое сносится целиком, билдер
-## строит заново. Поколение _sigil_tab_seq гасит корутины билдеров, чтобы
-## предыдущая вкладка не достраивалась поверх новой после своего await.
+## Открыть книгу Аркана (обложка откидывается) и показать стартовую страницу.
+## Перелистывание — строго после open_book(): если запустить go_to() во время
+## открытия, щит одного гаснет, пока второй ещё анимируется, и ввод попадает в
+## книгу. Корутина — await в месте вызова.
+func _open_sigil_book_and_show_tab(tab: String) -> void:
+	await _open_sigil_book()
+	_sigil_show_tab(tab)
+
+
+## Открыть книгу Аркана (обложка откидывается). Корутина — await в месте вызова.
+func _open_sigil_book() -> void:
+	if _sigil_book != null and is_instance_valid(_sigil_book):
+		await _sigil_book.open_book()
+
+
+## Программный переход на вкладку: строит контент и листает книгу. Старое
+## содержимое сносится целиком, билдер строит заново; поколение _sigil_tab_seq
+## гасит корутины билдеров, чтобы предыдущая вкладка не достраивалась поверх
+## новой после своего await.
 func _sigil_show_tab(tab: String) -> void:
-	if _sigil_coll == null or _sigil_tab_content == null:
+	if _sigil_coll == null:
+		return
+	_sigil_build_page(tab)
+	if _sigil_book != null and is_instance_valid(_sigil_book):
+		var idx: int = {"crafts": 0, "collection": 1, "sets": 2}[tab]
+		_sigil_book.go_to(idx)
+
+
+## Строит контент страницы-вкладки книги (без перелистывания).
+## Вызывается из page_requested — до снимка листа, чтобы новая страница
+## уже была отрендерена, когда лист откроет её.
+func _sigil_build_page(tab: String) -> void:
+	if _sigil_coll == null:
 		return
 	if tab != "crafts" and tab != "collection" and tab != "sets":
 		tab = "crafts"
+	var page: Control = _sigil_pages.get(tab)
+	if page == null:
+		return
+	# Уже активная и построенная страница — не перестраиваем (page_requested
+	# при программном go_to не должен дублировать контент).
+	if tab == _sigil_tab and page.get_child_count() > 0:
+		return
+	# Сносим содержимое СТАРОЙ страницы (билдер асинхронный — мог оставить
+	# статус-лейбл/демо-контент), затем строим новую.
+	var prev: Control = _sigil_pages.get(_sigil_tab, page)
+	if prev != page and prev != null:
+		for c in prev.get_children():
+			(c as Node).queue_free()
 	_sigil_tab = tab
 	_sigil_tab_seq += 1
-	for c in _sigil_tab_content.get_children():
+	_sigil_tab_content = page
+	for c in page.get_children():
 		(c as Node).queue_free()
-	for b in _sigil_tab_btns:
-		if b is Button and is_instance_valid(b):
-			var btn := b as Button
-			var active := str(btn.get_meta("tab", "")) == tab
-			var sb: StyleBox = btn.get_meta("sb_active") if active else btn.get_meta("sb_idle")
-			btn.add_theme_stylebox_override("normal", sb)
-			btn.add_theme_stylebox_override("hover", sb)
-			btn.add_theme_stylebox_override("pressed", sb)
-			btn.add_theme_stylebox_override("disabled", sb)
-			var fg := Color(0.16, 0.12, 0.03) if active else Color(0.88, 0.94, 0.96)
-			btn.add_theme_color_override("font_color", fg)
-			btn.add_theme_color_override("font_hover_color", fg)
 	match tab:
 		"collection":
 			_sigil_build_collection_tab(_sigil_tab_content)
@@ -2988,24 +3047,32 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	if not card_lore.is_empty():
 		var lt := _label(str(card_lore.get("title", "")), 16)
 		lt.name = "SigilLoreTitle"
+		if _font_lore != null:
+			lt.add_theme_font_override("font", _font_lore)
 		lt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lt.add_theme_color_override("font_color", Color(0.85, 0.85, 0.90))
 		lore_v.add_child(lt)
 		var ld := _label(str(card_lore.get("description", "")), 13)
 		ld.name = "SigilLoreDesc"
+		if _font_lore != null:
+			ld.add_theme_font_override("font", _font_lore)
 		ld.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		ld.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		ld.add_theme_color_override("font_color", Color(0.70, 0.72, 0.78))
 		lore_v.add_child(ld)
 		var le := _label(str(card_lore.get("effect_hint", "")), 12)
 		le.name = "SigilLoreEffect"
+		if _font_lore != null:
+			le.add_theme_font_override("font", _font_lore)
 		le.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		le.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		le.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
 		lore_v.add_child(le)
 		var lw := _label(str(card_lore.get("warning", "")), 12)
 		lw.name = "SigilLoreWarn"
+		if _font_lore != null:
+			lw.add_theme_font_override("font", _font_lore)
 		lw.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lw.add_theme_color_override("font_color", Color(0.8, 0.45, 0.4))
@@ -3668,6 +3735,8 @@ func _close_sigil_collection() -> void:
 	d.queue_free()
 	_sigil_tab_content = null
 	_sigil_tab_btns = []
+	_sigil_book = null
+	_sigil_pages = {}
 	Sfx.click()
 
 func _sigil_thumb(item: Dictionary) -> Control:
