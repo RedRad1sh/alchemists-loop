@@ -5117,6 +5117,49 @@ def admin_sigil_free_craft(device_id: str = Query("", max_length=128), craft_ind
         conn.close()
 
 
+@app.post("/api/admin/sigil/craft-chromatic", dependencies=[Depends(_require_admin_token)])
+def admin_sigil_craft_chromatic(device_id: str = Query("", max_length=128)):
+    """Админ: выдать игроку хроматический сигил (внекомплектный) с
+    уникальным seed и сгенерированным LLM-именем/лором."""
+    if not device_id:
+        return {"ok": False, "error": "missing_device_id"}
+    conn = get_db()
+    try:
+        today = _now_dt().date().isoformat()
+        craft_id = f"{today}_{device_id[:16]}_chroma"
+        # Идемпотентно: повторный вызов не плодит копии, а возвращает уже созданный.
+        existing = conn.execute(
+            "SELECT llm_name, seed, lore FROM sigil_crafts WHERE device_id=? AND craft_id=?",
+            (device_id, craft_id),
+        ).fetchone()
+        if existing:
+            return {"ok": True, "already_crafted": True, "craft": {
+                "id": craft_id, "rarity": "chromatic",
+                "llm_name": existing["llm_name"], "seed": existing["seed"],
+                "lore": existing["lore"],
+            }}
+        seed = int(time.time() * 1000) % 0x7FFFFFFF
+        rows = conn.execute(
+            "SELECT slug FROM elements ORDER BY RANDOM() LIMIT 4"
+        ).fetchall()
+        ing_names = [r["slug"] for r in rows]
+        ident = _generate_chromatic_identity(
+            {"ingredients": [{"item_id": n} for n in ing_names]}, "chromatic")
+        conn.execute(
+            "INSERT INTO sigil_crafts"
+            " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, seed, lore, crafted_at)"
+            " VALUES (?, ?, 'chromatic', ?, 1, '', ?, ?, ?)",
+            (device_id, craft_id, ident["name"], seed, ident["lore"], _now_iso()),
+        )
+        conn.commit()
+        return {"ok": True, "craft": {
+            "id": craft_id, "rarity": "chromatic",
+            "llm_name": ident["name"], "seed": seed, "lore": ident["lore"],
+        }}
+    finally:
+        conn.close()
+
+
 # ---------------------------------------------------------------------------
 # Запуск
 # ---------------------------------------------------------------------------

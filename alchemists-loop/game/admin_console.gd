@@ -120,7 +120,7 @@ func _on_command(text: String) -> void:
 		"sigil":
 			_cmd_sigil(parts)
 		"help":
-			_log_text("Commands: add <id>, unlock <mode>, set ether <N>, reset day, clear inventory, force circle open, sigil rotate|free <0|1|2>")
+			_log_text("Commands: add <id>, unlock <mode>, set ether <N>, reset day, clear inventory, force circle open, sigil rotate|free <0|1|2>|chroma|ritual")
 		_:
 			_log_text("[color=red]Unknown command: %s[/color]" % parts[0])
 
@@ -251,6 +251,13 @@ func _cmd_sigil(parts: Array) -> void:
 			_g._sigil.sigil_admin_rotate_result.connect(_on_sigil_rotate_done, CONNECT_ONE_SHOT)
 		_g._sigil.request_admin_rotate(dev)
 		_log_text("Sigil reset: rotating daily crafts...")
+	elif sub == "chroma":
+		# Выдача хроматического сигила: сервер генерирует имя/лор/seed.
+		var dev: String = _g._online._device_id
+		if not _g._sigil.sigil_admin_chromatic_result.is_connected(_on_sigil_chroma_done):
+			_g._sigil.sigil_admin_chromatic_result.connect(_on_sigil_chroma_done, CONNECT_ONE_SHOT)
+		_g._sigil.request_admin_chromatic(dev)
+		_log_text("Sigil chroma: запрошен хроматический сигил...")
 	elif sub == "free":
 		if parts.size() < 3:
 			_log_text("[color=red]Usage: sigil free <0|1|2>[/color]")
@@ -292,6 +299,21 @@ func _on_sigil_rotate_done(result: Dictionary) -> void:
 			_g._sigil_show_tab.call_deferred("crafts")
 	else:
 		_log_text("[color=red]Sigil rotate FAIL: %s[/color]" % str(result.get("error", "?")))
+
+
+## Ответ сервера на выдачу хроматического сигила: лог + обновление коллекции.
+func _on_sigil_chroma_done(result: Dictionary) -> void:
+	if bool(result.get("ok", false)):
+		var craft: Dictionary = result.get("craft", {})
+		_log_text("Хроматик выдан: %s (seed=%s)" % [
+			str(craft.get("llm_name", "?")), str(craft.get("seed", "?"))])
+		# Обновить коллекцию (экстрас) в открытой модалке.
+		if _g._sigil != null:
+			_g._sigil.request_collection(_g._online._device_id)
+		if _g._sigil_coll != null and _g._sigil_tab == "crafts":
+			_g._sigil_show_tab.call_deferred("crafts")
+	else:
+		_log_text("[color=red]Sigil chroma FAIL: %s[/color]" % str(result.get("error", "?")))
 
 
 func _log_text(msg: String) -> void:

@@ -14,6 +14,7 @@ signal daily_crafts_ready(crafts: Array)
 signal craft_completed(craft_id: String, rarity: String, llm_name: String)
 signal sigil_admin_reset_result(result: Dictionary)
 signal sigil_admin_rotate_result(result: Dictionary)
+signal sigil_admin_chromatic_result(result: Dictionary)
 signal craft_failed(error: String)
 signal catalog_ready(cards: Dictionary)
 signal collection_ready(collection: Dictionary)
@@ -592,6 +593,20 @@ func request_admin_rotate(device_id: String) -> void:
 	if not Net.sigil_admin_rotate_result.is_connected(_on_admin_rotate_result):
 		Net.sigil_admin_rotate_result.connect(_on_admin_rotate_result, CONNECT_ONE_SHOT)
 	Net.sigil_admin_rotate(device_id)
+
+
+## Админ: выдать игроку хроматический сигил (сервер генерирует имя/лор/seed).
+func request_admin_chromatic(device_id: String) -> void:
+	if not Net.sigil_admin_chromatic_result.is_connected(_on_admin_chromatic_result):
+		Net.sigil_admin_chromatic_result.connect(_on_admin_chromatic_result, CONNECT_ONE_SHOT)
+	Net.sigil_admin_chromatic(device_id)
+
+
+func _on_admin_chromatic_result(result: Dictionary) -> void:
+	sigil_admin_chromatic_result.emit(result)
+	# Новый хроматик — коллекция изменилась: перезапросить, чтобы экстрас появился.
+	# _last_device_id хранит последний device_id запросов крафта/ротации.
+	request_collection(_last_device_id)
 
 
 func _on_admin_rotate_result(result: Dictionary) -> void:
