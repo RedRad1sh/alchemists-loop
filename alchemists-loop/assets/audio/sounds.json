@@ -100,7 +100,7 @@
       "start_sec": 5.0,
       "len_sec": 0.8,
       "loop": true,
-      "about": "Ритуал: фаза ВЕРЧЕНИЯ — зацикленный кусок (loop), играет с MATERIALIZE до FLASH"
+      "about": "TODO(звук): верчение ОТКЛЮЧЕНО в ritual.gd (loop-кусок подобран плохо). Доделать: подобрать start_sec/len_sec под ритм, фейд петли"
     },
     "ritual_reveal": {
       "file": "res://assets/audio/ritual/mixkit-arcane-chain-spell-879.wav",

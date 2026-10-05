@@ -242,13 +242,15 @@ func _enter_phase(next: int) -> void:
 			on_activation.emit()
 		Phase.MATERIALIZE:
 			Sfx.ritual_phase()  # материализация: 1 раз в середине
-			Sfx.ritual_spin()   # зацикленное верчение: играет до выхода из фазы
+			# TODO(звук): зацикленное верчение (Sfx.ritual_spin + ritual_spin_stop)
+			# отключено — кусок/луп подобраны плохо, звук «сломан». Доделать:
+			# подобрать start_sec/len_sec под ритм и фейд петли, затем раскомментить.
 			_hint.text = "ФОРМА ОБРЕТАЕТ ПЛОТЬ"
 			_flash = 0.65; _shake = 0.9
 			on_core_morph.emit()
 			_spawn_sparks()
 		Phase.FLASH:
-			Sfx.ritual_spin_stop()  # верчение закончилось
+			# TODO(звук): Sfx.ritual_spin_stop() — см. MATERIALIZE (верчение отключено).
 			_hint.text = "ТРАНСМУТАЦИЯ ЗАВЕРШЕНА"
 			_flash = 1.0; _shake = 1.2
 			on_flash.emit()
