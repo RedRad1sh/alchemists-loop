@@ -2757,7 +2757,7 @@ func _sigil_collection_cell(entry: Dictionary) -> Control:
 	var accent := _rarity_color(rarity)
 	var copies := int(entry.get("copies", 1))
 	var cell := Button.new()
-	cell.custom_minimum_size = Vector2(0, 124)
+	cell.custom_minimum_size = Vector2(0, 200)
 	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cell.clip_contents = true
 	cell.add_theme_stylebox_override("normal", _sigil_row_style(accent, 0.0))
@@ -2777,7 +2777,7 @@ func _sigil_collection_cell(entry: Dictionary) -> Control:
 	holder.offset_right = -8
 	holder.offset_bottom = -8
 
-	var shot := _sigil_preview_slot(accent, 96)
+	var shot := _sigil_preview_slot(accent, 150)
 	holder.add_child(shot)
 	shot.set_anchors_preset(Control.PRESET_FULL_RECT)
 	cell.set_meta("preview", shot)
