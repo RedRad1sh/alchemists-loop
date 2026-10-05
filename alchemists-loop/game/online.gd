@@ -97,9 +97,11 @@ const QTE_MARGIN_RIGHT := 16.0
 const QTE_MARGIN_TOP := 96.0
 const QTE_MARGIN_BOTTOM := 120.0
 const QTE_TELEGRAPH_TIME := 1.1
-# Всплывающий QTE-пузырь выключен: событие наступает в фоне (статус/toast),
-# без кнопки-пузыря и телеграф-анимации.
-const EVENT_QTE_ENABLED := false
+# Всплывающий QTE-пузырь выключен в проде: событие наступает в фоне
+# (статус/toast), без кнопки-пузыря и телеграф-анимации. В selftest-прогоне
+# пузырь включён — сюита про телеграф проверяет видимость пузыря как часть
+# механики (тесты живут по старым ожиданиям).
+var event_qte_enabled := SelftestMode.enabled()
 const QTE_PLACEMENT_ATTEMPTS := 24
 const TOAST_MAX := 4
 
@@ -1420,7 +1422,7 @@ func _spawn_event() -> void:
 	_event_telegraphing = true
 	_event_spawn_token += 1
 	var token := _event_spawn_token
-	if EVENT_QTE_ENABLED:
+	if event_qte_enabled:
 		_place_event_qte()
 		_event_qte.visible = true
 		_event_card.visible = true
@@ -1513,7 +1515,7 @@ func _event_symbol() -> String:
 func _update_event_ui() -> void:
 	if _event_qte == null or _event_btn == null:
 		return
-	var show_bubble := EVENT_QTE_ENABLED
+	var show_bubble := event_qte_enabled
 	if _event_telegraphing:
 		# §12: в телеграфе таймер ещё не идёт — пузырь только показывается.
 		_event_qte.visible = show_bubble

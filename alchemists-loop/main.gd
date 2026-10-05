@@ -2121,22 +2121,9 @@ func _sigil_show_tab(tab: String) -> void:
 		return
 	if tab != "crafts" and tab != "collection" and tab != "sets":
 		tab = "crafts"
-	# «Перелистывание страницы»: старый лист схлопывается к корешку (левая
-	# кромка), новый вырастает из него — как листание в книге.
-	var old_children: Array = _sigil_tab_content.get_children()
-	for c in old_children:
-		(c as Control).pivot_offset = Vector2(0, (c as Control).size.y * 0.5)
-		(c as Control).scale = Vector2.ONE
-		var tw := create_tween()
-		tw.tween_property(c, "scale:x", 0.02, 0.10)\
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		tw.tween_property(c, "scale:x", 1.0, 0.10)\
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tw.parallel().tween_property(c, "modulate:a", 0.15, 0.20)
-		tw.chain().tween_callback(func():
-			for cc in old_children:
-				if is_instance_valid(cc):
-					(cc as Node).queue_free())
+	# Снос старого содержимого — синхронный (sb6 требует мгновенный free).
+	for c in _sigil_tab_content.get_children():
+		(c as Node).queue_free()
 	_sigil_tab = tab
 	_sigil_tab_seq += 1
 	for b in _sigil_tab_btns:
@@ -2985,8 +2972,13 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	]
 	var _entry_seed := int(entry.get("seed", 0))
 	var _ps: Array = ps_pairs[abs(_entry_seed) % ps_pairs.size()]
+	# id для лора: у каталожных карт — card_id (craft_id пуст), у хроматиков —
+	# craft_id (card_id пуст). Пустой craft_id НЕ должен маскировать card_id.
+	var _lore_id := str(entry.get("craft_id", ""))
+	if _lore_id == "":
+		_lore_id = str(entry.get("card_id", ""))
 	var card_lore := SigilLore.generate({
-		"id": str(entry.get("craft_id", str(entry.get("card_id", "")))),
+		"id": _lore_id,
 		"process": str(entry.get("process", _ps[0])),
 		"stage": str(entry.get("stage", _ps[1])),
 		"seed": _entry_seed,
