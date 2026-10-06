@@ -2107,38 +2107,68 @@ func _clean_str(v) -> String:
 # ---------- R9: см. game/spirit.gd (4494-4930) ----------
 
 
+# ---------- Сигильный UI: делегирующие обёртки (тело — game/sigil/sigil_ui.gd) ----------
+# Сохранены для selftest-сьютов (suite_sigil_cards.gd, suite_journal_misc.gd),
+# которые зовут функции и читают состояние сигильного UI через g.*.
+
+var _sigil_coll: ColorRect:
+	get: return _sigil_ui._sigil_coll
+var _sigil_tab_content: Control:
+	get: return _sigil_ui._sigil_tab_content
+var _sigil_tab: String:
+	get: return _sigil_ui._sigil_tab
+var _sigil_pages: Dictionary:
+	get: return _sigil_ui._sigil_pages
+var _sigil_book: BookPager:
+	get: return _sigil_ui._sigil_book
+var _sigil_fullscreen: Control:
+	get: return _sigil_ui._sigil_fullscreen
+var _sigil_claim_layer: Control:
+	get: return _sigil_ui._sigil_claim_layer
+var _sigil_set_screen: Control:
+	get: return _sigil_ui._sigil_set_screen
+var _sigil_craft_screen: Control:
+	get: return _sigil_ui._sigil_craft_screen
+var _sigil_pending_craft: Dictionary:
+	get: return _sigil_ui._sigil_pending_craft
+	set(v): _sigil_ui._sigil_pending_craft = v
+
+func _open_sigil_modal(start_tab: String = "crafts") -> void:
+	_sigil_ui._open_sigil_modal(start_tab)
+func _sigil_show_tab(tab: String) -> void:
+	_sigil_ui._sigil_show_tab(tab)
+func _open_sigil_craft(craft: Dictionary) -> void:
+	_sigil_ui._open_sigil_craft(craft)
+func _close_sigil_craft_screen() -> void:
+	_sigil_ui._close_sigil_craft_screen()
+func _close_sigil_collection() -> void:
+	_sigil_ui._close_sigil_collection()
+func _open_sigil_fullscreen(entry: Dictionary) -> void:
+	_sigil_ui._open_sigil_fullscreen(entry)
+func _close_sigil_fullscreen() -> void:
+	_sigil_ui._close_sigil_fullscreen()
+func _sigil_catalog_entry(card_id: String, coll_entry: Dictionary) -> Dictionary:
+	return _sigil_ui._sigil_catalog_entry(card_id, coll_entry)
+func _on_sigil_craft_failed(err: String) -> void:
+	_sigil_ui._on_sigil_craft_failed(err)
+func _on_sigil_milestone_result(result: Dictionary) -> void:
+	_sigil_ui._on_sigil_milestone_result(result)
+func _open_sigil_set_screen(set_id: String) -> void:
+	_sigil_ui._open_sigil_set_screen(set_id)
+func _close_sigil_set_screen() -> void:
+	_sigil_ui._close_sigil_set_screen()
+func _modal_open_for_ads() -> bool:
+	return _sigil_ui._modal_open_for_ads()
+func _handle_esc(event: InputEvent) -> bool:
+	return _sigil_ui._handle_esc(event)
+func _close_top_modal() -> bool:
+	return _sigil_ui._close_top_modal()
+
+
 # ================= selftest (тело — в tests/, оп B1) =================
 
 func _run_selftest() -> void:
 	await Selftest.run(self)
-
-
-## Рисованная галочка для claimed-точек майлстоунов: глиф «✓» вне шрифта
-## Manrope, поэтому отметка рисуется двумя линиями в _draw.
-class SigilMilestoneMark:
-	extends Control
-
-	func _draw() -> void:
-		var c := Color(0.90, 0.82, 0.56)
-		var w := 2.0
-		draw_line(Vector2(size.x * 0.16, size.y * 0.52),
-			Vector2(size.x * 0.42, size.y * 0.78), c, w)
-		draw_line(Vector2(size.x * 0.42, size.y * 0.78),
-			Vector2(size.x * 0.86, size.y * 0.22), c, w)
-
-
-## Силуэт несобранной карты комплекта (Task 7b): тёмный контур круга без
-## заливки — игрок не получает ни имени, ни арта, ни намёка на сид карты.
-class SigilSilhouette:
-	extends Control
-
-	func _draw() -> void:
-		var c := Color(0.28, 0.32, 0.40)
-		var w := 2.0
-		var r := (minf(size.x, size.y) - 8.0) * 0.5
-		if r <= 0.0:
-			return
-		draw_arc(size * 0.5, r, 0.0, TAU, 48, c, w, true)
 
 
 ## Декоративный слой появления карточки.

@@ -172,7 +172,7 @@ func _sigil_build_page(tab: String) -> void:
 func _sigil_build_crafts_tab(container: Control) -> void:
 	var seq := _sigil_tab_seq
 	var dim := _sigil_coll
-	var status := main._label("Загружаю крафты…", 15)
+	var status: Label = main._label("Загружаю крафты…", 15)
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	status.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -200,7 +200,7 @@ func _sigil_build_crafts_tab(container: Control) -> void:
 	if not loaded or crafts.is_empty():
 		status.text = "Сервер не ответил.\nКрафты появятся, когда вернётся связь."
 		status.add_theme_color_override("font_color", Color(0.78, 0.58, 0.46))
-		var retry := main._small_button("Повторить", Vector2(180, 46), 2)
+		var retry: Button = main._small_button("Повторить", Vector2(180, 46), 2)
 		retry.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		retry.pressed.connect(func():
 			_close_sigil_collection()
@@ -220,7 +220,7 @@ func _sigil_build_crafts_tab(container: Control) -> void:
 	# игрока на пустом экране.
 	for i in rows.size():
 		_sigil_render_busy = true
-		var tex := await main._sigil.preview_texture(crafts[i])
+		var tex: ImageTexture = await main._sigil.preview_texture(crafts[i])
 		_sigil_render_busy = false
 		if seq != _sigil_tab_seq or _sigil_coll != dim or tex == null:
 			continue
@@ -236,7 +236,7 @@ func _sigil_build_collection_tab(container: Control) -> void:
 	var coll: Dictionary = main._sigil._server_collection
 	var extras: Array = main._sigil.server_extras()
 	if coll.is_empty() and extras.is_empty():
-		var empty := main._label("Пока пусто — крафты дня ждут", 16)
+		var empty: Label = main._label("Пока пусто — крафты дня ждут", 16)
 		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		empty.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		empty.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
@@ -284,7 +284,7 @@ func _sigil_build_collection_tab(container: Control) -> void:
 		section.name = "SigilChromaSection"
 		section.add_theme_constant_override("separation", 8)
 		list.add_child(section)
-		var st := main._label("ХРОМАТИКА", 14)
+		var st: Label = main._label("ХРОМАТИКА", 14)
 		st.autowrap_mode = TextServer.AUTOWRAP_OFF
 		st.add_theme_color_override("font_color", Color(1.0, 0.55, 0.12))
 		section.add_child(st)
@@ -315,7 +315,7 @@ func _sigil_build_collection_tab(container: Control) -> void:
 			var xseed := int(xe.get("seed", 0))
 			if xseed != 0:
 				main._sigil._cache_extra = "chromatic|object|%d" % xseed
-			var cimg := main._sigil._load_cached_image(str(xe.get("craft_id", "")))
+			var cimg: Image = main._sigil._load_cached_image(str(xe.get("craft_id", "")))
 			if cimg == null:
 				cimg = await main._sigil.generate_card(
 					str(xe.get("craft_id", "")), PackedStringArray(),
@@ -331,7 +331,7 @@ func _sigil_build_collection_tab(container: Control) -> void:
 	# видны сразу, картинки приходят кадром позже.
 	for p in pending:
 		_sigil_render_busy = true
-		var tex := await main._sigil.preview_texture(p[1])
+		var tex: ImageTexture = await main._sigil.preview_texture(p[1])
 		_sigil_render_busy = false
 		if seq != _sigil_tab_seq or _sigil_coll != dim or tex == null:
 			continue
@@ -342,9 +342,9 @@ func _sigil_build_collection_tab(container: Control) -> void:
 ## каталога, прогресс «N/25», ProgressBar и ряд точек-майлстоунов 3/6/13/25.
 ## Экран комплекта с сеткой карт и силуэтами — Task 7b.
 func _sigil_build_sets_tab(container: Control) -> void:
-	var sets := main._sigil.catalog_sets()
+	var sets: Array = main._sigil.catalog_sets()
 	if sets.is_empty():
-		var empty := main._label("Комплекты появятся после загрузки каталога", 16)
+		var empty: Label = main._label("Комплекты появятся после загрузки каталога", 16)
 		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		empty.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		empty.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
@@ -383,7 +383,7 @@ func _sigil_set_panel(set_def: Dictionary) -> Control:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 8)
 	box.add_child(head)
-	var title := main._label(str(set_def.get("title", "")), 17)
+	var title: Label = main._label(str(set_def.get("title", "")), 17)
 	title.name = "SigilSetTitle"
 	title.autowrap_mode = TextServer.AUTOWRAP_OFF
 	title.add_theme_color_override("font_color", accent)
@@ -397,7 +397,7 @@ func _sigil_set_panel(set_def: Dictionary) -> Control:
 		for cid in (ids as Array):
 			if main._sigil.has_collected(str(cid)):
 				collected += 1
-	var count := main._label("%d/%d" % [collected, main.SIGIL_SET_SIZE], 14)
+	var count: Label = main._label("%d/%d" % [collected, main.SIGIL_SET_SIZE], 14)
 	count.name = "SigilSetCount"
 	count.autowrap_mode = TextServer.AUTOWRAP_OFF
 	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -426,7 +426,7 @@ func _sigil_set_panel(set_def: Dictionary) -> Control:
 	var dots := HBoxContainer.new()
 	dots.add_theme_constant_override("separation", 10)
 	box.add_child(dots)
-	var claimed := main._sigil.claimed_tiers(set_id)
+	var claimed: Array = main._sigil.claimed_tiers(set_id)
 	for tier in [3, 6, 13, 25]:
 		dots.add_child(_sigil_milestone_dot(set_id, tier, collected, claimed))
 	# Тап по панели (вне точек-майлстоунов) открывает экран комплекта — точки
@@ -506,7 +506,7 @@ func _open_sigil_set_screen(set_id: String) -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 8)
 	vbox.add_child(head)
-	var title := main._label("%s · %d/%d" % [str(set_def.get("title", "")),
+	var title: Label = main._label("%s · %d/%d" % [str(set_def.get("title", "")),
 		collected, main.SIGIL_SET_SIZE], 20)
 	title.name = "SigilSetScreenTitle"
 	title.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -514,7 +514,7 @@ func _open_sigil_set_screen(set_id: String) -> void:
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	head.add_child(title)
-	var close_btn := main._small_button("✕", Vector2(46, 40))
+	var close_btn: Button = main._small_button("✕", Vector2(46, 40))
 	close_btn.name = "SigilSetClose"
 	close_btn.tooltip_text = "Закрыть"
 	close_btn.pressed.connect(_close_sigil_set_screen)
@@ -548,7 +548,7 @@ func _open_sigil_set_screen(set_id: String) -> void:
 	var scr := root
 	for p in pending:
 		_sigil_render_busy = true
-		var tex := await main._sigil.preview_texture(p[1])
+		var tex: ImageTexture = await main._sigil.preview_texture(p[1])
 		_sigil_render_busy = false
 		if _sigil_set_screen != scr or not is_instance_valid(p[0]):
 			continue
@@ -571,10 +571,10 @@ func _close_sigil_set_screen() -> void:
 ## тапом на фуллскрин карты; несобранная или неизвестная каталогу — силуэт:
 ## тёмный контур круга + «???», без имени и без арта (спека: без спойлера).
 func _sigil_set_cell(card_id: String, coll_entry: Dictionary) -> Control:
-	var card := main._sigil.card(card_id)
+	var card: Dictionary = main._sigil.card(card_id)
 	if not card.is_empty() and main._sigil.has_collected(card_id):
 		var entry := _sigil_catalog_entry(card_id, coll_entry)
-		var accent := main._rarity_color(str(entry.get("rarity", "common")))
+		var accent: Color = main._rarity_color(str(entry.get("rarity", "common")))
 		var btn := Button.new()
 		btn.name = "SigilSetCell_" + card_id
 		btn.custom_minimum_size = Vector2(0, 110)
@@ -624,7 +624,7 @@ func _sigil_set_cell(card_id: String, coll_entry: Dictionary) -> Control:
 	ring.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vb.add_child(ring)
-	var q := main._label("???", 16)
+	var q: Label = main._label("???", 16)
 	q.autowrap_mode = TextServer.AUTOWRAP_OFF
 	q.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	q.add_theme_color_override("font_color", Color(0.45, 0.49, 0.58))
@@ -767,20 +767,20 @@ func _sigil_claim_popup(tier: int) -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	panel.add_child(vbox)
 
-	var title := main._label("Награда получена", 20)
+	var title: Label = main._label("Награда получена", 20)
 	title.name = "SigilClaimTitle"
 	title.autowrap_mode = TextServer.AUTOWRAP_OFF
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_color", Color(0.90, 0.82, 0.56))
 	vbox.add_child(title)
 
-	var body := main._label(reward, 15)
+	var body: Label = main._label(reward, 15)
 	body.autowrap_mode = TextServer.AUTOWRAP_OFF
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	body.add_theme_color_override("font_color", Color(0.80, 0.82, 0.86))
 	vbox.add_child(body)
 
-	var ok_btn := main._small_button("OK", Vector2(120, 40))
+	var ok_btn: Button = main._small_button("OK", Vector2(120, 40))
 	ok_btn.name = "SigilClaimOk"
 	ok_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	ok_btn.pressed.connect(_close_sigil_claim_popup)
@@ -800,7 +800,7 @@ func _close_sigil_claim_popup() -> void:
 ## копиях больше одной; тап открывает полноэкранный просмотр.
 func _sigil_collection_cell(entry: Dictionary) -> Control:
 	var rarity := str(entry.get("rarity", "common"))
-	var accent := main._rarity_color(rarity)
+	var accent: Color = main._rarity_color(rarity)
 	var copies := int(entry.get("copies", 1))
 	var cell := Button.new()
 	cell.custom_minimum_size = Vector2(0, 200)
@@ -843,7 +843,7 @@ func _sigil_collection_cell(entry: Dictionary) -> Control:
 ## Entry полноэкранного просмотра карты каталога: имя/редкость/сет берутся
 ## из каталога, дата и копии — из серверной записи коллекции.
 func _sigil_catalog_entry(card_id: String, coll_entry: Dictionary) -> Dictionary:
-	var card := main._sigil.card(card_id)
+	var card: Dictionary = main._sigil.card(card_id)
 	if card.is_empty():
 		return {}
 	var set_title := ""
@@ -891,7 +891,7 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 		Sfx.ritual_reveal()
 	else:
 		Sfx.click()
-	var accent := main._rarity_color(rarity)
+	var accent: Color = main._rarity_color(rarity)
 	var root := Control.new()
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.z_index = 30
@@ -924,7 +924,7 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	vbox.add_theme_constant_override("margin_bottom", 10)
 	panel.add_child(vbox)
 
-	var title_lbl := main._label(str(entry.get("name", "")), 22)
+	var title_lbl: Label = main._label(str(entry.get("name", "")), 22)
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_lbl.add_theme_color_override("font_color", accent)
 	vbox.add_child(title_lbl)
@@ -1028,7 +1028,7 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 				"warning": "",
 			}
 	if not card_lore.is_empty():
-		var lt := main._label(str(card_lore.get("title", "")), 16)
+		var lt: Label = main._label(str(card_lore.get("title", "")), 16)
 		lt.name = "SigilLoreTitle"
 		if main._font_lore != null:
 			lt.add_theme_font_override("font", main._font_lore)
@@ -1036,7 +1036,7 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 		lt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lt.add_theme_color_override("font_color", Color(0.85, 0.85, 0.90))
 		lore_v.add_child(lt)
-		var ld := main._label(str(card_lore.get("description", "")), 13)
+		var ld: Label = main._label(str(card_lore.get("description", "")), 13)
 		ld.name = "SigilLoreDesc"
 		if main._font_lore != null:
 			ld.add_theme_font_override("font", main._font_lore)
@@ -1044,7 +1044,7 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 		ld.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		ld.add_theme_color_override("font_color", Color(0.70, 0.72, 0.78))
 		lore_v.add_child(ld)
-		var le := main._label(str(card_lore.get("effect_hint", "")), 12)
+		var le: Label = main._label(str(card_lore.get("effect_hint", "")), 12)
 		le.name = "SigilLoreEffect"
 		if main._font_lore != null:
 			le.add_theme_font_override("font", main._font_lore)
@@ -1052,7 +1052,7 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 		le.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		le.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
 		lore_v.add_child(le)
-		var lw := main._label(str(card_lore.get("warning", "")), 12)
+		var lw: Label = main._label(str(card_lore.get("warning", "")), 12)
 		lw.name = "SigilLoreWarn"
 		if main._font_lore != null:
 			lw.add_theme_font_override("font", main._font_lore)
@@ -1070,31 +1070,31 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	# (pivot в 0,0 → свечение уезжало в правый нижний угол). Живая карточка
 	# в SubViewport уже анимируется (аура/фольга/искры) — ритуал не нужен.
 
-	var rar_lbl := main._label(_sigil_rarity_title(rarity), 14)
+	var rar_lbl: Label = main._label(_sigil_rarity_title(rarity), 14)
 	rar_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	rar_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rar_lbl.add_theme_color_override("font_color", accent)
 	vbox.add_child(rar_lbl)
 
-	var set_lbl := main._label("Комплект: %s" % str(entry.get("set_title", "")), 13)
+	var set_lbl: Label = main._label("Комплект: %s" % str(entry.get("set_title", "")), 13)
 	set_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	set_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	set_lbl.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
 	vbox.add_child(set_lbl)
 
-	var got_lbl := main._label("Получена: %s" % _sigil_date_ru(str(entry.get("first_at", ""))), 13)
+	var got_lbl: Label = main._label("Получена: %s" % _sigil_date_ru(str(entry.get("first_at", ""))), 13)
 	got_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	got_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	got_lbl.add_theme_color_override("font_color", Color(0.62, 0.64, 0.70))
 	vbox.add_child(got_lbl)
 
-	var copies_lbl := main._label("копии: ×%d" % int(entry.get("copies", 1)), 13)
+	var copies_lbl: Label = main._label("копии: ×%d" % int(entry.get("copies", 1)), 13)
 	copies_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	copies_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	copies_lbl.add_theme_color_override("font_color", Color(0.80, 0.82, 0.86))
 	vbox.add_child(copies_lbl)
 
-	var close_btn := main._small_button("Закрыть", Vector2(88, 36))
+	var close_btn: Button = main._small_button("Закрыть", Vector2(88, 36))
 	close_btn.name = "SigilFsClose"
 	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close_btn.pressed.connect(_close_sigil_fullscreen)
@@ -1145,11 +1145,11 @@ func _sigil_fill_fullscreen_art(slot: Control, entry: Dictionary) -> void:
 	var fs := _sigil_fullscreen
 	var card_id := str(entry.get("card_id", ""))
 	if card_id == "":
-		var img0 := main._sigil._load_cached_image(str(entry.get("craft_id", "")))
+		var img0: Image = main._sigil._load_cached_image(str(entry.get("craft_id", "")))
 		if img0 != null and _sigil_fullscreen == fs:
 			_sigil_fill_preview(slot, ImageTexture.create_from_image(img0))
 		return
-	var img := main._sigil._load_cached_image(card_id)
+	var img: Image = main._sigil._load_cached_image(card_id)
 	if img == null:
 		var waited := 0.0
 		while _sigil_render_busy and waited < 1.0:
@@ -1157,7 +1157,7 @@ func _sigil_fill_fullscreen_art(slot: Control, entry: Dictionary) -> void:
 			waited += get_process_delta_time()
 		if _sigil_fullscreen != fs or not is_instance_valid(slot):
 			return
-		var recipe := main._sigil.card_recipe_for({"card_id": card_id})
+		var recipe: SigilRecipe = main._sigil.card_recipe_for({"card_id": card_id})
 		img = await main._sigil._svc.render(recipe, main._sigil._options)
 		if img != null and _sigil_fullscreen == fs:
 			main._sigil._save_cached_image(card_id, img)
@@ -1205,11 +1205,11 @@ func _await_catalog(timeout: float) -> bool:
 func _sigil_craft_row(craft: Dictionary) -> Control:
 	var rarity := str(craft.get("rarity", "common"))
 	var is_chromatic := bool(craft.get("is_chromatic", false))
-	var ether_cost := main._sigil.craft_ether_cost(craft)
-	var rc := main._rarity_color(rarity)
-	var accent := Color(1.0, 0.55, 0.12) if is_chromatic else rc
+	var ether_cost: int = main._sigil.craft_ether_cost(craft)
+	var rc: Color = main._rarity_color(rarity)
+	var accent: Color = Color(1.0, 0.55, 0.12) if is_chromatic else rc
 	var shortages := _sigil_shortages(craft)
-	var can_afford := shortages.is_empty() and main._engine.ether >= ether_cost
+	var can_afford: bool = shortages.is_empty() and main._engine.ether >= ether_cost
 	var n_ing := int((craft.get("ingredients", []) as Array).size())
 	var title := _sigil_craft_title(craft)
 	# Высота по содержимому: Button не контейнер и сам её не посчитает.
@@ -1257,7 +1257,7 @@ func _sigil_craft_row(craft: Dictionary) -> Control:
 	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(info)
 
-	var name_lbl := main._label(title, 18)
+	var name_lbl: Label = main._label(title, 18)
 	name_lbl.add_theme_color_override("font_color", Color(0.95, 0.93, 0.86))
 	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1274,14 +1274,14 @@ func _sigil_craft_row(craft: Dictionary) -> Control:
 		var d := ing as Dictionary
 		info.add_child(_sigil_need_row(str(d.get("item_id", "")), int(d.get("qty", 0))))
 
-	var price := main._label("%d эфира" % ether_cost, 15)
+	var price: Label = main._label("%d эфира" % ether_cost, 15)
 	price.autowrap_mode = TextServer.AUTOWRAP_OFF
 	price.add_theme_color_override("font_color",
 		Color(0.62, 0.85, 0.66) if main._engine.ether >= ether_cost else Color(0.92, 0.48, 0.42))
 	info.add_child(price)
 
 	if not shortages.is_empty():
-		var miss := main._label(_sigil_shortage_text(shortages), 12)
+		var miss: Label = main._label(_sigil_shortage_text(shortages), 12)
 		miss.add_theme_color_override("font_color", Color(0.92, 0.56, 0.46))
 		miss.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		info.add_child(miss)
@@ -1338,7 +1338,7 @@ func _sigil_flip_card(ev: InputEvent, card_flip: Control) -> void:
 func _sigil_live_card(entry: Dictionary) -> Control:
 	# Свой SubViewport, а не общий вьюпорт SigilRenderService: общий занят
 	# статичными рендерами (UPDATE_DISABLED) и не может быть переподключён.
-	var recipe := main._sigil.card_recipe_for(entry)
+	var recipe: SigilRecipe = main._sigil.card_recipe_for(entry)
 	var rarity := str(entry.get("rarity", recipe.rarity))
 	var prism_eff := ""
 	# Хроматики — космос/призма поверх (Prism-эффекты card_beatify).
@@ -1402,7 +1402,7 @@ func _sigil_preview_slot(accent: Color, side: int, border: bool = true) -> Contr
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(rect)
 	box.set_meta("rect", rect)
-	var ph := main._label("…", 28)
+	var ph: Label = main._label("…", 28)
 	ph.name = "Ph"
 	ph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ph.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -1460,7 +1460,7 @@ func _sigil_badge(text: String, col: Color) -> Control:
 	sb.content_margin_top = 3
 	sb.content_margin_bottom = 3
 	b.add_theme_stylebox_override("panel", sb)
-	var l := main._label(text, 11)
+	var l: Label = main._label(text, 11)
 	l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	l.add_theme_color_override("font_color", col)
 	b.add_child(l)
@@ -1480,12 +1480,12 @@ func _sigil_need_row(elem_id: String, needed: int) -> Control:
 	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(dot)
-	var nm := main._label(main._online._item_name(elem_id), 13)
+	var nm: Label = main._label(main._online._item_name(elem_id), 13)
 	nm.autowrap_mode = TextServer.AUTOWRAP_OFF
 	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	nm.add_theme_color_override("font_color", Color(0.80, 0.82, 0.86))
 	row.add_child(nm)
-	var qty := main._label("%d / %d" % [have, needed], 13)
+	var qty: Label = main._label("%d / %d" % [have, needed], 13)
 	qty.autowrap_mode = TextServer.AUTOWRAP_OFF
 	qty.add_theme_color_override("font_color",
 		Color(0.55, 0.86, 0.58) if enough else Color(0.93, 0.50, 0.44))
@@ -1591,7 +1591,7 @@ func _close_sigil_craft_ritual() -> void:
 
 func _on_sigil_board_confirmed(craft: Dictionary) -> void:
 	# Атомарный крафт: ресурсы списываются сразу (спека: карточка уже у игрока)
-	var ether_cost := main._sigil.craft_ether_cost(craft)
+	var ether_cost: int = main._sigil.craft_ether_cost(craft)
 	main._engine.ether = max(0, main._engine.ether - ether_cost)
 	for ing in craft.get("ingredients", []):
 		var d := ing as Dictionary
@@ -1652,7 +1652,7 @@ func _show_pending_craft_card(craft_id: String, rarity: String, llm_name: String
 		}
 		_open_sigil_fullscreen(entry)
 		return
-	var img := await main._sigil.get_card(craft_id, SigilManager.craft_ingredients(craft),
+	var img: Image = await main._sigil.get_card(craft_id, SigilManager.craft_ingredients(craft),
 		StringName(rarity), &"object", _sigil_craft_title(craft))
 	if img == null:
 		return
@@ -1742,7 +1742,7 @@ func _sigil_thumb(item: Dictionary) -> Control:
 		main._show_sigil_card(item["texture"], id, main._online._item_name(id), rar)
 	)
 	cell.add_child(b)
-	var name_lbl := main._label(main._online._item_name(id), 10)
+	var name_lbl: Label = main._label(main._online._item_name(id), 10)
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_lbl.add_theme_color_override("font_color", main._rarity_color(rar))
 	name_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -1950,3 +1950,34 @@ func _modal_open_for_ads() -> bool:
 		return true
 	return false
 
+
+
+
+# ---------- Рисованные глифы (переехали из main.gd вместе с сигильным UI) ----------
+
+## Рисованная галочка для claimed-точек майлстоунов: глиф «✓» вне шрифта
+## Manrope, поэтому отметка рисуется двумя линиями в _draw.
+class SigilMilestoneMark:
+	extends Control
+
+	func _draw() -> void:
+		var c := Color(0.90, 0.82, 0.56)
+		var w := 2.0
+		draw_line(Vector2(size.x * 0.16, size.y * 0.52),
+			Vector2(size.x * 0.42, size.y * 0.78), c, w)
+		draw_line(Vector2(size.x * 0.42, size.y * 0.78),
+			Vector2(size.x * 0.86, size.y * 0.22), c, w)
+
+
+## Силуэт несобранной карты комплекта (Task 7b): тёмный контур круга без
+## заливки — игрок не получает ни имени, ни арта, ни намёка на сид карты.
+class SigilSilhouette:
+	extends Control
+
+	func _draw() -> void:
+		var c := Color(0.28, 0.32, 0.40)
+		var w := 2.0
+		var r := (minf(size.x, size.y) - 8.0) * 0.5
+		if r <= 0.0:
+			return
+		draw_arc(size * 0.5, r, 0.0, TAU, 48, c, w, true)
