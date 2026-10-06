@@ -85,17 +85,7 @@ func _add_lab_reagent_cell(item_id: String) -> void:
 	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cell.focus_mode = Control.FOCUS_NONE
 	cell.tooltip_text = g._online._item_name(item_id)
-	var cell_style := StyleBoxFlat.new()
-	cell_style.bg_color = Color(0.06, 0.12, 0.18, 0.78)
-	cell_style.border_color = Color(0.20, 0.34, 0.42, 0.72)
-	cell_style.set_border_width_all(1)
-	cell_style.set_corner_radius_all(12)
-	var cell_hover: StyleBoxFlat = cell_style.duplicate()
-	cell_hover.bg_color = Color(0.12, 0.23, 0.29, 0.90)
-	cell.add_theme_stylebox_override("normal", cell_style)
-	cell.add_theme_stylebox_override("hover", cell_hover)
-	cell.add_theme_stylebox_override("pressed", cell_hover)
-	cell.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	UIStyle.style_cell(cell, false, 0.78)
 
 	var cell_content := VBoxContainer.new()
 	cell_content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -257,13 +247,14 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 	# inventory-карточки и принудительной высоты, вызывающей прокрутку, больше нет.
 	arena.custom_minimum_size = Vector2.ZERO
 	arena.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	arena.add_theme_stylebox_override("panel", g._panel_style(Color(0.035, 0.06, 0.10, 0.90), 22))
+	arena.add_theme_stylebox_override("panel", UIStyle.arena_style())
 	page.add_child(arena)
 	_experiment_field = Control.new()
 	_experiment_field.custom_minimum_size = Vector2.ZERO
 	_experiment_field.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_experiment_field.clip_contents = true
 	arena.add_child(_experiment_field)
+	UIFx.field_decor(_experiment_field, Vector2(0, 23))
 
 	var field_title := g._label("ПОЛЕ ЭКСПЕРИМЕНТА", 12)
 	field_title.name = "ExperimentFieldTitle"
@@ -327,16 +318,7 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 	_experiment_drawer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_experiment_drawer.mouse_filter = Control.MOUSE_FILTER_STOP
 	_experiment_drawer.z_index = 2
-	var picker_style := StyleBoxFlat.new()
-	picker_style.bg_color = Color(0.025, 0.055, 0.09, 0.44)
-	picker_style.border_color = Color(0.26, 0.62, 0.67, 0.82)
-	picker_style.set_border_width_all(1)
-	picker_style.set_corner_radius_all(18)
-	picker_style.content_margin_left = 10.0
-	picker_style.content_margin_right = 10.0
-	picker_style.content_margin_top = 10.0
-	picker_style.content_margin_bottom = 10.0
-	_experiment_drawer.add_theme_stylebox_override("panel", picker_style)
+	_experiment_drawer.add_theme_stylebox_override("panel", UIStyle.picker_style())
 	_experiment_field.add_child(_experiment_drawer)
 	var drawer_col := VBoxContainer.new()
 	drawer_col.add_theme_constant_override("separation", 6)
@@ -689,20 +671,7 @@ func _refresh_experiment_drawer() -> void:
 		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		cell.focus_mode = Control.FOCUS_NONE
 		cell.tooltip_text = g._online._item_name(item_id)
-		var cell_style := StyleBoxFlat.new()
-		cell_style.bg_color = Color(0.06, 0.12, 0.18, 0.58)
-		cell_style.border_color = Color(0.20, 0.34, 0.42, 0.68)
-		if _experiment_hint_ids.has(item_id):
-			cell_style.bg_color = Color(0.18, 0.16, 0.10, 0.64)
-			cell_style.border_color = Color(1.0, 0.79, 0.28, 0.94)
-		cell_style.set_border_width_all(1)
-		cell_style.set_corner_radius_all(12)
-		var cell_hover: StyleBoxFlat = cell_style.duplicate()
-		cell_hover.bg_color = Color(0.12, 0.23, 0.29, 0.76)
-		cell.add_theme_stylebox_override("normal", cell_style)
-		cell.add_theme_stylebox_override("hover", cell_hover)
-		cell.add_theme_stylebox_override("pressed", cell_hover)
-		cell.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		UIStyle.style_cell(cell, _experiment_hint_ids.has(item_id), 0.58)
 		cell.pressed.connect(_select_experiment_item.bind(item_id))
 
 		var cell_content := VBoxContainer.new()
@@ -1511,11 +1480,9 @@ func _rebuild_bench_rows() -> void:
 		b.custom_minimum_size = Vector2(0, 46)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var selected := out == _bench_target
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.12, 0.20, 0.22, 0.95) if selected else Color(0.08, 0.11, 0.16, 0.9)
-		sb.set_corner_radius_all(12)
-		sb.border_color = Color(0.35, 0.85, 0.8, 0.55) if selected else Color(0.3, 0.4, 0.5, 0.3)
-		sb.set_border_width_all(1)
+		var sb := UIStyle.box(
+			Color(0.10, 0.22, 0.24, 0.95) if selected else Color(0.08, 0.11, 0.16, 0.9),
+			UIStyle.TEAL if selected else UIStyle.LINE, 12)
 		b.add_theme_stylebox_override("normal", sb)
 		b.add_theme_stylebox_override("hover", sb)
 		b.add_theme_stylebox_override("pressed", sb)
