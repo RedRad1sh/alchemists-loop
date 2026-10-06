@@ -432,6 +432,7 @@ var _sigil: SigilManager  # Аркан Сигилов: карточки реце
 ## Живая карточка фуллскрина — для подачи tilt из _process. Обнуляется
 ## при закрытии, чтобы _process не дёргал удалённую ноду.
 var _live_card_node: SigilCard = null
+var _sigil_ui: SigilUI = null  # вынесенный сигильный UI (game/sigil/sigil_ui.gd)
 var _sigil_header_btn: Button  ## кнопка Аркана Сигилов в шапке (иконка-таро)
 var _inv_grid: GridContainer = null
 
@@ -476,6 +477,9 @@ func _ready() -> void:
 	_sigil.name = "SigilManager"
 	add_child(_sigil)
 	_sigil.set_player_salt(OS.get_unique_id())
+	_sigil_ui = SigilUI.new()
+	_sigil_ui.main = self
+	add_child(_sigil_ui)
 	Monetization.bind_game(self)
 	# Прогон selftest не эмитит онбординг-аналитику: это не сессия реального
 	# пользователя. С U23 (T27) пути уже переведены в _ready автозагрузок, и эти
@@ -618,9 +622,9 @@ func _ready() -> void:
 	Net.sigil_catalog_result.connect(_sigil._on_catalog_result)
 	Net.sigil_collection_result.connect(_sigil._on_collection_result)
 	Net.sigil_milestone_result.connect(_sigil._on_milestone_result)
-	Net.sigil_milestone_result.connect(_on_sigil_milestone_result)
-	_sigil.craft_completed.connect(_on_sigil_craft_completed)
-	_sigil.craft_failed.connect(_on_sigil_craft_failed)
+	Net.sigil_milestone_result.connect(_sigil_ui._on_sigil_milestone_result)
+	_sigil.craft_completed.connect(_sigil_ui._on_sigil_craft_completed)
+	_sigil.craft_failed.connect(_sigil_ui._on_sigil_craft_failed)
 	# Task 8: достижения карточек обновляются при любой смене коллекции. В selftest
 	# _ach_update no-op (g._selftest), поэтому коннект безопасен и в прогоне сьютов.
 	_sigil.collection_changed.connect(_progress_ui._ach_update)
@@ -801,7 +805,7 @@ func _ready() -> void:
 		_engine.selected.clear()
 		_engine._place_into_slot("fire", "A")
 		_engine._place_into_slot("water", "B")
-		_on_brew_btn_pressed()
+		_sigil_ui._on_brew_btn_pressed()
 	if _demo_harness._demo and _demo_harness._action_goals:
 		if _tabs_ref != null:
 			_tabs_ref.current_tab = 0
@@ -809,7 +813,7 @@ func _ready() -> void:
 		_engine.selected.clear()
 		_engine._place_into_slot("fire", "A")
 		_engine._place_into_slot("water", "B")
-		_on_brew_btn_pressed()
+		_sigil_ui._on_brew_btn_pressed()
 	if _demo_harness._demo and _demo_harness._action_settings:
 		_hub._open_settings()
 	if _demo_harness._demo and _demo_harness._action_journal:
@@ -875,7 +879,7 @@ func _process(delta: float) -> void:
 		var card_flip: Control = _demo_flip_timer.get("card", null)
 		_demo_flip_timer = {}
 		if card_flip != null and is_instance_valid(card_flip):
-			_sigil_flip_card(_tap_event(), card_flip)
+			_sigil_ui._sigil_flip_card(_sigil_ui._tap_event(), card_flip)
 	if not _selftest:
 		_online._tick_netexperiment()
 		_online._tick_pending_experiment()
@@ -933,7 +937,7 @@ func _process(delta: float) -> void:
 		_engine._ghost.position = gp - _engine._ghost.size * 0.5
 		# Параллакс открытой карточки: тянем tilt за курсором. Только когда
 	# фуллскрин реально открыт и нода жива; иначе не трогаем.
-	if _sigil_fullscreen != null and _live_card_node != null \
+	if _sigil_ui._sigil_fullscreen != null and _live_card_node != null \
 			and is_instance_valid(_live_card_node):
 		var m := get_viewport().get_mouse_position()
 		var vp_sz := get_viewport_rect().size
@@ -1098,7 +1102,7 @@ func _build_ui() -> void:
 	_sigil_header_btn = sigil_btn
 	sigil_btn.tooltip_text = "Аркан Сигилов: ежедневные крафты"
 	sigil_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	sigil_btn.pressed.connect(_open_sigil_modal)
+	sigil_btn.pressed.connect(_sigil_ui._open_sigil_modal)
 	head.add_child(sigil_btn)
 	# «▲N» → родная иконка trend_up + счётчик текстом (core._refresh_header).
 	# Если SVG не импортирован (текстуры нет), _refresh_header оставит глиф «▲».
@@ -1304,7 +1308,7 @@ func _build_brew_bar() -> void:
 	_engine._brew_btn = _round_brew_button("ВАРИТЬ")
 	_engine._brew_btn.custom_minimum_size = Vector2(140, 52)  # увеличен hitbox
 	_engine._brew_btn.mouse_filter = Control.MOUSE_FILTER_STOP  # явный приём кликов
-	_engine._brew_btn.pressed.connect(_on_brew_btn_pressed)
+	_engine._brew_btn.pressed.connect(_sigil_ui._on_brew_btn_pressed)
 	row.add_child(_engine._brew_btn)
 	_engine._repeat_btn = _small_button("↻", Vector2(44, 42), 1)
 	_engine._repeat_btn.tooltip_text = "Повторить последнюю пару"
@@ -1366,7 +1370,7 @@ func _on_tab_changed(index: int) -> void:
 	# _ui_ready — собственный объяснимый гейт против первого синхронного tab_changed
 	# во время построения вкладок: без него от показа спасал бы только побочный
 	# Monetization._ads == null (Monetization._boot ещё не отработал).
-	if not _ui_ready or _modal_open_for_ads():
+	if not _ui_ready or _sigil_ui._modal_open_for_ads():
 		return
 	Monetization.show_interstitial("navigation")
 
@@ -1574,7 +1578,7 @@ func _build_popup() -> void:
 	close.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	close.pressed.connect(_hide_popup)
 	actions.add_child(close)
-	card.gui_input.connect(_on_popup_card_input)
+	card.gui_input.connect(_sigil_ui._on_popup_card_input)
 	_popup = center
 	# Модальное окно блокирует спавн и активацию QTE (док §8).
 	center.add_to_group("modal_ui")
@@ -1892,8 +1896,8 @@ func _demo_seed_sigil_coll() -> void:
 	# Демо проверки фуллскрина: открыть карточку clay (common) сразу,
 	# чтобы --shot/--gif показали живую карточку (анимации, лор на обороте).
 	if _demo_harness._shot_path != "" or _demo_harness._gif_dir != "":
-		var demo_entry := _sigil_catalog_entry("clay", {"copies": 2, "first_at": "2026-09-28T10:00:00"})
-		_open_sigil_fullscreen(demo_entry)
+		var demo_entry := _sigil_ui._sigil_catalog_entry("clay", {"copies": 2, "first_at": "2026-09-28T10:00:00"})
+		_sigil_ui._open_sigil_fullscreen(demo_entry)
 	# --sigiltab=collection|fullscreen|sets|set_grid: стартовую вкладку отдаём
 	# книге (_open_sigil_modal строит страницу сразу, а перелистывает уже после
 	# открытия обложки) — иначе _sigil_show_tab и open_book делят busy/_shield.
@@ -1903,7 +1907,7 @@ func _demo_seed_sigil_coll() -> void:
 			initial_tab = "collection"
 		"sets", "set_grid":
 			initial_tab = "sets"
-	_open_sigil_modal(initial_tab)
+	_sigil_ui._open_sigil_modal(initial_tab)
 	# Всё, что поверх книги: set_grid открывает экран комплекта (Task 7b).
 	match _demo_harness._sigil_tab:
 		"fullscreen":
@@ -1915,10 +1919,10 @@ func _demo_seed_sigil_coll() -> void:
 					target = str(k)
 					break
 			if target != "":
-				_open_sigil_fullscreen(_sigil_catalog_entry(target,
+				_sigil_ui._open_sigil_fullscreen(_sigil_ui._sigil_catalog_entry(target,
 					_sigil._server_collection[target]))
 		"set_grid":
-			_open_sigil_set_screen("earth")
+			_sigil_ui._open_sigil_set_screen("earth")
 		_:
 			pass
 
@@ -1951,11 +1955,11 @@ func _demo_sigil_sets() -> Array:
 # TASK 1: только вынос блока; делегирующие обёртки и подключение SigilUI — в TASK 2.
 func _unhandled_input(event: InputEvent) -> void:
 	# ~ (тильда) — toggle админ-консоли
-	if _handle_tilde(event):
+	if _sigil_ui._handle_tilde(event):
 		get_viewport().set_input_as_handled()
 		return
 	# Esc закрывает верхний попап
-	if _handle_esc(event):
+	if _sigil_ui._handle_esc(event):
 		get_viewport().set_input_as_handled()
 
 # ---------- подтверждение автоварки ----------
