@@ -1808,6 +1808,15 @@ func _rarity_color(rarity: String) -> Color:
 
 ## Демо-харнес (--action=sigilcoll): меню крафтов дня на локальных данных,
 ## без сервера. Превью кругов — настоящий рендер SigilRenderService.
+func _btn_style(col: Color) -> StyleBox:
+	return _sigil_ui._btn_style(col)
+
+func _await_daily_crafts(timeout: float) -> bool:
+	return await _sigil_ui._await_daily_crafts(timeout)
+
+func _await_catalog(timeout: float) -> bool:
+	return await _sigil_ui._await_catalog(timeout)
+
 func _demo_seed_sigil_coll() -> void:
 	var day := Time.get_date_string_from_system()
 	# Демо-каталог: земля доведена до восьми карт, как в брифе Task 7 (к 
@@ -2157,6 +2166,8 @@ func _open_sigil_set_screen(set_id: String) -> void:
 	_sigil_ui._open_sigil_set_screen(set_id)
 func _close_sigil_set_screen() -> void:
 	_sigil_ui._close_sigil_set_screen()
+func _show_sigil_craft_ritual(rarity: String) -> void:
+	_sigil_ui._show_sigil_craft_ritual(rarity)
 func _modal_open_for_ads() -> bool:
 	return _sigil_ui._modal_open_for_ads()
 func _handle_esc(event: InputEvent) -> bool:
@@ -2474,4 +2485,3 @@ class SigilCardRevealDecor:
 				]), Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.18 * k))
 		draw_circle(center, diag * 0.55 * k, Color(1.0, 1.0, 1.0, 0.35 * k))
 		draw_circle(center, diag * 0.28 * k, Color(1.0, 1.0, 1.0, 0.55 * k))
-

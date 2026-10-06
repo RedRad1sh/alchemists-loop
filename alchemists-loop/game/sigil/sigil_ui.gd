@@ -1544,7 +1544,7 @@ func _open_sigil_craft(craft: Dictionary) -> void:
 	board.name = "SigilCraftBoard"
 	_sigil_craft_screen = board
 	add_child(board)
-	board.show_craft(craft, self)
+	board.show_craft(craft, main)  # main — главный Game: board зовёт game._rarity_color и пр.
 	board.confirmed.connect(_on_sigil_board_confirmed)
 	board.closed.connect(_close_sigil_craft_screen)
 
