@@ -22,8 +22,8 @@ static func run(g: Game) -> void:
 	Selftest.check("achievements data", Game.ACHIEVEMENTS.size() >= 20)
 	var map_script: GDScript = null
 	var map_instance: Control = null
-	if ResourceLoader.exists("res://game/achievement_map_view.gd"):
-		map_script = load("res://game/achievement_map_view.gd") as GDScript
+	if ResourceLoader.exists("res://game/meta/achievement_map_view.gd"):
+		map_script = load("res://game/meta/achievement_map_view.gd") as GDScript
 	if map_script != null:
 		map_instance = map_script.new() as Control
 	var map_states: Dictionary = {}

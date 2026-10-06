@@ -1,7 +1,7 @@
 extends "res://addons/medusa/nodes/atom.gd"
 class_name AchievementMapAtom
 
-const Glyphs = preload("res://game/element_glyphs.gd")
+const Glyphs = preload("res://game/lab/element_glyphs.gd")
 
 const MAP_LOCKED := 0
 const MAP_AVAILABLE := 1

@@ -27,7 +27,7 @@ func _init(game: Game) -> void:
 # ================= дух-компаньон =================
 
 func _build_companion() -> void:
-	_companion = (load("res://game/companion.gd") as GDScript).new()
+	_companion = (load("res://game/home/companion.gd") as GDScript).new()
 	_companion.name = "Companion"
 	_companion.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	# компактный маскот в правом верхнем углу (конец панели вкладок) — контент не трогаем

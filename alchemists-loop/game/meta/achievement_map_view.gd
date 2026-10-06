@@ -2,8 +2,8 @@ extends Control
 class_name AchievementMapView
 
 const GRAPH_SCRIPT = preload("res://addons/medusa/nodes/graph.gd")
-const MAP_ATOM_SCRIPT = preload("res://game/achievement_map_atom.gd")
-const MAP_LINE_SCRIPT = preload("res://game/achievement_map_line.gd")
+const MAP_ATOM_SCRIPT = preload("res://game/meta/achievement_map_atom.gd")
+const MAP_LINE_SCRIPT = preload("res://game/meta/achievement_map_line.gd")
 
 const NODE_LOCKED := 0
 const NODE_AVAILABLE := 1

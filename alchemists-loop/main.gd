@@ -11,7 +11,7 @@ var BACKUP_PATH := "user://alchemy_save.bak"
 const SAVE_VERSION := 3
 
 var BREW_SECONDS := 1.2
-const HouseViewScript := preload("res://game/house_view.gd")
+const HouseViewScript := preload("res://game/home/house_view.gd")
 
 # --- данные живут в game/data/* (оп D); алиасы — ноль правок вызовов ---
 # Balance
