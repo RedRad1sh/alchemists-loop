@@ -496,6 +496,15 @@ class LLMGenerator:
         self.timeout = timeout if timeout is not None else float(os.environ.get("LLM_TIMEOUT", "30"))
         raw = models if models is not None else os.environ.get("LLM_MODELS", DEFAULT_MODELS)
         self.models = [m.strip() for m in raw.split(",") if m.strip()]
+        # Раздельные модели для генератора и валидатора: первая из LLM_MODELS —
+        # генератор, вторая (если есть) — валидатор. Удобно: генератор можно
+        # сделать креативнее/быстрее, валидатор — строже и надёжнее.
+        # Практика: mistralai/mistral-nemo хорошо подходит и для генератора,
+        # и для валидатора этой логики (генерит осмысленные абстракции вроде
+        # «Сознание»/«Амулет», rechняет только по делу) — проверено при сборке
+        # «Магии» цепочкой крафтов (2026-10-06).
+        self._gen_model: str = self.models[0] if self.models else ""
+        self._valid_model: str = self.models[1] if len(self.models) > 1 else self._gen_model
         self._rot = 0
 
     def available(self) -> bool:
@@ -533,7 +542,7 @@ class LLMGenerator:
         feedback = ""
         errors: list[str] = []
         for attempt in range(MAX_ATTEMPTS):
-            model = self.models[(self._rot + attempt) % len(self.models)]
+            model = self._gen_model
             try:
                 raw = self._call_once(model, a_name, b_name, feedback)
             except LLMError as e:
@@ -612,7 +621,7 @@ class LLMGenerator:
         feedback = ""
         errors: list[str] = []
         for attempt in range(MAX_ATTEMPTS):
-            model = self.models[(self._rot + attempt) % len(self.models)]
+            model = self._gen_model
             try:
                 raw = self._call_hint_once(model, a_name, b_name, feedback)
             except LLMError as e:
@@ -654,7 +663,7 @@ class LLMGenerator:
                  ", ".join(ingredient_names))
         errors: list[str] = []
         for attempt in range(1):
-            model = self.models[(self._rot + attempt) % len(self.models)]
+            model = self._gen_model
             try:
                 raw = self._call_identity_once(model, ingredient_names, rarity)
             except LLMError as e:
@@ -800,7 +809,7 @@ class LLMGenerator:
             return True, ""
 
         user_text = f"Вещества: «{a_name}» и «{b_name}». Кандидат: «{name}»."
-        for model in self.models:
+        for model in [self._valid_model]:
             payload = {
                 "model": model,
                 "messages": [
@@ -861,9 +870,11 @@ class LLMGenerator:
         # Часть провайдеров не умеет response_format=json_object, reasoning-поля
         # (max_completion_tokens/reasoning_effort) или заваливает JSON-валидацию
         # (400 json_validate_failed) → повторяем в «совместимом» виде без них.
-        if r.status_code == 400 and any(
+        # 503 «не осталось провайдеров после фильтрации параметров» — та же
+        # причина: прокси не находит провайдера с такими параметрами.
+        if r.status_code in (400, 503) and any(
             key in r.text.lower()
-            for key in ("response_format", "json", "reasoning", "max_tokens", "unsupported")
+            for key in ("response_format", "json", "reasoning", "max_tokens", "unsupported", "провайдер", "фильтрац")
         ):
             log.info("%s: 400 (%s…) — повторяю в совместимом виде",
                      model, r.text.strip()[:80].replace("\n", " "))
