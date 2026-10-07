@@ -10,7 +10,6 @@ migrations/NNN_*.sql и таблицу schema_version; применённый ф
 
 import os
 import sys
-import sqlite3
 
 import pytest
 
@@ -76,6 +75,10 @@ class TestRunner:
             "CREATE TABLE IF NOT EXISTS later_t (id INTEGER PRIMARY KEY);", encoding="utf-8")
         (d / "002_earlier.sql").write_text(
             "CREATE TABLE IF NOT EXISTS earlier_t (id INTEGER PRIMARY KEY);", encoding="utf-8")
+        # listdir отдаёт имена в обратном порядке: без sorted() в раннере тест краснеет
+        real_listdir = os.listdir
+        monkeypatch.setattr(
+            srv.os, "listdir", lambda p: list(reversed(sorted(real_listdir(p)))))
         srv.init_db()
         assert _versions(srv) == [(2, "002_earlier.sql"), (10, "010_later.sql")]
 
