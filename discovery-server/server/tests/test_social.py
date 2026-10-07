@@ -373,7 +373,10 @@ class TestFriendRespond:
         assert r.status_code == 404 and r.json()["detail"] == "request_not_found", r.text
 
     def test_third_party_cannot_accept(self, tmp_path, monkeypatch):
-        """Принять может только адресат: (a_device=? OR b_device=?) в WHERE."""
+        """Принять может только адресат: у третьего игрока другой pair_key, и 404
+        даёт уже фильтр по pair_key. `(a_device=? OR b_device=?)` в WHERE — пояс
+        на подтяжках: тест, где отказ держится только на нём, против этой схемы
+        не строится."""
         srv = _srv(tmp_path, monkeypatch)
         client = _client(srv)
         _player(client, "Варда", "dev-a")
@@ -419,6 +422,25 @@ class TestFriendRespond:
                          json={"device_id": "dev-a", "requester_device": "dev-c",
                                "accept": True})
         assert r2.status_code == 429 and r2.json()["detail"] == "friend_limit", r2.text
+
+    def test_requester_cannot_accept_own_request(self, tmp_path, monkeypatch):
+        """Заявитель не принимает свою же заявку: отказ держит `requester_device=?`
+        в WHERE. Без него заявитель стал бы другом в одностороннем порядке."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _ask(client, "Мира")
+        r = client.post("/api/friend/respond",
+                        json={"device_id": "dev-a", "requester_device": "dev-b",
+                              "accept": True})
+        assert r.status_code == 404 and r.json()["detail"] == "request_not_found", r.text
+        conn = srv.get_db()
+        try:
+            state = conn.execute("SELECT state FROM friend_edges").fetchone()["state"]
+        finally:
+            conn.close()
+        assert state == "pending", state
 
     @pytest.mark.skip(reason="block появляется в задаче 5")
     def test_block_prevents_accept(self, tmp_path, monkeypatch):

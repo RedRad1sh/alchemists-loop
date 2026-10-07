@@ -4188,7 +4188,11 @@ def friend_respond(payload: FriendRespondPayload):
         conn.commit()
         return FriendRespondResponse(ok=True, accepted=True,
                                      peer=_social_peer(conn, requester))
-    except HTTPException:
+    except Exception:
+        # Паритет с friend_request: rollback нужен и при контрактном
+        # HTTPException, и при неожиданной ошибке — BEGIN IMMEDIATE не должна
+        # оставаться открытой к conn.close().
+        conn.rollback()
         raise
     finally:
         conn.close()
