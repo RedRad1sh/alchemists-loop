@@ -489,6 +489,11 @@ class FriendPeerPayload(BaseModel):
     peer_device: str
 
 
+class FriendBlockPayload(BaseModel):
+    device_id: str
+    target_device: str
+
+
 class SocialOkResponse(BaseModel):
     ok: bool
 
@@ -4192,6 +4197,89 @@ def friend_respond(payload: FriendRespondPayload):
         # Паритет с friend_request: rollback нужен и при контрактном
         # HTTPException, и при неожиданной ошибке — BEGIN IMMEDIATE не должна
         # оставаться открытой к conn.close().
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _social_delete_pair(conn: sqlite3.Connection, device_id: str, peer_device: str) -> None:
+    """Удалить ребро и переписку пары. Вызывается из remove и block.
+
+    Переписка удаляется у обоих: оставить её у второй стороны — дыра в
+    приватности («удалил друга, а мои сообщения остались у него»).
+    """
+    pair_key = canonical_pair_key(device_id, peer_device)
+    conn.execute("DELETE FROM messages WHERE pair_key = ?", (pair_key,))
+    conn.execute("DELETE FROM friend_edges WHERE pair_key = ?", (pair_key,))
+
+
+@app.post("/api/friend/remove", response_model=SocialOkResponse)
+def friend_remove(payload: FriendPeerPayload):
+    me = payload.device_id.strip()
+    peer = payload.peer_device.strip()
+    if peer == SPIRIT_DEVICE:
+        raise HTTPException(status_code=400, detail="npc")
+    conn = get_db()
+    try:
+        if not _social_accepted(conn, me, peer):
+            raise HTTPException(status_code=404, detail="not_friends")
+        conn.execute("BEGIN IMMEDIATE")
+        _social_delete_pair(conn, me, peer)
+        conn.commit()
+        return SocialOkResponse(ok=True)
+    except Exception:
+        # Паритет с friend_request/friend_respond: rollback нужен и при контрактном
+        # HTTPException, и при неожиданной ошибке — BEGIN IMMEDIATE не должна
+        # оставаться открытой к conn.close().
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.post("/api/friend/block", response_model=SocialOkResponse)
+def friend_block(payload: FriendBlockPayload):
+    """Блок направлен: блокирует тот, кто в blocker_device.
+
+    Проверяется потом на request, respond, messages, send. Ребра может и не
+    быть — блок это защита от навязчивых, а не только «раздруживание».
+    """
+    me = payload.device_id.strip()
+    target = payload.target_device.strip()
+    if target == SPIRIT_DEVICE:
+        raise HTTPException(status_code=400, detail="npc")
+    if target == me:
+        raise HTTPException(status_code=400, detail="self")
+    conn = get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            "INSERT OR IGNORE INTO blocks (blocker_device, blocked_device, created_at) "
+            "VALUES (?, ?, ?)", (me, target, _now_iso()))
+        _social_delete_pair(conn, me, target)
+        conn.commit()
+        return SocialOkResponse(ok=True)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.post("/api/friend/unblock", response_model=SocialOkResponse)
+def friend_unblock(payload: FriendBlockPayload):
+    me = payload.device_id.strip()
+    target = payload.target_device.strip()
+    conn = get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            "DELETE FROM blocks WHERE blocker_device = ? AND blocked_device = ?",
+            (me, target))
+        conn.commit()
+        return SocialOkResponse(ok=True)
+    except Exception:
         conn.rollback()
         raise
     finally:

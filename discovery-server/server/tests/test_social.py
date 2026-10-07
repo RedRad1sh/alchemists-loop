@@ -442,7 +442,6 @@ class TestFriendRespond:
             conn.close()
         assert state == "pending", state
 
-    @pytest.mark.skip(reason="block появляется в задаче 5")
     def test_block_prevents_accept(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
         client = _client(srv)
@@ -455,3 +454,143 @@ class TestFriendRespond:
                         json={"device_id": "dev-b", "requester_device": "dev-a",
                               "accept": True})
         assert r.status_code == 403 and r.json()["detail"] == "blocked", r.text
+
+
+def _seed_message(srv, pair, from_device, body):
+    """Прямая вставка в messages: до задачи 6 роута отправки ещё нет."""
+    conn = srv.get_db()
+    try:
+        conn.execute(
+            "INSERT INTO messages (pair_key, from_device, body, sent_at) "
+            "VALUES (?,?,?,?)",
+            (srv.canonical_pair_key(*pair), from_device, body, srv._now_iso()))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _messages(srv, pair):
+    conn = srv.get_db()
+    try:
+        rows = conn.execute(
+            "SELECT body FROM messages WHERE pair_key = ? ORDER BY id",
+            (srv.canonical_pair_key(*pair),)).fetchall()
+    finally:
+        conn.close()
+    return [r["body"] for r in rows]
+
+
+class TestRemoveAndBlock:
+    def test_remove_clears_thread_for_both(self, tmp_path, monkeypatch):
+        """«Удалил друга, а переписка осталась у него» — дыра в приватности."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _ask(client, "Мира")
+        client.post("/api/friend/respond",
+                    json={"device_id": "dev-b", "requester_device": "dev-a",
+                          "accept": True})
+        _seed_message(srv, ("dev-a", "dev-b"), "dev-a", "привет")
+        _seed_message(srv, ("dev-a", "dev-b"), "dev-b", "здорово")
+        r = client.post("/api/friend/remove",
+                        json={"device_id": "dev-a", "peer_device": "dev-b"})
+        assert r.status_code == 200 and r.json()["ok"] is True, r.text
+        assert _messages(srv, ("dev-a", "dev-b")) == []
+        conn = srv.get_db()
+        try:
+            n = conn.execute("SELECT COUNT(*) AS c FROM friend_edges").fetchone()["c"]
+        finally:
+            conn.close()
+        assert n == 0
+
+    def test_remove_without_edge_is_not_found(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        r = client.post("/api/friend/remove",
+                        json={"device_id": "dev-a", "peer_device": "dev-b"})
+        assert r.status_code == 404 and r.json()["detail"] == "not_friends", r.text
+
+    def test_block_hides_thread_and_blocks_requests(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _player(client, "Третья", "dev-c")
+        _ask(client, "Мира")
+        client.post("/api/friend/respond",
+                    json={"device_id": "dev-b", "requester_device": "dev-a",
+                          "accept": True})
+        _seed_message(srv, ("dev-a", "dev-b"), "dev-b", "напиши мне")
+        r = client.post("/api/friend/block",
+                        json={"device_id": "dev-a", "target_device": "dev-b"})
+        assert r.status_code == 200 and r.json()["ok"] is True, r.text
+        assert _messages(srv, ("dev-a", "dev-b")) == []
+        # блок мешает заявке в обе стороны, ответ не раскрывает кто заблокировал
+        r1 = client.post("/api/friend/request",
+                         json={"device_id": "dev-a", "target_nick": "Мира"})
+        assert r1.status_code == 403 and r1.json()["detail"] == "blocked", r1.text
+        r2 = client.post("/api/friend/request",
+                         json={"device_id": "dev-b", "target_nick": "Варда"})
+        assert r2.status_code == 403 and r2.json()["detail"] == "blocked", r2.text
+
+    def test_block_without_edge_still_works(self, tmp_path, monkeypatch):
+        """Блок — защита от навязчивых, ребра может и не быть."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        r = client.post("/api/friend/block",
+                        json={"device_id": "dev-a", "target_device": "dev-b"})
+        assert r.status_code == 200, r.text
+        r = client.post("/api/friend/request",
+                        json={"device_id": "dev-b", "target_nick": "Варда"})
+        assert r.status_code == 403 and r.json()["detail"] == "blocked", r.text
+
+    def test_unblock_returns_nothing_but_allows_request(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _ask(client, "Мира")
+        client.post("/api/friend/respond",
+                    json={"device_id": "dev-b", "requester_device": "dev-a",
+                          "accept": True})
+        _seed_message(srv, ("dev-a", "dev-b"), "dev-b", "до связи")
+        client.post("/api/friend/block",
+                    json={"device_id": "dev-a", "target_device": "dev-b"})
+        r = client.post("/api/friend/unblock",
+                        json={"device_id": "dev-a", "target_device": "dev-b"})
+        assert r.status_code == 200 and r.json()["ok"] is True, r.text
+        assert _messages(srv, ("dev-a", "dev-b")) == [], \
+            "разблокировка не возвращает переписку — это осознанное действие"
+        conn = srv.get_db()
+        try:
+            n = conn.execute("SELECT COUNT(*) AS c FROM friend_edges").fetchone()["c"]
+        finally:
+            conn.close()
+        assert n == 0, "разблокировка не возвращает ребро"
+        r2 = client.post("/api/friend/request",
+                         json={"device_id": "dev-a", "target_nick": "Мира"})
+        assert r2.status_code == 200 and r2.json()["state"] == "pending", r2.text
+
+    def test_spirit_cannot_be_removed_or_blocked(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        r = client.post("/api/friend/remove",
+                        json={"device_id": "dev-a", "peer_device": "npc-spirit"})
+        assert r.status_code == 400 and r.json()["detail"] == "npc", r.text
+        r = client.post("/api/friend/block",
+                        json={"device_id": "dev-a", "target_device": "npc-spirit"})
+        assert r.status_code == 400 and r.json()["detail"] == "npc", r.text
+
+    def test_block_self_rejected(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        r = client.post("/api/friend/block",
+                        json={"device_id": "dev-a", "target_device": "dev-a"})
+        assert r.status_code == 400 and r.json()["detail"] == "self", r.text
