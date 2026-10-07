@@ -195,7 +195,6 @@ class TestFriendRequest:
                         json={"device_id": "dev-a", "target_nick": "Бот"})
         assert r.status_code == 400 and r.json()["detail"] == "bot", r.text
 
-    @pytest.mark.skip(reason="respond появляется в задаче 4")
     def test_already_friends_conflict(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
         client = _client(srv)
@@ -222,7 +221,6 @@ class TestFriendRequest:
                         json={"device_id": "dev-a", "target_nick": "Четвёртый"})
         assert r.status_code == 429 and r.json()["detail"] == "pending_limit", r.text
 
-    @pytest.mark.skip(reason="respond появляется в задаче 4")
     def test_friend_limit(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
         monkeypatch.setattr(srv, "FRIEND_MAX", 1)
@@ -290,3 +288,148 @@ class TestFriendRequest:
         finally:
             conn.close()
         assert row["state"] == "pending", row["state"]
+
+
+def _ask(client, target_nick, device_id="dev-a"):
+    r = client.post("/api/friend/request",
+                    json={"device_id": device_id, "target_nick": target_nick})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+class TestFriendRespond:
+    @pytest.mark.skip(reason="inbox появляется в задаче 7")
+    def test_accept_makes_friendship_symmetric(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _ask(client, "Мира")
+        r = client.post("/api/friend/respond",
+                        json={"device_id": "dev-b", "requester_device": "dev-a",
+                              "accept": True})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["ok"] is True and body["accepted"] is True
+        assert body["peer"]["device_id"] == "dev-a" and body["peer"]["nick"] == "Варда"
+        # список один на пару: отдельного «принять от имени второго» не нужно
+        inbox_a = client.get("/api/social/inbox", params={"device_id": "dev-a"})
+        inbox_b = client.get("/api/social/inbox", params={"device_id": "dev-b"})
+        assert inbox_a.status_code == 200 and inbox_b.status_code == 200, \
+            (inbox_a.text, inbox_b.text)
+
+    def test_decline_deletes_edge_and_allows_new_request(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _ask(client, "Мира")
+        r = client.post("/api/friend/respond",
+                        json={"device_id": "dev-b", "requester_device": "dev-a",
+                              "accept": False})
+        assert r.status_code == 200, r.text
+        assert r.json()["accepted"] is False
+        conn = srv.get_db()
+        try:
+            n = conn.execute("SELECT COUNT(*) AS c FROM friend_edges").fetchone()["c"]
+        finally:
+            conn.close()
+        assert n == 0, "отказ хранится удалением: история отказов не нужна"
+        # повторная заявка после отказа допустима
+        r2 = client.post("/api/friend/request",
+                         json={"device_id": "dev-a", "target_nick": "Мира"})
+        assert r2.status_code == 200 and r2.json()["state"] == "pending", r2.text
+
+    def test_second_respond_is_not_found(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _ask(client, "Мира")
+        client.post("/api/friend/respond",
+                    json={"device_id": "dev-b", "requester_device": "dev-a",
+                          "accept": True})
+        r = client.post("/api/friend/respond",
+                        json={"device_id": "dev-b", "requester_device": "dev-a",
+                              "accept": True})
+        assert r.status_code == 404 and r.json()["detail"] == "request_not_found", r.text
+        # ребро осталось принятым: повторный respond его не портит
+        conn = srv.get_db()
+        try:
+            state = conn.execute("SELECT state FROM friend_edges").fetchone()["state"]
+        finally:
+            conn.close()
+        assert state == "accepted", state
+
+    def test_unknown_requester_is_not_found(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _ask(client, "Мира")
+        r = client.post("/api/friend/respond",
+                        json={"device_id": "dev-b", "requester_device": "dev-нет",
+                              "accept": True})
+        assert r.status_code == 404 and r.json()["detail"] == "request_not_found", r.text
+
+    def test_third_party_cannot_accept(self, tmp_path, monkeypatch):
+        """Принять может только адресат: (a_device=? OR b_device=?) в WHERE."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _player(client, "Третья", "dev-c")
+        _ask(client, "Мира")
+        r = client.post("/api/friend/respond",
+                        json={"device_id": "dev-c", "requester_device": "dev-a",
+                              "accept": True})
+        assert r.status_code == 404 and r.json()["detail"] == "request_not_found", r.text
+        conn = srv.get_db()
+        try:
+            state = conn.execute("SELECT state FROM friend_edges").fetchone()["state"]
+        finally:
+            conn.close()
+        assert state == "pending", state
+
+    def test_self_respond_rejected(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        r = client.post("/api/friend/respond",
+                        json={"device_id": "dev-a", "requester_device": "dev-a",
+                              "accept": True})
+        assert r.status_code == 400 and r.json()["detail"] == "self", r.text
+
+    def test_accept_respects_own_friend_limit(self, tmp_path, monkeypatch):
+        """Лимит проверяется у ПРИНИМАЮЩЕГО, а не только у инициатора."""
+        srv = _srv(tmp_path, monkeypatch)
+        monkeypatch.setattr(srv, "FRIEND_MAX", 1)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _player(client, "Третья", "dev-c")
+        # заявители — Мира и Третья, адресат один: Варда (dev-a) принимает
+        _ask(client, "Варда", device_id="dev-b")  # Варда получила заявку
+        _ask(client, "Варда", device_id="dev-c")  # и ещё одну
+        r1 = client.post("/api/friend/respond",
+                         json={"device_id": "dev-a", "requester_device": "dev-b",
+                               "accept": True})
+        assert r1.status_code == 200, r1.text
+        r2 = client.post("/api/friend/respond",
+                         json={"device_id": "dev-a", "requester_device": "dev-c",
+                               "accept": True})
+        assert r2.status_code == 429 and r2.json()["detail"] == "friend_limit", r2.text
+
+    @pytest.mark.skip(reason="block появляется в задаче 5")
+    def test_block_prevents_accept(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _ask(client, "Мира")
+        client.post("/api/friend/block",
+                    json={"device_id": "dev-b", "target_device": "dev-a"})
+        r = client.post("/api/friend/respond",
+                        json={"device_id": "dev-b", "requester_device": "dev-a",
+                              "accept": True})
+        assert r.status_code == 403 and r.json()["detail"] == "blocked", r.text

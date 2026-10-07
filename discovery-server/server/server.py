@@ -4145,6 +4145,55 @@ def friend_request(payload: FriendRequestPayload):
         conn.close()
 
 
+@app.post("/api/friend/respond", response_model=FriendRespondResponse)
+def friend_respond(payload: FriendRespondPayload):
+    """Приём или отказ по заявке. Оба — guarded-переход по state='pending'.
+
+    rowcount == 0 означает «заявки нет, она уже принята или её принял второй
+    поток» — все три случая дают 404, а не «успех». Отказ удаляет строку.
+    """
+    me = payload.device_id.strip()
+    requester = payload.requester_device.strip()
+    if me == requester:
+        raise HTTPException(status_code=400, detail="self")
+    conn = get_db()
+    try:
+        pair_key = canonical_pair_key(me, requester)
+        if _social_blocked(conn, me, requester):
+            raise HTTPException(status_code=403, detail="blocked")
+        if not payload.accept:
+            conn.execute("BEGIN IMMEDIATE")
+            cur = conn.execute(
+                "DELETE FROM friend_edges WHERE pair_key = ? AND state = 'pending' "
+                "AND requester_device = ? AND (a_device = ? OR b_device = ?)",
+                (pair_key, requester, me, me))
+            if cur.rowcount == 0:
+                conn.rollback()
+                raise HTTPException(status_code=404, detail="request_not_found")
+            conn.commit()
+            return FriendRespondResponse(ok=True, accepted=False,
+                                         peer=_social_peer(conn, requester))
+
+        if _social_friend_count(conn, me) >= FRIEND_MAX:
+            raise HTTPException(status_code=429, detail="friend_limit")
+        conn.execute("BEGIN IMMEDIATE")
+        cur = conn.execute(
+            "UPDATE friend_edges SET state = 'accepted', updated_at = ? "
+            "WHERE pair_key = ? AND state = 'pending' AND requester_device = ? "
+            "AND (a_device = ? OR b_device = ?)",
+            (_now_iso(), pair_key, requester, me, me))
+        if cur.rowcount == 0:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="request_not_found")
+        conn.commit()
+        return FriendRespondResponse(ok=True, accepted=True,
+                                     peer=_social_peer(conn, requester))
+    except HTTPException:
+        raise
+    finally:
+        conn.close()
+
+
 @app.get("/api/rating", response_model=RatingResponse)
 def rating(device_id: str = Query("", max_length=128)):
     """Рейтинг игроков: открытия, вещества, очки целей, наличие домика."""
