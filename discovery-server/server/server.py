@@ -498,6 +498,32 @@ class SocialOkResponse(BaseModel):
     ok: bool
 
 
+class MessageItem(BaseModel):
+    id: int
+    from_me: bool
+    body: str
+    sent_at: str
+
+
+class MessagesResponse(BaseModel):
+    ok: bool
+    messages: list[MessageItem] = []
+
+
+class MessageSendPayload(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    peer_device: str = Field(..., min_length=1, max_length=128)
+    # 2000 намеренно больше MSG_MAX_LEN: иначе pydantic отдаст свой 422 вместо
+    # контрактного 400 too_long, а клиент обязан получить код из таблицы §5.
+    body: str = Field(..., max_length=2000)
+
+
+class MessageSendResponse(BaseModel):
+    ok: bool
+    id: int
+    sent_at: str
+
+
 class ProfileResponse(BaseModel):
     ok: bool
     nick: str
@@ -4286,6 +4312,105 @@ def friend_unblock(payload: FriendBlockPayload):
             (me, target))
         conn.commit()
         return SocialOkResponse(ok=True)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+_MSG_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _clean_message_body(raw: str) -> str:
+    """Тело сообщения: CRLF → LF, управляющие символы вон, пробелы по краям.
+
+    Клиент рендерит тело как обычный текст (BBCode в лейблах выключен), но
+    ESC-последовательности и NUL не должны попадать ни в логи сервера, ни в
+    ленту. \\t (\\x09) и \\n (\\x0a) сохраняются намеренно.
+    """
+    text = (raw or "").replace("\r\n", "\n").replace("\r", "\n")
+    return _MSG_CONTROL_RE.sub("", text).strip()
+
+
+@app.get("/api/messages", response_model=MessagesResponse)
+def get_messages(device_id: str = Query(..., min_length=1, max_length=128),
+                 peer_device: str = Query("", max_length=128),
+                 since_id: int = Query(0, ge=0),
+                 limit: int = Query(100, ge=1, le=100)):
+    """Лента одной пары. Открытие ленты и есть прочтение.
+
+    Побочный эффект: read_at выставляется только ЧУЖИМ сообщениям этой пары.
+    Свои вставляются уже прочитанными, поэтому фильтр from_device != me не
+    косметический: без него unread собеседника гаснет от моего же открытия.
+    """
+    me = device_id.strip()
+    peer = peer_device.strip()
+    if not peer:
+        raise HTTPException(status_code=400, detail="missing_peer")
+    conn = get_db()
+    try:
+        if _social_blocked(conn, me, peer):
+            raise HTTPException(status_code=403, detail="blocked")
+        if not _social_accepted(conn, me, peer):
+            raise HTTPException(status_code=404, detail="not_friends")
+        pair_key = canonical_pair_key(me, peer)
+        rows = conn.execute(
+            "SELECT id, from_device, body, sent_at FROM messages "
+            "WHERE pair_key = ? AND id > ? ORDER BY id ASC LIMIT ?",
+            (pair_key, int(since_id), int(limit))).fetchall()
+        conn.execute(
+            "UPDATE messages SET read_at = ? "
+            "WHERE pair_key = ? AND from_device != ? AND read_at IS NULL",
+            (_now_iso(), pair_key, me))
+        conn.commit()
+        return MessagesResponse(ok=True, messages=[
+            MessageItem(id=r["id"], from_me=(r["from_device"] == me),
+                        body=r["body"], sent_at=r["sent_at"]) for r in rows])
+    except HTTPException:
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.post("/api/message/send", response_model=MessageSendResponse)
+def send_message(payload: MessageSendPayload):
+    me = payload.device_id.strip()
+    peer = payload.peer_device.strip()
+    if peer == SPIRIT_DEVICE:
+        raise HTTPException(status_code=403, detail="npc")
+    body = _clean_message_body(payload.body)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty")
+    if len(body) > MSG_MAX_LEN:
+        raise HTTPException(status_code=400, detail="too_long")
+    conn = get_db()
+    try:
+        if _social_blocked(conn, me, peer):
+            raise HTTPException(status_code=403, detail="blocked")
+        if not _social_accepted(conn, me, peer):
+            raise HTTPException(status_code=404, detail="not_friends")
+        # Суточный счётчик намеренно НЕ атомарный с вставкой — это анти-спам, а
+        # не экономика (та же оговорка, что у VISITS_PER_VISITOR_DAY).
+        sent = conn.execute(
+            "SELECT COUNT(*) AS c FROM messages WHERE from_device = ? AND sent_at >= ?",
+            (me, _today())).fetchone()["c"]
+        if sent >= MSG_PER_DAY:
+            raise HTTPException(status_code=429, detail="daily_limit")
+        pair_key = canonical_pair_key(me, peer)
+        now = _now_iso()
+        conn.execute("BEGIN IMMEDIATE")
+        cur = conn.execute(
+            "INSERT INTO messages (pair_key, from_device, body, sent_at, read_at) "
+            "VALUES (?, ?, ?, ?, ?)", (pair_key, me, body, now, now))
+        new_id = int(cur.lastrowid)
+        conn.commit()
+        return MessageSendResponse(ok=True, id=new_id, sent_at=now)
+    except HTTPException:
+        raise
     except Exception:
         conn.rollback()
         raise

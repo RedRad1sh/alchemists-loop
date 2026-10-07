@@ -7,6 +7,7 @@ process_server здесь не годится: подпроцесс не даё�
 (уборка почты, триггер «return»), ни get_llm (весточки).
 """
 
+import datetime as _dt
 import os
 import sys
 
@@ -671,3 +672,209 @@ class TestRemoveAndBlock:
             assert huge.status_code == 422, (route, huge.text)
             huge_peer = client.post(route, json={"device_id": "dev-a", key: long_id})
             assert huge_peer.status_code == 422, (route, huge_peer.text)
+
+
+def _befriend(srv, client, nick_a="Варда", dev_a="dev-a", nick_b="Мира", dev_b="dev-b"):
+    _player(client, nick_a, dev_a)
+    _player(client, nick_b, dev_b)
+    client.post("/api/friend/request", json={"device_id": dev_a, "target_nick": nick_b})
+    r = client.post("/api/friend/respond",
+                    json={"device_id": dev_b, "requester_device": dev_a, "accept": True})
+    assert r.status_code == 200, r.text
+    return dev_a, dev_b
+
+
+class TestMessages:
+    def test_thread_order_and_from_me(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        r = client.post("/api/message/send",
+                        json={"device_id": a, "peer_device": b, "body": "привет"})
+        assert r.status_code == 200 and r.json()["ok"] is True, r.text
+        first_id = r.json()["id"]
+        client.post("/api/message/send",
+                    json={"device_id": b, "peer_device": a, "body": "здорово"})
+        r = client.get("/api/messages",
+                       params={"device_id": a, "peer_device": b})
+        assert r.status_code == 200, r.text
+        rows = r.json()["messages"]
+        assert [(m["body"], m["from_me"]) for m in rows] == \
+            [("привет", True), ("здорово", False)], rows
+        assert rows[0]["id"] == first_id
+
+    def test_reading_marks_only_peer_messages(self, tmp_path, monkeypatch):
+        """read_at — побочный эффект открытия ленты, отдельного «mark read» нет.
+
+        Свои сообщения вставляются уже прочитанными, поэтому UPDATE обязан
+        фильтровать from_device != me: иначе unread собеседника гаснет от того,
+        что я сам открыл ленту.
+        """
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        client.post("/api/message/send", json={"device_id": a, "peer_device": b, "body": "моё"})
+        client.post("/api/message/send", json={"device_id": b, "peer_device": a, "body": "чужое"})
+        client.get("/api/messages", params={"device_id": a, "peer_device": b})
+        conn = srv.get_db()
+        try:
+            rows = conn.execute(
+                "SELECT body, from_device, read_at FROM messages ORDER BY id").fetchall()
+        finally:
+            conn.close()
+        mine = next(r for r in rows if r["body"] == "моё")
+        theirs = next(r for r in rows if r["body"] == "чужое")
+        assert theirs["read_at"] is not None, rows
+        assert mine["read_at"] is not None, "своё пишется прочитанным при вставке"
+        # Все строки, созданные /api/message/send, вставлены уже прочитанными,
+        # поэтому хвост теста сеет read_at IS NULL напрямую (так живёт только
+        # письмо Светика, §6.4): иначе проверка «открытие ленты читает чужое и
+        # не трогает своё» краснеть не умеет.
+        conn = srv.get_db()
+        try:
+            conn.execute("INSERT INTO messages (pair_key, from_device, body, sent_at) "
+                         "VALUES (?,?,?,?)",
+                         (srv.canonical_pair_key(a, b), b, "чужое непрочитано", srv._now_iso()))
+            conn.execute("INSERT INTO messages (pair_key, from_device, body, sent_at) "
+                         "VALUES (?,?,?,?)",
+                         (srv.canonical_pair_key(a, b), a, "моё непрочитано", srv._now_iso()))
+            conn.commit()
+        finally:
+            conn.close()
+        client.get("/api/messages", params={"device_id": a, "peer_device": b})
+        conn = srv.get_db()
+        try:
+            states = {r["body"]: r["read_at"] for r in conn.execute(
+                "SELECT body, read_at FROM messages WHERE read_at IS NULL OR "
+                "body IN ('чужое непрочитано', 'моё непрочитано')").fetchall()}
+        finally:
+            conn.close()
+        assert states["чужое непрочитано"] is not None, \
+            "открытие ленты выставляет read_at чужим сообщениям пары"
+        assert states["моё непрочитано"] is None, \
+            "фильтр from_device != me обязателен: иначе unread гаснет от моего же открытия"
+
+    def test_since_id_returns_only_newer(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        ids = []
+        for i in range(3):
+            ids.append(client.post(
+                "/api/message/send",
+                json={"device_id": a, "peer_device": b, "body": "m%d" % i}).json()["id"])
+        r = client.get("/api/messages",
+                       params={"device_id": a, "peer_device": b, "since_id": ids[1]})
+        assert [m["id"] for m in r.json()["messages"]] == [ids[2]], r.json()
+
+    def test_limit_is_bounded(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        for i in range(5):
+            client.post("/api/message/send",
+                        json={"device_id": a, "peer_device": b, "body": "m%d" % i})
+        r = client.get("/api/messages",
+                       params={"device_id": a, "peer_device": b, "limit": 2})
+        assert len(r.json()["messages"]) == 2, r.json()
+        r = client.get("/api/messages",
+                       params={"device_id": a, "peer_device": b, "limit": 100})
+        assert r.status_code == 200 and len(r.json()["messages"]) == 5, r.text
+        # limit зажат Query(ge=1, le=100): выход за диапазон — 422 валидации
+        r = client.get("/api/messages",
+                       params={"device_id": a, "peer_device": b, "limit": 5000})
+        assert r.status_code == 422, r.text
+
+    def test_strangers_and_missing_peer(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        r = client.get("/api/messages", params={"device_id": "dev-a", "peer_device": "dev-b"})
+        assert r.status_code == 404 and r.json()["detail"] == "not_friends", r.text
+        r = client.get("/api/messages", params={"device_id": "dev-a", "peer_device": ""})
+        assert r.status_code == 400 and r.json()["detail"] == "missing_peer", r.text
+        r = client.post("/api/message/send",
+                        json={"device_id": "dev-a", "peer_device": "dev-b", "body": "эй"})
+        assert r.status_code == 404 and r.json()["detail"] == "not_friends", r.text
+
+    def test_other_pair_thread_is_not_readable(self, tmp_path, monkeypatch):
+        """peer_device обязателен: «все переписки скопом» не отдаём."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        c, d = _befriend(srv, client, nick_a="Третья", dev_a="dev-c",
+                         nick_b="Четвёртая", dev_b="dev-d")
+        client.post("/api/message/send", json={"device_id": c, "peer_device": d, "body": "чужое"})
+        r = client.get("/api/messages", params={"device_id": a, "peer_device": b})
+        assert [m["body"] for m in r.json()["messages"]] == [], r.json()
+
+    def test_body_validation(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        r = client.post("/api/message/send", json={"device_id": a, "peer_device": b, "body": "   "})
+        assert r.status_code == 400 and r.json()["detail"] == "empty", r.text
+        r = client.post("/api/message/send",
+                        json={"device_id": a, "peer_device": b, "body": "ы" * (srv.MSG_MAX_LEN + 1)})
+        assert r.status_code == 400 and r.json()["detail"] == "too_long", r.text
+        r = client.post("/api/message/send",
+                        json={"device_id": a, "peer_device": b, "body": "ы" * srv.MSG_MAX_LEN})
+        assert r.status_code == 200, r.text
+
+    def test_control_chars_and_newlines_are_cleaned(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        r = client.post("/api/message/send",
+                        json={"device_id": a, "peer_device": b,
+                              "body": "при\r\nвет\u0000мир\u001b[31m"})
+        assert r.status_code == 200, r.text
+        rows = client.get("/api/messages",
+                          params={"device_id": b, "peer_device": a}).json()["messages"]
+        assert rows[0]["body"] == "при\nветмир[31m", rows[0]
+
+    def test_daily_limit_resets_next_day(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        monkeypatch.setattr(srv, "MSG_PER_DAY", 3)
+        clock = {"now": _dt.datetime(2026, 10, 7, 12, 0)}
+        monkeypatch.setattr(srv, "_now_dt", lambda: clock["now"])
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        for i in range(3):
+            r = client.post("/api/message/send",
+                            json={"device_id": a, "peer_device": b, "body": "m%d" % i})
+            assert r.status_code == 200, (i, r.text)
+        r = client.post("/api/message/send",
+                        json={"device_id": a, "peer_device": b, "body": "m3"})
+        assert r.status_code == 429 and r.json()["detail"] == "daily_limit", r.text
+        # лимит на ОТПРАВКУ: получать можно и дальше
+        r = client.post("/api/message/send",
+                        json={"device_id": b, "peer_device": a, "body": "ответ"})
+        assert r.status_code == 200, r.text
+        clock["now"] = _dt.datetime(2026, 10, 8, 0, 30)
+        r = client.post("/api/message/send",
+                        json={"device_id": a, "peer_device": b, "body": "утро"})
+        assert r.status_code == 200, r.text
+
+    def test_spirit_does_not_answer(self, tmp_path, monkeypatch):
+        """Светик не читает ответы: отправка на npc-spirit запрещена."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        r = client.post("/api/message/send",
+                        json={"device_id": "dev-a", "peer_device": "npc-spirit",
+                              "body": "привет"})
+        assert r.status_code == 403 and r.json()["detail"] == "npc", r.text
+
+    def test_blocked_pair_cannot_read_or_write(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        client.post("/api/friend/block", json={"device_id": a, "target_device": b})
+        # блок удалил ребро, поэтому дальше 404; проверяем, что не 200
+        r = client.get("/api/messages", params={"device_id": b, "peer_device": a})
+        assert r.status_code in (403, 404), r.text
+        r = client.post("/api/message/send",
+                        json={"device_id": b, "peer_device": a, "body": "эй"})
+        assert r.status_code in (403, 404), r.text
