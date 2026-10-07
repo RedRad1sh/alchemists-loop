@@ -11,7 +11,6 @@ import datetime as _dt
 import os
 import sys
 
-import pytest
 from fastapi.testclient import TestClient
 
 SERVER_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
@@ -299,7 +298,6 @@ def _ask(client, target_nick, device_id="dev-a"):
 
 
 class TestFriendRespond:
-    @pytest.mark.skip(reason="inbox появляется в задаче 7")
     def test_accept_makes_friendship_symmetric(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
         client = _client(srv)
@@ -706,9 +704,10 @@ class TestMessages:
     def test_reading_marks_only_peer_messages(self, tmp_path, monkeypatch):
         """read_at — побочный эффект открытия ленты, отдельного «mark read» нет.
 
-        Свои сообщения вставляются уже прочитанными, поэтому UPDATE обязан
-        фильтровать from_device != me: иначе unread собеседника гаснет от того,
-        что я сам открыл ленту.
+        read_at значит «прочитано ПОЛУЧАТЕЛЕМ» и при вставке остаётся NULL,
+        поэтому UPDATE обязан фильтровать from_device != me: без него моё же
+        открытие ленты выставило бы read_at на ИСХОДЯЩИЕ строки и погасило бы
+        бейдж собеседника. Краснеет на удалении этого фильтра.
         """
         srv = _srv(tmp_path, monkeypatch)
         client = _client(srv)
@@ -724,35 +723,10 @@ class TestMessages:
             conn.close()
         mine = next(r for r in rows if r["body"] == "моё")
         theirs = next(r for r in rows if r["body"] == "чужое")
-        assert theirs["read_at"] is not None, rows
-        assert mine["read_at"] is not None, "своё пишется прочитанным при вставке"
-        # Все строки, созданные /api/message/send, вставлены уже прочитанными,
-        # поэтому хвост теста сеет read_at IS NULL напрямую (так живёт только
-        # письмо Светика, §6.4): иначе проверка «открытие ленты читает чужое и
-        # не трогает своё» краснеть не умеет.
-        conn = srv.get_db()
-        try:
-            conn.execute("INSERT INTO messages (pair_key, from_device, body, sent_at) "
-                         "VALUES (?,?,?,?)",
-                         (srv.canonical_pair_key(a, b), b, "чужое непрочитано", srv._now_iso()))
-            conn.execute("INSERT INTO messages (pair_key, from_device, body, sent_at) "
-                         "VALUES (?,?,?,?)",
-                         (srv.canonical_pair_key(a, b), a, "моё непрочитано", srv._now_iso()))
-            conn.commit()
-        finally:
-            conn.close()
-        client.get("/api/messages", params={"device_id": a, "peer_device": b})
-        conn = srv.get_db()
-        try:
-            states = {r["body"]: r["read_at"] for r in conn.execute(
-                "SELECT body, read_at FROM messages WHERE read_at IS NULL OR "
-                "body IN ('чужое непрочитано', 'моё непрочитано')").fetchall()}
-        finally:
-            conn.close()
-        assert states["чужое непрочитано"] is not None, \
+        assert theirs["read_at"] is not None, \
             "открытие ленты выставляет read_at чужим сообщениям пары"
-        assert states["моё непрочитано"] is None, \
-            "фильтр from_device != me обязателен: иначе unread гаснет от моего же открытия"
+        assert mine["read_at"] is None, \
+            "исходящие — не мои на прочтение: их читает получатель"
 
     def test_since_id_returns_only_newer(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
@@ -878,3 +852,230 @@ class TestMessages:
         r = client.post("/api/message/send",
                         json={"device_id": b, "peer_device": a, "body": "эй"})
         assert r.status_code in (403, 404), r.text
+
+
+def _send(client, dev, peer, body):
+    r = client.post("/api/message/send",
+                    json={"device_id": dev, "peer_device": peer, "body": body})
+    assert r.status_code == 200, r.text
+    return r.json()["id"]
+
+
+def _inbox(client, device_id):
+    r = client.get("/api/social/inbox", params={"device_id": device_id})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _count(srv, sql, args=()):
+    conn = srv.get_db()
+    try:
+        return conn.execute(sql, args).fetchone()["c"]
+    finally:
+        conn.close()
+
+
+class TestInbox:
+    def test_unregistered_device_is_404_without_side_effects(self, tmp_path, monkeypatch):
+        """Соц-слой профили не создаёт: нет строки в players — 404."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        r = client.get("/api/social/inbox", params={"device_id": "dev-ghost"})
+        assert r.status_code == 404 and r.json()["detail"] == "not_registered", r.text
+        for table in ("friend_edges", "messages", "spirit_messages", "social_state"):
+            assert _count(srv, "SELECT COUNT(*) AS c FROM %s" % table) == 0, table
+
+    def test_missing_device_id_is_422(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        assert client.get("/api/social/inbox").status_code == 422
+
+    def test_response_shape(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        _send(client, b, a, "Спасибо за карту!")
+        _player(client, "Николя", "dev-z")   # заявка, которую никто не принял
+        client.post("/api/friend/request", json={"device_id": "dev-z", "target_nick": "Варда"})
+        # last_seen пишут игровые роуты (_upsert_player из brew-check/discover/
+        # vein/find/player/register/house), а НЕ POST /api/me — которым тесты и
+        # регистрируют. Поэтому значение сеется напрямую: проверяем, что inbox
+        # отдаёт живое поле players, а не заглушку "".
+        conn = srv.get_db()
+        try:
+            conn.execute("UPDATE players SET last_seen = ? WHERE device_id = ?",
+                         (srv._today(), b))
+            conn.commit()
+        finally:
+            conn.close()
+        body = _inbox(client, a)
+        assert body["ok"] is True
+        assert body["friend_limit"] == srv.FRIEND_MAX
+        assert body["unread_total"] == 1
+        assert body["requests_total"] == 1
+        f = body["friends"][0]
+        assert f["device_id"] == b and f["nick"] == "Мира"
+        assert f["unread"] == 1 and f["last_msg_preview"] == "Спасибо за карту!"
+        assert f["last_msg_at"], f
+        assert f["avatar"], f
+        assert f["last_seen"] == srv._today(), f
+        inc = body["incoming"][0]
+        assert inc["device_id"] == "dev-z" and inc["nick"] == "Николя"
+        assert inc["requested_at"], inc
+        assert inc["avatar"], inc
+        assert inc["last_seen"] == "", "NULL last_seen нормализуется в пустую строку"
+
+    def test_outgoing_requests(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _ask(client, "Мира")
+        body = _inbox(client, "dev-a")
+        assert [o["nick"] for o in body["outgoing"]] == ["Мира"], body["outgoing"]
+        assert body["friends"] == [], "pending не считается другом"
+        assert body["requests_total"] == 0, "requests_total — про ВХОДЯщие"
+
+    def test_sorted_by_last_message_then_nick(self, tmp_path, monkeypatch):
+        """Светик первым (задача 8), дальше по последнему сообщению, пустые по нику.
+
+        Часы подменяются и двигаются между отправками: sent_at хранится с
+        точностью до секунды, и без этого три сообщения попали бы в одну
+        секунду — сортировка выродилась бы в ничью, которую разрешает ник, и
+        тест зелёным прошёл бы даже на отсутствующем ключе last_msg_at.
+        """
+        srv = _srv(tmp_path, monkeypatch)
+        clock = {"now": _dt.datetime(2026, 10, 7, 12, 0, 0)}
+        monkeypatch.setattr(srv, "_now_dt", lambda: clock["now"])
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        for nick, dev in (("Аня", "dev-1"), ("Боря", "dev-2"), ("Вера", "dev-3")):
+            _player(client, nick, dev)
+            client.post("/api/friend/request", json={"device_id": "dev-a", "target_nick": nick})
+            client.post("/api/friend/respond",
+                        json={"device_id": dev, "requester_device": "dev-a", "accept": True})
+        clock["now"] = _dt.datetime(2026, 10, 7, 12, 0, 10)
+        _send(client, "dev-3", "dev-a", "от Веры")
+        clock["now"] = _dt.datetime(2026, 10, 7, 12, 0, 20)
+        _send(client, "dev-1", "dev-a", "от Ани")       # свежее Веры
+        # у Бори сообщений нет: пустой last_msg_at обязан уйти в конец
+        assert [f["nick"] for f in _inbox(client, "dev-a")["friends"]] == \
+            ["Аня", "Вера", "Боря"]
+        clock["now"] = _dt.datetime(2026, 10, 7, 12, 0, 30)
+        _send(client, "dev-2", "dev-a", "Боря ответил")
+        assert [f["nick"] for f in _inbox(client, "dev-a")["friends"]] == \
+            ["Боря", "Аня", "Вера"]
+
+    def test_unread_ignores_own_messages(self, tmp_path, monkeypatch):
+        """Бейдж направлен в получателя: свои не считаются, чужие — да.
+
+        read_at при вставке NULL, поэтому у b непрочитаны ОБА моих сообщения,
+        а у меня — одно его. Переставить `from_device != ?` на `= ?` — и обе
+        цифры поменяются местами, тест краснеет.
+        """
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        _send(client, a, b, "моё первое")
+        _send(client, a, b, "моё второе")
+        _send(client, b, a, "чужое")
+        assert _inbox(client, a)["unread_total"] == 1
+        mine = next(f for f in _inbox(client, a)["friends"] if f["device_id"] == b)
+        assert mine["unread"] == 1, mine
+        theirs = next(f for f in _inbox(client, b)["friends"] if f["device_id"] == a)
+        assert theirs["unread"] == 2, "для собеседника оба моих сообщения непрочитаны"
+
+    def test_preview_truncated_to_msg_preview_len(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        _send(client, b, a, "ы" * 500)
+        f = _inbox(client, a)["friends"][0]
+        assert len(f["last_msg_preview"]) == srv.MSG_PREVIEW_LEN, len(f["last_msg_preview"])
+        # полная лента не обрезана: превью — только витрина
+        full = client.get("/api/messages", params={"device_id": a, "peer_device": b}).json()
+        assert len(full["messages"][0]["body"]) == srv.MSG_MAX_LEN
+
+    def test_rename_visible_immediately(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        client.post("/api/me", json={"device_id": b, "nick": "Мира Вторая"})
+        f = _inbox(client, a)["friends"][0]
+        assert f["nick"] == "Мира Вторая", f
+        assert f["device_id"] == b, "device_id стабилен, ник — витрина"
+
+    def test_prune_by_age_and_by_tail(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        clock = {"now": _dt.datetime(2026, 10, 7, 12, 0)}
+        monkeypatch.setattr(srv, "_now_dt", lambda: clock["now"])
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        c, d = _befriend(srv, client, nick_a="Третья", dev_a="dev-c",
+                         nick_b="Четвёртая", dev_b="dev-d")
+        # старое сообщение (31 день) — глобальная уборка по возрасту
+        conn = srv.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO messages (pair_key, from_device, body, sent_at, read_at) "
+                "VALUES (?,?,?,?,?)",
+                (srv.canonical_pair_key(a, b), b, "древнее",
+                 srv._date_minus(srv.MSG_RETENTION_DAYS + 1), srv._now_iso()))
+            # хвост 205 сообщений в паре c-d: обрезается до MSG_KEEP_PER_PAIR
+            pk = srv.canonical_pair_key(c, d)
+            for i in range(srv.MSG_KEEP_PER_PAIR + 5):
+                conn.execute(
+                    "INSERT INTO messages (pair_key, from_device, body, sent_at, read_at) "
+                    "VALUES (?,?,?,?,?)", (pk, d, "tail%03d" % i, srv._now_iso(), srv._now_iso()))
+            conn.commit()
+        finally:
+            conn.close()
+        # Инбоксом обращается УЧАСТНИК обрезаемой пары: хвосты чистятся только
+        # по парям того, кто позвал (глобальная уборка по возрасту — по всем).
+        # Вызов от имени a оставил бы пару c-d нетронутой, и проверка хвоста
+        # была бы проверкой «ничего не произошло».
+        _inbox(client, c)
+        assert _count(srv, "SELECT COUNT(*) AS c FROM messages WHERE body = 'древнее'") == 0
+        tail = _count(srv, "SELECT COUNT(*) AS c FROM messages WHERE pair_key = ?",
+                      (srv.canonical_pair_key(c, d),))
+        assert tail == srv.MSG_KEEP_PER_PAIR, tail
+        # обрезан СТАРЫЙ конец, а не свежий
+        assert _count(srv, "SELECT COUNT(*) AS c FROM messages WHERE body = 'tail000'") == 0
+        assert _count(srv, "SELECT COUNT(*) AS c FROM messages WHERE body = 'tail204'") == 1
+        # уборка по возрасту глобальна: «древнее» лежит в паре a-b, а позвал c
+        assert _count(srv, "SELECT COUNT(*) AS c FROM messages WHERE pair_key = ?",
+                      (srv.canonical_pair_key(a, b),)) == 0, "в паре a-b было только древнее"
+
+    def test_prune_leaves_short_threads_alone(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        _send(client, b, a, "живое")
+        _inbox(client, a)
+        _inbox(client, b)
+        assert _count(srv, "SELECT COUNT(*) AS c FROM messages") == 1
+
+    def test_social_state_day_moves_with_clock(self, tmp_path, monkeypatch):
+        """social_state.last_inbox_day — основа триггера «return» (задача 8)."""
+        srv = _srv(tmp_path, monkeypatch)
+        clock = {"now": _dt.datetime(2026, 10, 7, 12, 0)}
+        monkeypatch.setattr(srv, "_now_dt", lambda: clock["now"])
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _inbox(client, "dev-a")
+        conn = srv.get_db()
+        try:
+            day = conn.execute(
+                "SELECT last_inbox_day FROM social_state WHERE device_id='dev-a'"
+            ).fetchone()["last_inbox_day"]
+        finally:
+            conn.close()
+        assert day == "2026-10-07", day
+        clock["now"] = _dt.datetime(2026, 10, 9, 8, 0)
+        _inbox(client, "dev-a")
+        conn = srv.get_db()
+        try:
+            rows = conn.execute("SELECT last_inbox_day FROM social_state").fetchall()
+        finally:
+            conn.close()
+        assert len(rows) == 1 and rows[0]["last_inbox_day"] == "2026-10-09", rows

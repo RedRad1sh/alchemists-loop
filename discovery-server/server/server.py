@@ -524,6 +524,41 @@ class MessageSendResponse(BaseModel):
     sent_at: str
 
 
+class InboxFriend(BaseModel):
+    device_id: str
+    nick: str
+    avatar: dict = {}
+    last_seen: str = ""
+    unread: int = 0
+    last_msg_at: str = ""
+    last_msg_preview: str = ""
+
+
+class InboxRequest(BaseModel):
+    device_id: str
+    nick: str
+    avatar: dict = {}
+    last_seen: str = ""
+    requested_at: str = ""
+
+
+class InboxOutgoing(BaseModel):
+    nick: str
+    requested_at: str = ""
+
+
+class SocialInboxResponse(BaseModel):
+    ok: bool
+    friends: list[InboxFriend] = []
+    incoming: list[InboxRequest] = []
+    outgoing: list[InboxOutgoing] = []
+    unread_total: int = 0
+    requests_total: int = 0
+    # Дефолт вычисляется в момент создания класса, поэтому FRIEND_MAX обязан
+    # быть объявлен выше моделей (он стоит в блоке констант после ECHO_CAP).
+    friend_limit: int = FRIEND_MAX
+
+
 class ProfileResponse(BaseModel):
     ok: bool
     nick: str
@@ -4333,6 +4368,52 @@ def _clean_message_body(raw: str) -> str:
     return _MSG_CONTROL_RE.sub("", text).strip()
 
 
+def _social_prune(conn: sqlite3.Connection, device_id: str) -> None:
+    """Уборка почты: глобально по возрасту и хвостами по парам игрока.
+
+    Вызывается только из GET /api/social/inbox — единственной точки, которую
+    клиент зовёт при входе в игру. Фоновых задач и планировщика нет.
+
+    Граница возраста — строковое сравнение ISO-дат: _date_minus(N) даёт
+    'YYYY-MM-DD', а sent_at — 'YYYY-MM-DDTHH:MM:SS', поэтому сообщение,
+    отправленное ровно N дней назад сегодня, сохраняется. Запас в сутки
+    намеренный: точность до дня здесь достаточна, а часовые пояса — нет.
+
+    Хвост обрезается по id, а не по sent_at: id монотонен в пределах пары и не
+    зависит от часов. При ≤ MSG_KEEP_PER_PAIR строках подзапрос возвращает
+    NULL, и `id < NULL` не удаляет ничего.
+    """
+    conn.execute("DELETE FROM messages WHERE sent_at < ?",
+                 (_date_minus(MSG_RETENTION_DAYS),))
+    rows = conn.execute(
+        "SELECT pair_key FROM friend_edges WHERE a_device = ? OR b_device = ?",
+        (device_id, device_id)).fetchall()
+    pair_keys = {r["pair_key"] for r in rows}
+    pair_keys.add(canonical_pair_key(device_id, SPIRIT_DEVICE))
+    for pk in pair_keys:
+        conn.execute(
+            "DELETE FROM messages WHERE pair_key = ? AND id < ("
+            "  SELECT id FROM messages WHERE pair_key = ? ORDER BY id DESC LIMIT 1 OFFSET ?)",
+            (pk, pk, MSG_KEEP_PER_PAIR - 1))
+
+
+def _social_mark_seen(conn: sqlite3.Connection, device_id: str, day: str) -> None:
+    """Запомнить день последнего обращения к inbox.
+
+    НЕ players.last_seen: тот обновляет _upsert_player на игровых роутах
+    (brew-check, discover, vein/find, player/register, house), а клиент зовёт
+    их в стартовом обмене РАНЬШЕ inbox — триггер «игрок вернулся» по last_seen
+    не сработал бы ни разу. POST /api/me к ним не относится: set_me пишет
+    только nick, last_seen там остаётся NULL.
+    """
+    conn.execute(
+        "INSERT INTO social_state (device_id, last_inbox_day, updated_at) "
+        "VALUES (?, ?, ?) "
+        "ON CONFLICT(device_id) DO UPDATE SET "
+        "last_inbox_day = excluded.last_inbox_day, updated_at = excluded.updated_at",
+        (device_id, day, _now_iso()))
+
+
 @app.get("/api/messages", response_model=MessagesResponse)
 def get_messages(device_id: str = Query(..., min_length=1, max_length=128),
                  peer_device: str = Query("", max_length=128),
@@ -4341,8 +4422,9 @@ def get_messages(device_id: str = Query(..., min_length=1, max_length=128),
     """Лента одной пары. Открытие ленты и есть прочтение.
 
     Побочный эффект: read_at выставляется только ЧУЖИМ сообщениям этой пары.
-    Свои вставляются уже прочитанными, поэтому фильтр from_device != me не
-    косметический: без него unread собеседника гаснет от моего же открытия.
+    Фильтр from_device != me несёт поведение, а не косметику: read_at значит
+    «прочитано получателем» и ставится при вставке в NULL, поэтому без фильтра
+    моё же открытие ленты погасило бы бейдж собеседника.
     """
     me = device_id.strip()
     peer = peer_device.strip()
@@ -4403,13 +4485,147 @@ def send_message(payload: MessageSendPayload):
         pair_key = canonical_pair_key(me, peer)
         now = _now_iso()
         conn.execute("BEGIN IMMEDIATE")
+        # read_at не ставится: он значит «прочитано ПОЛУЧАТЕЛЕМ». Столбец на
+        # строке один, и «видел отправитель» с «видел получатель» в нём не
+        # уживаются — вставка «своего» прочитанным гасила бы бейдж собеседника
+        # навсегда.
         cur = conn.execute(
-            "INSERT INTO messages (pair_key, from_device, body, sent_at, read_at) "
-            "VALUES (?, ?, ?, ?, ?)", (pair_key, me, body, now, now))
+            "INSERT INTO messages (pair_key, from_device, body, sent_at) "
+            "VALUES (?, ?, ?, ?)", (pair_key, me, body, now))
         new_id = int(cur.lastrowid)
         conn.commit()
         return MessageSendResponse(ok=True, id=new_id, sent_at=now)
     except HTTPException:
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.get("/api/social/inbox", response_model=SocialInboxResponse)
+def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
+    """Единственная «толстая» точка соц-слоя: уборка, Светик, список, бейджи.
+
+    Профиль не создаёт: нет строки в players — 404 not_registered. Порядок
+    шагов существенен — _social_mark_seen выполняется ПОСЛЕ сборки ответа,
+    потому что триггер «return» (задача 8) читает social_state.last_inbox_day
+    как «когда игрок заходил в прошлый раз».
+    """
+    me = device_id.strip()
+    conn = get_db()
+    try:
+        if conn.execute("SELECT 1 FROM players WHERE device_id = ?", (me,)).fetchone() is None:
+            raise HTTPException(status_code=404, detail="not_registered")
+
+        today = _today()
+        conn.execute("BEGIN IMMEDIATE")
+        _social_prune(conn, me)
+
+        # --- Весточки Светика (задача 8) ------------------------------------
+        # Здесь появятся два вызова: _ensure_spirit_edge(conn, me) и
+        # _ensure_spirit_message(conn, me, today). В этой задаче блок пуст:
+        # ребро Светика создаётся вместе с весточками, иначе клиент увидел бы
+        # друга без имени.
+
+        edges = conn.execute(
+            "SELECT pair_key, a_device, b_device, state, requester_device, updated_at "
+            "FROM friend_edges WHERE a_device = ? OR b_device = ?", (me, me)).fetchall()
+
+        friends: list[InboxFriend] = []
+        incoming: list[InboxRequest] = []
+        outgoing: list[InboxOutgoing] = []
+        accepted_pairs: dict[str, str] = {}     # peer_device -> pair_key
+        incoming_dev: dict[str, str] = {}       # peer_device -> updated_at
+        outgoing_dev: dict[str, str] = {}       # peer_device -> updated_at
+        for e in edges:
+            peer = e["b_device"] if e["a_device"] == me else e["a_device"]
+            if e["state"] == "accepted":
+                accepted_pairs[peer] = e["pair_key"]
+            elif e["requester_device"] == me:
+                outgoing_dev[peer] = e["updated_at"]
+            else:
+                incoming_dev[peer] = e["updated_at"]
+
+        # Витрины одним запросом: ник и аватар читаются заново, поэтому
+        # переименование друга видно сразу.
+        wanted = set(accepted_pairs) | set(incoming_dev) | set(outgoing_dev)
+        showcase: dict[str, sqlite3.Row] = {}
+        if wanted:
+            marks = ",".join("?" for _ in wanted)
+            for row in conn.execute(
+                    "SELECT device_id, nick, last_seen FROM players "
+                    "WHERE device_id IN (%s)" % marks, tuple(sorted(wanted))).fetchall():
+                showcase[row["device_id"]] = row
+
+        # Непрочитанное и последнее сообщение — одной агрегацией на все пары.
+        stats: dict[str, sqlite3.Row] = {}
+        if accepted_pairs:
+            marks = ",".join("?" for _ in accepted_pairs)
+            for row in conn.execute(
+                    "SELECT pair_key, "
+                    "SUM(CASE WHEN from_device != ? AND read_at IS NULL THEN 1 ELSE 0 END) AS unread, "
+                    "MAX(id) AS last_id, MAX(sent_at) AS last_at "
+                    "FROM messages WHERE pair_key IN (%s) GROUP BY pair_key" % marks,
+                    tuple([me] + sorted(accepted_pairs.values()))).fetchall():
+                stats[row["pair_key"]] = row
+
+        # Тела превью — вторым запросом по собранным id (N ≤ числу друзей).
+        previews: dict[int, str] = {}
+        last_ids = sorted({r["last_id"] for r in stats.values() if r["last_id"] is not None})
+        if last_ids:
+            marks = ",".join("?" for _ in last_ids)
+            for row in conn.execute(
+                    "SELECT id, body FROM messages WHERE id IN (%s)" % marks,
+                    tuple(last_ids)).fetchall():
+                previews[row["id"]] = row["body"][:MSG_PREVIEW_LEN]
+
+        unread_total = 0
+        for peer, pk in accepted_pairs.items():
+            row = showcase.get(peer)
+            nick = row["nick"] if row is not None else ""
+            st = stats.get(pk)
+            unread = int(st["unread"] or 0) if st is not None else 0
+            unread_total += unread
+            friends.append(InboxFriend(
+                device_id=peer, nick=nick,
+                avatar=avatar_for(nick or peer),
+                last_seen=(row["last_seen"] if row is not None and row["last_seen"] else ""),
+                unread=unread,
+                last_msg_at=(st["last_at"] if st is not None and st["last_at"] else ""),
+                last_msg_preview=(previews.get(st["last_id"], "") if st is not None else "")))
+        for peer, at in incoming_dev.items():
+            row = showcase.get(peer)
+            nick = row["nick"] if row is not None else ""
+            incoming.append(InboxRequest(
+                device_id=peer, nick=nick, avatar=avatar_for(nick or peer),
+                last_seen=(row["last_seen"] if row is not None and row["last_seen"] else ""),
+                requested_at=at))
+        for peer, at in outgoing_dev.items():
+            row = showcase.get(peer)
+            outgoing.append(InboxOutgoing(nick=(row["nick"] if row is not None else ""),
+                                          requested_at=at))
+
+        # Сортировка — три стабильных прохода list.sort от младшего ключа к
+        # старшему. Светик всегда первым, дальше последнее сообщение (пустые в
+        # конце), дальше ник. Клиент порядок не переставляет и определяет
+        # закреплённого по device_id == SPIRIT_DEVICE.
+        friends.sort(key=lambda f: f.nick)
+        friends.sort(key=lambda f: f.last_msg_at or "", reverse=True)
+        friends.sort(key=lambda f: f.device_id == SPIRIT_DEVICE, reverse=True)
+        incoming.sort(key=lambda r: r.nick)
+        incoming.sort(key=lambda r: r.requested_at, reverse=True)
+        outgoing.sort(key=lambda o: o.requested_at, reverse=True)
+
+        _social_mark_seen(conn, me, today)
+        conn.commit()
+        return SocialInboxResponse(
+            ok=True, friends=friends, incoming=incoming, outgoing=outgoing,
+            unread_total=unread_total, requests_total=len(incoming),
+            friend_limit=FRIEND_MAX)
+    except HTTPException:
+        conn.rollback()
         raise
     except Exception:
         conn.rollback()
