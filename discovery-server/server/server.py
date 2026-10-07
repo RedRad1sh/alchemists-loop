@@ -450,6 +450,49 @@ class HouseVisitResponse(BaseModel):
     visits_week: int = 0
 
 
+# ---------------------------------------------------------------------------
+# S1 «Друзья и переписка»: модели
+# ---------------------------------------------------------------------------
+
+class SocialPeer(BaseModel):
+    device_id: str
+    nick: str
+    avatar: dict = {}
+    last_seen: str = ""
+
+
+class FriendRequestPayload(BaseModel):
+    device_id: str
+    target_nick: str
+
+
+class FriendRequestResponse(BaseModel):
+    ok: bool
+    state: str
+    peer: SocialPeer
+
+
+class FriendRespondPayload(BaseModel):
+    device_id: str
+    requester_device: str
+    accept: bool
+
+
+class FriendRespondResponse(BaseModel):
+    ok: bool
+    accepted: bool
+    peer: SocialPeer
+
+
+class FriendPeerPayload(BaseModel):
+    device_id: str
+    peer_device: str
+
+
+class SocialOkResponse(BaseModel):
+    ok: bool
+
+
 class ProfileResponse(BaseModel):
     ok: bool
     nick: str
@@ -3957,6 +4000,142 @@ def get_house(nick: str = Query(..., min_length=1, max_length=64)):
             ok=True, nick=row["nick"], avatar=avatar_for(row["nick"]), house=house,
             visits_week=_visits_week(conn, row["device_id"]),
         )
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# S1 «Друзья и переписка»
+# ---------------------------------------------------------------------------
+
+def _social_peer(conn: sqlite3.Connection, device_id: str) -> SocialPeer:
+    """Витрина собеседника: ник и аватар читаются на каждом запросе.
+
+    Ник сменяем через POST /api/me, поэтому ничего не кэшируется в рёбрах:
+    переименование друга видно сразу и ничего не рвёт.
+    """
+    row = conn.execute(
+        "SELECT nick, last_seen FROM players WHERE device_id = ?", (device_id,)
+    ).fetchone()
+    if row is None:
+        return SocialPeer(device_id=device_id, nick="", avatar=avatar_for(device_id))
+    return SocialPeer(device_id=device_id, nick=row["nick"],
+                      avatar=avatar_for(row["nick"]), last_seen=row["last_seen"] or "")
+
+
+def _social_blocked(conn: sqlite3.Connection, a: str, b: str) -> bool:
+    """Блок в любую сторону. Ответ не раскрывает, кто именно заблокировал."""
+    row = conn.execute(
+        "SELECT 1 FROM blocks WHERE (blocker_device = ? AND blocked_device = ?) "
+        "OR (blocker_device = ? AND blocked_device = ?)", (a, b, b, a)
+    ).fetchone()
+    return row is not None
+
+
+def _social_edge(conn: sqlite3.Connection, a: str, b: str) -> Optional[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM friend_edges WHERE pair_key = ?",
+        (canonical_pair_key(a, b),)
+    ).fetchone()
+
+
+def _social_accepted(conn: sqlite3.Connection, a: str, b: str) -> bool:
+    row = _social_edge(conn, a, b)
+    return row is not None and row["state"] == "accepted"
+
+
+def _social_friend_count(conn: sqlite3.Connection, device_id: str) -> int:
+    """Принятые рёбра, КРОМЕ Светика: закреплённый NPC не занимает слот."""
+    return conn.execute(
+        "SELECT COUNT(*) AS c FROM friend_edges "
+        "WHERE state = 'accepted' AND (a_device = ? OR b_device = ?) "
+        "AND a_device != ? AND b_device != ?",
+        (device_id, device_id, SPIRIT_DEVICE, SPIRIT_DEVICE)
+    ).fetchone()["c"]
+
+
+def _social_pending_out(conn: sqlite3.Connection, device_id: str) -> int:
+    return conn.execute(
+        "SELECT COUNT(*) AS c FROM friend_edges "
+        "WHERE state = 'pending' AND requester_device = ?", (device_id,)
+    ).fetchone()["c"]
+
+
+@app.post("/api/friend/request", response_model=FriendRequestResponse)
+def friend_request(payload: FriendRequestPayload):
+    """Заявка в друзья по нику. Ник — единственный вход, дальше только device_id.
+
+    Встречная заявка принимается сразу: игрок не должен видеть «заявку в ответ
+    на заявку». Своя повторная заявка идемпотентна — клиент не обязан различать
+    «не отправилось» и «уже отправлено».
+    """
+    me = payload.device_id.strip()
+    target_nick = payload.target_nick.strip()
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT device_id, nick FROM players WHERE nick = ?", (target_nick,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=400, detail="target_not_found")
+        target = row["device_id"]
+        if target.startswith("bot-"):
+            raise HTTPException(status_code=400, detail="bot")
+        if target == me:
+            raise HTTPException(status_code=400, detail="self")
+        if _social_blocked(conn, me, target):
+            raise HTTPException(status_code=403, detail="blocked")
+
+        edge = _social_edge(conn, me, target)
+        if edge is not None:
+            if edge["state"] == "accepted":
+                raise HTTPException(status_code=409, detail="already_friends")
+            if edge["requester_device"] == me:
+                return FriendRequestResponse(ok=True, state="pending",
+                                             peer=_social_peer(conn, target))
+            conn.execute(
+                "UPDATE friend_edges SET state = 'accepted', updated_at = ? "
+                "WHERE pair_key = ?", (_now_iso(), edge["pair_key"]))
+            conn.commit()
+            return FriendRequestResponse(ok=True, state="accepted",
+                                         peer=_social_peer(conn, target))
+
+        if _social_friend_count(conn, me) >= FRIEND_MAX:
+            raise HTTPException(status_code=429, detail="friend_limit")
+        if _social_pending_out(conn, me) >= FRIEND_PENDING_OUT_MAX:
+            raise HTTPException(status_code=429, detail="pending_limit")
+
+        pair_key = canonical_pair_key(me, target)
+        a_device, b_device = pair_key.split("|", 1)
+        now = _now_iso()
+        conn.execute("BEGIN IMMEDIATE")
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO friend_edges (pair_key, a_device, b_device, "
+            "state, requester_device, created_at, updated_at) "
+            "VALUES (?, ?, ?, 'pending', ?, ?, ?)",
+            (pair_key, a_device, b_device, me, now, now))
+        if cur.rowcount == 0:
+            # Гонку выиграл параллельный запрос: не возвращаем «успех вставки»,
+            # а отвечаем из фактической строки. Приём _ensure_sigil_daily / D7.
+            conn.rollback()
+            edge = _social_edge(conn, me, target)
+            if edge is None:
+                raise HTTPException(status_code=503, detail="race_lost")
+            if edge["state"] == "accepted":
+                raise HTTPException(status_code=409, detail="already_friends")
+            return FriendRequestResponse(
+                ok=True,
+                state="accepted" if edge["requester_device"] != me else "pending",
+                peer=_social_peer(conn, target))
+        conn.commit()
+        return FriendRequestResponse(ok=True, state="pending",
+                                     peer=_social_peer(conn, target))
+    except Exception:
+        # Один блок на все отказы: rollback нужен и при контрактном
+        # HTTPException, и при неожиданной ошибке — транзакция BEGIN IMMEDIATE
+        # не должна оставаться открытой к conn.close().
+        conn.rollback()
+        raise
     finally:
         conn.close()
 
