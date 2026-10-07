@@ -657,8 +657,8 @@ class TestRemoveAndBlock:
         assert r.status_code == 200 and r.json()["ok"] is True, r.text
 
     def test_payload_bounds(self, tmp_path, monkeypatch):
-        """Пустой или гигантский идентификатор не должен доходить до БД:
-        device_id пишется в PRIMARY KEY blocks и friend_edges."""
+        """Пустой или гигантский идентификатор не должен доходить до БД: оба
+        поля пишутся в PRIMARY KEY (blocks, friend_edges.pair_key)."""
         srv = _srv(tmp_path, monkeypatch)
         client = _client(srv)
         long_id = "x" * 200
@@ -669,3 +669,5 @@ class TestRemoveAndBlock:
             assert empty.status_code == 422, (route, empty.text)
             huge = client.post(route, json={"device_id": long_id, key: "dev-b"})
             assert huge.status_code == 422, (route, huge.text)
+            huge_peer = client.post(route, json={"device_id": "dev-a", key: long_id})
+            assert huge_peer.status_code == 422, (route, huge_peer.text)
