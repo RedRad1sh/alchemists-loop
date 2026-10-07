@@ -10,6 +10,7 @@ process_server здесь не годится: подпроцесс не даё�
 import os
 import sys
 
+import pytest
 from fastapi.testclient import TestClient
 
 SERVER_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
@@ -119,3 +120,139 @@ class TestSchema:
         assert srv.SPIRIT_BODY_MAX == 200
         # зарезервированный device_id не должен наследовать семантику seed-ботов
         assert not srv.SPIRIT_DEVICE.startswith("bot-")
+
+
+class TestFriendRequest:
+    def test_request_creates_pending_edge(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        r = client.post("/api/friend/request",
+                        json={"device_id": "dev-a", "target_nick": "Мира"})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["ok"] is True and body["state"] == "pending"
+        assert body["peer"]["device_id"] == "dev-b" and body["peer"]["nick"] == "Мира"
+        assert body["peer"]["avatar"], body["peer"]
+
+    def test_repeat_is_idempotent_and_does_not_duplicate(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        for _ in range(2):
+            r = client.post("/api/friend/request",
+                            json={"device_id": "dev-a", "target_nick": "Мира"})
+            assert r.status_code == 200, r.text
+        conn = srv.get_db()
+        try:
+            n = conn.execute("SELECT COUNT(*) AS c FROM friend_edges").fetchone()["c"]
+        finally:
+            conn.close()
+        assert n == 1, "pair_key в PRIMARY KEY делает вторую заявку невозможной"
+
+    def test_counter_request_accepts(self, tmp_path, monkeypatch):
+        """Встречная заявка принимается: игрок не видит «заявку в ответ на заявку»."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        client.post("/api/friend/request", json={"device_id": "dev-a", "target_nick": "Мира"})
+        r = client.post("/api/friend/request", json={"device_id": "dev-b", "target_nick": "Варда"})
+        assert r.status_code == 200, r.text
+        assert r.json()["state"] == "accepted", r.json()
+        conn = srv.get_db()
+        try:
+            row = conn.execute("SELECT state, requester_device FROM friend_edges").fetchone()
+            n = conn.execute("SELECT COUNT(*) AS c FROM friend_edges").fetchone()["c"]
+        finally:
+            conn.close()
+        assert n == 1 and row["state"] == "accepted"
+        assert row["requester_device"] == "dev-a", "первый заявитель сохраняется"
+
+    def test_unknown_nick_self_and_bot(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        r = client.post("/api/friend/request",
+                        json={"device_id": "dev-a", "target_nick": "НетТакой"})
+        assert r.status_code == 400 and r.json()["detail"] == "target_not_found", r.text
+        r = client.post("/api/friend/request",
+                        json={"device_id": "dev-a", "target_nick": "Варда"})
+        assert r.status_code == 400 and r.json()["detail"] == "self", r.text
+        # seed-боты (Issue #17) живут в players с device_id LIKE 'bot-%'.
+        # id вне диапазона сида (bot-0..bot-3), приём test_nick_hijack.py.
+        conn = srv.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO players (nick, device_id, created_at, last_seen) "
+                "VALUES ('Бот', 'bot-9', ?, ?)", (srv._today(), srv._now_iso()))
+            conn.commit()
+        finally:
+            conn.close()
+        r = client.post("/api/friend/request",
+                        json={"device_id": "dev-a", "target_nick": "Бот"})
+        assert r.status_code == 400 and r.json()["detail"] == "bot", r.text
+
+    @pytest.mark.skip(reason="respond появляется в задаче 4")
+    def test_already_friends_conflict(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        client.post("/api/friend/request", json={"device_id": "dev-a", "target_nick": "Мира"})
+        client.post("/api/friend/respond",
+                    json={"device_id": "dev-b", "requester_device": "dev-a", "accept": True})
+        r = client.post("/api/friend/request", json={"device_id": "dev-a", "target_nick": "Мира"})
+        assert r.status_code == 409 and r.json()["detail"] == "already_friends", r.text
+
+    def test_pending_out_limit(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        monkeypatch.setattr(srv, "FRIEND_PENDING_OUT_MAX", 3)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        for i in range(3):
+            _player(client, "Сосед%d" % i, "dev-p%d" % i)
+            r = client.post("/api/friend/request",
+                            json={"device_id": "dev-a", "target_nick": "Сосед%d" % i})
+            assert r.status_code == 200, (i, r.text)
+        _player(client, "Четвёртый", "dev-p3")
+        r = client.post("/api/friend/request",
+                        json={"device_id": "dev-a", "target_nick": "Четвёртый"})
+        assert r.status_code == 429 and r.json()["detail"] == "pending_limit", r.text
+
+    @pytest.mark.skip(reason="respond появляется в задаче 4")
+    def test_friend_limit(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        monkeypatch.setattr(srv, "FRIEND_MAX", 1)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _player(client, "Третья", "dev-c")
+        client.post("/api/friend/request", json={"device_id": "dev-a", "target_nick": "Мира"})
+        client.post("/api/friend/respond",
+                    json={"device_id": "dev-b", "requester_device": "dev-a", "accept": True})
+        r = client.post("/api/friend/request", json={"device_id": "dev-a", "target_nick": "Третья"})
+        assert r.status_code == 429 and r.json()["detail"] == "friend_limit", r.text
+
+    def test_spirit_edge_does_not_take_friend_slot(self, tmp_path, monkeypatch):
+        """Ребро Светика закреплено и не учитывается в FRIEND_MAX (задача 8)."""
+        srv = _srv(tmp_path, monkeypatch)
+        monkeypatch.setattr(srv, "FRIEND_MAX", 1)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        conn = srv.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO friend_edges (pair_key, a_device, b_device, state, "
+                "requester_device, created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
+                (srv.canonical_pair_key("dev-a", srv.SPIRIT_DEVICE), "dev-a",
+                 srv.SPIRIT_DEVICE, "accepted", srv.SPIRIT_DEVICE,
+                 srv._now_iso(), srv._now_iso()))
+            conn.commit()
+        finally:
+            conn.close()
+        _player(client, "Мира", "dev-b")
+        r = client.post("/api/friend/request", json={"device_id": "dev-a", "target_nick": "Мира"})
+        assert r.status_code == 200, r.text
