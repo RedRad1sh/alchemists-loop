@@ -4093,6 +4093,11 @@ def friend_request(payload: FriendRequestPayload):
             if edge["requester_device"] == me:
                 return FriendRequestResponse(ok=True, state="pending",
                                              peer=_social_peer(conn, target))
+            # Встречная заявка — это приём, поэтому лимит друзей гейтит её так же,
+            # как /api/friend/respond: иначе игрок с полным списком получил бы
+            # лишнего друга, ответив на чужую заявку своей.
+            if _social_friend_count(conn, me) >= FRIEND_MAX:
+                raise HTTPException(status_code=429, detail="friend_limit")
             conn.execute(
                 "UPDATE friend_edges SET state = 'accepted', updated_at = ? "
                 "WHERE pair_key = ?", (_now_iso(), edge["pair_key"]))

@@ -256,3 +256,37 @@ class TestFriendRequest:
         _player(client, "Мира", "dev-b")
         r = client.post("/api/friend/request", json={"device_id": "dev-a", "target_nick": "Мира"})
         assert r.status_code == 200, r.text
+
+    def test_counter_request_respects_friend_limit(self, tmp_path, monkeypatch):
+        """Встречная заявка не обходит FRIEND_MAX (приём гейтит и задача 4)."""
+        srv = _srv(tmp_path, monkeypatch)
+        monkeypatch.setattr(srv, "FRIEND_MAX", 1)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _player(client, "Третья", "dev-c")
+        conn = srv.get_db()
+        try:
+            # один принятый друг — слот уже занят
+            conn.execute(
+                "INSERT INTO friend_edges (pair_key, a_device, b_device, state, "
+                "requester_device, created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
+                (srv.canonical_pair_key("dev-a", "dev-b"), "dev-a", "dev-b",
+                 "accepted", "dev-a", srv._now_iso(), srv._now_iso()))
+            conn.commit()
+        finally:
+            conn.close()
+        # входящая заявка от Третьей
+        r = client.post("/api/friend/request", json={"device_id": "dev-c", "target_nick": "Варда"})
+        assert r.status_code == 200, r.text
+        # ответ своей заявкой — тот же приём, лимит обязан сработать
+        r = client.post("/api/friend/request", json={"device_id": "dev-a", "target_nick": "Третья"})
+        assert r.status_code == 429 and r.json()["detail"] == "friend_limit", r.text
+        conn = srv.get_db()
+        try:
+            row = conn.execute(
+                "SELECT state FROM friend_edges WHERE pair_key = ?",
+                (srv.canonical_pair_key("dev-a", "dev-c"),)).fetchone()
+        finally:
+            conn.close()
+        assert row["state"] == "pending", row["state"]
