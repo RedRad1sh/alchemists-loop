@@ -850,6 +850,67 @@ def canonical_pair_key(a: str, b: str) -> str:
         return f"{a}|{a}"
     return f"{min(a, b)}|{max(a, b)}"
 
+# ---------------------------------------------------------------------------
+# Forward-only раннер версий схемы (S1, задача 0)
+# ---------------------------------------------------------------------------
+
+MIGRATIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations")
+_MIGRATION_NAME_RE = re.compile(r"^(\d{3})_([a-z0-9_]+)\.sql$")
+
+
+def _ensure_schema_version(conn: sqlite3.Connection) -> set[int]:
+    """Таблица версий + множество уже применённых номеров."""
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS schema_version (
+               version INTEGER PRIMARY KEY,
+               name TEXT NOT NULL,
+               applied_at TEXT NOT NULL
+           )"""
+    )
+    return {int(r["version"]) for r in conn.execute("SELECT version FROM schema_version").fetchall()}
+
+
+def _apply_migrations(conn: sqlite3.Connection) -> list[str]:
+    """Применить migrations/NNN_*.sql с version > записанных. Только вперёд.
+
+    Откатов нет: роль down-миграции играет снапшот БД перед деплоем
+    (README-server.md, раздел «Где хранится база данных»). Ошибка → rollback и
+    исключение наружу: сервер не стартует с наполовину применённой миграцией.
+
+    BEGIN IMMEDIATE/COMMIT зашиты ВНУТРЬ передаваемого скрипта, а не вокруг
+    вызова executescript: executescript неявно коммитит незакрытую транзакцию,
+    поэтому внешний BEGIN был бы проглочен до выполнения первой строки.
+    Интерполяция имени и номера безопасна — обе величины получены совпадением
+    _MIGRATION_NAME_RE, applied_at даёт _now_iso().
+    """
+    applied = _ensure_schema_version(conn)
+    if not os.path.isdir(MIGRATIONS_DIR):
+        return []
+    done: list[str] = []
+    for name in sorted(n for n in os.listdir(MIGRATIONS_DIR) if n.endswith(".sql")):
+        m = _MIGRATION_NAME_RE.match(name)
+        if m is None:
+            raise RuntimeError(
+                "Файл в migrations/ вне формата NNN_snake_case.sql: %s" % name)
+        version = int(m.group(1))
+        if version in applied:
+            continue
+        with open(os.path.join(MIGRATIONS_DIR, name), "r", encoding="utf-8") as f:
+            body = f.read()
+        script = (
+            "BEGIN IMMEDIATE;\n"
+            + body
+            + "\nINSERT INTO schema_version (version, name, applied_at) "
+              "VALUES (%d, '%s', '%s');\nCOMMIT;\n" % (version, name, _now_iso())
+        )
+        try:
+            conn.executescript(script)
+        except Exception:
+            conn.rollback()
+            raise
+        done.append(name)
+    return done
+
 def init_db():
     """Инициализация БД: создать таблицы и загрузить стартовый граф веществ."""
     conn = get_db()
@@ -878,6 +939,12 @@ def init_db():
             with open(schema_path, "r", encoding="utf-8") as f:
                 schema_sql = f.read()
             conn.executescript(schema_sql)
+
+        # Раннер версий — после schema.sql: на свежей БД схема уже содержит все
+        # таблицы, и миграции того же DDL проходят вхолостую (IF NOT EXISTS),
+        # записывая только строку версии. Форма «schema.sql + migrations»
+        # покрыта tests/test_migrations.py и tests/test_social.py::TestSchema.
+        _apply_migrations(conn)
 
         # миграция старых БД: колонки glyph и d
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(elements)").fetchall()}
