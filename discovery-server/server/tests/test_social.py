@@ -44,7 +44,9 @@ def _tables(conn):
 
 
 def _columns(conn, table):
-    return [(r["name"], r["type"], r["notnull"], r["pk"])
+    """Форма таблицы целиком: dflt_value в сравнении обязателен, иначе DEFAULT
+    разъедется между schema.sql и миграцией молча."""
+    return [(r["name"], r["type"], r["notnull"], r["pk"], r["dflt_value"])
             for r in conn.execute("PRAGMA table_info(%s)" % table).fetchall()]
 
 
@@ -95,7 +97,7 @@ class TestSchema:
         srv.init_db()
         conn = srv.get_db()
         try:
-            pk = [name for (name, _t, _n, pk) in _columns(conn, "friend_edges") if pk]
+            pk = [c[0] for c in _columns(conn, "friend_edges") if c[3]]
         finally:
             conn.close()
         assert pk == ["pair_key"], pk
@@ -110,6 +112,8 @@ class TestSchema:
         assert srv.MSG_KEEP_PER_PAIR == 200
         assert srv.MSG_PREVIEW_LEN == 60
         assert srv.SPIRIT_DEVICE == "npc-spirit"
+        assert srv.SPIRIT_NICK == "Светик"
+        assert srv.SPIRIT_LLM_TIMEOUT == 8
         assert srv.SPIRIT_RETURN_DAYS == 3
         assert srv.SPIRIT_LLM_PER_DAY_GLOBAL == 200
         assert srv.SPIRIT_BODY_MAX == 200
