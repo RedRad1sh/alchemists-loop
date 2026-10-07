@@ -164,6 +164,11 @@ func make_craft_recipe(craft: Dictionary) -> SigilRecipe:
 	if display_name == "":
 		# Имя из каталога (fallback_name) — достойное название вместо id крафта.
 		display_name = str(craft.get("fallback_name", ""))
+	if display_name == "":
+		# Экраны сигилов (sigil_ui: _open_sigil_fullscreen) кладут готовое имя в
+		# "name"; без этой ветки у хроматиков и каталожных карт полоса названия
+		# на самой карточке оставалась пустой.
+		display_name = str(craft.get("name", ""))
 	_pending_seed = int(craft.get("seed", 0))
 	var r := _make_recipe(str(craft.get("id", "")), craft_ingredients(craft),
 		StringName(str(craft.get("rarity", "common"))), &"object",

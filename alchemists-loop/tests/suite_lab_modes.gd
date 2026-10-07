@@ -21,14 +21,14 @@ static func run(g: Game) -> void:
 	Selftest.check("field reagent enters cauldron", g._pages._experiment_cauldron_items.size() == 1 and g._pages._experiment_cauldron_items[0] == "fire")
 	g._pages._experiment_clear_cauldron()
 	Selftest.check("experiment cauldron can be cleared", g._pages._experiment_cauldron_items.is_empty())
-	g._tabs_ref.current_tab = 2
+	g._tabs_ref.current_tab = Game.TAB_WORLD
 	g._update_brew_bar_visibility()
 	Selftest.check("bar hides on other tab", not g._brew_bar.visible)
-	g._tabs_ref.current_tab = 1
+	g._tabs_ref.current_tab = Game.TAB_LAB
 	g._update_brew_bar_visibility()
 	Selftest.check("bar visible on lab", g._brew_bar.visible)
 	var pad_ok := false
-	var lab_scroll := g._tabs_ref.get_child(1) as ScrollContainer
+	var lab_scroll := g._tabs_ref.get_child(Game.TAB_LAB) as ScrollContainer
 	if lab_scroll != null:
 		for ch in lab_scroll.get_children():
 			var v: VBoxContainer = null

@@ -40,6 +40,10 @@ static func run(g: Game) -> void:
 			if not reachable.has(o) and reachable.has(String(r["a"])) and reachable.has(String(r["b"])):
 				reachable[o] = true
 				rc = true
+	var missing := []
+	for k in g.ITEMS.keys():
+		if not reachable.has(k):
+			missing.append(k)
 	Selftest.check("graph reachable all", reachable.size() == g.ITEMS.size())
 	# циклы в известных рецептах (серверный контент) не должны вешать _layer_of
 	g.RECIPES.append({"a": "cyc_a", "b": "fire", "out": "cyc_b"})

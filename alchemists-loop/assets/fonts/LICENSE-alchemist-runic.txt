@@ -1,0 +1,28 @@
+Alchemist Runic
+==============
+
+Файл:      assets/fonts/Alchemist-Runic.ttf
+Источник:  tools/alchemist-glyphs.svg
+Сборка:    tools/build_alchemist_font.py
+Версия:    1.000
+
+Права
+-----
+Глифы нарисованы для проекта «Петля алхимика» и принадлежат проекту.
+Лицензия не предоставляется: распространение, переиспользование и
+модификация вне этого проекта не разрешены. Все права защищены.
+
+Шрифт не является производным от Manrope, Divagon или Manasco —
+это самостоятельный рисунок, сгенерированный из собственного SVG-спрайта.
+
+Пересборка
+----------
+    python tools/build_alchemist_font.py
+
+Скрипт требует fontTools и не тянет никаких внешних шрифтов.
+
+License
+-------
+The glyphs were drawn for the "Alchemist's Loop" project and are owned by
+the project. No license is granted: redistribution, reuse or modification
+outside this project is not permitted. All rights reserved.

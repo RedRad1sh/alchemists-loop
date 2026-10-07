@@ -13,6 +13,8 @@ var _aura_btns := {}
 var _house_btn: Button = null
 var _furniture_btns := {}
 var _house_view: Control = null
+var _house_screen: Control = null      # полноэкранный экран дома (не вкладка)
+var _house_scroll: ScrollContainer = null
 var _furniture_shop: VBoxContainer = null
 var _house_hint: Label = null
 var house_furniture: Dictionary = {}   # категория -> id варианта (DECOR)
@@ -410,9 +412,95 @@ func _build_house_page(page: VBoxContainer) -> void:
 
 func _open_workshop() -> void:
 	_refresh_house_page()
-	if g._tabs_ref != null:
-		g._tabs_ref.current_tab = 3
+	_open_house_screen()
 	Sfx.click()
+
+
+func _open_house_screen() -> void:
+	if _house_screen != null:
+		_house_screen.visible = true
+		if _house_scroll != null:
+			_house_scroll.scroll_vertical = 0
+
+
+func _close_house_screen() -> void:
+	if _house_screen != null:
+		_house_screen.visible = false
+	Sfx.click()
+
+
+# Полноэкранный экран дома — тот же приём, что у Аркана Сигилов
+# (sigil_ui._open_sigil_modal): dim z=20 в группе modal_ui, тап по фону и Esc
+# закрывают. Поверх него живут только декор-магазин (z=100), палитра и гостевой
+# домик (z=21) — они и закрываются раньше (см. _close_top_modal).
+func _build_house_screen() -> void:
+	var root := Control.new()
+	root.name = "HouseScreen"
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.visible = false
+	root.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.z_index = 20
+	root.add_to_group("modal_ui")
+	g.add_child(root)
+	_house_screen = root
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.84)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			_close_house_screen()
+	)
+	root.add_child(dim)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		margin.add_theme_constant_override(side, 12)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(margin)
+
+	var panel := PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.add_theme_stylebox_override("panel", g._panel_style(Color(0.055, 0.065, 0.10, 0.99), 18))
+	margin.add_child(panel)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	panel.add_child(col)
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	col.add_child(head)
+	var head_spacer := Control.new()
+	head_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(head_spacer)
+	var close_btn := g._small_button("Закрыть", Vector2(116, 40), 1)
+	close_btn.pressed.connect(_close_house_screen)
+	head.add_child(close_btn)
+
+	# Каркас содержимого повторяет main._make_page: скролл -> поля -> VBox, чтобы
+	# _build_house_page() не заметил переезда с вкладки на экран.
+	var scroll := ScrollContainer.new()
+	scroll.name = "HouseScroll"
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(scroll)
+	_house_scroll = scroll
+	var body := MarginContainer.new()
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_theme_constant_override("margin_right", 12)
+	body.add_theme_constant_override("margin_left", 2)
+	scroll.add_child(body)
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 8)
+	body.add_child(content)
+	_build_house_page(content)
 
 
 func _refresh_house_page() -> void:
@@ -671,8 +759,8 @@ func _close_decor_popup() -> void:
 		_decor_popup.visible = false
 	_refresh_house_page()
 	# после магазина — наверх страницы, к домику: результат выбора виден сразу (п.3)
-	if g._tabs_ref != null and g._tabs_ref.current_tab == 3:
-		g._demo_harness._set_page_scroll(0)
+	if _house_screen != null and _house_screen.visible and _house_scroll != null:
+		_house_scroll.scroll_vertical = 0
 	Sfx.click()
 
 

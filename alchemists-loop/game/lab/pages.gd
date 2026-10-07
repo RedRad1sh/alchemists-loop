@@ -106,8 +106,6 @@ func _add_lab_reagent_cell(item_id: String) -> void:
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cell_content.add_child(name_label)
-	# Tap по подписи или свободному месту ячейки остаётся таким же действием,
-	# как tap по орбу; drag продолжает идти через сам ElementOrb.
 	cell.pressed.connect(func() -> void:
 		g._engine._on_item_tapped(orb, item_id)
 	)
@@ -117,7 +115,19 @@ func _add_lab_reagent_cell(item_id: String) -> void:
 
 
 func _build_lab(page: VBoxContainer) -> void:
-	# панель котла
+	# Котёл закрепляется вверху и не уезжает при прокрутке: внешний скролл вкладки
+	# отключается (тот же приём, что в _build_experiment_location), а остальная
+	# лаборатория идёт одним потоком внутри LabScroll.
+	var page_margin := page.get_parent() as Control
+	if page_margin != null:
+		var page_scroll := page_margin.get_parent() as ScrollContainer
+		if page_scroll != null:
+			page_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+			page_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	page.add_theme_constant_override("separation", 10)
+	page.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+	# 1. Закреплённая верхняя панель: лунки A/B + котёл + короткая подсказка.
 	var brew_panel := PanelContainer.new()
 	brew_panel.add_theme_stylebox_override("panel",
 		g._panel_style(Color(0.07, 0.10, 0.15, 0.85), 18))
@@ -125,89 +135,89 @@ func _build_lab(page: VBoxContainer) -> void:
 	var bp := VBoxContainer.new()
 	bp.add_theme_constant_override("separation", 6)
 	brew_panel.add_child(bp)
-
 	var mid := HBoxContainer.new()
 	mid.alignment = BoxContainer.ALIGNMENT_CENTER
 	mid.add_theme_constant_override("separation", 6)
 	bp.add_child(mid)
-
 	g._engine._slot_a = g._make_slot("A")
 	mid.add_child(g._engine._slot_a)
-
 	g._engine._cauldron = CauldronView.new()
-	g._engine._cauldron.custom_minimum_size = Vector2(256, 210)
+	# Компактнее: 200×170 вместо 256×210 — панель целиком остаётся на экране
+	# вместе с закреплённой внизу кнопкой «ВАРИТЬ».
+	g._engine._cauldron.custom_minimum_size = Vector2(200, 170)
 	g._engine._cauldron.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# QTE-событие не должно заслонять котёл (док §7).
 	g._engine._cauldron.add_to_group("qte_exclusion")
 	mid.add_child(g._engine._cauldron)
-
 	g._engine._slot_b = g._make_slot("B")
 	mid.add_child(g._engine._slot_b)
-
-	var hint_line := g._label("Источники и «ВАРИТЬ» закреплены внизу экрана — при прокрутке они остаются на месте.", 12)
+	var hint_line := g._label("Перетащи вещества в лунки A/B и вари.", 12)
 	hint_line.add_theme_color_override("font_color", Color(0.55, 0.62, 0.68))
+	hint_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bp.add_child(hint_line)
 
-	# Родник живёт в лаборатории: это постоянная часть петли, а не отдельный чип.
-	var spring_title := g._label("Родник", 16)
-	spring_title.add_theme_color_override("font_color", Color(0.45, 0.95, 0.9))
-	page.add_child(spring_title)
-	var spring_box := VBoxContainer.new()
-	spring_box.add_theme_constant_override("separation", 6)
-	page.add_child(spring_box)
-	_build_spring_page(spring_box)
+	# 2. Прокручиваемая часть: автоварка → родник → инвентарь.
+	var lab_scroll := ScrollContainer.new()
+	lab_scroll.name = "LabScroll"
+	lab_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	lab_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	lab_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lab_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	page.add_child(lab_scroll)
+	var lab_content := VBoxContainer.new()
+	lab_content.add_theme_constant_override("separation", 8)
+	lab_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lab_scroll.add_child(lab_content)
 
-	# автоварка: рецепты прямо в лаборатории (Светик теперь в углу вверху справа — контент на всю ширину)
+	# 2.1. Автоварка (Книга рецептов) — сразу под котлом. Список остаётся в
+	# своей рамке на 220 px: иначе 100+ рецептов утаскивают родник и инвентарь
+	# за много экранов прокрутки.
 	var book_head := HBoxContainer.new()
 	book_head.add_theme_constant_override("separation", 6)
-	page.add_child(book_head)
-	var book_title := g._label("Книга рецептов — Производство считает длинные маршруты", 16)
+	lab_content.add_child(book_head)
+	var book_title := g._label("Книга рецептов — Производство", 16)
 	book_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	book_head.add_child(book_title)
-	var book_note := g._label("Бесплатное раскрытие результата убрано: неизвестные пары проверяются в Эксперименте, известные маршруты запускаются здесь.", 12)
-	book_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	book_note.add_theme_color_override("font_color", Color(0.62, 0.74, 0.82))
-	page.add_child(book_note)
 	var search := LineEdit.new()
 	search.placeholder_text = "Поиск вещества по названию…"
 	search.custom_minimum_size = Vector2(0, 40)
 	search.add_theme_font_size_override("font_size", 15)
 	search.clear_button_enabled = true
 	search.text_changed.connect(g._online._on_search_changed)
-	page.add_child(search)
+	lab_content.add_child(search)
 	g._engine._search_box = search
 	g._engine._book_stats = g._label("", 13)
-	page.add_child(g._engine._book_stats)
-	var auto_scroll := ScrollContainer.new()
-	auto_scroll.custom_minimum_size = Vector2(0, 290)
-	auto_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	var book_margin := MarginContainer.new()
-	book_margin.add_theme_constant_override("margin_right", 14)
-	page.add_child(book_margin)
-	book_margin.add_child(auto_scroll)
+	lab_content.add_child(g._engine._book_stats)
+	var book_scroll := ScrollContainer.new()
+	book_scroll.custom_minimum_size = Vector2(0, 220)
+	book_scroll.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	book_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	lab_content.add_child(book_scroll)
 	g._engine._book_list = VBoxContainer.new()
 	g._engine._book_list.add_theme_constant_override("separation", 6)
 	g._engine._book_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	auto_scroll.add_child(g._engine._book_list)
+	book_scroll.add_child(g._engine._book_list)
 
-	# инвентарь
-	page.add_child(g._label("Вещества — перетащи в лунки (A/B) у котла", 16))
+	# 2.2. Родник — постоянная часть лаборатории; компактный блок.
+	var spring_box := VBoxContainer.new()
+	spring_box.add_theme_constant_override("separation", 4)
+	lab_content.add_child(spring_box)
+	_build_spring_page(spring_box)
+
+	# 2.3. Инвентарь реагентов — перетаскиваются в лунки A/B.
+	lab_content.add_child(g._label("Вещества — перетащи в лунки (A/B) у котла", 16))
 	g._inv_grid = GridContainer.new()
-	var grid := g._inv_grid
-	# Та же компактная ячейка, что и в Эксперименте: знак + имя,
-	# touch-зона 48 px, без россыпи огромных орбов.
-	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 6)
-	grid.add_theme_constant_override("v_separation", 6)
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	page.add_child(grid)
-	# Добавляем только элементы, которые игрок уже открыл (есть в inventory)
+	g._inv_grid.columns = 4
+	g._inv_grid.add_theme_constant_override("h_separation", 6)
+	g._inv_grid.add_theme_constant_override("v_separation", 6)
+	g._inv_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lab_content.add_child(g._inv_grid)
 	for raw_id in g.ITEMS:
 		var item_id := String(raw_id)
 		if g._engine.inventory.has(item_id):
 			_add_lab_reagent_cell(item_id)
 
-	# отступ под закреплённую панель «ВАРИТЬ»
+	# Отступ — не внутри прокрутки, а под ней: он резервирует место под
+	# закреплённую панель «ВАРИТЬ», чтобы скроллящийся контент под неё не залезал.
 	var bottom_pad := Control.new()
 	bottom_pad.custom_minimum_size = Vector2(0, 150)
 	page.add_child(bottom_pad)
@@ -215,12 +225,9 @@ func _build_lab(page: VBoxContainer) -> void:
 
 func _build_experiment_location(page: VBoxContainer) -> void:
 	_experiment_position_rng.randomize()
-	# Эксперимент остаётся полем с главным объектом: список не резервирует
-	# постоянную боковую колонку. По умолчанию выбор открыт как полупрозрачное
-	# окно поверх поля — игрок видит котёл и уже добавленные орбы.
+	# Канвас Эксперимента помещается в viewport целиком: сам список реагентов
+	# прокручивается внутри своего окна, но поле — нет.
 	page.add_theme_constant_override("separation", 8)
-	# Канвас Эксперимента должен помещаться в viewport целиком: длинный
-	# список реагентов прокручивается внутри своего окна, но само поле — нет.
 	var page_margin := page.get_parent() as Control
 	if page_margin != null:
 		var page_scroll := page_margin.get_parent() as ScrollContainer
@@ -236,15 +243,12 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 	title.autowrap_mode = TextServer.AUTOWRAP_OFF
 	title_row.add_child(title)
 
-
 	_experiment_status = g._label("Выбери вещество: окно выбора останется прозрачным, чтобы видеть поле.", 13)
 	_experiment_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_experiment_status.add_theme_color_override("font_color", Color(0.68, 0.82, 0.88))
 	page.add_child(_experiment_status)
 
 	var arena := PanelContainer.new()
-	# Поле растягивается до доступной высоты страницы. Никакой постоянной
-	# inventory-карточки и принудительной высоты, вызывающей прокрутку, больше нет.
 	arena.custom_minimum_size = Vector2.ZERO
 	arena.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	arena.add_theme_stylebox_override("panel", UIStyle.arena_style())
@@ -269,8 +273,6 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 	field_hint.add_theme_color_override("font_color", Color(0.48, 0.56, 0.64))
 	_experiment_field.add_child(field_hint)
 
-	# Котёл — самостоятельное место для смешения без внешней карточки.
-	# Он центрируется по всему полю, а не по месту, оставшемуся после списка.
 	var center := CenterContainer.new()
 	_experiment_center = center
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -294,7 +296,6 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 	_experiment_cauldron = CauldronView.new()
 	_experiment_cauldron.custom_minimum_size = Vector2(218, 188)
 	_experiment_cauldron.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# QTE-событие не должно заслонять котёл (док §7).
 	_experiment_cauldron.add_to_group("qte_exclusion")
 	cauldron_col.add_child(_experiment_cauldron)
 	_experiment_recipe_line = g._label("Свободен · перетащи реагенты сюда", 10)
@@ -305,14 +306,10 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 	_experiment_clear_button = g._small_button("Очистить", Vector2(96, 38), 0)
 	_experiment_clear_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_experiment_clear_button.add_theme_font_size_override("font_size", 12)
-	# Кнопка выглядит компактно, но сохраняет touch-зону helper-а.
 	_experiment_clear_button.pressed.connect(_experiment_clear_cauldron)
 	cauldron_col.add_child(_experiment_clear_button)
 
-	# Полноэкранный выбор вещества. Это не боковая панель: полупрозрачный
-	# слой накрывает всё поле, а небольшие ячейки быстро просматриваются.
-	# Временные орбы остаются под окном выбора: полупрозрачность слоя
-	# позволяет их видеть, но ячейки и подписи всегда остаются сверху.
+	# Полноэкранный выбор вещества: полупрозрачный слой накрывает всё поле.
 	_experiment_drawer = PanelContainer.new()
 	_experiment_drawer.name = "ExperimentReagentPicker"
 	_experiment_drawer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -402,8 +399,6 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 	_experiment_drawer_empty.custom_minimum_size = Vector2(0, 24)
 	drawer_col.add_child(_experiment_drawer_empty)
 
-	# После закрытия остаётся одна компактная кнопка возврата. Она не занимает
-	# поле постоянно и не перекрывает зону Светика в верхней части экрана.
 	_experiment_reopen_button = g._small_button("Выбрать реагент", Vector2(158, 44), 1)
 	_experiment_reopen_button.custom_minimum_size.y = 44.0
 	_experiment_reopen_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -434,9 +429,6 @@ func _set_experiment_rect(control: Control, rect: Rect2) -> void:
 
 
 func _set_experiment_picker_field_chrome() -> void:
-	# Когда список открыт, не оставляем под ним дублирующиеся подписи и
-	# «Очистить»: сам котёл остаётся видимым, а поле не превращается в набор
-	# полупрозрачных дубликатов подписей.
 	var field_title := _experiment_field.get_node_or_null("ExperimentFieldTitle") as Control
 	var field_hint := _experiment_field.get_node_or_null("ExperimentFieldHint") as Control
 	var picker_open := _experiment_drawer != null and _experiment_drawer.visible
@@ -458,8 +450,6 @@ func _fit_experiment_overlay() -> void:
 	var field_size := _experiment_field.size
 	if _experiment_reagent_grid != null:
 		_experiment_reagent_grid.columns = 4 if field_size.x >= 420.0 else (3 if field_size.x >= 330.0 else 2)
-	# Поле всегда занимает всю ширину. Старой боковой колонки больше нет:
-	# выбор — отдельный полупрозрачный режим, а котёл остаётся по центру.
 	_experiment_side_drawer = false
 	_experiment_play_right = field_size.x
 	_experiment_cauldron_frame.custom_minimum_size = Vector2(232, 292)
@@ -503,9 +493,6 @@ func _experiment_normalize_search(value: String) -> String:
 
 
 func _experiment_search_aliases(item_id: String) -> String:
-	# Небольшой слой семантических синонимов поверх имени/ID/описания.
-	# Он нужен именно в picker: игрок может искать «пламя», а не помнить
-	# внутренний slug fire.
 	match item_id:
 		"fire": return "пламя жар flame blaze"
 		"water": return "влага жидкость liquid вода"
@@ -547,8 +534,6 @@ func _experiment_search_matches(item_id: String) -> bool:
 
 
 func _experiment_reagent_priority(item_id: String) -> int:
-	# После платной подсказки Светика нужные два вещества всегда первыми;
-	# затем идут недавно использованные, чтобы повторный поиск не начинался с нуля.
 	if _experiment_hint_ids.has(item_id):
 		return -100
 	var recent := _experiment_recent_ids.find(item_id)
@@ -562,8 +547,6 @@ func _experiment_reagent_ids(apply_filter := true) -> Array[String]:
 		var item_id := String(raw_id)
 		if int(g._engine.inventory.get(item_id, 0)) <= 0 or not g.ITEMS.has(item_id):
 			continue
-		# Поиск всегда имеет приоритет над фильтром: пользователь явно
-		# попросил найти вещество и не должен угадывать, в какой вкладке оно.
 		if apply_filter and not _experiment_search_matches(item_id):
 			continue
 		if apply_filter and not query_active:
@@ -580,8 +563,6 @@ func _experiment_reagent_ids(apply_filter := true) -> Array[String]:
 		ids.append(item_id)
 	var stable_order := _experiment_filter == "all" or query_active
 	ids.sort_custom(func(a: String, b: String) -> bool:
-		# Вкладка «Все» — это спокойный каталог: нажатие не должно
-		# перебрасывать вещество в начало прямо под пальцем.
 		if stable_order:
 			return g._online._item_name(a) < g._online._item_name(b)
 		var pa := _experiment_reagent_priority(a)
@@ -626,8 +607,6 @@ func _experiment_drawer_state_signature() -> String:
 			open_ids.append(item_id)
 	open_ids.sort()
 	var query := _experiment_normalize_search(_experiment_reagent_search.text) if _experiment_reagent_search != null else ""
-	# Recent order matters only for the dedicated «Недавние» filter. In «Все»
-	# it is deliberately excluded so a tap never causes a jump.
 	var recent := ",".join(_experiment_recent_ids) if _experiment_filter == "recent" else ""
 	return "%s|%s|%s|%s|%s" % [
 		_experiment_filter, query, ",".join(_experiment_hint_ids), ",".join(open_ids), recent]
@@ -665,8 +644,6 @@ func _refresh_experiment_drawer() -> void:
 	for item_id in visible_ids:
 		var cell := Button.new()
 		cell.name = "ReagentCell_%s" % item_id
-		# Визуальная ячейка компактная, а вся её высота остаётся
-		# интерактивной зоной доступного размера 48 px.
 		cell.custom_minimum_size = Vector2(0, 48)
 		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		cell.focus_mode = Control.FOCUS_NONE
@@ -681,8 +658,6 @@ func _refresh_experiment_drawer() -> void:
 		cell_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cell.add_child(cell_content)
 		var orb := g._make_orb(item_id, 28)
-		# Ячейка показывает только знак и имя; количество остаётся в запасе,
-		# а не превращает компактный выбор в таблицу.
 		orb.count = 0
 		orb.interactive = false
 		orb.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -717,8 +692,6 @@ func _experiment_can_take(item_id: String) -> bool:
 
 
 func _select_experiment_item(item_id: String) -> void:
-	# Выбор из полноэкранного списка сразу создаёт вещество на поле,
-	# без отдельной кнопки подтверждения.
 	_experiment_spawn_token(item_id)
 
 
@@ -762,8 +735,6 @@ func _experiment_position_taken(candidate: Rect2, token_size: float) -> bool:
 		var token_rect := Rect2(token.position, Vector2(token_size, token_size)).grow(10.0)
 		if padded.intersects(token_rect):
 			return true
-	# Верхняя часть окна занята заголовком, поиском и фильтрами. Не прячем
-	# новое вещество под ними, даже если само окно остаётся полупрозрачным.
 	if _experiment_drawer != null and _experiment_drawer.visible:
 		var menu_head := Rect2(0.0, 0.0, _experiment_field.size.x, 214.0)
 		if padded.intersects(menu_head):
@@ -786,9 +757,6 @@ func _experiment_token_position(_lane: int, token_size: float) -> Vector2:
 		min_y = 216.0
 	var max_y := maxf(min_y, h - token_size - 20.0)
 	var candidate := Vector2(min_x, min_y)
-	# Случайное место с несколькими попытками избежать котла, меню и
-	# уже лежащих веществ. Если поле заполнено, последняя случайная точка
-	# всё равно лучше, чем возвращение к фиксированной сетке.
 	for _attempt in 80:
 		candidate = Vector2(
 			_experiment_position_rng.randf_range(min_x, max_x),
@@ -809,8 +777,6 @@ func _experiment_spawn_token(item_id: String) -> void:
 	token.count = 1
 	token.interactive = true
 	token.size = Vector2(50, 50)
-	# Окно выбора должно быть выше временных веществ: ячейки и подписи
-	# не перекрываются добавленными орбами.
 	token.z_index = 1
 	token.name = "ВременныйРеагент_%d" % _experiment_token_seq
 	_experiment_token_seq += 1
@@ -827,8 +793,6 @@ func _experiment_spawn_token(item_id: String) -> void:
 	appear.tween_property(token, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_experiment_status.text = "«%s» появился на поле. При желании перенеси его в котёл." % g._online._item_name(item_id)
 	Sfx.click()
-	# Содержимое каталога не изменилось: не пересобираем десятки ячеек
-	# после каждого добавления и не двигаем выбранный элемент.
 
 
 func _on_experiment_token_tapped(token: ElementOrb, _bound_token: ElementOrb) -> void:
@@ -935,7 +899,6 @@ func _experiment_launch_pair() -> void:
 		_experiment_recipe_line.text = "Котёл свободен · выбери другую пару"
 		_refresh_experiment_drawer()
 		return
-	# Визуальное состояние очищается до сетевого вызова: сервер теперь владеет расходом и возвратом.
 	_experiment_hint_ids.clear()
 	if _experiment_filter == "hint":
 		_experiment_filter = "recent"
@@ -945,7 +908,6 @@ func _experiment_launch_pair() -> void:
 	if started:
 		_experiment_status.text = "Светик раздувает огонь… сервер проверяет эту пару."
 	else:
-		# Офлайн/отказ до списания: ничего не потеряно, вернём пару в котёл.
 		_experiment_cauldron_items = [a, b]
 		_refresh_experiment_cauldron()
 	_refresh_experiment_drawer()
@@ -962,6 +924,8 @@ func _refresh_experiment_location() -> void:
 
 func _build_world(page: VBoxContainer) -> void:
 	page.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# Всё в одном ScrollContainer: убраны вложенные Scroll'ы; пагинация,
+	# ленты и резонавилки идут последовательно без отдельных экранов.
 	page.add_child(g._label("Мир живых открытий", 20))
 	g._online._world_status = g._label("Связываемся с миром…", 14)
 	g._online._world_status.add_theme_color_override("font_color", Color(0.62, 0.74, 0.82))
@@ -985,24 +949,16 @@ func _build_world(page: VBoxContainer) -> void:
 	g._feed_list = VBoxContainer.new()
 	g._feed_list.add_theme_constant_override("separation", 3)
 	page.add_child(g._feed_list)
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var col := VBoxContainer.new()
-	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.add_theme_constant_override("separation", 8)
-	scroll.add_child(col)
-	page.add_child(scroll)
-	col.add_child(g._label("Зал славы", 18))
+	page.add_child(g._label("Зал славы", 18))
 	g._online._hall_list = VBoxContainer.new()
 	g._online._hall_list.add_theme_constant_override("separation", 4)
-	col.add_child(g._online._hall_list)
-	col.add_child(g._label("Топ длинных цепочек", 18))
+	page.add_child(g._online._hall_list)
+	page.add_child(g._label("Топ длинных цепочек", 18))
 	g._online._chains_list = VBoxContainer.new()
 	g._online._chains_list.add_theme_constant_override("separation", 4)
-	col.add_child(g._online._chains_list)
-	# Социальные отголоски принадлежат Миру, а не отдельному инструменту.
-	g._resonance._build_resonance_page(col)
-	col.add_child(g._label("Все вещества", 18))
+	page.add_child(g._online._chains_list)
+	g._resonance._build_resonance_page(page)
+	page.add_child(g._label("Все вещества", 18))
 	g._online._world_search = LineEdit.new()
 	g._online._world_search.placeholder_text = "Поиск по миру: имя, id, автор…"
 	g._online._world_search.clear_button_enabled = true
@@ -1010,16 +966,16 @@ func _build_world(page: VBoxContainer) -> void:
 	g._online._world_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	g._online._world_search.text_changed.connect(g._online._on_world_search)
 	g._online._world_search.text_submitted.connect(func(_t: String) -> void: g.get_viewport().gui_release_focus())
-	col.add_child(g._online._world_search)
+	page.add_child(g._online._world_search)
 	g._online._world_grid = GridContainer.new()
 	g._online._world_grid.columns = 1
 	g._online._world_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	g._online._world_grid.add_theme_constant_override("v_separation", 6)
-	col.add_child(g._online._world_grid)
+	page.add_child(g._online._world_grid)
 	var pager := HBoxContainer.new()
 	pager.alignment = BoxContainer.ALIGNMENT_CENTER
 	pager.add_theme_constant_override("separation", 8)
-	col.add_child(pager)
+	page.add_child(pager)
 	g._online._world_prev = g._small_button("‹", Vector2(52, 40), 1)
 	g._online._world_prev.pressed.connect(func() -> void: g._online._world_set_page(g._online._world_page - 1))
 	pager.add_child(g._online._world_prev)
@@ -1065,9 +1021,6 @@ func _build_tools_page(page: VBoxContainer) -> void:
 	_tools_sub = VBoxContainer.new()
 	_tools_sub.add_theme_constant_override("separation", 8)
 	col.add_child(_tools_sub)
-	var bottom_pad := Control.new()
-	bottom_pad.custom_minimum_size = Vector2(0, 150)
-	col.add_child(bottom_pad)
 
 
 func _ensure_modes() -> void:
@@ -1075,7 +1028,6 @@ func _ensure_modes() -> void:
 		return
 	var unlocked_keys := {}
 	var selectable_keys := {}
-	# чипы: по одному на режим, порядок из MODES; не хватает ширины — переносятся
 	for m in Game.MODES:
 		var key := String(m["key"])
 		if not _mode_chips.has(key):
@@ -1093,7 +1045,6 @@ func _ensure_modes() -> void:
 			unlocked_keys[key] = true
 			if not bool(m.get("hidden", false)):
 				selectable_keys[key] = true
-	# содержимое разблокированных режимов строим лениво и кэшируем
 	for key in unlocked_keys:
 		if _mode_pages.has(key):
 			continue
@@ -1112,7 +1063,6 @@ func _ensure_modes() -> void:
 				g._retort._build_retort_page(box)
 			"letters":
 				g._riddles._build_letters_page(box)
-				# Атлас остаётся доступен, но живёт в том же экране, что и письма Светика.
 				g._riddles._build_atlas_page(box)
 			"atlas":
 				g._riddles._build_atlas_page(box)
@@ -1123,8 +1073,7 @@ func _ensure_modes() -> void:
 		_tools_sub.add_child(box)
 		box.visible = false
 		_mode_pages[key] = box
-		_mode_tabs[key] = box  # обратная совместимость (selftest/диагностика)
-	# если выбранного нет или он закрылся — берём первый разблокированный
+		_mode_tabs[key] = box
 	if _tools_sel == "" or not selectable_keys.has(_tools_sel):
 		_tools_sel = ""
 		for m in Game.MODES:
@@ -1264,9 +1213,8 @@ func _confirm_experiment() -> void:
 func _focus_experiment(a: String, b: String) -> void:
 	_experiment_a = a
 	_experiment_b = b
-	# Неизвестные узлы всегда ведут в первичную пространственную локацию.
 	if g._tabs_ref != null:
-		g._tabs_ref.current_tab = 0
+		g._tabs_ref.current_tab = Game.TAB_EXPERIMENT
 	_refresh_experiment_location()
 	_refresh_experiment_page()
 
@@ -1301,7 +1249,7 @@ func _refresh_experiment_page() -> void:
 		_experiment_button.disabled = not bool(check.get("ok", false)) or g._engine._experiment_pending_pair.size() > 0
 
 func _build_spring_page(container: VBoxContainer) -> void:
-	container.add_child(g._label(_mode_hint("spring"), 15))
+	# Один горизонтальный ряд стихий: орб 56 + подпись, без россыпи панелей.
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 12)
@@ -1310,12 +1258,12 @@ func _build_spring_page(container: VBoxContainer) -> void:
 		var col := VBoxContainer.new()
 		col.add_theme_constant_override("separation", 2)
 		col.alignment = BoxContainer.ALIGNMENT_CENTER
-		var orb := g._make_orb(item_id, 64)
+		var orb := g._make_orb(item_id, 56)
 		orb.tapped.connect(_on_spring_pick.bind(item_id))
 		col.add_child(orb)
-		var mark := g._label("", 15)
+		var mark := g._label("", 13)
 		mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		mark.custom_minimum_size = Vector2(64, 20)
+		mark.custom_minimum_size = Vector2(56, 18)
 		mark.add_theme_color_override("font_color", Color(0.45, 0.95, 0.9))
 		col.add_child(mark)
 		row.add_child(col)
@@ -1325,15 +1273,10 @@ func _build_spring_page(container: VBoxContainer) -> void:
 	_spring_toggle_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_spring_toggle_btn.pressed.connect(_toggle_spring)
 	container.add_child(_spring_toggle_btn)
-	_spring_info = g._label("", 14)
+	_spring_info = g._label("", 13)
 	container.add_child(_spring_info)
 
 func _spend_gate(key: String, now_ms: int) -> bool:
-	# True — трата разрешена (окно свободно) и ключ взведён; False — повторный тап
-	# внутри SPEND_GUARD_MSEC. now_ms параметром, чтобы это было чисто тестируемо.
-	# Взводится на входе, поэтому отказанного следующим гейтом тапа окно тоже
-	# тратит 250 мс: это анти-спам очереди нажатий (тот же смысл, что
-	# _collect_all_ms в core.gd), а не бухгалтерия списаний.
 	var last := int(_spend_guard_ms.get(key, -Game.SPEND_GUARD_MSEC))
 	if now_ms - last < Game.SPEND_GUARD_MSEC:
 		return false
@@ -1341,8 +1284,6 @@ func _spend_gate(key: String, now_ms: int) -> bool:
 	return true
 
 func _hint() -> bool:
-	# Единственная подсказка — платный голос Светика. Она показывает направление,
-	# но никогда не раскрывает результат и не создаёт новую валюту.
 	if not _spend_gate("hint", Time.get_ticks_msec()):
 		return false
 	if not g._spirit._companion_unlocked:
@@ -1391,7 +1332,6 @@ func _hint() -> bool:
 	return true
 
 func _hint_candidates() -> Array:
-	# приоритет: неопробованные пары из открытых веществ (локальные + серверные)
 	var res: Array = []
 	var seen := {}
 	var ids: Array = g._engine.inventory.keys()
@@ -1403,8 +1343,6 @@ func _hint_candidates() -> Array:
 		if g._online._has_ingredients(a, b):
 			res.append(r)
 			seen[g._pair_key(a, b)] = true
-	# Серверные пары и самосочетания тоже остаются честными кандидатами: подсказка
-	# никогда не ведёт в уже известный рецепт и не предлагает недостающий запас.
 	for raw_a in ids:
 		for raw_b in ids:
 			var a := String(raw_a)
@@ -1550,8 +1488,6 @@ func _bench_tick(delta: float) -> void:
 		g._engine.status_text = "Верстак ждёт: %s" % String(plan.get("reason", "нет подходящего рецепта"))
 		g._engine._refresh()
 		return
-	# Верстак тоже работает по этапам: нехватка полной стоимости не блокирует
-	# первый доступный шаг. Следующий тик продолжит маршрут.
 	g._engine._run_bench_plan(_bench_target, plan)
 
 func _unrevealed_recipe_candidates() -> Array:

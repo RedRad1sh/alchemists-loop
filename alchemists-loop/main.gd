@@ -10,6 +10,16 @@ var TEMP_PATH := "user://alchemy_save.tmp"
 var BACKUP_PATH := "user://alchemy_save.bak"
 const SAVE_VERSION := 3
 
+# ---------- индексы вкладок нижней навигации ----------
+# Дом — не вкладка, а полноэкранный экран (Home._build_house_screen), поэтому
+# разделов пять, а не шесть. Везде по коду — только эти имена: зашитый номер
+# вкладки разъезжался молча при каждом переносе раздела.
+const TAB_EXPERIMENT := 0
+const TAB_LAB := 1
+const TAB_WORLD := 2
+const TAB_RATING := 3
+const TAB_TOOLS := 4
+
 var BREW_SECONDS := 1.2
 const HouseViewScript := preload("res://game/home/house_view.gd")
 
@@ -355,6 +365,7 @@ var _font_bold: Font = null
 var _font_xbold: Font = null
 var _font_display: Font = null  # Divagon: названия (заголовки карточек)
 var _font_lore: Font = null     # Manasco: лор/описания карточек
+var _font_runic: Font = null    # Alchemist Runic: рунический заголовок шапки
 var _ui_tex: Dictionary = {}   # path -> Texture2D (кэш)
 var _tabs_ref: TabContainer
 # F1 (раунд правки U18): признак достроенного UI. tabs.tab_changed срабатывает
@@ -629,7 +640,12 @@ func _ready() -> void:
 	# _ach_update no-op (g._selftest), поэтому коннект безопасен и в прогоне сьютов.
 	_sigil.collection_changed.connect(_progress_ui._ach_update)
 	_init_new_game()
-	_saves._load_game()
+	# Селфтест стартует с чистого _init_new_game(): _load_game() прочитал бы
+	# настоящий сейв игрока из user:// и принёс серверные вещества/рецепты и вехи,
+	# отчего краснеет десяток несвязанных кейсов (graph reachable all, fail
+	# refund, collection regen bonus, esc stack was clean on entry, …).
+	if not _selftest:
+		_saves._load_game()
 	_build_ui()
 	_shop.build()
 	if not _selftest and not App.consent_is_decided():
@@ -681,14 +697,12 @@ func _ready() -> void:
 		_home._open_workshop()
 	if _demo_harness._demo and _demo_harness._action_rating:
 		if _tabs_ref != null:
-			_tabs_ref.current_tab = 4
+			_tabs_ref.current_tab = TAB_RATING
 	if _demo_harness._demo and _demo_harness._action_decor:
 		_home._cosmetic_house = true
 		_home.house_owned = {"rug": ["rug_1"]}
 		_home._apply_cosmetic()
-		if _tabs_ref != null:
-			_tabs_ref.current_tab = 3
-		_home._refresh_house_page()
+		_home._open_workshop()
 		_home._open_decor_shop(_demo_harness._decor_demo_cat)
 	if _demo_harness._demo and _demo_harness._action_guesthouse:
 		_home._apply_player_house("Люмина", {"built": true, "theme": "ember", "aura": "rose",
@@ -698,8 +712,7 @@ func _ready() -> void:
 	if _demo_harness._demo and _demo_harness._action_palette:
 		_home._cosmetic_house = true
 		_home._apply_cosmetic()
-		if _tabs_ref != null:
-			_tabs_ref.current_tab = 3
+		_home._open_workshop()
 		_home._open_color_picker("wall")
 	if _demo_harness._demo and _demo_harness._action_glyphs:
 		# витрина параметрических глифов (диагностика рендера)
@@ -712,7 +725,7 @@ func _ready() -> void:
 	if _demo_harness._demo and _demo_harness._action_resonance:
 		_progress_ui._ach_world_first = 1
 		if _tabs_ref != null:
-			_tabs_ref.current_tab = 5
+			_tabs_ref.current_tab = TAB_TOOLS
 		_pages._ensure_modes()
 		_pages._select_mode("resonance")
 		# витрина без сервера: состояние подставляем напрямую
@@ -739,14 +752,14 @@ func _ready() -> void:
 			{"sub": "", "name": "", "started": 0.0, "dur": 0.0},
 		]
 		if _tabs_ref != null:
-			_tabs_ref.current_tab = 5
+			_tabs_ref.current_tab = TAB_TOOLS
 		_pages._ensure_modes()
 		_pages._select_mode("retort")
 		_retort._refresh_retort_page()
 		_engine._refresh()
 	if _demo_harness._demo and _demo_harness._action_retortpick:
 		if _tabs_ref != null:
-			_tabs_ref.current_tab = 5
+			_tabs_ref.current_tab = TAB_TOOLS
 		_pages._ensure_modes()
 		_pages._select_mode("retort")
 		_engine._refresh()
@@ -754,7 +767,7 @@ func _ready() -> void:
 	if _demo_harness._demo and _demo_harness._action_letter:
 		_riddles._inject_letter_demo()
 		if _tabs_ref != null:
-			_tabs_ref.current_tab = 5
+			_tabs_ref.current_tab = TAB_TOOLS
 		_pages._ensure_modes()
 		_pages._select_mode("letters")
 		_riddles._refresh_letters_page()
@@ -762,7 +775,7 @@ func _ready() -> void:
 	if _demo_harness._demo and _demo_harness._action_atlas:
 		_riddles._inject_atlas_demo()
 		if _tabs_ref != null:
-			_tabs_ref.current_tab = 5
+			_tabs_ref.current_tab = TAB_TOOLS
 		_pages._ensure_modes()
 		_pages._select_mode("atlas")
 		_riddles._refresh_atlas_page()
@@ -776,7 +789,7 @@ func _ready() -> void:
 			if not _engine.inventory.has(String(cid)):
 				_engine.inventory[String(cid)] = 1
 		if _tabs_ref != null:
-			_tabs_ref.current_tab = 5
+			_tabs_ref.current_tab = TAB_TOOLS
 		_pages._ensure_modes()
 		_pages._select_mode("circle")
 		_retention._refresh_circle_page()
@@ -792,7 +805,7 @@ func _ready() -> void:
 			if not _engine.inventory.has(String(wid)):
 				_engine.inventory[String(wid)] = 1
 		if _tabs_ref != null:
-			_tabs_ref.current_tab = 5
+			_tabs_ref.current_tab = TAB_TOOLS
 		_pages._ensure_modes()
 		_pages._select_mode("week")
 		_retention._refresh_week_page()
@@ -800,7 +813,7 @@ func _ready() -> void:
 	if _demo_harness._demo and _demo_harness._action_goal:
 		# кадр модалки выбора цели: собираем пару и открываем режимный экран
 		if _tabs_ref != null:
-			_tabs_ref.current_tab = 0
+			_tabs_ref.current_tab = TAB_EXPERIMENT
 		_engine.ether = 100
 		_engine.selected.clear()
 		_engine._place_into_slot("fire", "A")
@@ -808,7 +821,7 @@ func _ready() -> void:
 		_sigil_ui._on_brew_btn_pressed()
 	if _demo_harness._demo and _demo_harness._action_goals:
 		if _tabs_ref != null:
-			_tabs_ref.current_tab = 0
+			_tabs_ref.current_tab = TAB_EXPERIMENT
 		_engine.ether = 100
 		_engine.selected.clear()
 		_engine._place_into_slot("fire", "A")
@@ -884,13 +897,13 @@ func _process(delta: float) -> void:
 		_online._tick_netexperiment()
 		_online._tick_pending_experiment()
 	if _tabs_ref != null and not _selftest and _online._net_enabled:
-		if _tabs_ref.current_tab == 2:
+		if _tabs_ref.current_tab == TAB_WORLD:
 			_online._world_poll += delta
 			if _online._world_poll > 25.0:
 				_online._world_poll = 0.0
 				Net.events()
 				Net.challenge(_online._device_id)
-		elif _tabs_ref.current_tab == 4:
+		elif _tabs_ref.current_tab == TAB_RATING:
 			_online._rating_poll += delta
 			if _online._rating_poll > 25.0:
 				_online._rating_poll = 0.0
@@ -1027,6 +1040,7 @@ func _build_ui() -> void:
 	_font_xbold = _load_font(str(fonts_cfg.get("xbold", "res://assets/fonts/Manrope-ExtraBold.ttf")))
 	_font_display = _load_font(str(fonts_cfg.get("display", "")))
 	_font_lore = _load_font(str(fonts_cfg.get("lore", "")))
+	_font_runic = _load_font(str(fonts_cfg.get("runic", "")))
 	var th := Theme.new()
 	# Базовый размер рассчитан под Android portrait: иерархия строится
 	# размерами конкретных заголовков, а не крупным шрифтом по умолчанию.
@@ -1034,6 +1048,12 @@ func _build_ui() -> void:
 	if _font_reg != null:
 		th.default_font = _font_reg
 	UIStyle.apply_theme(th)
+	# Названия карточек сигилов берут шрифт из темы по имени "runic"
+	# (см. game/sigil/scripts/sigil_card.gd). До этого там искалось имя
+	# "display", которое никто не регистрировал, поэтому карточки молча падали
+	# в default_font, то есть в Manrope.
+	if _font_runic != null:
+		th.set_font("runic", "Label", _font_runic)
 	theme = th
 
 	var bg := ColorRect.new()
@@ -1085,15 +1105,25 @@ func _build_ui() -> void:
 	var head := HBoxContainer.new()
 	head.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	root.add_child(head)
-	var title := _label("ПЕТЛЯ АЛХИМИКА", 24)
+	# Заголовок игры — рунический display-шрифт: это логотип, а не заголовок
+	# раздела. 19 px, а не 22-24: при ширине 540 px ряд из шести кнопок 46×46
+	# оставляет заголовку ~216 px, а рунический в 22 px требует 235 px и при
+	# AUTOWRAP_WORD_SMART уезжает на две строки; в 19 px это 203 px.
+	var title := _label("ПЕТЛЯ АЛХИМИКА", 19)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if _font_xbold != null:
+	if _font_runic != null:
+		title.add_theme_font_override("font", _font_runic)
+	elif _font_xbold != null:
 		title.add_theme_font_override("font", _font_xbold)
 	title.add_theme_color_override("font_color", Color(0.94, 0.97, 1.0))
 	head.add_child(title)
-	var quests_btn := _small_button("✦", Vector2(46, 36), 2)
-	# Иконка вместо текстового глифа: на золотой кнопке — тёмные чернила.
-	UIIcon.into_button(quests_btn, "star", 20, Color("2a1d05"))
+	# Ряд шапки — одинаковые квадраты 46×46 с иконками Atheneum 24 px. Размер
+	# задала таро-кнопка Аркана (спека: строго квадратная 46×46); остальные были
+	# 46×36, поэтому ряд шёл рваным по высоте, а аватар жил в своей 9-slice
+	# текстуре вместо общего UIStyle-хрома.
+	var quests_btn := _header_button(2)
+	# На золотой кнопке белая база иконки не читается — тёмные чернила.
+	UIIcon.into_button(quests_btn, "star", 24, Color("2a1d05"))
 	quests_btn.tooltip_text = "Задания Светика, достижения, комплекты, заказы"
 	quests_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	quests_btn.pressed.connect(_progress_ui._open_progress_popup)
@@ -1106,37 +1136,32 @@ func _build_ui() -> void:
 	head.add_child(sigil_btn)
 	# «▲N» → родная иконка trend_up + счётчик текстом (core._refresh_header).
 	# Если SVG не импортирован (текстуры нет), _refresh_header оставит глиф «▲».
-	var up_icon := UIIcon.texture("trend_up", true)
-	_hub._up_btn = _small_button("" if up_icon != null else "▲", Vector2(46, 36))
+	var up_icon := UIIcon.texture("trend_up")
+	_hub._up_btn = _header_button(0)
 	if up_icon != null:
 		_hub._up_btn.icon = up_icon
+	else:
+		_hub._up_btn.text = "▲"
 	_hub._up_btn.tooltip_text = "Улучшения"
 	_hub._up_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_hub._up_btn.pressed.connect(_hub._open_upgrades)
 	head.add_child(_hub._up_btn)
-	_sound_btn = _small_button("♪", Vector2(46, 36))
-	UIIcon.into_button(_sound_btn, "volume", 20)
+	_sound_btn = _header_button(0)
+	UIIcon.into_button(_sound_btn, "volume", 24)
 	_sound_btn.tooltip_text = "Настройки звука"
 	_sound_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_sound_btn.pressed.connect(_hub._open_settings)
 	head.add_child(_sound_btn)
-	var log_btn := _small_button("Ж", Vector2(46, 36))
-	UIIcon.into_button(log_btn, "book", 20)
+	var log_btn := _header_button(0)
+	UIIcon.into_button(log_btn, "book", 24)
 	log_btn.tooltip_text = "Журнал событий"
 	log_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	log_btn.pressed.connect(_hub._open_journal)
 	head.add_child(log_btn)
-	var me_btn := Button.new()
-	me_btn.custom_minimum_size = Vector2(46, 36)
-	me_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var me_btn := _header_button(0)
 	me_btn.tooltip_text = "Профиль: твоё имя и аватар"
+	me_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	me_btn.pressed.connect(_hub._open_profile)
-	var mb := _stylebox_9("res://assets/ui/btn_secondary.png", Vector4(14, 12, 14, 12))
-	if mb != null:
-		me_btn.add_theme_stylebox_override("normal", mb)
-		var mbh := _stylebox_9("res://assets/ui/btn_secondary.png", Vector4(14, 12, 14, 12), Color(1.2, 1.22, 1.18, 1))
-		me_btn.add_theme_stylebox_override("hover", mbh)
-	me_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	var cc := CenterContainer.new()
 	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1185,8 +1210,8 @@ func _build_ui() -> void:
 	# Нижняя навигация: QTE-событие не должно появляться поверх вкладок (док §7).
 	tabs.add_to_group("qte_exclusion")
 	UIStyle.style_tabs(tabs)
-	tabs.add_theme_font_size_override("font_size", 14)
-	tabs.add_theme_constant_override("tab_hseparation", 4)
+	tabs.add_theme_font_size_override("font_size", 16)
+	tabs.add_theme_constant_override("tab_hseparation", 2)
 	tabs.tab_changed.connect(_on_tab_changed)
 	root.add_child(tabs)
 
@@ -1196,8 +1221,6 @@ func _build_ui() -> void:
 	_pages._build_lab(lab)
 	var world := _make_page(tabs, "Мир")
 	_pages._build_world(world)
-	var house := _make_page(tabs, "Дом")
-	_home._build_house_page(house)
 	var rating := _make_page(tabs, "Рейтинг")
 	_online._build_rating_page(rating)
 	var tools := _make_page(tabs, "Инструменты")
@@ -1218,6 +1241,7 @@ func _build_ui() -> void:
 	_retort._build_retort_picker()
 	_saves._build_return_popup()
 	_hub._build_prestige_popup()
+	_home._build_house_screen()
 	_home._build_decor_popup()
 	_home._build_color_picker()
 	_home._build_house_popup()
@@ -1240,9 +1264,9 @@ func _build_ui() -> void:
 func _apply_tab_icons(tabs: TabContainer) -> void:
 	# Иконки вкладок: набор «Atheneum» 16 px (из PR #32, assets/ui/icons16).
 	# Белая база на тёмной панели читается без тонирования. С иконками вкладки
-	# становятся шире, поэтому кегль заголовков — 11: шесть разделов целиком
-	# помещаются на 540 px.
-	var tab_icons := ["flask", "cauldron", "globe", "home", "trophy", "sliders"]
+	# становятся шире, поэтому кегль заголовков урезан — но разделов теперь пять
+	# (дом переехал на полноэкранный экран), так что 13 помещается на 540 px.
+	var tab_icons := ["flask", "cauldron", "globe", "trophy", "sliders"]
 	var applied := false
 	for i in mini(tab_icons.size(), tabs.get_tab_count()):
 		var tex := UIIcon.texture(tab_icons[i], true)
@@ -1250,7 +1274,7 @@ func _apply_tab_icons(tabs: TabContainer) -> void:
 			tabs.set_tab_icon(i, tex)
 			applied = true
 	if applied:
-		tabs.add_theme_font_size_override("font_size", 11)
+		tabs.add_theme_font_size_override("font_size", 13)
 
 func _fit_ui_root_after_layout(host: Control, root: Control) -> void:
 	# Два кадра дают всем динамическим страницам посчитать minimum size;
@@ -1390,7 +1414,7 @@ func _refetch_world() -> void:
 func _update_brew_bar_visibility() -> void:
 	if _brew_bar == null:
 		return
-	var on_lab := _tabs_ref == null or _tabs_ref.current_tab == 1
+	var on_lab := _tabs_ref == null or _tabs_ref.current_tab == TAB_LAB
 	_brew_bar.visible = on_lab
 	if _engine._repeat_btn != null:
 		_engine._repeat_btn.disabled = _engine.brewing or _engine._last_pair.size() != 2
@@ -1494,6 +1518,17 @@ func _square_button(text: String, kind: int = 0) -> Button:
 		b.add_theme_font_override("font", _font_semi)
 	UIStyle.style_button(b, kind, 10)
 	return b
+
+## Кнопка шапки: квадрат 46×46 и узкие поляны контента. Со стандартными 12 px
+## иконка 24 px в 46 px не помещается, и Godot обрезает её вместе со счётчиком.
+func _header_button(kind: int) -> Button:
+	var b := _square_button("", kind)
+	for s in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		var sb := b.get_theme_stylebox(s) as StyleBoxFlat
+		if sb != null:
+			sb.content_margin_left = 2.0
+			sb.content_margin_right = 2.0
+	return b
 func _tarot_button() -> Button:
 	var b := _square_button("", 1)
 	var icon := TarotIcon.new()
@@ -1515,6 +1550,7 @@ func _label(text: String, font_size: int = 16) -> Label:
 	node.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return node
+
 
 # ---------- книга ----------
 
@@ -1680,9 +1716,13 @@ func _show_sigil_card(tex: ImageTexture, item_id: String, display_name: String, 
 	vbox.add_theme_constant_override("separation", 8)
 	card_panel.add_child(vbox)
 
-	var title_lbl := _label(display_name, 22)
+	var title_lbl := _label(display_name, 26)
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_lbl.add_theme_color_override("font_color", accent)
+	# Имя карточки — рунический шрифт (как на самих карточках сигилов).
+	var runic_font := UIStyle.runic()
+	if runic_font != null:
+		title_lbl.add_theme_font_override("font", runic_font)
 	vbox.add_child(title_lbl)
 
 	var img_rect := TextureRect.new()

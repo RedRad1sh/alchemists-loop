@@ -73,6 +73,11 @@ func _set_page_scroll(value: int) -> void:
 	var sc := page as ScrollContainer
 	if sc != null:
 		sc.scroll_vertical = value
+		# В лаборатории внешний скролл вкладки отключён (котёл закреплён),
+		# поэтому прокручиваем внутренний LabScroll.
+		var lab := sc.find_child("LabScroll", true, false) as ScrollContainer
+		if lab != null:
+			lab.scroll_vertical = value
 
 func _probe_pixels(img: Image) -> void:
 	print("slotA well rect=", g._engine._slot_a.get_global_rect())

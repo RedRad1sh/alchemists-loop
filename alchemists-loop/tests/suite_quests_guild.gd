@@ -18,6 +18,23 @@ static func run(g: Game) -> void:
 	Selftest.check("quest tier counted", g._guild._quest_progress({"goal": "tier", "tier": 2}) == int(g._guild._quest_tier.get(2, 0)))
 	Selftest.check("quest goal done funcs", g._guild._quest_progress({"goal": "affinity"}) == g._spirit._companion_level_for(g._spirit._companion_affinity))
 
+	# Ряды заданий — карточки с полосой прогресса, а не пара Label.
+	g._progress_ui._rebuild_quest_rows()
+	var qrows := g._guild._quest_rows.get_children()
+	var qcards := 0
+	for qnode in qrows:
+		if qnode is PanelContainer and (qnode as Control).find_child("ProgressBar", true, false) != null:
+			qcards += 1
+	Selftest.check("quest rows render as cards",
+		qrows.size() == Game.SPIRIT_QUESTS.size() and qcards == qrows.size())
+	var q0: Dictionary = Game.SPIRIT_QUESTS[0]
+	var q0bar: ProgressBar = null
+	if not qrows.is_empty() and qrows[0] is PanelContainer:
+		q0bar = (qrows[0] as PanelContainer).find_child("ProgressBar", true, false) as ProgressBar
+	Selftest.check("quest card bar carries quest progress",
+		q0bar != null and int(q0bar.max_value) == g._guild._quest_target(q0)
+		and int(q0bar.value) == mini(g._guild._quest_progress(q0), g._guild._quest_target(q0)))
+
 	# достижения
 	Selftest.check("achievements data", Game.ACHIEVEMENTS.size() >= 20)
 	var map_script: GDScript = null

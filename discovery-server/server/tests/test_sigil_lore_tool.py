@@ -22,7 +22,9 @@ def test_fragment_check_detects_text_only_drift(tmp_path):
     lore.write_fragments(tmp_path)
     assert lore.check_fragments(tmp_path) == 0
     path = tmp_path / "actions.json"
-    payload = json.loads(path.read_text())
+    # encoding явный: read_text()/write_text() без него берут локаль Windows
+    # (cp1251), и кириллица в фрагментах перестаёт кругом проходить через utf-8.
+    payload = json.loads(path.read_text(encoding="utf-8"))
     payload["fragments"][0]["text"] += " тихо"
-    path.write_text(json.dumps(payload, ensure_ascii=False))
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     assert lore.check_fragments(tmp_path) == 1

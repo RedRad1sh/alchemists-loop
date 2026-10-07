@@ -678,6 +678,24 @@ func _can_brew() -> bool:
 		return false
 	return _available_ether() >= _pair_cost(selected[0], selected[1], _production_discount)
 
+## Текст неудачной варки, когда мир так и не спросили. Раньше все случаи
+## выглядели одинаково («Туман рассеялся… Возвращено N эфира»), и отложенный
+## запрос было не отличить от настоящей неудачи — это и читалось как баг.
+func _candidate_skip_text(reason: String, retry_in: float) -> String:
+	var tail := " Возвращено %d эфира." % Game.FAILURE_REFUND
+	match reason:
+		"offline":
+			return "Туман рассеялся… Мира нет на связи, спросить пару не у кого." + tail
+		"busy":
+			return "Туман рассеялся… Мир занят другой парой, эта подождёт." + tail
+		"cooldown":
+			return ("Туман рассеялся… Мир посмотрит эту пару через %d с."
+				% ceili(maxf(retry_in, 1.0))) + tail
+		_:
+			# "fog" — тот самый 5-процентный туман у авто-производства.
+			return "Туман рассеялся…" + tail
+
+
 func _brew(from_auto: bool = false) -> Dictionary:
 	var pair_cost := Game.BREW_COST
 	if selected.size() == 2:
@@ -731,11 +749,18 @@ func _brew(from_auto: bool = false) -> Dictionary:
 			# U9 (T11): fail-closed списание — ингредиенты перехвачены другой
 			# трассой пока котёл «спал»; ничего не тратим, в сеть не идём.
 			status_text = "Ингредиенты не дожили до котла: варка отменена без списания."
-		elif g._online._try_net_candidate(a, b):
-			status_text = "Туман рассеялся… Мир проверяет пару…"
 		else:
-			status_text = "Туман рассеялся… Возвращено %d эфира." % Game.FAILURE_REFUND
-			g._spirit._companion_react("fail", "")
+			# manual = не автоплан: осознанная варка обязана дойти до мира.
+			# Троттлинг (60 с на пару и 5% «тумана») остаётся только для
+			# авто-производства — иначе повторная варка молча не спрашивала бы
+			# сервер, а игрок видел бы обычную неудачу и считал это багом.
+			var net: Dictionary = g._online._try_net_candidate(a, b, not _auto)
+			if bool(net.get("ok", false)):
+				status_text = "Туман рассеялся… Мир проверяет пару…"
+			else:
+				status_text = _candidate_skip_text(String(net.get("reason", "")),
+					float(net.get("retry_in", 0.0)))
+				g._spirit._companion_react("fail", "")
 		Sfx.error()
 		Input.vibrate_handheld(20)
 		if _cauldron != null:

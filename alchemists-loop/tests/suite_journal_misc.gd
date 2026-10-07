@@ -150,13 +150,11 @@ static func run(g: Game) -> void:
 	var _b0 := g._home._cp_b.value
 	var _oktext0 := g._home._cp_ok.text
 	var _cust_theme0 := bool(g._home._custom_unlocked.get("theme", false))
-	# _close_decor_popup прокручивает страницу дома наверх, если открыта вкладка «Дом»
-	var _page3: ScrollContainer = null
-	if g._tabs_ref != null and g._tabs_ref.get_child_count() > 3:
-		_page3 = g._tabs_ref.get_child(3) as ScrollContainer
+	# _close_decor_popup прокручивает экран дома наверх, если тот открыт
+	var _house_sc: ScrollContainer = g._home._house_scroll
 	var _scroll0 := 0
-	if _page3 != null:
-		_scroll0 = _page3.scroll_vertical
+	if _house_sc != null:
+		_scroll0 = _house_sc.scroll_vertical
 
 	# Слив возможных утечек из предыдущих сюит ДО проверок: иначе утёкшая попап
 	# (а) красит T1 чужим дефектом и (б) крадёт второй вызов в T2, отчего краснеет
@@ -275,8 +273,8 @@ static func run(g: Game) -> void:
 	g._home._aura_custom_on = _auraon0
 	g._home._apply_cosmetic()
 	g._home._refresh_house_page()
-	if _page3 != null:
-		_page3.scroll_vertical = _scroll0
+	if _house_sc != null:
+		_house_sc.scroll_vertical = _scroll0
 	g._engine._auto = _auto0
 	g._engine._auto_cancel = _acancel0
 	g._engine.status_text = _status0
@@ -1003,7 +1001,7 @@ static func run(g: Game) -> void:
 	Selftest.check("t23 second interstitial waits out the cooldown",
 		not Monetization.can_show_interstitial() and not Monetization.show_interstitial("navigation"))
 	# Граница навигации: вызов ровно в _on_tab_changed и ровно при закрытых модалах.
-	# 0-я вкладка берётся намеренно — world/rating-ветки (2/4/5) трогали бы Net.
+	# 0-я вкладка берётся намеренно — world/rating/tools-ветки (2/3/4) трогали бы Net.
 	g._engine._auto = false
 	_t23_clear_ad_limits()
 	Selftest.check("t23 navigation fixture is modal-free with a clear cooldown",
@@ -1585,6 +1583,8 @@ static func _no_modal_visible(g: Game) -> bool:
 	if g._home._color_picker != null and g._home._color_picker.visible:
 		return false
 	if g._home._house_popup != null and g._home._house_popup.visible:
+		return false
+	if g._home._house_screen != null and g._home._house_screen.visible:
 		return false
 	return true
 

@@ -431,7 +431,7 @@ func _build_credits_popup() -> void:
 	col.add_child(ttl)
 	# Заглушка: централизованное место про шрифты/тему, чтобы не забыть.
 	# Дальше — дизайн (портрет авторов, лицензии, ссылки).
-	var fonts_line := "Шрифты: Manrope (UI), Divagon (названия), Manasco (лор)"
+	var fonts_line := "Шрифты: Manrope (UI), Divagon (названия), Manasco (лор), Alchemist Runic (заголовок)"
 	var fl := g._label(fonts_line, 12)
 	fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -441,7 +441,12 @@ func _build_credits_popup() -> void:
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ver.add_theme_color_override("font_color", Color(0.55, 0.6, 0.65))
 	col.add_child(ver)
-	# Превью шрифтов: Divagon на названии, Manasco на лоре.
+	# Превью шрифтов: Divagon на названии, Manasco на лоре, Runic на заголовке.
+	var prev_runic := g._label("ПЕТЛЯ АЛХИМИКА", 24)
+	prev_runic.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if g._font_runic != null:
+		prev_runic.add_theme_font_override("font", g._font_runic)
+		col.add_child(prev_runic)
 	var prev1 := g._label("Алхимический Сигил", 18)
 	prev1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if g._font_display != null:

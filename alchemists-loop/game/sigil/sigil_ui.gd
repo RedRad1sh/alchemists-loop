@@ -148,16 +148,18 @@ func _sigil_build_page(tab: String) -> void:
 	# при программном go_to не должен дублировать контент).
 	if tab == _sigil_tab and page.get_child_count() > 0:
 		return
-	# Сносим содержимое СТАРОЙ страницы (билдер асинхронный — мог оставить
-	# статус-лейбл/демо-контент), затем строим новую.
-	var prev: Control = _sigil_pages.get(_sigil_tab, page)
-	if prev != page and prev != null:
-		for c in prev.get_children():
-			(c as Node).queue_free()
+	# УХОДЯЩУЮ страницу не трогаем: лист BookPager — это её снимок на
+	# frame_post_draw текущего кадра. Снесённая заранее, она пустеет ровно
+	# в момент старта анимации, и перелистывание выглядит как исчезновение.
 	_sigil_tab = tab
 	_sigil_tab_seq += 1
 	_sigil_tab_content = page
+	# Старое содержимое ЦЕЛЕВОЙ страницы уходит со сцены сразу: queue_free
+	# удаляет узел только в конце кадра, а снимок (при листании назад он берётся
+	# с приходящей страницы) рисуется в этом же кадре — иначе на листе лежит
+	# старая страница поверх новой.
 	for c in page.get_children():
+		page.remove_child(c)
 		(c as Node).queue_free()
 	match tab:
 		"collection":
@@ -924,10 +926,10 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	vbox.add_theme_constant_override("margin_bottom", 10)
 	panel.add_child(vbox)
 
-	var title_lbl: Label = main._label(str(entry.get("name", "")), 22)
-	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_lbl.add_theme_color_override("font_color", accent)
-	vbox.add_child(title_lbl)
+	# Верхней надписи с именем здесь нет намеренно: имя уже напечатано на самой
+	# карточке (у опций рендера show_name=true), и дубль над ней только мешал.
+	# Если имя понадобится отдельным заголовком — брать шрифт через
+	# UIStyle.runic(), тема в это поддерево не доходит.
 
 	# Живая карточка: SubViewportContainer + SigilCard (анимированная аура,
 	# искры/фольга — как в sigil_module_v2). _svc.preview_into подключает
@@ -1890,6 +1892,11 @@ func _close_top_modal() -> bool:
 		# быть не могут, порядок этих двух веток не важен.
 		main._home._close_house_popup()
 		return true
+	elif main._home != null and main._home._house_screen != null and main._home._house_screen.visible:
+		# Полноэкранный дом (z=20) — нижняя поверхность: декор-магазин, палитра и
+		# гостевой домик лежат поверх него и закрываются раньше.
+		main._home._close_house_screen()
+		return true
 	return false
 
 # Read-only перечисление ровно тех поверхностей, что закрывает
@@ -1947,6 +1954,8 @@ func _modal_open_for_ads() -> bool:
 	if main._home != null and main._home._color_picker != null and main._home._color_picker.visible:
 		return true
 	if main._home != null and main._home._house_popup != null and main._home._house_popup.visible:
+		return true
+	if main._home != null and main._home._house_screen != null and main._home._house_screen.visible:
 		return true
 	return false
 

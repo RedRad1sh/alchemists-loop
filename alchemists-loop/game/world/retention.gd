@@ -641,17 +641,25 @@ func _vein_find_entry(pair_key: String, cycle_id: String = "") -> Dictionary:
 	return fallback
 
 
+## server-кэш цикла читается через этот геттер: /api/vein/cycle/status отдаёт
+## tag2 как Optional[str] = null (цикл ещё не «расползлся»), а String(null) —
+## это ошибка рантайма, которая обрывала бы _commit_brew посреди варки.
+func _cache_str(key: String) -> String:
+	var v: Variant = _cycle_cache.get(key, "")
+	return String(v) if typeof(v) == TYPE_STRING else ""
+
+
 func _vein_report_pair(a: String, b: String, out: String) -> void:
 	# §3.3.1: personal find рождается только для пары из серверной книги, тег
 	# которой активен в текущем цикле; anti-farm — одна пара на цикл (R2: без
 	# кэша цикла find не заводится).
 	if out == "" or not g._online._is_server_pair(a, b):
 		return
-	var cyc := String(_cycle_cache.get("cycle_id", ""))
+	var cyc := _cache_str("cycle_id")
 	var tag := String(g._online._server_tag.get(out, ""))
 	if cyc == "" or tag == "":
 		return
-	if tag != String(_cycle_cache.get("tag1", "")) and tag != String(_cycle_cache.get("tag2", "")):
+	if tag != _cache_str("tag1") and tag != _cache_str("tag2"):
 		return
 	var pk := g._pair_key(a, b)
 	if _vein_find_exists(cyc, pk):

@@ -17,6 +17,21 @@ const TEXT := Color("e8f2f6")
 const TEXT_DIM := Color("8ea3b1")
 const DANGER := Color("e8695a")
 
+# Рунический display-шрифт (заголовок игры и названия карточек сигилов).
+const RUNIC_PATH := "res://assets/fonts/Alchemist-Runic.ttf"
+static var _runic: Font = null
+
+
+## Рунический шрифт напрямую, минуя тему. Нужен там, где тема физически не
+## достаёт: Godot не прокидывает её через узлы, которые не Control (SigilUI —
+## простой Node), и обрывает на SubViewport, а в них рендерятся и карточки-PNG
+## (sigil_render_service), и живая карточка фуллскрина. get_theme_font там
+## возвращает не Manrope, а встроенный Open Sans.
+static func runic() -> Font:
+	if _runic == null and ResourceLoader.exists(RUNIC_PATH):
+		_runic = load(RUNIC_PATH) as Font
+	return _runic
+
 
 static func box(bg: Color, border: Color, radius: int, border_w: int = 1) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
@@ -156,7 +171,10 @@ static func _tab_box(bg: Color, edge: Color, underline: int) -> StyleBoxFlat:
 	sb.corner_radius_bottom_left = 0
 	sb.corner_radius_bottom_right = 0
 	sb.border_width_bottom = underline
-	_margins(sb, 9, 8, 9, 8)
+	# Отступы задают высоту вкладки, то есть тач-зону нижнего меню. По горизонтали
+	# они малы намеренно: шесть разделов с иконками 16 px не помещались в 540 px
+	# (сумма ~549 при 516 доступных), и шестая вкладка «Инструменты» обрезалась.
+	_margins(sb, 6, 13, 6, 13)
 	return sb
 
 

@@ -59,21 +59,21 @@ func _build_progress_popup() -> void:
 	_prog_tabs.add_child(_ach_map)
 
 	var quests_page := _new_progress_list_page("Светик")
-	quests_page.add_child(g._label("ЗАДАНИЯ СВЕТИКА", 15))
+	quests_page.add_child(UIWidgets.section(g, "ЗАДАНИЯ СВЕТИКА"))
 	g._guild._quest_rows = VBoxContainer.new()
 	g._guild._quest_rows.add_theme_constant_override("separation", 5)
 	g._guild._quest_rows.mouse_filter = Control.MOUSE_FILTER_PASS
 	quests_page.add_child(g._guild._quest_rows)
 
 	var sets_page := _new_progress_list_page("Комплекты")
-	sets_page.add_child(g._label("КОМПЛЕКТЫ СТИХИЙ", 15))
+	sets_page.add_child(UIWidgets.section(g, "КОМПЛЕКТЫ СТИХИЙ"))
 	g._set_rows = VBoxContainer.new()
 	g._set_rows.add_theme_constant_override("separation", 5)
 	g._set_rows.mouse_filter = Control.MOUSE_FILTER_PASS
 	sets_page.add_child(g._set_rows)
 
 	var orders_page := _new_progress_list_page("Заказы")
-	orders_page.add_child(g._label("ЗАКАЗЫ ГИЛЬДИИ", 15))
+	orders_page.add_child(UIWidgets.section(g, "ЗАКАЗЫ ГИЛЬДИИ"))
 	g._guild._order_rows = VBoxContainer.new()
 	g._guild._order_rows.add_theme_constant_override("separation", 5)
 	g._guild._order_rows.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -131,22 +131,13 @@ func _rebuild_quest_rows() -> void:
 	for q in Game.SPIRIT_QUESTS:
 		var id := String(q["id"])
 		var done := g._guild._quests_done.has(id)
-		var prog := g._guild._quest_progress(q)
-		var target := g._guild._quest_target(q)
-		var line := "✓ %s" % String(q["title"]) if done else "• %s — %d/%d" % [String(q["title"]), mini(prog, target), target]
-		var lbl := g._label(line, 12)
-		if done:
-			lbl.add_theme_color_override("font_color", Color(0.45, 0.62, 0.5))
-		else:
-			lbl.add_theme_color_override("font_color", Color(0.9, 0.86, 0.72))
-		g._guild._quest_rows.add_child(lbl)
+		var aff := int(q.get("aff", 0))
 		var sub_txt := String(q.get("hint", ""))
-		if int(q.get("aff", 0)) > 0:
-			sub_txt += " · +%d дружбы" % int(q.get("aff", 0))
 		sub_txt += " · навсегда +%d кап, +%.1f/с" % [Game.QUEST_CAP, Game.QUEST_REGEN]
-		var sub := g._label(sub_txt, 11)
-		sub.add_theme_color_override("font_color", Color(0.55, 0.66, 0.72))
-		g._guild._quest_rows.add_child(sub)
+		g._guild._quest_rows.add_child(UIWidgets.progress_row(
+			g, String(q["title"]), sub_txt, g._guild._quest_progress(q),
+			g._guild._quest_target(q), done, UIStyle.GOLD,
+			"" if aff <= 0 else "+%d дружбы" % aff))
 
 func _upgrades_total() -> int:
 	var t := 0

@@ -223,7 +223,7 @@ static func run(g: Game) -> void:
 	# размер задаём в дереве: синтезированным событиям мыши нужны предсказуемые пиксели
 	u14_view.size = Vector2(400, 300)
 	# гейт process: скрытый предок — ровно то, что делает TabContainer с
-	# неактивной страницей вкладки «Дом»
+	# неактивной страницей и спрятанный полноэкранный экран дома
 	Selftest.check("u14 process parked under hidden ancestor", not u14_view.is_processing())
 	u14_host.visible = true
 	Selftest.check("u14 host is visible in tree", u14_host.is_visible_in_tree())
@@ -665,6 +665,33 @@ static func run(g: Game) -> void:
 	g._home.house_gift_week = u30_week
 	g._home.house_gift_count = u30_count
 	g._home.house_owned = u30_owned
+
+	# ============ Дом: вкладка -> полноэкранный экран ============
+	# Мутации, которые красят блок: вернуть «Дом» в TabContainer (краснеют
+	# «five tabs» и «house is not a tab»), снять z_index/add_to_group с
+	# HouseScreen (краснеют «house screen sits above persistent ui» и
+	# «house screen blocks world events»), убрать показ из _open_workshop
+	# (краснеет «open workshop shows the house screen»), убрать ветку
+	# _house_screen из _close_top_modal (краснеет «esc closes house screen»).
+	var u31_titles := []
+	for u31_i in g._tabs_ref.get_tab_count():
+		u31_titles.append(g._tabs_ref.get_tab_title(u31_i))
+	Selftest.check("five tabs", g._tabs_ref.get_tab_count() == 5)
+	Selftest.check("house is not a tab", not u31_titles.has("Дом"))
+	Selftest.check("tab captions are readable (font_size >= 13)",
+		g._tabs_ref.get_theme_font_size("font_size") >= 13)
+	var u31_screen := g._home._house_screen
+	Selftest.check("house screen built and hidden on start",
+		u31_screen != null and not u31_screen.visible)
+	Selftest.check("house screen sits above persistent ui",
+		u31_screen != null and u31_screen.z_index == 20)
+	Selftest.check("house screen is a modal surface",
+		u31_screen != null and u31_screen.is_in_group("modal_ui"))
+	g._home._open_workshop()
+	Selftest.check("open workshop shows the house screen",
+		u31_screen.visible and g._home._house_view != null)
+	Selftest.check("house screen blocks world events", not g._online._can_spawn_event())
+	Selftest.check("esc closes house screen", g._close_top_modal() and not u31_screen.visible)
 
 
 static func _u28_task(id: String) -> Dictionary:

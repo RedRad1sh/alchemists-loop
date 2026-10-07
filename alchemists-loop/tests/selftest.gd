@@ -41,6 +41,13 @@ static func run(g: Game) -> void:
 	_total = 0
 	_fails = 0
 
+	# Инвариант герметичного старта: мир прогона не тронут чужим сейвом. Мутация —
+	# снять `if not _selftest:` вокруг _saves._load_game() в main.gd: на машине с
+	# сохранением краснеет этот кейс, а не случайные сюиты дальше по списку.
+	Selftest.check("selftest starts from a clean world (no real save loaded)",
+		g._online._server_elements.is_empty() and g._online._server_recipes.is_empty()
+		and g._engine._milestones_done.is_empty())
+
 	g.SAVE_PATH = "user://alchemy_st_save.json"
 	g.TEMP_PATH = "user://alchemy_st_save.tmp"
 	g.BACKUP_PATH = "user://alchemy_st_save.bak"

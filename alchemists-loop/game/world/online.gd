@@ -394,27 +394,45 @@ func _grant_local_acquisition(slug: String) -> Array:
 		return g._engine._grant_first_open(slug)
 	return []
 
-func _try_net_candidate(a: String, b: String) -> bool:
-	"""Попробовать проверить неизвестную пару на сервере. True — запрос ушёл."""
+## Попробовать проверить неизвестную пару на сервере.
+##
+## manual = true — игрок варит пару осознанно: троттлинг (кулдаун 60 с на пару и
+## 5-процентный «туман») не применяется. Иначе повторная варка той же пары
+## молча уходила бы мимо мира, а игрок видел бы обычную локальную неудачу и не
+## понимал, что запрос просто отложен. Троттлинг остаётся для авто-производства
+## (_auto), которое и создаёт поток запросов к LLM.
+##
+## -> {"ok": bool, "reason": "" | "offline" | "cooldown" | "fog" | "busy",
+##     "retry_in": float}  — reason нужен вызывающему, чтобы объяснить игроку,
+##     почему мир не спросили.
+func _try_net_candidate(a: String, b: String, manual: bool = false) -> Dictionary:
 	if not _net_enabled or not Net.is_available():
-		return false
+		return {"ok": false, "reason": "offline", "retry_in": 0.0}
 	var key := g._pair_key(a, b)
 	var now := Time.get_ticks_msec() / 1000.0
-	if now - float(g._engine._last_candidate_time.get(key, 0.0)) < Game.CANDIDATE_COOLDOWN:
-		return false
-	if randf() < Game.CANDIDATE_CHANCE:
-		return false
+	if not manual:
+		# has(key), а не get(key, 0.0): now — это секунды с запуска ДВИЖКА.
+		# Для пары, которую ещё ни разу не спрашивали, значение по умолчанию 0.0
+		# давало now - 0 < 60, то есть первые 60 секунд сессии мир не спрашивали
+		# вообще ни про одну неизвестную пару — выглядело как «запрос не уходит».
+		if g._engine._last_candidate_time.has(key):
+			var elapsed := now - float(g._engine._last_candidate_time[key])
+			if elapsed < Game.CANDIDATE_COOLDOWN:
+				return {"ok": false, "reason": "cooldown",
+					"retry_in": Game.CANDIDATE_COOLDOWN - elapsed}
+		if randf() < Game.CANDIDATE_CHANCE:
+			return {"ok": false, "reason": "fog", "retry_in": 0.0}
 	# U11 (T14): не перезахватываем занятый слот. Пока другая пара ждёт ответа
 	# мира, запрос не отправляем и cooldown не тратим: игрок видит штатную
 	# реплику неудачной варки («Туман рассеялся… Возвращено N эфира»,
 	# core.gd `_brew`), пара остаётся неизвестной и запросится позже.
 	if not _register_pending_pair(a, b, false):
-		return false
+		return {"ok": false, "reason": "busy", "retry_in": 0.0}
 	g._engine._last_candidate_time[key] = now
 	# The legacy cauldron path also uses the server's Experiment budget now, but
 	# keeps its existing refund/inventory semantics.
 	Net.check_pair(a, b, _net_nick, _device_id, true)
-	return true
+	return {"ok": true, "reason": "", "retry_in": 0.0}
 
 func _start_experiment(a: String, b: String) -> bool:
 	"""Явный Эксперимент: только 2 реагента в v1, сервер авторитетен (док §5)."""
@@ -1011,9 +1029,15 @@ func _rebuild_world_grid() -> void:
 		_world_next.disabled = _world_page >= pages - 1
 
 func _item_name(item_id: String) -> String:
+	# id может прийти с сервера (мир/книга) раньше, чем вещество есть в локальном
+	# ITEMS, — тогда показываем слаг вместо падения _refresh на отсутствующем ключе.
+	if not g.ITEMS.has(item_id):
+		return item_id
 	return String(g.ITEMS[item_id]["name"])
 
 func _item_desc(item_id: String) -> String:
+	if not g.ITEMS.has(item_id):
+		return ""
 	return String(g.ITEMS[item_id].get("d", ""))
 
 func _item_glyph(item_id: String) -> String:

@@ -120,7 +120,7 @@ func _build_companion_dialog() -> void:
 
 func _refresh_companion_visible() -> void:
 	if _companion != null:
-		var on_lab := g._tabs_ref == null or g._tabs_ref.current_tab == 0 or g._tabs_ref.current_tab == 1
+		var on_lab := g._tabs_ref == null or g._tabs_ref.current_tab == Game.TAB_EXPERIMENT or g._tabs_ref.current_tab == Game.TAB_LAB
 		_companion.visible = on_lab and _companion_unlocked
 		# У верхней шапки нет свободного места для всплывающего облачка:
 		# текст Светика живёт в его окне общения и не закрывает навигацию.
@@ -145,7 +145,7 @@ func _companion_hello() -> void:
 	_refresh_companion_visible()
 	if not _companion_unlocked:
 		return
-	var on_lab := g._tabs_ref == null or g._tabs_ref.current_tab == 0 or g._tabs_ref.current_tab == 1
+	var on_lab := g._tabs_ref == null or g._tabs_ref.current_tab == Game.TAB_EXPERIMENT or g._tabs_ref.current_tab == Game.TAB_LAB
 	if not on_lab:
 		return
 	if g._demo_harness._demo:
