@@ -462,8 +462,8 @@ class SocialPeer(BaseModel):
 
 
 class FriendRequestPayload(BaseModel):
-    device_id: str
-    target_nick: str
+    device_id: str = Field(..., min_length=1, max_length=128)
+    target_nick: str = Field(..., min_length=1, max_length=64)
 
 
 class FriendRequestResponse(BaseModel):
@@ -473,8 +473,8 @@ class FriendRequestResponse(BaseModel):
 
 
 class FriendRespondPayload(BaseModel):
-    device_id: str
-    requester_device: str
+    device_id: str = Field(..., min_length=1, max_length=128)
+    requester_device: str = Field(..., min_length=1, max_length=128)
     accept: bool
 
 
@@ -485,13 +485,13 @@ class FriendRespondResponse(BaseModel):
 
 
 class FriendPeerPayload(BaseModel):
-    device_id: str
-    peer_device: str
+    device_id: str = Field(..., min_length=1, max_length=128)
+    peer_device: str = Field(..., min_length=1, max_length=128)
 
 
 class FriendBlockPayload(BaseModel):
-    device_id: str
-    target_device: str
+    device_id: str = Field(..., min_length=1, max_length=128)
+    target_device: str = Field(..., min_length=1, max_length=128)
 
 
 class SocialOkResponse(BaseModel):
@@ -4218,7 +4218,9 @@ def _social_delete_pair(conn: sqlite3.Connection, device_id: str, peer_device: s
 def friend_remove(payload: FriendPeerPayload):
     me = payload.device_id.strip()
     peer = payload.peer_device.strip()
-    if peer == SPIRIT_DEVICE:
+    # Светик защищён с обеих сторон: device_id ничем не аутентифицирован,
+    # поэтому вызов от имени npc-spirit удалил бы чужое закреплённое ребро.
+    if SPIRIT_DEVICE in (me, peer):
         raise HTTPException(status_code=400, detail="npc")
     conn = get_db()
     try:
@@ -4247,7 +4249,7 @@ def friend_block(payload: FriendBlockPayload):
     """
     me = payload.device_id.strip()
     target = payload.target_device.strip()
-    if target == SPIRIT_DEVICE:
+    if SPIRIT_DEVICE in (me, target):
         raise HTTPException(status_code=400, detail="npc")
     if target == me:
         raise HTTPException(status_code=400, detail="self")
@@ -4269,6 +4271,11 @@ def friend_block(payload: FriendBlockPayload):
 
 @app.post("/api/friend/unblock", response_model=SocialOkResponse)
 def friend_unblock(payload: FriendBlockPayload):
+    """Снимает только собственный блок: удаляется строка (me, target).
+
+    Блок, который поставили мне, снимаю не я, а тот, кто его поставил. Ни
+    ребро, ни переписка не возвращаются — очистка была осознанным действием.
+    """
     me = payload.device_id.strip()
     target = payload.target_device.strip()
     conn = get_db()

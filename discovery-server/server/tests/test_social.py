@@ -513,12 +513,30 @@ class TestRemoveAndBlock:
                         json={"device_id": "dev-a", "peer_device": "dev-b"})
         assert r.status_code == 404 and r.json()["detail"] == "not_friends", r.text
 
+    def test_remove_leaves_pending_request_alone(self, tmp_path, monkeypatch):
+        """remove гейтится по accepted, а не по любому ребру: pending-заявка
+        остаётся в БД нетронутой (отклоняет её адресат через respond, а не
+        заявитель через remove)."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        _ask(client, "Мира")
+        r = client.post("/api/friend/remove",
+                        json={"device_id": "dev-a", "peer_device": "dev-b"})
+        assert r.status_code == 404 and r.json()["detail"] == "not_friends", r.text
+        conn = srv.get_db()
+        try:
+            row = conn.execute("SELECT state FROM friend_edges").fetchone()
+        finally:
+            conn.close()
+        assert row is not None and row["state"] == "pending", row
+
     def test_block_hides_thread_and_blocks_requests(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
         client = _client(srv)
         _player(client, "Варда", "dev-a")
         _player(client, "Мира", "dev-b")
-        _player(client, "Третья", "dev-c")
         _ask(client, "Мира")
         client.post("/api/friend/respond",
                     json={"device_id": "dev-b", "requester_device": "dev-a",
@@ -594,3 +612,60 @@ class TestRemoveAndBlock:
         r = client.post("/api/friend/block",
                         json={"device_id": "dev-a", "target_device": "dev-a"})
         assert r.status_code == 400 and r.json()["detail"] == "self", r.text
+
+    def test_calling_as_the_spirit_is_rejected(self, tmp_path, monkeypatch):
+        """device_id ничем не аутентифицирован, поэтому и вторая сторона пары
+        проверяется: вызов от имени npc-spirit удалил бы чужое закреплённое
+        ребро и вставил бы блок, который жертва сама не снимет (unblock
+        удаляет только (me, target))."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Мира", "dev-b")
+        r = client.post("/api/friend/remove",
+                        json={"device_id": "npc-spirit", "peer_device": "dev-b"})
+        assert r.status_code == 400 and r.json()["detail"] == "npc", r.text
+        r = client.post("/api/friend/block",
+                        json={"device_id": "npc-spirit", "target_device": "dev-b"})
+        assert r.status_code == 400 and r.json()["detail"] == "npc", r.text
+        conn = srv.get_db()
+        try:
+            n = conn.execute("SELECT COUNT(*) AS c FROM blocks").fetchone()["c"]
+        finally:
+            conn.close()
+        assert n == 0, "отказ не должен оставлять строку в blocks"
+
+    def test_block_twice_is_idempotent_and_unblock_of_nothing_is_ok(
+            self, tmp_path, monkeypatch):
+        """INSERT OR IGNORE + PK(blocks) — второй блок не даёт 500; unblock
+        без строки идемпотентен, клиент не обязан различать."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        body = {"device_id": "dev-a", "target_device": "dev-b"}
+        assert client.post("/api/friend/block", json=body).status_code == 200
+        r = client.post("/api/friend/block", json=body)
+        assert r.status_code == 200, r.text
+        conn = srv.get_db()
+        try:
+            n = conn.execute("SELECT COUNT(*) AS c FROM blocks").fetchone()["c"]
+        finally:
+            conn.close()
+        assert n == 1, "повтор не удваивает строку"
+        r = client.post("/api/friend/unblock",
+                        json={"device_id": "dev-b", "target_device": "dev-a"})
+        assert r.status_code == 200 and r.json()["ok"] is True, r.text
+
+    def test_payload_bounds(self, tmp_path, monkeypatch):
+        """Пустой или гигантский идентификатор не должен доходить до БД:
+        device_id пишется в PRIMARY KEY blocks и friend_edges."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        long_id = "x" * 200
+        for route, key in (("/api/friend/remove", "peer_device"),
+                           ("/api/friend/block", "target_device"),
+                           ("/api/friend/unblock", "target_device")):
+            empty = client.post(route, json={"device_id": "", key: "dev-b"})
+            assert empty.status_code == 422, (route, empty.text)
+            huge = client.post(route, json={"device_id": long_id, key: "dev-b"})
+            assert huge.status_code == 422, (route, huge.text)
