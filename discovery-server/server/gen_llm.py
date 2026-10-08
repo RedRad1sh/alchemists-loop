@@ -703,6 +703,91 @@ class LLMGenerator:
         log.info("IDENTITY-RAW (id=%s): %.400s", model, content or "")
         return content
 
+    # ------------------------------------------------------------------
+    def generate_spirit_message(self, context: dict, timeout: int = 0) -> dict:
+        """Весточка Светика: {"body": "..."} или {} (сервер уходит на шаблон).
+
+        Одна попытка и короткий таймаут — весточка генерируется внутри
+        GET /api/social/inbox, и игрок не должен ждать ретраев. Форма метода
+        повторяет generate_card_identity (тот же провайдер-гейт, тот же
+        _extract_json, та же ротация self._rot).
+        """
+        if self.provider in ("off", "", "mock", "local"):
+            return {}
+        if not self.api_key or not self.models:
+            return {}
+        t_start = time.time()
+        model = self.models[self._rot % len(self.models)]
+        try:
+            raw = self._call_spirit_once(model, context, timeout)
+        except LLMError as e:
+            log.warning("spirit: %s → %s", model, e)
+            return {}
+        try:
+            data = _extract_json(raw)
+            body = str(data.get("body", "")).strip()
+            if not body:
+                raise ValueError("пустой body")
+        except Exception:
+            log.warning("spirit: %s → ответ не по формату", model)
+            return {}
+        self._rot = (self._rot + 1) % len(self.models)
+        log.info("spirit готов (модель %s, %.1fs)", model, time.time() - t_start)
+        return {"body": body}
+
+    def _call_spirit_once(self, model: str, context: dict, timeout: int = 0) -> str:
+        """Один вызов модели за весточку; вернуть сырой текст (или LLMError)."""
+        nick = str(context.get("nick", "")).strip() or "друг"
+        weekday = str(context.get("weekday", "")).strip()
+        detail = str(context.get("trigger_detail", "")).strip()
+        trigger = str(context.get("trigger_id", "")).strip()
+        reason = {
+            "return": "игрок давно не заходил и вот вернулся",
+            "guest": "в его дом сегодня заглянул гость: " + (detail or "кто-то"),
+            "vein_find": "сегодня он нашёл новое сочетание стихий ("
+                         + (detail or "1") + " шт.)",
+            "sigil_milestone": "сегодня он заявил комплект печатей: " + (detail or ""),
+            "sigil_craft": "сегодня он закрепил карту: " + (detail or "новую"),
+            "first_brew": "сегодня у него впервые получился резонанс варки",
+        }.get(trigger, "в лаборатории обычный день")
+        messages = [
+            {"role": "system", "content":
+                "Ты — Светик, маленький добрый дух алхимической лаборатории. "
+                "Отвечай строго JSON. Пиши по-русски, тепло и коротко: 1-2 "
+                "предложения, не длиннее 200 символов, без переводов строк. "
+                "Не давай советов о реальной жизни, здоровье, деньгах и "
+                "отношениях. Не повторяй имя игрока больше одного раза."},
+            {"role": "user", "content":
+                "Сегодня " + (weekday or "обычный день") + ". Игрок " + nick +
+                ": " + reason + ". Скажи ему одну короткую добрую весточку. "
+                'Формат: {"body": "..."}'},
+        ]
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0.9,
+            "max_tokens": 128,
+            "max_completion_tokens": 128,
+            "reasoning_effort": "none",
+            "response_format": {"type": "json_object"},
+        }
+        url, headers = self._endpoint(model)
+        try:
+            r = requests.post(url, json=payload, headers=headers,
+                              timeout=(timeout or self.timeout))
+        except Exception as e:
+            raise LLMError(f"сеть: {e}") from e
+        if r.status_code != 200:
+            text = (r.text or "")[:200].strip()
+            raise LLMError(f"HTTP {r.status_code}: {text}")
+        try:
+            envelope = r.json()
+            content = envelope["choices"][0]["message"]["content"]
+        except Exception as e:
+            raise LLMError(f"битый ответ: {e}") from e
+        log.info("SPIRIT-RAW (id=%s): %.400s", model, content or "")
+        return content
+
     def _template_identity(self, ingredient_names: list[str], rarity: str) -> dict:
         """Детерминированная идентичность без LLM (mock/local/офлайн)."""
         if not ingredient_names:

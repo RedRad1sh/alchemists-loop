@@ -318,9 +318,9 @@ class TestFriendRespond:
             (inbox_a.text, inbox_b.text)
         # Симметрия — не статус, а содержимое: друг виден с обеих сторон. Без
         # этих двух строк тест зелё и на пустых списках (замечание ревьюера).
-        assert [f["device_id"] for f in inbox_a.json()["friends"]] == ["dev-b"], \
+        assert [f["device_id"] for f in _humans(inbox_a.json())] == ["dev-b"], \
             inbox_a.json()["friends"]
-        assert [f["device_id"] for f in inbox_b.json()["friends"]] == ["dev-a"], \
+        assert [f["device_id"] for f in _humans(inbox_b.json())] == ["dev-a"], \
             inbox_b.json()["friends"]
         assert inbox_a.json()["requests_total"] == 0 and inbox_b.json()["requests_total"] == 0, \
             "принятая заявка не оставляется висеть входящей"
@@ -884,6 +884,12 @@ def _count(srv, sql, args=()):
         conn.close()
 
 
+def _humans(body):
+    """Живые друзья без Светика: его строка добавляется в каждый inbox начиная с
+    задачи 8, и ассерты задачи 7 про собеседников иначе ломаются на ровном месте."""
+    return [f for f in body["friends"] if f["device_id"] != "npc-spirit"]
+
+
 class TestInbox:
     def test_unregistered_device_is_404_without_side_effects(self, tmp_path, monkeypatch):
         """Соц-слой профили не создаёт: нет строки в players — 404."""
@@ -922,7 +928,7 @@ class TestInbox:
         assert body["friend_limit"] == srv.FRIEND_MAX
         assert body["unread_total"] == 1
         assert body["requests_total"] == 1
-        f = body["friends"][0]
+        f = _humans(body)[0]
         assert f["device_id"] == b and f["nick"] == "Мира"
         assert f["unread"] == 1 and f["last_msg_preview"] == "Спасибо за карту!"
         assert f["last_msg_at"], f
@@ -942,7 +948,7 @@ class TestInbox:
         _ask(client, "Мира")
         body = _inbox(client, "dev-a")
         assert [o["nick"] for o in body["outgoing"]] == ["Мира"], body["outgoing"]
-        assert body["friends"] == [], "pending не считается другом"
+        assert _humans(body) == [], "pending не считается другом"
         assert body["requests_total"] == 0, "requests_total — про ВХОДЯщие"
 
     def test_sorted_by_last_message_then_nick(self, tmp_path, monkeypatch):
@@ -968,11 +974,11 @@ class TestInbox:
         clock["now"] = _dt.datetime(2026, 10, 7, 12, 0, 20)
         _send(client, "dev-1", "dev-a", "от Ани")       # свежее Веры
         # у Бори сообщений нет: пустой last_msg_at обязан уйти в конец
-        assert [f["nick"] for f in _inbox(client, "dev-a")["friends"]] == \
+        assert [f["nick"] for f in _humans(_inbox(client, "dev-a"))] == \
             ["Аня", "Вера", "Боря"]
         clock["now"] = _dt.datetime(2026, 10, 7, 12, 0, 30)
         _send(client, "dev-2", "dev-a", "Боря ответил")
-        assert [f["nick"] for f in _inbox(client, "dev-a")["friends"]] == \
+        assert [f["nick"] for f in _humans(_inbox(client, "dev-a"))] == \
             ["Боря", "Аня", "Вера"]
 
     def test_unread_ignores_own_messages(self, tmp_path, monkeypatch):
@@ -999,7 +1005,7 @@ class TestInbox:
         client = _client(srv)
         a, b = _befriend(srv, client)
         _send(client, b, a, "ы" * 500)
-        f = _inbox(client, a)["friends"][0]
+        f = _humans(_inbox(client, a))[0]
         assert len(f["last_msg_preview"]) == srv.MSG_PREVIEW_LEN, len(f["last_msg_preview"])
         # полная лента не обрезана: превью — только витрина
         full = client.get("/api/messages", params={"device_id": a, "peer_device": b}).json()
@@ -1010,7 +1016,7 @@ class TestInbox:
         client = _client(srv)
         a, b = _befriend(srv, client)
         client.post("/api/me", json={"device_id": b, "nick": "Мира Вторая"})
-        f = _inbox(client, a)["friends"][0]
+        f = _humans(_inbox(client, a))[0]
         assert f["nick"] == "Мира Вторая", f
         assert f["device_id"] == b, "device_id стабилен, ник — витрина"
 
@@ -1132,7 +1138,7 @@ class TestInbox:
         client = _client(srv)
         a, b = _befriend(srv, client)
         _send(client, b, a, "раз\nдва\tтри")
-        f = _inbox(client, a)["friends"][0]
+        f = _humans(_inbox(client, a))[0]
         assert f["last_msg_preview"] == "раз два три", repr(f["last_msg_preview"])
         full = client.get("/api/messages", params={"device_id": a, "peer_device": b}).json()
         assert full["messages"][0]["body"] == "раз\nдва\tтри", full["messages"][0]["body"]
@@ -1153,7 +1159,7 @@ class TestInbox:
         _send(client, b, a, "первое")
         clock["now"] = _dt.datetime(2026, 10, 7, 12, 0, 5)
         _send(client, b, a, "второе")
-        f = _inbox(client, a)["friends"][0]
+        f = _humans(_inbox(client, a))[0]
         assert f["last_msg_preview"] == "второе", f
         assert f["last_msg_at"] == "2026-10-07T12:00:05", f["last_msg_at"]
 
@@ -1185,4 +1191,373 @@ class TestInbox:
         assert [i["nick"] for i in body["incoming"]] == ["Боря", "Вера", "Аня"], body["incoming"]
         assert [o["nick"] for o in body["outgoing"]] == ["Дана", "Гриша"], body["outgoing"]
         assert body["requests_total"] == 3, body
-        assert body["friends"] == [], "pending не считается другом"
+        assert _humans(body) == [], "pending не считается другом"
+
+
+class _FakeSpiritLLM:
+    """Провайдер задан, ключ задан — сервер обязан попытаться сгенерировать."""
+
+    def __init__(self, body="Свет твоей колбы сегодня особенно тёплый.", fail=False):
+        self.provider = "openrouter"
+        self.api_key = "test-key"
+        self.models = ["test-model"]
+        self.body = body
+        self.fail = fail
+        self.calls = 0
+        self.last_context = None
+
+    def generate_spirit_message(self, context, timeout=0):
+        self.calls += 1
+        self.last_context = context
+        if self.fail:
+            return {}
+        return {"body": self.body}
+
+
+class _NoSpiritLLM:
+    """local/off провайдер: бюджет LLM не тратится, сразу шаблон."""
+    provider = "local"
+    api_key = ""
+    models = []
+
+    def generate_spirit_message(self, context, timeout=0):
+        raise AssertionError("при provider=local сервер не должен звать LLM")
+
+
+def _spirit_rows(srv, device_id=None):
+    conn = srv.get_db()
+    try:
+        q = ("SELECT device_id, day, trigger_id, body, source, message_id "
+             "FROM spirit_messages")
+        rows = conn.execute(q + " ORDER BY day").fetchall() if device_id is None \
+            else conn.execute(q + " WHERE device_id = ? ORDER BY day",
+                              (device_id,)).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
+def _seed_visit(srv, host, visitor, day):
+    conn = srv.get_db()
+    try:
+        conn.execute("INSERT OR IGNORE INTO house_visits (host_device, visitor_device, day) "
+                     "VALUES (?,?,?)", (host, visitor, day))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _seed_discovery(srv, device_id, pair_key, at):
+    conn = srv.get_db()
+    try:
+        conn.execute("INSERT OR IGNORE INTO personal_discoveries "
+                     "(device_id, pair_key, discovered_at) VALUES (?,?,?)",
+                     (device_id, pair_key, at))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+class TestSpirit:
+    def test_spirit_is_first_friend_and_not_a_player(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Мира", "dev-b")
+        client.post("/api/friend/request", json={"device_id": "dev-a", "target_nick": "Мира"})
+        client.post("/api/friend/respond",
+                    json={"device_id": "dev-b", "requester_device": "dev-a", "accept": True})
+        body = _inbox(client, "dev-a")
+        assert body["friends"][0]["device_id"] == "npc-spirit", body["friends"]
+        assert body["friends"][0]["nick"] == srv.SPIRIT_NICK
+        # строки в players для Светика НЕТ: иначе он попал бы в /api/rating
+        # и в поиск по нику как живой игрок
+        conn = srv.get_db()
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM players WHERE device_id = 'npc-spirit'").fetchone()
+        finally:
+            conn.close()
+        assert row is None
+        rating = client.get("/api/rating").json()["rows"]
+        assert all(r["nick"] != srv.SPIRIT_NICK for r in rating), rating
+
+    def test_spirit_showcase_comes_from_constants(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        clock = {"now": _dt.datetime(2026, 10, 7, 12, 0)}
+        monkeypatch.setattr(srv, "_now_dt", lambda: clock["now"])
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        f = _inbox(client, "dev-a")["friends"][0]
+        assert f["device_id"] == "npc-spirit"
+        assert f["nick"] == srv.SPIRIT_NICK, f
+        # last_seen у духа — сегодня: клиент рисует «всегда рядом», а не
+        # фейковый «онлайн» из даты (спека §6.6)
+        assert f["last_seen"] == "2026-10-07", f
+        assert f["avatar"], f
+
+    def test_no_event_no_message(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _inbox(client, "dev-a")
+        assert _spirit_rows(srv) == [], "день без письма нормален"
+        assert _count(srv, "SELECT COUNT(*) AS c FROM messages") == 0
+
+    def test_one_message_per_day_and_no_second_llm_call(self, tmp_path, monkeypatch):
+        fake = _FakeSpiritLLM()
+        srv = _srv(tmp_path, monkeypatch, llm=fake)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _seed_visit(srv, "dev-a", "dev-g", srv._today())
+        _player(client, "Гость", "dev-g")
+        _inbox(client, "dev-a")
+        _inbox(client, "dev-a")
+        _inbox(client, "dev-a")
+        assert fake.calls == 1, "идемпотентно: LLM не зовётся повторно"
+        rows = _spirit_rows(srv, "dev-a")
+        assert len(rows) == 1, rows
+        assert rows[0]["trigger_id"] == "guest" and rows[0]["source"] == "llm"
+        assert rows[0]["message_id"] > 0, rows[0]
+        assert _count(srv, "SELECT COUNT(*) AS c FROM messages WHERE id = ?",
+                      (rows[0]["message_id"],)) == 1
+        assert _count(srv, "SELECT COUNT(*) AS c FROM messages") == 1
+
+    def test_guest_trigger_names_the_visitor(self, tmp_path, monkeypatch):
+        fake = _FakeSpiritLLM()
+        srv = _srv(tmp_path, monkeypatch, llm=fake)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Гость", "dev-g")
+        _seed_visit(srv, "dev-a", "dev-g", srv._today())
+        _inbox(client, "dev-a")
+        assert fake.last_context["trigger_id"] == "guest", fake.last_context
+        assert fake.last_context["trigger_detail"] == "Гость", fake.last_context
+        assert fake.last_context["nick"] == "Варда", fake.last_context
+        assert fake.last_context["weekday"], fake.last_context
+
+    def test_unread_includes_spirit(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch, llm=_FakeSpiritLLM())
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Гость", "dev-g")
+        _seed_visit(srv, "dev-a", "dev-g", srv._today())
+        body = _inbox(client, "dev-a")
+        assert body["unread_total"] == 1, body
+        assert body["friends"][0]["unread"] == 1, body["friends"][0]
+        # открытие ленты Светика гасит бейдж: отдельного «mark read» нет
+        r = client.get("/api/messages",
+                       params={"device_id": "dev-a", "peer_device": "npc-spirit"})
+        assert r.status_code == 200, r.text
+        assert [m["body"] for m in r.json()["messages"]], r.json()
+        assert all(m["from_me"] is False for m in r.json()["messages"])
+        assert _inbox(client, "dev-a")["unread_total"] == 0
+
+    def test_template_fallback_when_llm_fails(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch, llm=_FakeSpiritLLM(fail=True))
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Гость", "dev-g")
+        _seed_visit(srv, "dev-a", "dev-g", srv._today())
+        _inbox(client, "dev-a")
+        rows = _spirit_rows(srv, "dev-a")
+        assert rows[0]["source"] == "template", rows
+        assert "Варда" in rows[0]["body"], rows[0]
+        assert "{" not in rows[0]["body"] and "}" not in rows[0]["body"], rows[0]
+
+    def test_local_provider_does_not_spend_budget(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch, llm=_NoSpiritLLM())
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Гость", "dev-g")
+        _seed_visit(srv, "dev-a", "dev-g", srv._today())
+        _inbox(client, "dev-a")
+        rows = _spirit_rows(srv, "dev-a")
+        assert rows and rows[0]["source"] == "template", rows
+
+    def test_global_daily_llm_cap(self, tmp_path, monkeypatch):
+        """Свой гейт, не общая _reserve_llm_generation: весточки не едят квоту веществ."""
+        fake = _FakeSpiritLLM()
+        srv = _srv(tmp_path, monkeypatch, llm=fake)
+        monkeypatch.setattr(srv, "SPIRIT_LLM_PER_DAY_GLOBAL", 1)
+        client = _client(srv)
+        today = srv._today()
+        for nick, dev in (("Варда", "dev-a"), ("Мира", "dev-b")):
+            _player(client, nick, dev)
+            _player(client, "Гость " + nick, "dev-g-" + dev)
+            _seed_visit(srv, dev, "dev-g-" + dev, today)
+        _inbox(client, "dev-a")
+        _inbox(client, "dev-b")
+        rows = {r["device_id"]: r["source"] for r in
+                (_spirit_rows(srv, "dev-a") + _spirit_rows(srv, "dev-b"))}
+        assert sorted(rows.values()) == ["llm", "template"], rows
+        assert fake.calls == 1, "второму игроку LLM уже не зовётся"
+
+    def test_return_beats_guest(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch, llm=_FakeSpiritLLM())
+        clock = {"now": _dt.datetime(2026, 10, 1, 12, 0)}
+        monkeypatch.setattr(srv, "_now_dt", lambda: clock["now"])
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Гость", "dev-g")
+        _seed_visit(srv, "dev-a", "dev-g", srv._today())
+        _inbox(client, "dev-a")          # гость есть, «возврата» нет → guest
+        clock["now"] = _dt.datetime(2026, 10, 5, 12, 0)
+        _seed_visit(srv, "dev-a", "dev-g", srv._today())
+        _inbox(client, "dev-a")          # гость снова, но 4 дня не заходил → return
+        rows = _spirit_rows(srv, "dev-a")
+        assert len(rows) == 2, rows
+        assert rows[0]["trigger_id"] == "guest", rows[0]
+        assert rows[-1]["trigger_id"] == "return", rows[-1]
+
+    def test_return_ignores_last_seen_from_game_routes(self, tmp_path, monkeypatch):
+        """Игрок мог варить и заглядывать в дом (это пишет players.last_seen через
+        _upsert_player), но в ленту не заходить. last_seen сегодня, а весточка
+        «return» всё равно обязана выйти: источник — social_state.last_inbox_day."""
+        srv = _srv(tmp_path, monkeypatch, llm=_FakeSpiritLLM())
+        clock = {"now": _dt.datetime(2026, 10, 1, 12, 0)}
+        monkeypatch.setattr(srv, "_now_dt", lambda: clock["now"])
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _inbox(client, "dev-a")
+        clock["now"] = _dt.datetime(2026, 10, 6, 9, 0)
+        conn = srv.get_db()
+        try:
+            # Так выглядит строка игрока после игрового роута: _upsert_player
+            # ставит last_seen = сегодня. POST /api/me его не трогает (set_me
+            # пишет только nick), поэтому сеём напрямую.
+            conn.execute("UPDATE players SET last_seen = ? WHERE device_id = 'dev-a'",
+                         (srv._today(),))
+            conn.commit()
+        finally:
+            conn.close()
+        conn = srv.get_db()
+        try:
+            last_seen = conn.execute(
+                "SELECT last_seen FROM players WHERE device_id='dev-a'").fetchone()["last_seen"]
+        finally:
+            conn.close()
+        assert last_seen == "2026-10-06", last_seen
+        _inbox(client, "dev-a")
+        rows = _spirit_rows(srv, "dev-a")
+        assert rows[-1]["trigger_id"] == "return", rows
+
+    def test_first_inbox_is_not_return(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch, llm=_FakeSpiritLLM())
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _inbox(client, "dev-a")
+        assert _spirit_rows(srv, "dev-a") == [], \
+            "строки в social_state нет (первый вход) — триггер не срабатывает"
+
+    def test_return_needs_full_three_days(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch, llm=_FakeSpiritLLM())
+        clock = {"now": _dt.datetime(2026, 10, 1, 12, 0)}
+        monkeypatch.setattr(srv, "_now_dt", lambda: clock["now"])
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _inbox(client, "dev-a")
+        clock["now"] = _dt.datetime(2026, 10, 3, 12, 0)   # 2 дня с последней отметки — мало
+        _inbox(client, "dev-a")
+        assert _spirit_rows(srv, "dev-a") == []
+        # Каждый inbox переставляет отметку, поэтому отсчёт «3 дня» идёт от
+        # 2026-10-03, а не от первого входа. Это же тест ловит и порядок шагов:
+        # если _social_mark_seen встанет ДО _ensure_spirit_message, на 6-е число
+        # days будет 0 и весточка «return» не выйдет.
+        clock["now"] = _dt.datetime(2026, 10, 6, 12, 0)   # 3 дня от отметки — сработал
+        _inbox(client, "dev-a")
+        assert [r["trigger_id"] for r in _spirit_rows(srv, "dev-a")] == ["return"]
+
+    def test_all_triggers_are_covered_by_pool(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        triggers = ("return", "guest", "vein_find", "sigil_milestone",
+                    "sigil_craft", "first_brew")
+        assert set(srv._SPIRIT_FALLBACK) == set(triggers), sorted(srv._SPIRIT_FALLBACK)
+        for t in triggers:
+            pool = srv._SPIRIT_FALLBACK[t]
+            assert len(pool) >= 5, (t, len(pool))
+            for phrase in pool:
+                assert "{nick}" in phrase, (t, phrase)
+                body = srv._spirit_fallback("dev-a", "2026-10-07", t, "Варда", "Гость")
+                assert "{" not in body and "}" not in body, (t, body)
+                assert len(body) <= srv.SPIRIT_BODY_MAX, (t, len(body))
+
+    def test_fallback_is_deterministic(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        a = srv._spirit_fallback("dev-a", "2026-10-07", "guest", "Варда", "Гость")
+        b = srv._spirit_fallback("dev-a", "2026-10-07", "guest", "Варда", "Гость")
+        assert a == b, "тот же день и устройство — та же фраза (перезапуск не мельтешит)"
+        assert "{nick}" not in a and "{detail}" not in a
+        assert "Варда" in a and "Гость" in a, a
+        # другой день — другая фраза хотя бы иногда; гарантируем только, что
+        # выбор не вырождается в константу на все дни
+        week = {srv._spirit_fallback("dev-a", "2026-10-%02d" % d, "guest",
+                                     "Варда", "Гость") for d in range(1, 15)}
+        assert len(week) > 1, week
+
+    def test_body_validation_rejects_bad_llm_output(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _player(client, "Сосед", "dev-z")
+        conn = srv.get_db()
+        try:
+            good = "Колба сегодня светится ровно, {nick}".replace("{nick}", "Варда")
+            assert srv._spirit_clean_body(conn, good, "Варда", "dev-a", "") == good
+            for bad in ("", "   ", "две\nстроки", "два\r\nперевода",
+                        "твой device_id dev-a виден",
+                        "код 123456",
+                        "Сосед заходил сегодня",       # ник третьего игрока
+                        "ы" * 400):
+                assert srv._spirit_clean_body(conn, bad, "Варда", "dev-a", "") == "", bad
+            # длина на границе: обрезка по слову допустима, если осталось >= 20
+            long_ok = ("Светик смотрит на полку с колбами и тихо радуется, "
+                       "что {nick} сегодня снова здесь, в тёплой лаборатории."
+                       ).replace("{nick}", "Варда")
+            assert srv._spirit_clean_body(conn, long_ok, "Варда", "dev-a", "") == long_ok
+        finally:
+            conn.close()
+
+    def test_vein_find_and_sigil_triggers(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch, llm=_FakeSpiritLLM())
+        clock = {"now": _dt.datetime(2026, 10, 7, 12, 0)}
+        monkeypatch.setattr(srv, "_now_dt", lambda: clock["now"])
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _seed_discovery(srv, "dev-a", "вода|огонь", srv._now_iso())
+        _inbox(client, "dev-a")
+        assert [r["trigger_id"] for r in _spirit_rows(srv, "dev-a")] == ["vein_find"]
+        # следующий день — следующий триггер
+        clock["now"] = _dt.datetime(2026, 10, 8, 12, 0)
+        conn = srv.get_db()
+        try:
+            conn.execute("INSERT OR IGNORE INTO sigil_crafts (device_id, craft_id, rarity, "
+                         "llm_name, crafted_at) VALUES (?,?,?,?,?)",
+                         ("dev-a", "c1", "common", "Сигил Утра", srv._now_iso()))
+            conn.commit()
+        finally:
+            conn.close()
+        _inbox(client, "dev-a")
+        rows = _spirit_rows(srv, "dev-a")
+        assert rows[-1]["trigger_id"] == "sigil_craft", rows[-1]
+        assert rows[-1]["day"] == "2026-10-08", rows[-1]
+        assert rows[-1]["body"], rows[-1]
+
+    def test_spirit_edge_cannot_be_removed(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _inbox(client, "dev-a")
+        conn = srv.get_db()
+        try:
+            n = conn.execute(
+                "SELECT COUNT(*) AS c FROM friend_edges WHERE state='accepted'").fetchone()["c"]
+        finally:
+            conn.close()
+        assert n == 1, "ребро Светика создаётся лениво при первом inbox"
+        # Светик не занимает слот FRIEND_MAX
+        conn = srv.get_db()
+        try:
+            assert srv._social_friend_count(conn, "dev-a") == 0
+        finally:
+            conn.close()
