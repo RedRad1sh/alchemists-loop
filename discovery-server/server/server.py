@@ -19,6 +19,7 @@ import os
 import re
 import sys
 import time
+import unicodedata
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
@@ -4424,6 +4425,278 @@ def _social_mark_seen(conn: sqlite3.Connection, device_id: str, day: str) -> Non
         (device_id, day, _now_iso()))
 
 
+_WEEKDAY_RU = ("понедельник", "вторник", "среда", "четверг",
+               "пятница", "суббота", "воскресенье")
+
+# Фолбэк-пул весточек: 5 фраз на каждый из 6 триггеров. Используется, когда LLM
+# недоступна, не уложилась в SPIRIT_LLM_TIMEOUT, вернула брак или исчерпан
+# глобальный суточный потолок. Выбор детерминирован по (device_id, day,
+# trigger_id): перезапуск клиента не мельтешит текстом.
+# Подстановки: {nick} — имя игрока, {detail} — деталь триггера.
+_SPIRIT_FALLBACK: dict[str, tuple[str, ...]] = {
+    "return": (
+        "{nick}, ты вернулся! Я тут слегка протёр колбы от пыли.",
+        "Без тебя лаборатория была тише обычного, {nick}. Рад, что ты снова здесь.",
+        "{nick}, я сохранил твой свет на полке. Всё на месте.",
+        "С возвращением, {nick}. Сегодня хороший день, чтобы что-нибудь смешать.",
+        "{nick}, пока тебя не было, я пересчитал все банки. Сходятся.",
+    ),
+    "guest": (
+        "{nick}, к тебе сегодня заглянул {detail}! Я старался быть приветливым.",
+        "В твоём доме побывал гость — {detail}. Пахнет интересом, {nick}.",
+        "{detail} заходил посмотреть на твои колбы, {nick}.",
+        "{nick}, сегодня твой дом видел {detail}. Мне понравилось.",
+        "Гость на пороге — это {detail}. Хороший день, {nick}.",
+    ),
+    "vein_find": (
+        "{nick}, ты нашёл новое сочетание! Я видел, как вспыхнула жила.",
+        "Сегодня в твоём котле родилось нечто новое, {nick}. Поздравляю!",
+        "{nick}, жила откликнулась. Это {detail} — и это твоё открытие.",
+        "Новое сочетание, {nick}! Я записал его себе на память.",
+        "{detail} находок сегодня, {nick}. Свету прибавилось.",
+    ),
+    "sigil_milestone": (
+        "{nick}, комплект собран! Печати светятся в один голос.",
+        "Сегодня ты заявил комплект ({detail}), {nick}. Я горжусь.",
+        "{nick}, твои печати сошлись. Это редкое ощущение.",
+        "Комплект {detail} закрыт, {nick}. Красиво вышло.",
+        "{nick}, круг замкнулся — печати вместе. Я тихо похлопал.",
+    ),
+    "sigil_craft": (
+        "{nick}, новая карта «{detail}» заняла своё место на полке.",
+        "Сегодня ты закрепил «{detail}», {nick}. Она ещё тёплая.",
+        "{detail} — так называется твоя новая карта, {nick}. Мне нравится.",
+        "{nick}, полка стала на одну карту богаче: «{detail}».",
+        "Новая печать «{detail}» у тебя дома, {nick}. Береги её.",
+    ),
+    "first_brew": (
+        "{nick}, котёл сегодня откликнулся. Первый резонанс — он запоминается.",
+        "Сварилось! {nick}, я видел, как поднялся пар.",
+        "{nick}, твой первый резонанс дня — хороший знак.",
+        "Котёл пел, {nick}. Значит, руки верные.",
+        "{nick}, сегодня варка пошла. Оставь немного света на завтра.",
+    ),
+}
+
+
+def _spirit_fallback(device_id: str, day: str, trigger_id: str,
+                     nick: str, detail: str) -> str:
+    """Детерминированная фраза из пула. sha256 — как в avatar_for: тот же приём."""
+    pool = _SPIRIT_FALLBACK.get(trigger_id) or _SPIRIT_FALLBACK["guest"]
+    digest = hashlib.sha256(
+        ("%s#%s#%s" % (device_id, day, trigger_id)).encode("utf-8")).hexdigest()
+    phrase = pool[int(digest, 16) % len(pool)]
+    return (phrase.replace("{nick}", nick or "друг")
+                  .replace("{detail}", detail or "кое-что"))
+
+
+def _spirit_clean_body(conn: sqlite3.Connection, raw: str, nick: str,
+                       device_id: str, detail: str) -> str:
+    """Проверка тела весточки от LLM. Брак → '' (сервер уходит на шаблон).
+
+    Отбраковывается (спека §6.5): пустое, с переводами строк, управляющие
+    символы любой Unicode-категории C*, вхождение device_id игрока, длинные
+    числа (телефоны, коды, суммы), ник третьего игрока и слишком длинное тело.
+    Содержимое по смыслу (советы о реальной жизни, здоровье, деньгах) здесь НЕ
+    фильтруется — это держит системный промпт в _call_spirit_once; решение
+    пользователя от 2026-10-07: словарный фильтр избыточен. Стоимость проверки
+    ограничена тем, что генерация бывает не чаще раза в сутки на устройство и
+    под глобальным потолком SPIRIT_LLM_PER_DAY_GLOBAL.
+    """
+    text = (raw or "").strip()
+    if not text or "\n" in text or "\r" in text:
+        return ""
+    if any(unicodedata.category(c).startswith("C") for c in text):
+        return ""
+    if device_id and device_id in text:
+        return ""
+    if re.search(r"\d{3,}", text):
+        return ""
+    if len(text) > SPIRIT_BODY_MAX:
+        cut = text[:SPIRIT_BODY_MAX]
+        space = cut.rfind(" ")
+        # Обрезаем по последнему пробелу внутри лимита. Если пробела нет, текст
+        # в пределах лимита — не связное предложение, а пачка символов (например
+        # 400 повторов), и обрезать её по слову не по чему: отбраковка целиком.
+        if space < 20:
+            return ""
+        text = cut[:space].strip()
+        if len(text) < 20:
+            return ""
+    for row in conn.execute(
+            "SELECT nick FROM players WHERE nick != '' AND nick != ? LIMIT 200",
+            (nick,)).fetchall():
+        other = row["nick"]
+        if other and other != detail and other in text:
+            return ""
+    return text
+
+
+def _reserve_spirit_llm(conn: sqlite3.Connection, today: str) -> bool:
+    """Собственный бюджетный гейт весточек.
+
+    НЕ общая _reserve_llm_generation: та квота защищает генерацию веществ, и
+    весточки не должны её съедать. Список провайдеров берём тот же, что у
+    _experiment_uses_llm, но на исключение отвечаем False, а не True: весточка
+    опциональна, и битый конфиг LLM не должен выталкивать сетевой вызов на
+    пути, который игрок ждёт при каждом входе в ленту.
+
+    Гейт намеренно не атомарный: это ограничение расхода, а не экономика. Два
+    одновременных inbox могут оба пройти счётчик — цена одна лишняя генерация,
+    и она всё равно ограничена «одна весточка в сутки на устройство».
+    """
+    try:
+        provider = (get_llm().provider or "").strip().lower()
+    except Exception:
+        return False
+    if provider in ("", "local", "mock", "off"):
+        return False
+    used = conn.execute(
+        "SELECT COUNT(*) AS c FROM spirit_messages WHERE day = ? AND source = 'llm'",
+        (today,)).fetchone()["c"]
+    return int(used) < SPIRIT_LLM_PER_DAY_GLOBAL
+
+
+def _ensure_spirit_edge(conn: sqlite3.Connection, device_id: str) -> None:
+    """Ленивое accepted-ребро со Светиком при первом inbox.
+
+    Ребро закреплено: не удаляется, не блокируется и не учитывается в
+    FRIEND_MAX (_social_friend_count исключает SPIRIT_DEVICE).
+    """
+    pair_key = canonical_pair_key(device_id, SPIRIT_DEVICE)
+    now = _now_iso()
+    conn.execute(
+        "INSERT OR IGNORE INTO friend_edges (pair_key, a_device, b_device, state, "
+        "requester_device, created_at, updated_at) "
+        "VALUES (?, ?, ?, 'accepted', ?, ?, ?)",
+        (pair_key, pair_key.split("|", 1)[0], pair_key.split("|", 1)[1],
+         SPIRIT_DEVICE, now, now))
+
+
+def _spirit_trigger(conn: sqlite3.Connection, device_id: str,
+                    today: str) -> tuple[Optional[str], str]:
+    """(trigger_id, деталь) по приоритету спеки §6.3, либо (None, '').
+
+    Все источники — данные, которые сервер уже хранит. Форматы дат различаются:
+    discovered_at/crafted_at/claimed_at пишутся _now_iso() → сравнение
+    substr(col,1,10) = today; house_visits.day уже ключ дня;
+    resonance_seen.first_at вставляется без значения (INSERT перечисляет только
+    pair_key и brewer_key) и получает sqlite-дефолт datetime('now') в UTC без
+    DAY_TZ_OFFSET — перекос до суток у триггера first_brew. Он 6-й по
+    приоритету, а запись resonance_seen участвует в атомарном дедупе T03,
+    поэтому её не меняем.
+
+    Триггер «return» читает social_state.last_inbox_day, а НЕ players.last_seen:
+    тот обновляет _upsert_player на игровых роутах (brew-check, discover,
+    vein/find, player/register, house), а клиент зовёт их в стартовом обмене
+    РАНЬШЕ inbox — по last_seen возврат не отличился бы никогда.
+    """
+    row = conn.execute(
+        "SELECT last_inbox_day FROM social_state WHERE device_id = ?",
+        (device_id,)).fetchone()
+    if row is not None:
+        try:
+            last = datetime.strptime(row["last_inbox_day"], "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            last = None
+        if last is not None:
+            days = (_today_date() - last).days
+            if days >= SPIRIT_RETURN_DAYS:
+                return "return", "%d" % days
+
+    guest = conn.execute(
+        "SELECT visitor_device FROM house_visits "
+        "WHERE host_device = ? AND day = ? LIMIT 1", (device_id, today)).fetchone()
+    if guest is not None:
+        nick_row = conn.execute(
+            "SELECT nick FROM players WHERE device_id = ?",
+            (guest["visitor_device"],)).fetchone()
+        return "guest", (nick_row["nick"] if nick_row is not None else "")
+
+    finds = conn.execute(
+        "SELECT COUNT(*) AS c FROM personal_discoveries "
+        "WHERE device_id = ? AND substr(discovered_at, 1, 10) = ?",
+        (device_id, today)).fetchone()["c"]
+    if int(finds) > 0:
+        return "vein_find", "%d" % finds
+
+    milestone = conn.execute(
+        "SELECT set_id, tier FROM sigil_milestones "
+        "WHERE device_id = ? AND substr(claimed_at, 1, 10) = ? "
+        "ORDER BY tier DESC LIMIT 1", (device_id, today)).fetchone()
+    if milestone is not None:
+        return "sigil_milestone", "%s %d" % (milestone["set_id"], int(milestone["tier"]))
+
+    craft = conn.execute(
+        "SELECT llm_name FROM sigil_crafts "
+        "WHERE device_id = ? AND substr(crafted_at, 1, 10) = ? "
+        "ORDER BY crafted_at DESC LIMIT 1", (device_id, today)).fetchone()
+    if craft is not None:
+        return "sigil_craft", (craft["llm_name"] or "новая карта")
+
+    brews = conn.execute(
+        "SELECT COUNT(*) AS c FROM resonance_seen "
+        "WHERE brewer_key = ? AND substr(first_at, 1, 10) = ?",
+        (device_id, today)).fetchone()["c"]
+    if int(brews) > 0:
+        return "first_brew", ""
+    return None, ""
+
+
+def _ensure_spirit_message(conn: sqlite3.Connection, device_id: str,
+                           today: str) -> None:
+    """Весточка дня: не чаще одной, только по событию, LLM с фолбэком.
+
+    Тело кладётся в ОБЩУЮ ленту пары (device_id, npc-spirit) — отдельного
+    хранилища нет, spirit_messages только фиксирует факт генерации дня.
+    """
+    if conn.execute("SELECT 1 FROM spirit_messages WHERE device_id = ? AND day = ?",
+                    (device_id, today)).fetchone() is not None:
+        return
+    trigger_id, detail = _spirit_trigger(conn, device_id, today)
+    if trigger_id is None:
+        return
+    nick_row = conn.execute(
+        "SELECT nick FROM players WHERE device_id = ?", (device_id,)).fetchone()
+    nick = nick_row["nick"] if nick_row is not None else ""
+
+    body = ""
+    source = "template"
+    if _reserve_spirit_llm(conn, today):
+        try:
+            out = get_llm().generate_spirit_message({
+                "nick": nick,
+                "trigger_id": trigger_id,
+                "trigger_detail": detail,
+                "weekday": _WEEKDAY_RU[_now_dt().weekday()],
+            }, timeout=SPIRIT_LLM_TIMEOUT)
+        except Exception as e:
+            log.warning("spirit: генерация упала → шаблон: %s", e)
+            out = {}
+        body = _spirit_clean_body(conn, (out or {}).get("body", ""), nick,
+                                  device_id, detail)
+        if body:
+            source = "llm"
+    if not body:
+        body = _spirit_fallback(device_id, today, trigger_id, nick, detail)
+        source = "template"
+
+    pair_key = canonical_pair_key(device_id, SPIRIT_DEVICE)
+    now = _now_iso()
+    cur = conn.execute(
+        "INSERT INTO messages (pair_key, from_device, body, sent_at, read_at) "
+        "VALUES (?, ?, ?, ?, NULL)", (pair_key, SPIRIT_DEVICE, body, now))
+    msg_id = int(cur.lastrowid)
+    saved = conn.execute(
+        "INSERT OR IGNORE INTO spirit_messages (device_id, day, trigger_id, body, "
+        "source, message_id, generated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (device_id, today, trigger_id, body, source, msg_id, now))
+    if saved.rowcount == 0:
+        # Гонку выиграл параллельный inbox: строку дня не дублируем, а своё
+        # сообщение забираем обратно — иначе в ленте будет две весточки.
+        conn.execute("DELETE FROM messages WHERE id = ?", (msg_id,))
+
+
 @app.get("/api/messages", response_model=MessagesResponse)
 def get_messages(device_id: str = Query(..., min_length=1, max_length=128),
                  peer_device: str = Query("", max_length=128),
@@ -4534,14 +4807,19 @@ def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
             raise HTTPException(status_code=404, detail="not_registered")
 
         today = _today()
+        # --- Светик: закреплённое ребро и весточка дня -----------------------
+        # Вне BEGIN IMMEDIATE и со своим commit: генерация весточки — сетевой
+        # вызов, под write-локом его держать нельзя (тот же порядок, что у
+        # _reserve_llm_generation). Оба вызова пишут по одной строке и уходят
+        # одним commit; ни one-per-day гейт, ни INSERT OR IGNORE от этого не
+        # меняются — гонку с параллельным inbox по-прежнему разрешает
+        # PRIMARY KEY (device_id, day).
+        _ensure_spirit_edge(conn, me)
+        _ensure_spirit_message(conn, me, today)
+        conn.commit()
+
         conn.execute("BEGIN IMMEDIATE")
         _social_prune(conn, me)
-
-        # --- Весточки Светика (задача 8) ------------------------------------
-        # Здесь появятся два вызова: _ensure_spirit_edge(conn, me) и
-        # _ensure_spirit_message(conn, me, today). В этой задаче блок пуст:
-        # ребро Светика создаётся вместе с весточками, иначе клиент увидел бы
-        # друга без имени.
 
         edges = conn.execute(
             "SELECT pair_key, a_device, b_device, state, requester_device, updated_at "
@@ -4602,15 +4880,21 @@ def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
         unread_total = 0
         for peer, pk in accepted_pairs.items():
             row = showcase.get(peer)
-            nick = row["nick"] if row is not None else ""
             st = stats.get(pk)
             unread = int(st["unread"] or 0) if st is not None else 0
             unread_total += unread
             last = previews.get(st["last_id"]) if st is not None else None
+            if peer == SPIRIT_DEVICE:
+                nick = SPIRIT_NICK
+                last_seen = today
+            else:
+                nick = row["nick"] if row is not None else ""
+                last_seen = (row["last_seen"] if row is not None and row["last_seen"]
+                             else "")
             friends.append(InboxFriend(
                 device_id=peer, nick=nick,
                 avatar=avatar_for(nick or peer),
-                last_seen=(row["last_seen"] if row is not None and row["last_seen"] else ""),
+                last_seen=last_seen,
                 unread=unread,
                 last_msg_at=(last["sent_at"] if last is not None else ""),
                 last_msg_preview=(_preview_line(last["body"]) if last is not None else "")))
