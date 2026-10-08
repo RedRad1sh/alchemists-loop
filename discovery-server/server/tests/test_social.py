@@ -1374,6 +1374,14 @@ class TestSpirit:
         _inbox(client, "dev-a")
         rows = _spirit_rows(srv, "dev-a")
         assert rows and rows[0]["source"] == "template", rows
+        # Гейт проверяем напрямую: через inbox он невидим, потому что
+        # generate_spirit_message у local-провайдера возвращает {} и без него.
+        conn = srv.get_db()
+        try:
+            assert srv._reserve_spirit_llm(conn, srv._today()) is False, \
+                "local-провайдер не резервирует бюджет весточек"
+        finally:
+            conn.close()
 
     def test_global_daily_llm_cap(self, tmp_path, monkeypatch):
         """Свой гейт, не общая _reserve_llm_generation: весточки не едят квоту веществ."""
@@ -1510,11 +1518,25 @@ class TestSpirit:
                         "Сосед заходил сегодня",       # ник третьего игрока
                         "ы" * 400):
                 assert srv._spirit_clean_body(conn, bad, "Варда", "dev-a", "") == "", bad
-            # длина на границе: обрезка по слову допустима, если осталось >= 20
+            # длина за границей: обрезаем по последнему пробелу внутри лимита,
+            # а не по самому лимиту. Пока long_ok короче SPIRIT_BODY_MAX, ветка
+            # обрезки не исполняется ни при какой правке — поэтому текст ниже
+            # гарантированно длиннее лимита, и краснеет он и на удалении ветки,
+            # и на срезе «по индексу, не по слову».
+            tail = "и свет на полке держится ровно"
             long_ok = ("Светик смотрит на полку с колбами и тихо радуется, "
-                       "что {nick} сегодня снова здесь, в тёплой лаборатории."
-                       ).replace("{nick}", "Варда")
-            assert srv._spirit_clean_body(conn, long_ok, "Варда", "dev-a", "") == long_ok
+                       "что {nick} сегодня снова здесь, в тёплой лаборатории, "
+                       ).replace("{nick}", "Варда") + tail * 6
+            assert srv.SPIRIT_BODY_MAX < len(long_ok), len(long_ok)
+            got = srv._spirit_clean_body(conn, long_ok, "Варда", "dev-a", "")
+            assert got and got == long_ok[:srv.SPIRIT_BODY_MAX].rsplit(" ", 1)[0], got
+            assert len(got) < srv.SPIRIT_BODY_MAX, len(got)
+            # ник из detail — не «чужой ник»: гостя в его же весточке называть
+            # можно. Без этой оговорки каждая LLM-весточка guest молча уходила
+            # бы на шаблон, и тест выше («Сосед заходил» → '') этого не ловил бы.
+            with_detail = "К тебе заходил Сосед, Варда — колбы ещё тёплые."
+            assert srv._spirit_clean_body(conn, with_detail, "Варда", "dev-a",
+                                          "Сосед") == with_detail, with_detail
         finally:
             conn.close()
 
@@ -1542,6 +1564,38 @@ class TestSpirit:
         assert rows[-1]["trigger_id"] == "sigil_craft", rows[-1]
         assert rows[-1]["day"] == "2026-10-08", rows[-1]
         assert rows[-1]["body"], rows[-1]
+        # 10-09 — sigil_milestone, 10-10 — first_brew: оба SQL-запроса обязаны
+        # исполняться хотя бы раз. Опечатка в колонке здесь даёт OperationalError
+        # внутри _spirit_trigger, а это 500 всего inbox — «нет весточки» был бы
+        # безобидной подменой, и тест бы о ней не сообщил.
+        clock["now"] = _dt.datetime(2026, 10, 9, 12, 0)
+        conn = srv.get_db()
+        try:
+            conn.execute("INSERT OR IGNORE INTO sigil_milestones (device_id, set_id, tier, "
+                         "claimed_at) VALUES (?,?,?,?)",
+                         ("dev-a", "major", 1, srv._now_iso()))
+            conn.commit()
+        finally:
+            conn.close()
+        _inbox(client, "dev-a")
+        rows = _spirit_rows(srv, "dev-a")
+        assert rows[-1]["trigger_id"] == "sigil_milestone", rows[-1]
+        assert rows[-1]["day"] == "2026-10-09", rows[-1]
+        clock["now"] = _dt.datetime(2026, 10, 10, 12, 0)
+        conn = srv.get_db()
+        try:
+            # first_at с явным значением: дефолт sqlite — datetime('now') в UTC,
+            # а тест подменяет только _now_dt, так что на «сегодня» он бы не лёг.
+            conn.execute("INSERT OR IGNORE INTO resonance_seen (pair_key, brewer_key, "
+                         "first_at) VALUES (?,?,?)",
+                         ("p1", "dev-a", srv._now_iso()))
+            conn.commit()
+        finally:
+            conn.close()
+        _inbox(client, "dev-a")
+        rows = _spirit_rows(srv, "dev-a")
+        assert rows[-1]["trigger_id"] == "first_brew", rows[-1]
+        assert rows[-1]["day"] == "2026-10-10", rows[-1]
 
     def test_spirit_edge_cannot_be_removed(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
