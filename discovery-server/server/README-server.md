@@ -196,6 +196,44 @@ per-player seed = `sha256(device_id#day)[:8]`.
 
 Ответ: `{"ok", "cards", "extras", "error"}`.
 
+### Социальные интеракции S1 (друзья и переписка)
+
+Ключ всех сущностей — `device_id`; ник только витрина и вход поиска
+(`target_nick` в `POST /api/friend/request`, ник UNIQUE). Отсутствие
+`device_id` даёт 422 валидации FastAPI, прочие отказы — коды из `detail`
+(латинский snake_case, числа-лимиты в `detail` не кладутся).
+
+| Метод | Вход | Успех | Ошибки |
+|---|---|---|---|
+| `POST /api/friend/request` | `{device_id, target_nick}` | `{ok, state, peer}` | 400 `target_not_found`/`bot`/`self`; 403 `blocked`; 409 `already_friends`; 429 `friend_limit`/`pending_limit` |
+| `POST /api/friend/respond` | `{device_id, requester_device, accept}` | `{ok, accepted, peer}` | 400 `self`; 403 `blocked`; 404 `request_not_found`; 429 `friend_limit` |
+| `POST /api/friend/remove` | `{device_id, peer_device}` | `{ok}` | 400 `npc`; 404 `not_friends` |
+| `POST /api/friend/block` | `{device_id, peer_device}` | `{ok}` | 400 `npc`/`self` |
+| `POST /api/friend/unblock` | `{device_id, peer_device}` | `{ok}` | — |
+| `GET /api/social/inbox` | `device_id` | `{ok, friends, incoming, outgoing, unread_total, requests_total, friend_limit}` | 404 `not_registered` |
+| `GET /api/messages` | `device_id, peer_device, since_id, limit` | `{ok, messages:[{id, from_me, body, sent_at}]}` | 400 `missing_peer`; 403 `blocked`; 404 `not_friends` |
+| `POST /api/message/send` | `{device_id, peer_device, body}` | `{ok, id, sent_at}` | 400 `empty`/`too_long`; 403 `blocked`/`npc`; 404 `not_friends`; 429 `daily_limit` |
+
+`GET /api/social/inbox` — единственная точка, которую клиент зовёт при входе в
+игру и при открытии экрана. В неё собраны все побочные эффекты слоя: уборка
+почты (`_social_prune`), ленивое ребро Светика (`_ensure_spirit_edge`),
+весточка дня (`_ensure_spirit_message`) и отметка `social_state.last_inbox_day`.
+Фоновых задач и планировщика нет.
+
+Лимиты — константы `server.py`: `FRIEND_MAX=50`, `FRIEND_PENDING_OUT_MAX=20`,
+`MSG_MAX_LEN=500`, `MSG_PER_DAY=50`, `MSG_RETENTION_DAYS=30`,
+`MSG_KEEP_PER_PAIR=200`, `MSG_PREVIEW_LEN=60`, `SPIRIT_LLM_PER_DAY_GLOBAL=200`.
+Клиент их не дублирует: `friend_limit` приезжает в ответе `inbox`.
+
+Светик — `SPIRIT_DEVICE = "npc-spirit"`, строки в `players` для него нет (иначе
+он попал бы в `/api/rating` и в поиск по нику). Его нельзя удалить,
+заблокировать и написать ему; он не занимает слот `FRIEND_MAX`. Весточка
+генерируется не чаще одной в сутки и только по событию (приоритет:
+`return` → `guest` → `vein_find` → `sigil_milestone` → `sigil_craft` →
+`first_brew`); при недоступности LLM, браке ответа или исчерпании
+`SPIRIT_LLM_PER_DAY_GLOBAL` используется детерминированный шаблонный пул
+`_SPIRIT_FALLBACK` (`source='template'`).
+
 ## Живой мир (лента + цель дня)
 
 - **`GET /api/events?limit=12`** — лента последних первооткрытий мира: кто, что,
@@ -512,6 +550,29 @@ cooldown квот) от таймзоны не зависят. Невалидны
 
 Переопределить путь можно переменной `ALCHEMY_DB_PATH` (или устаревшей `DB_PATH`):
 оба варианта имеют приоритет над дефолтной папкой.
+
+#### Снапшот БД перед деплоем (обязательно)
+
+Миграции схемы forward-only: раннер `_apply_migrations()` (`server.py`)
+применяет `migrations/NNN_*.sql` с номером больше записанных в
+`schema_version`, откатов нет. Роль down-миграции играет копия БД, снятая
+ДО деплоя:
+
+```bash
+sudo systemctl stop discovery-server
+sudo cp /var/lib/alchemists-loop/discoveries.db \
+        /var/lib/alchemists-loop/discoveries.db.$(date +%F).bak
+sudo systemctl start discovery-server
+```
+
+Порядок «копия → деплой» менять нельзя: миграция выполняется внутри
+`init_db()` на старте процесса, первым же обращением к базе после перезапуска
+сервиса. Копию делает оператор — `init_db()` только применяет миграции и никаких
+резервных копий не создаёт.
+
+Новые таблицы объявляются в двух местах: в `schema.sql` (для свежей БД) и в
+`migrations/NNN_*.sql` (для существующей). Совпадение формы держит
+`tests/test_social.py::TestSchema::test_migration_file_alone_creates_same_shape`.
 
 ## Тестирование
 

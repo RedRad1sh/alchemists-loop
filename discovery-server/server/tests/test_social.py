@@ -18,7 +18,22 @@ SERVER_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 SOCIAL_TABLES = ("friend_edges", "messages", "blocks", "spirit_messages", "social_state")
 
 
-def _srv(tmp_path, monkeypatch, llm=None):
+class _LocalLLM:
+    """Заглушка фикстуры: provider=local не резервирует бюджет и никуда не ходит.
+    Без неё `_srv()` на машине с живым ключом в .env делает реальный HTTP-запрос
+    при каждом inbox, где есть триггер Светика."""
+    provider = "local"
+    api_key = ""
+    models = []
+
+    def generate_spirit_message(self, context, timeout=0):
+        raise AssertionError("тест не должен звать LLM без явной подмены")
+
+    def generate_card_identity(self, *args, **kwargs):
+        raise AssertionError("тест не должен звать LLM без явной подмены")
+
+
+def _srv(tmp_path, monkeypatch, llm=_LocalLLM()):
     sys.path.insert(0, SERVER_DIR)
     import server as srv
     monkeypatch.setattr(srv, "DB_PATH", str(tmp_path / "social.db"))
@@ -1615,3 +1630,80 @@ class TestSpirit:
             assert srv._social_friend_count(conn, "dev-a") == 0
         finally:
             conn.close()
+
+
+class TestAccountDeletion:
+    def test_cascade_clears_social_tables(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch, llm=_FakeSpiritLLM())
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        _send(client, a, b, "до встречи")
+        # Сиротская строка: пара БЕЗ ребра. Именно она делает проверяемым
+        # `DELETE FROM messages WHERE from_device = ?` из спеки §7 — через
+        # pair_key рёбер такое сообщение не удаляется никогда.
+        _seed_message(srv, (a, "dev-x"), a, "сиротское")
+        _player(client, "Гость", "dev-g")
+        _seed_visit(srv, a, "dev-g", srv._today())
+        _inbox(client, a)                       # ребро Светика + social_state
+        conn = srv.get_db()
+        try:
+            conn.execute("INSERT OR IGNORE INTO blocks (blocker_device, blocked_device, "
+                         "created_at) VALUES (?,?,?)", (a, "dev-g", srv._now_iso()))
+            conn.commit()
+        finally:
+            conn.close()
+        r = client.delete("/api/account", params={"device_id": a})
+        assert r.status_code == 200, r.text
+        assert r.json()["deleted"] is True, r.json()
+        for table, where in (
+                ("friend_edges", "a_device = ? OR b_device = ?"),
+                ("messages", "from_device = ?"),
+                ("blocks", "blocker_device = ? OR blocked_device = ?"),
+                ("spirit_messages", "device_id = ?"),
+                ("social_state", "device_id = ?")):
+            args = (a,) if where.count("?") == 1 else (a, a)
+            assert _count(srv, "SELECT COUNT(*) AS c FROM %s WHERE %s" % (table, where),
+                          args) == 0, table
+
+    def test_deletion_removes_shared_thread_entirely(self, tmp_path, monkeypatch):
+        """Переписка пары удаляется с обоих концов, а не только «мои» строки."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        _send(client, a, b, "от a")
+        _send(client, b, a, "от b")
+        r = client.delete("/api/account", params={"device_id": a})
+        assert r.status_code == 200, r.text
+        pk = srv.canonical_pair_key(a, b)
+        assert _count(srv, "SELECT COUNT(*) AS c FROM messages WHERE pair_key = ?",
+                      (pk,)) == 0
+
+    def test_peer_survives_deletion(self, tmp_path, monkeypatch):
+        """Удаление одного не ломает соц-слой второго (общий мир сохраняется)."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        _player(client, "Третья", "dev-c")
+        # Заявка ОТ Третьей к b — именно она должна остаться во ВХОДЯЩИХ b.
+        # Наоборот (b → Третья) было бы исходящие, и ассерт ниже был бы неверен.
+        client.post("/api/friend/request",
+                    json={"device_id": "dev-c", "target_nick": "Мира"})
+        client.delete("/api/account", params={"device_id": a})
+        body = _inbox(client, b)
+        # _humans, а не body["friends"]: с задачи 8 Светик — первая строка
+        # каждого inbox, и голый [] не выполним ни при какой реализации.
+        assert [f["device_id"] for f in _humans(body)] == [], body["friends"]
+        assert [i["nick"] for i in body["incoming"]] == ["Третья"], body["incoming"]
+        assert body["ok"] is True
+
+    def test_deleting_unregistered_device_is_ok(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        r = client.delete("/api/account", params={"device_id": "dev-ghost"})
+        assert r.status_code == 200, r.text
+        assert r.json()["deleted"] is False
+
+    def test_fixture_never_reaches_real_llm(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        assert srv.get_llm().provider == "local", \
+            "фикстура не должна зависеть от .env машины"
