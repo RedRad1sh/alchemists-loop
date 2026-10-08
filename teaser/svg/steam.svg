@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="240" viewBox="0 0 300 240">
+  <g stroke="#ffffff" stroke-width="16" stroke-linecap="round" fill="none" opacity="{{o}}">
+    <path d="M60 230 C 40 190 80 150 60 110 C 40 70 80 30 60 0" transform="translate(0,{{y}})"/>
+    <path d="M150 235 C 172 195 130 155 150 115 C 172 75 130 35 150 5" transform="translate(0,{{y2}})"/>
+    <path d="M240 230 C 220 190 260 150 240 110 C 220 70 260 30 240 0" transform="translate(0,{{y}})"/>
+  </g>
+</svg>

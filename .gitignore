@@ -16,3 +16,7 @@ discovery-server/server/tests/*.sqlite
 # Godot: генерируемые метаданные импорта/uid (regenerable locally)
 *.import
 *.uid
+
+# тизер: бинарные артефакты рендера
+/teaser/*.mp4
+/teaser/poster.png
