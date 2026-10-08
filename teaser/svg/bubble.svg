@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="460" height="190" viewBox="0 0 460 190">
+  <g opacity="{{o}}">
+    <path d="M40 20 H420 Q440 20 440 40 V110 Q440 130 420 130 H120 L80 168 L86 130 H40 Q20 130 20 110 V40 Q20 20 40 20 Z"
+          fill="#1d2733" stroke="#35c4b5" stroke-width="5"/>
+    <text x="230" y="88" font-family="Manrope" font-weight="800" font-size="46" fill="#ffffff" text-anchor="middle">{{text}}</text>
+  </g>
+</svg>
