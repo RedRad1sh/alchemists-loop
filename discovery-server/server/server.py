@@ -3915,6 +3915,27 @@ def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
             "UPDATE challenges SET first_nick = 'Анонимный алхимик', first_device = NULL WHERE first_device = ?",
             (device_id,),
         )
+        # S1: социальный слой чистится целиком, а не «только мои строки».
+        # Порядок существенен — pair_key пары надо прочитать ДО удаления рёбер,
+        # иначе переписку нечем будет искать. Переписка удаляется с обоих
+        # концов: оставить её у второй стороны — та же дыра в приватности, что
+        # и в friend_remove/friend_block.
+        social_pairs = [r["pair_key"] for r in conn.execute(
+            "SELECT pair_key FROM friend_edges WHERE a_device = ? OR b_device = ?",
+            (device_id, device_id)).fetchall()]
+        social_pairs.append(canonical_pair_key(device_id, SPIRIT_DEVICE))
+        for pk in social_pairs:
+            conn.execute("DELETE FROM messages WHERE pair_key = ?", (pk,))
+        conn.execute("DELETE FROM messages WHERE from_device = ?", (device_id,))
+        # Свой `from_device`, а не только pair_key рёбер: переписка игрока с
+        # собеседником, чьё ребро уже удалено (сиротская строка), иначе
+        # переживает аккаунт — спека §7 требует чистить и по `from_device`.
+        conn.execute("DELETE FROM friend_edges WHERE a_device = ? OR b_device = ?",
+                     (device_id, device_id))
+        conn.execute("DELETE FROM blocks WHERE blocker_device = ? OR blocked_device = ?",
+                     (device_id, device_id))
+        conn.execute("DELETE FROM spirit_messages WHERE device_id = ?", (device_id,))
+        conn.execute("DELETE FROM social_state WHERE device_id = ?", (device_id,))
         for table in [
             "echoes", "letters", "challenge_scores", "vein_points", "atlas_solves",
             "fair_pairs", "fair_contrib", "fair_claims", "vein_hits", "legacy_vein_hits",
