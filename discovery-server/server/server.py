@@ -4368,6 +4368,16 @@ def _clean_message_body(raw: str) -> str:
     return _MSG_CONTROL_RE.sub("", text).strip()
 
 
+def _preview_line(raw: str) -> str:
+    """Превью для строки друга: одна строка длиной не больше MSG_PREVIEW_LEN.
+
+    Лента переводы строк сохраняет (_clean_message_body их не режет), а строка
+    списка друзей в клиенте — один Label в ряд: перенос внутри превью разодрал
+    бы её на две. Тот же приём, что у описания вещества: " ".join(split()).
+    """
+    return " ".join((raw or "").split())[:MSG_PREVIEW_LEN]
+
+
 def _social_prune(conn: sqlite3.Connection, device_id: str) -> None:
     """Уборка почты: глобально по возрасту и хвостами по парам игрока.
 
@@ -4441,6 +4451,10 @@ def get_messages(device_id: str = Query(..., min_length=1, max_length=128),
             "SELECT id, from_device, body, sent_at FROM messages "
             "WHERE pair_key = ? AND id > ? ORDER BY id ASC LIMIT ?",
             (pair_key, int(since_id), int(limit))).fetchall()
+        # Писаем под BEGIN IMMEDIATE, как в friend_request и _ensure_letter:
+        # вне явной транзакции модуль открывает под UPDATE deferred-транзакцию,
+        # и она берёт RESERVED уже на ходе записи.
+        conn.execute("BEGIN IMMEDIATE")
         conn.execute(
             "UPDATE messages SET read_at = ? "
             "WHERE pair_key = ? AND from_device != ? AND read_at IS NULL",
@@ -4559,27 +4573,31 @@ def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
                     "WHERE device_id IN (%s)" % marks, tuple(sorted(wanted))).fetchall():
                 showcase[row["device_id"]] = row
 
-        # Непрочитанное и последнее сообщение — одной агрегацией на все пары.
+        # Непрочитанное и id последнего сообщения — одной агрегацией на все
+        # пары. sent_at здесь НЕ берётся: дата живёт в строке-победителе по id,
+        # а MAX(sent_at) — по часам, и при переводе часов назад они разошлись бы
+        # (строка друга показывала бы дату одного сообщения и текст другого).
         stats: dict[str, sqlite3.Row] = {}
         if accepted_pairs:
             marks = ",".join("?" for _ in accepted_pairs)
             for row in conn.execute(
                     "SELECT pair_key, "
                     "SUM(CASE WHEN from_device != ? AND read_at IS NULL THEN 1 ELSE 0 END) AS unread, "
-                    "MAX(id) AS last_id, MAX(sent_at) AS last_at "
+                    "MAX(id) AS last_id "
                     "FROM messages WHERE pair_key IN (%s) GROUP BY pair_key" % marks,
                     tuple([me] + sorted(accepted_pairs.values()))).fetchall():
                 stats[row["pair_key"]] = row
 
-        # Тела превью — вторым запросом по собранным id (N ≤ числу друзей).
-        previews: dict[int, str] = {}
+        # Тело и дата превью — вторым запросом по собранным id (N ≤ числу
+        # друзей): одна строка даёт оба поля, поэтому они про одно сообщение.
+        previews: dict[int, sqlite3.Row] = {}
         last_ids = sorted({r["last_id"] for r in stats.values() if r["last_id"] is not None})
         if last_ids:
             marks = ",".join("?" for _ in last_ids)
             for row in conn.execute(
-                    "SELECT id, body FROM messages WHERE id IN (%s)" % marks,
+                    "SELECT id, body, sent_at FROM messages WHERE id IN (%s)" % marks,
                     tuple(last_ids)).fetchall():
-                previews[row["id"]] = row["body"][:MSG_PREVIEW_LEN]
+                previews[row["id"]] = row
 
         unread_total = 0
         for peer, pk in accepted_pairs.items():
@@ -4588,13 +4606,14 @@ def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
             st = stats.get(pk)
             unread = int(st["unread"] or 0) if st is not None else 0
             unread_total += unread
+            last = previews.get(st["last_id"]) if st is not None else None
             friends.append(InboxFriend(
                 device_id=peer, nick=nick,
                 avatar=avatar_for(nick or peer),
                 last_seen=(row["last_seen"] if row is not None and row["last_seen"] else ""),
                 unread=unread,
-                last_msg_at=(st["last_at"] if st is not None and st["last_at"] else ""),
-                last_msg_preview=(previews.get(st["last_id"], "") if st is not None else "")))
+                last_msg_at=(last["sent_at"] if last is not None else ""),
+                last_msg_preview=(_preview_line(last["body"]) if last is not None else "")))
         for peer, at in incoming_dev.items():
             row = showcase.get(peer)
             nick = row["nick"] if row is not None else ""

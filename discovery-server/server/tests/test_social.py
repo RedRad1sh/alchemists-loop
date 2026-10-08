@@ -316,6 +316,14 @@ class TestFriendRespond:
         inbox_b = client.get("/api/social/inbox", params={"device_id": "dev-b"})
         assert inbox_a.status_code == 200 and inbox_b.status_code == 200, \
             (inbox_a.text, inbox_b.text)
+        # Симметрия — не статус, а содержимое: друг виден с обеих сторон. Без
+        # этих двух строк тест зелё и на пустых списках (замечание ревьюера).
+        assert [f["device_id"] for f in inbox_a.json()["friends"]] == ["dev-b"], \
+            inbox_a.json()["friends"]
+        assert [f["device_id"] for f in inbox_b.json()["friends"]] == ["dev-a"], \
+            inbox_b.json()["friends"]
+        assert inbox_a.json()["requests_total"] == 0 and inbox_b.json()["requests_total"] == 0, \
+            "принятая заявка не оставляется висеть входящей"
 
     def test_decline_deletes_edge_and_allows_new_request(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
@@ -456,7 +464,8 @@ class TestFriendRespond:
 
 
 def _seed_message(srv, pair, from_device, body):
-    """Прямая вставка в messages: до задачи 6 роута отправки ещё нет."""
+    """Прямая вставка в messages: нужна, где лента важна до отправки или с
+    особым sent_at. Обычные сообщения пишем через _send."""
     conn = srv.get_db()
     try:
         conn.execute(
@@ -1079,3 +1088,101 @@ class TestInbox:
         finally:
             conn.close()
         assert len(rows) == 1 and rows[0]["last_inbox_day"] == "2026-10-09", rows
+
+    def test_prune_age_boundary_is_exclusive(self, tmp_path, monkeypatch):
+        """Граница `<`, а не `<=`: строке ровно MSG_RETENTION_DAYS дней — жить.
+
+        Возврат `_social_prune` к «<=» краснит этот тест, но молчит в
+        test_prune_by_age_and_by_tail: там сиду на сутки за границей, и обе
+        записи удаляются одинаково. Граничный sent_at — ровно строка
+        _date_minus(N) без времени: сравнение лексикографическое, и «<» её
+        сохраняет, «<=» — уже нет.
+        """
+        srv = _srv(tmp_path, monkeypatch)
+        clock = {"now": _dt.datetime(2026, 10, 7, 12, 0)}
+        monkeypatch.setattr(srv, "_now_dt", lambda: clock["now"])
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        conn = srv.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO messages (pair_key, from_device, body, sent_at) "
+                "VALUES (?,?,?,?)",
+                (srv.canonical_pair_key(a, b), b, "ровно на границе",
+                 srv._date_minus(srv.MSG_RETENTION_DAYS)))
+            conn.execute(
+                "INSERT INTO messages (pair_key, from_device, body, sent_at) "
+                "VALUES (?,?,?,?)",
+                (srv.canonical_pair_key(a, b), b, "за границей",
+                 srv._date_minus(srv.MSG_RETENTION_DAYS + 1) + "T00:00:01"))
+            conn.commit()
+        finally:
+            conn.close()
+        _inbox(client, a)
+        assert _count(srv, "SELECT COUNT(*) AS c FROM messages WHERE body = 'ровно на границе'") == 1
+        assert _count(srv, "SELECT COUNT(*) AS c FROM messages WHERE body = 'за границей'") == 0
+
+    def test_preview_is_a_single_line(self, tmp_path, monkeypatch):
+        """Превью в строке друга — один Label: перенос разорвал бы её.
+
+        Тело при этом не трогается: лента переводы строк сохраняет по спеке,
+        поэтому выпрямление живёт в витрине, а не в _clean_message_body.
+        """
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        _send(client, b, a, "раз\nдва\tтри")
+        f = _inbox(client, a)["friends"][0]
+        assert f["last_msg_preview"] == "раз два три", repr(f["last_msg_preview"])
+        full = client.get("/api/messages", params={"device_id": a, "peer_device": b}).json()
+        assert full["messages"][0]["body"] == "раз\nдва\tтри", full["messages"][0]["body"]
+
+    def test_last_msg_at_is_the_preview_row_date(self, tmp_path, monkeypatch):
+        """Дата в строке друга — от того же сообщения, что и превью.
+
+        Часы идут назад (NTP-перевод), поэтому MAX(sent_at) указывает на
+        предпоследнее письмо, а MAX(id) — на последнее. Отдельный MAX(sent_at)
+        в агрегации показал бы «новое» сообщение датированным старше
+        предыдущего; этот тест краснеет на его возврате.
+        """
+        srv = _srv(tmp_path, monkeypatch)
+        clock = {"now": _dt.datetime(2026, 10, 7, 12, 0, 10)}
+        monkeypatch.setattr(srv, "_now_dt", lambda: clock["now"])
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        _send(client, b, a, "первое")
+        clock["now"] = _dt.datetime(2026, 10, 7, 12, 0, 5)
+        _send(client, b, a, "второе")
+        f = _inbox(client, a)["friends"][0]
+        assert f["last_msg_preview"] == "второе", f
+        assert f["last_msg_at"] == "2026-10-07T12:00:05", f["last_msg_at"]
+
+    def test_requests_sorted_by_recency_then_nick(self, tmp_path, monkeypatch):
+        """Списки заявок упорядочены: свежие первыми, ничья — по нику.
+
+        По одному элементу ключ не проверить: с одной входящей и одной
+        исходящей удалённые sort-строки оставляли набор зелёным. Порядок
+        вставки здесь намеренно НЕ совпадает с ожидаемым ни по часам, ни по
+        нику (Вера раньше Бори при равной секунде, Гриша раньше Даны).
+        """
+        srv = _srv(tmp_path, monkeypatch)
+        clock = {"now": _dt.datetime(2026, 10, 7, 12, 0, 0)}
+        monkeypatch.setattr(srv, "_now_dt", lambda: clock["now"])
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        for nick, dev in (("Аня", "dev-1"), ("Боря", "dev-2"), ("Вера", "dev-3"),
+                          ("Гриша", "dev-4"), ("Дана", "dev-5")):
+            _player(client, nick, dev)
+        clock["now"] = _dt.datetime(2026, 10, 7, 12, 0, 20)
+        _ask(client, "Варда", device_id="dev-3")
+        _ask(client, "Варда", device_id="dev-2")
+        clock["now"] = _dt.datetime(2026, 10, 7, 12, 0, 10)
+        _ask(client, "Варда", device_id="dev-1")
+        _ask(client, "Гриша")
+        clock["now"] = _dt.datetime(2026, 10, 7, 12, 0, 20)
+        _ask(client, "Дана")
+        body = _inbox(client, "dev-a")
+        assert [i["nick"] for i in body["incoming"]] == ["Боря", "Вера", "Аня"], body["incoming"]
+        assert [o["nick"] for o in body["outgoing"]] == ["Дана", "Гриша"], body["outgoing"]
+        assert body["requests_total"] == 3, body
+        assert body["friends"] == [], "pending не считается другом"

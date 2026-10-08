@@ -52,8 +52,10 @@ CREATE TABLE IF NOT EXISTS spirit_messages (
 );
 
 -- last_inbox_day нужен вместо players.last_seen для триггера «return»:
--- last_seen обновляет _upsert_player на любом POST /api/me, а клиент зовёт
--- /api/me в стартовом обмене РАНЬШЕ inbox — триггер не сработал бы ни разу.
+-- last_seen пишет _upsert_player на игровых роутах (brew-check, discover,
+-- vein/find, player/register, house), а клиент зовёт их в стартовом обмене
+-- РАНЬШЕ inbox — триггер по last_seen не сработал бы ни разу. POST /api/me
+-- last_seen не трогает: set_me пишет только nick.
 CREATE TABLE IF NOT EXISTS social_state (
     device_id TEXT NOT NULL PRIMARY KEY,
     last_inbox_day TEXT NOT NULL,
