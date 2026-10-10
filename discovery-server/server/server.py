@@ -3926,10 +3926,10 @@ def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
         social_pairs.append(canonical_pair_key(device_id, SPIRIT_DEVICE))
         for pk in social_pairs:
             conn.execute("DELETE FROM messages WHERE pair_key = ?", (pk,))
-        conn.execute("DELETE FROM messages WHERE from_device = ?", (device_id,))
         # Свой `from_device`, а не только pair_key рёбер: переписка игрока с
         # собеседником, чьё ребро уже удалено (сиротская строка), иначе
         # переживает аккаунт — спека §7 требует чистить и по `from_device`.
+        conn.execute("DELETE FROM messages WHERE from_device = ?", (device_id,))
         conn.execute("DELETE FROM friend_edges WHERE a_device = ? OR b_device = ?",
                      (device_id, device_id))
         conn.execute("DELETE FROM blocks WHERE blocker_device = ? OR blocked_device = ?",
@@ -4102,6 +4102,12 @@ def _social_peer(conn: sqlite3.Connection, device_id: str) -> SocialPeer:
     Ник сменяем через POST /api/me, поэтому ничего не кэшируется в рёбрах:
     переименование друга видно сразу и ничего не рвёт.
     """
+    if device_id == SPIRIT_DEVICE:
+        # Светика нет в players (иначе попал бы в /api/rating), витрина — из
+        # констант, как уже сделано в inbox. Без этой ветки peer в ответе по
+        # дух-ребру возвращал nick: "".
+        return SocialPeer(device_id=device_id, nick=SPIRIT_NICK,
+                          avatar=avatar_for(SPIRIT_NICK))
     row = conn.execute(
         "SELECT nick, last_seen FROM players WHERE device_id = ?", (device_id,)
     ).fetchone()
@@ -4149,6 +4155,21 @@ def _social_pending_out(conn: sqlite3.Connection, device_id: str) -> int:
     ).fetchone()["c"]
 
 
+def _social_id(raw: str) -> str:
+    """Единая граница валидности device_id социальных роутов (F2/I-1, I-2).
+
+    min_length=1 в моделях применяется к СЫРОЙ строке pydantic, поэтому "   "
+    проходит валидацию и после strip() превращается в "" — ключ графа.
+    "|" внутри id делает canonical_pair_key неоднозначным
+    (key("ab", "c|d") == key("ab|c", "d")), а чтение по pair_key принадлежность
+    пары не проверяет. Пустое или с "| — 400 bad_device_id, до БД не доходит.
+    """
+    value = (raw or "").strip()
+    if not value or "|" in value:
+        raise HTTPException(status_code=400, detail="bad_device_id")
+    return value
+
+
 @app.post("/api/friend/request", response_model=FriendRequestResponse)
 def friend_request(payload: FriendRequestPayload):
     """Заявка в друзья по нику. Ник — единственный вход, дальше только device_id.
@@ -4157,7 +4178,7 @@ def friend_request(payload: FriendRequestPayload):
     на заявку». Своя повторная заявка идемпотентна — клиент не обязан различать
     «не отправилось» и «уже отправлено».
     """
-    me = payload.device_id.strip()
+    me = _social_id(payload.device_id)
     target_nick = payload.target_nick.strip()
     conn = get_db()
     try:
@@ -4167,6 +4188,11 @@ def friend_request(payload: FriendRequestPayload):
         if row is None:
             raise HTTPException(status_code=400, detail="target_not_found")
         target = row["device_id"]
+        # Светик защищён с обеих сторон (F1/C-1): request от имени npc-spirit
+        # создавал pending-ребро dev|npc-spirit, которое _ensure_spirit_edge
+        # (INSERT OR IGNORE) не чинил — друг-Светик исчезал из списка.
+        if SPIRIT_DEVICE in (me, target):
+            raise HTTPException(status_code=400, detail="npc")
         if target.startswith("bot-"):
             raise HTTPException(status_code=400, detail="bot")
         if target == me:
@@ -4186,9 +4212,24 @@ def friend_request(payload: FriendRequestPayload):
             # лишнего друга, ответив на чужую заявку своей.
             if _social_friend_count(conn, me) >= FRIEND_MAX:
                 raise HTTPException(status_code=429, detail="friend_limit")
-            conn.execute(
+            cur = conn.execute(
                 "UPDATE friend_edges SET state = 'accepted', updated_at = ? "
-                "WHERE pair_key = ?", (_now_iso(), edge["pair_key"]))
+                "WHERE pair_key = ? AND state = 'pending'", (_now_iso(), edge["pair_key"]))
+            if cur.rowcount == 0:
+                # Ребро исчезло или перешло из pending между чтением и UPDATE
+                # (remove/block съели, параллельный respond принял) — тот же
+                # guarded-паттерн, что у friend_respond и race-ветка вставки:
+                # не возвращаем «успех», а отвечаем из фактической строки.
+                conn.rollback()
+                fresh = _social_edge(conn, me, target)
+                if fresh is None:
+                    raise HTTPException(status_code=404, detail="request_not_found")
+                if fresh["state"] == "accepted":
+                    raise HTTPException(status_code=409, detail="already_friends")
+                return FriendRequestResponse(
+                    ok=True,
+                    state="accepted" if fresh["requester_device"] != me else "pending",
+                    peer=_social_peer(conn, target))
             conn.commit()
             return FriendRequestResponse(ok=True, state="accepted",
                                          peer=_social_peer(conn, target))
@@ -4240,8 +4281,12 @@ def friend_respond(payload: FriendRespondPayload):
     rowcount == 0 означает «заявки нет, она уже принята или её принял второй
     поток» — все три случая дают 404, а не «успех». Отказ удаляет строку.
     """
-    me = payload.device_id.strip()
-    requester = payload.requester_device.strip()
+    me = _social_id(payload.device_id)
+    requester = _social_id(payload.requester_device)
+    # Паритет с friend_request (F1/C-1): respond с requester_device="npc-spirit"
+    # — та же дыра, что и заявка от имени духа.
+    if SPIRIT_DEVICE in (me, requester):
+        raise HTTPException(status_code=400, detail="npc")
     if me == requester:
         raise HTTPException(status_code=400, detail="self")
     conn = get_db()
@@ -4299,8 +4344,8 @@ def _social_delete_pair(conn: sqlite3.Connection, device_id: str, peer_device: s
 
 @app.post("/api/friend/remove", response_model=SocialOkResponse)
 def friend_remove(payload: FriendPeerPayload):
-    me = payload.device_id.strip()
-    peer = payload.peer_device.strip()
+    me = _social_id(payload.device_id)
+    peer = _social_id(payload.peer_device)
     # Светик защищён с обеих сторон: device_id ничем не аутентифицирован,
     # поэтому вызов от имени npc-spirit удалил бы чужое закреплённое ребро.
     if SPIRIT_DEVICE in (me, peer):
@@ -4330,8 +4375,8 @@ def friend_block(payload: FriendBlockPayload):
     Проверяется потом на request, respond, messages, send. Ребра может и не
     быть — блок это защита от навязчивых, а не только «раздруживание».
     """
-    me = payload.device_id.strip()
-    target = payload.target_device.strip()
+    me = _social_id(payload.device_id)
+    target = _social_id(payload.target_device)
     if SPIRIT_DEVICE in (me, target):
         raise HTTPException(status_code=400, detail="npc")
     if target == me:
@@ -4359,8 +4404,8 @@ def friend_unblock(payload: FriendBlockPayload):
     Блок, который поставили мне, снимаю не я, а тот, кто его поставил. Ни
     ребро, ни переписка не возвращаются — очистка была осознанным действием.
     """
-    me = payload.device_id.strip()
-    target = payload.target_device.strip()
+    me = _social_id(payload.device_id)
+    target = _social_id(payload.target_device)
     conn = get_db()
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -4418,7 +4463,8 @@ def _social_prune(conn: sqlite3.Connection, device_id: str) -> None:
     conn.execute("DELETE FROM messages WHERE sent_at < ?",
                  (_date_minus(MSG_RETENTION_DAYS),))
     rows = conn.execute(
-        "SELECT pair_key FROM friend_edges WHERE a_device = ? OR b_device = ?",
+        "SELECT pair_key FROM friend_edges WHERE (a_device = ? OR b_device = ?) "
+        "AND state = 'accepted'",
         (device_id, device_id)).fetchall()
     pair_keys = {r["pair_key"] for r in rows}
     pair_keys.add(canonical_pair_key(device_id, SPIRIT_DEVICE))
@@ -4592,6 +4638,15 @@ def _ensure_spirit_edge(conn: sqlite3.Connection, device_id: str) -> None:
         "VALUES (?, ?, ?, 'accepted', ?, ?, ?)",
         (pair_key, pair_key.split("|", 1)[0], pair_key.split("|", 1)[1],
          SPIRIT_DEVICE, now, now))
+    # Само-лечение (F1/C-1): INSERT OR IGNORE не чинит уже отравленное ребро —
+    # request от имени npc-spirit оставлял пару dev|npc-spirit в pending,
+    # Светик исчезал из списка (фильтр state='accepted'), письма уходили в
+    # недоступную ветку. Чиним состояние на месте; rowcount не проверяем — на
+    # честной строке UPDATE не делает ничего, операция идемпотентна.
+    conn.execute(
+        "UPDATE friend_edges SET state = 'accepted', requester_device = ?, "
+        "updated_at = ? WHERE pair_key = ? AND state != 'accepted'",
+        (SPIRIT_DEVICE, now, pair_key))
 
 
 def _spirit_trigger(conn: sqlite3.Connection, device_id: str,
@@ -4730,10 +4785,13 @@ def get_messages(device_id: str = Query(..., min_length=1, max_length=128),
     «прочитано получателем» и ставится при вставке в NULL, поэтому без фильтра
     моё же открытие ленты погасило бы бейдж собеседника.
     """
-    me = device_id.strip()
+    me = _social_id(device_id)
     peer = peer_device.strip()
     if not peer:
         raise HTTPException(status_code=400, detail="missing_peer")
+    # Та же граница F2 для собеседника: пустое уже отсечено missing_peer
+    # (контракт GET-параметра не меняем), остаётся проверка "|".
+    peer = _social_id(peer)
     conn = get_db()
     try:
         if _social_blocked(conn, me, peer):
@@ -4768,8 +4826,8 @@ def get_messages(device_id: str = Query(..., min_length=1, max_length=128),
 
 @app.post("/api/message/send", response_model=MessageSendResponse)
 def send_message(payload: MessageSendPayload):
-    me = payload.device_id.strip()
-    peer = payload.peer_device.strip()
+    me = _social_id(payload.device_id)
+    peer = _social_id(payload.peer_device)
     if peer == SPIRIT_DEVICE:
         raise HTTPException(status_code=403, detail="npc")
     body = _clean_message_body(payload.body)
@@ -4821,7 +4879,10 @@ def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
     потому что триггер «return» (задача 8) читает social_state.last_inbox_day
     как «когда игрок заходил в прошлый раз».
     """
-    me = device_id.strip()
+    # F2: отсутствие device_id по-прежнему 422 валидации Query(min_length=1),
+    # «нет строки в players» — 404 not_registered; здесь отсекается только
+    # формально прошедший валидация пустой/с «|» id.
+    me = _social_id(device_id)
     conn = get_db()
     try:
         if conn.execute("SELECT 1 FROM players WHERE device_id = ?", (me,)).fetchone() is None:

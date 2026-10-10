@@ -657,6 +657,51 @@ class TestRemoveAndBlock:
             conn.close()
         assert n == 0, "отказ не должен оставлять строку в blocks"
 
+    def test_request_and_respond_as_the_spirit_are_rejected(self, tmp_path, monkeypatch):
+        """F1 (C-1): request от имени npc-spirit создавал pending-ребро
+        dev|npc-spirit, которое _ensure_spirit_edge (INSERT OR IGNORE) чинить
+        не умел: Светик исчезал из списка друзей (фильтр state='accepted'),
+        а письма генерировались в недоступную ветку (GET /api/messages → 404
+        not_friends). Respond на заявку от духа — та же дыра."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Мира", "dev-b")
+        r = client.post("/api/friend/request",
+                        json={"device_id": "npc-spirit", "target_nick": "Мира"})
+        assert r.status_code == 400 and r.json()["detail"] == "npc", r.text
+        r = client.post("/api/friend/respond",
+                        json={"device_id": "dev-b", "requester_device": "npc-spirit",
+                              "accept": True})
+        assert r.status_code == 400 and r.json()["detail"] == "npc", r.text
+        assert _count(srv, "SELECT COUNT(*) AS c FROM friend_edges") == 0, \
+            "отказ не должен оставлять ребро"
+
+    def test_poisoned_spirit_edge_heals_on_inbox(self, tmp_path, monkeypatch):
+        """_ensure_spirit_edge становится само-лечащей: уже отравленное
+        pending-ребро (единственная форма, которую оставлял request от имени
+        npc-spirit до фикса) чинится UPDATE'ом без миграции — иначе живой БД
+        остаётся с исчезнувшим Светиком, а инвариант «ребро dev|npc-spirit
+        всегда accepted» не защищён ничем."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        pk = srv.canonical_pair_key("dev-a", "npc-spirit")
+        a, b = pk.split("|", 1)
+        conn = srv.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO friend_edges (pair_key, a_device, b_device, state, "
+                "requester_device, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (pk, a, b, "pending", "npc-spirit", srv._now_iso(), srv._now_iso()))
+            conn.commit()
+        finally:
+            conn.close()
+        body = _inbox(client, "dev-a")
+        spirit = [f for f in body["friends"] if f["device_id"] == "npc-spirit"]
+        assert spirit and spirit[0]["nick"] == srv.SPIRIT_NICK, body["friends"]
+        assert _count(srv, "SELECT COUNT(*) AS c FROM friend_edges "
+                           "WHERE pair_key = ? AND state = 'accepted'", (pk,)) == 1
+
     def test_block_twice_is_idempotent_and_unblock_of_nothing_is_ok(
             self, tmp_path, monkeypatch):
         """INSERT OR IGNORE + PK(blocks) — второй блок не даёт 500; unblock
@@ -694,6 +739,31 @@ class TestRemoveAndBlock:
             assert huge.status_code == 422, (route, huge.text)
             huge_peer = client.post(route, json={"device_id": "dev-a", key: long_id})
             assert huge_peer.status_code == 422, (route, huge_peer.text)
+        # F2: min_length=1 применяется к сырой строке pydantic, поэтому "   " и
+        # "a|b" проходят валидацию и отсекаются только хендлером — 400
+        # bad_device_id.
+        pipe = client.post("/api/friend/remove",
+                           json={"device_id": "a|b", "peer_device": "dev-b"})
+        assert pipe.status_code == 400 and pipe.json()["detail"] == "bad_device_id", pipe.text
+
+    def test_blank_and_pipe_device_id_rejected(self, tmp_path, monkeypatch):
+        """.strip() идёт ПОСЛЕ pydantic-валидации, поэтому "   " превращался в
+        "" и становился ключом графа; "|" внутри id делает canonical_pair_key
+        неоднозначным (key("ab", "c|d") == key("ab|c", "d")). Оба — 400
+        bad_device_id на request и message/send, до БД запрос не доходит."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Мира", "dev-b")
+        for bad in ("   ", "a|b"):
+            r = client.post("/api/friend/request",
+                            json={"device_id": bad, "target_nick": "Мира"})
+            assert r.status_code == 400 and r.json()["detail"] == "bad_device_id", (bad, r.text)
+            r = client.post("/api/message/send",
+                            json={"device_id": bad, "peer_device": "dev-b",
+                                  "body": "привет"})
+            assert r.status_code == 400 and r.json()["detail"] == "bad_device_id", (bad, r.text)
+        assert _count(srv, "SELECT COUNT(*) AS c FROM friend_edges") == 0
+        assert _count(srv, "SELECT COUNT(*) AS c FROM messages") == 0
 
 
 def _befriend(srv, client, nick_a="Варда", dev_a="dev-a", nick_b="Мира", dev_b="dev-b"):
@@ -1311,6 +1381,22 @@ class TestSpirit:
         assert f["last_seen"] == "2026-10-07", f
         assert f["avatar"], f
 
+    def test_social_peer_showcase_covers_the_spirit(self, tmp_path, monkeypatch):
+        """F6: _social_peer не знал про Светика — peer в ответе по дух-ребру
+        возвращал nick: "". Витрина константами уже сделана в inbox, здесь тот
+        же инвариант проверяется прямым вызовом хелпера (самый дешёвый путь:
+        после гейта npc на request/respond route-сценарий для духа недоступен)."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        conn = srv.get_db()
+        try:
+            peer = srv._social_peer(conn, srv.SPIRIT_DEVICE)
+        finally:
+            conn.close()
+        assert peer.device_id == srv.SPIRIT_DEVICE
+        assert peer.nick == srv.SPIRIT_NICK, peer
+        assert peer.avatar == srv.avatar_for(srv.SPIRIT_NICK), peer.avatar
+
     def test_no_event_no_message(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
         client = _client(srv)
@@ -1555,7 +1641,7 @@ class TestSpirit:
         finally:
             conn.close()
 
-    def test_vein_find_and_sigil_triggers(self, tmp_path, monkeypatch):
+    def test_event_triggers_fire(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch, llm=_FakeSpiritLLM())
         clock = {"now": _dt.datetime(2026, 10, 7, 12, 0)}
         monkeypatch.setattr(srv, "_now_dt", lambda: clock["now"])
