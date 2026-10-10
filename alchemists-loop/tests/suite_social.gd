@@ -15,9 +15,12 @@ static func run(g: Game) -> void:
 	_save_keys(g)
 	_wiring(g)
 	_screen(g)
+	_segment_press(g)
+	_esc_stack(g)
 	_thread(g)
 	_confirm(g)
 	_search_helpers(g)
+	_send_failures(g)
 
 static func _net_requests(_g: Game) -> void:
 	# вызов реальных методов: в ST Net синхронно сливает очередь в offline,
@@ -161,10 +164,105 @@ static func _screen(g: Game) -> void:
 		and ui._screen.is_in_group("modal_ui"))
 	g._social._seed_demo()
 	ui.open(0)
-	Selftest.check("friends segment", ui._tab == 0 and ui._body != null)
+	# F2: сверяем отрисованное содержимое, а не эхо поля `_tab` (open(tab) сам
+	# его пишет): 3 друга и ноль заявок в сид-мире, затем наоборот.
+	Selftest.check("friends tab renders rows", ui._body != null
+		and ui._body.find_children("FriendRow_*", "", true, false).size() == 3
+		and ui._body.find_children("RequestRow_*", "", true, false).is_empty())
 	ui.open(1)
-	Selftest.check("requests segment", ui._tab == 1 and ui._body != null)
+	Selftest.check("requests tab renders rows", ui._body != null
+		and ui._body.find_children("RequestRow_*", "", true, false).size() == 1
+		and ui._body.find_children("FriendRow_*", "", true, false).is_empty())
 	ui.close()
+
+
+static func _segment_press(g: Game) -> void:
+	# F1 (Critical): перестройка списка из-под собственного pressed не должна
+	# free() нажавшую кнопку/строку. Мутации: вернуть `child.free()` в
+	# _refresh_list/_build_thread — краснеют «survives rebuild» (кнопка мертва в
+	# тот же момент); вернуть чистый queue_free() без remove_child — краснеет
+	# «exactly one fresh segments» (старый узел ещё ребёнок _body).
+	var ui = g.get("_social_ui")
+	if ui == null or ui._screen == null or ui._body == null:
+		Selftest.check("segment press available", false)
+		return
+	g._social._seed_demo()
+	ui.open(0)
+	var seg: HBoxContainer = ui._body.find_child("SocialSegments", true, false)
+	if seg == null or seg.get_child_count() < 2:
+		Selftest.check("segment press: seg buttons found", false)
+		ui.close()
+		return
+	var requests_b: Button = seg.get_child(1) as Button
+	if requests_b == null:
+		Selftest.check("segment press: seg button is Button", false)
+		ui.close()
+		return
+	requests_b.pressed.emit()
+	Selftest.check("pressed segment button survives rebuild", is_instance_valid(requests_b))
+	var fresh: Array = ui._body.find_children("SocialSegments", "", true, false)
+	Selftest.check("exactly one fresh segments after press", fresh.size() == 1)
+	Selftest.check("press switches rendered rows",
+		ui._body.find_children("RequestRow_*", "", true, false).size() == 1
+		and ui._body.find_children("FriendRow_*", "", true, false).is_empty())
+	if fresh.size() == 1:
+		var friends_b: Button = (fresh[0] as HBoxContainer).get_child(0) as Button
+		if friends_b != null:
+			friends_b.pressed.emit()
+			Selftest.check("second segment press survives rebuild", is_instance_valid(friends_b))
+			Selftest.check("friends rows rendered after return press",
+				ui._body.find_children("FriendRow_*", "", true, false).size() == 3)
+	# «Назад» в ленте — тот же hazard: _close_thread перестраивает _body,
+	# освобождая нажавшую кнопку.
+	ui._open_thread("dev-b")
+	var header: HBoxContainer = ui._body.find_child("ThreadHeader", true, false)
+	if header == null or header.get_child_count() == 0:
+		Selftest.check("back button available", false)
+		ui.close()
+		return
+	var back_b: Button = header.get_child(0) as Button
+	if back_b == null:
+		Selftest.check("back button is Button", false)
+		ui.close()
+		return
+	back_b.pressed.emit()
+	Selftest.check("pressed back button survives rebuild", is_instance_valid(back_b))
+	Selftest.check("list rebuilt after back press", ui._peer == ""
+		and ui._body.find_children("SocialSegments", "", true, false).size() == 1
+		and ui._body.find_children("FriendRow_*", "", true, false).size() == 3)
+	ui.close()
+
+
+static func _esc_stack(g: Game) -> void:
+	# Task 4 Step (план): Esc-стек — закрытие идёт по слоям социалки
+	# (модалка → лента → список → экран), а не проваливается сквозь экран к
+	# поверхности под ним; ad-предикат обязан видеть соц-поверхности.
+	# Мутации: снять соц-ветки в sigil_ui._close_top_modal — первый же Esc
+	# «съедается» lower-поверхностью и красит кейсы; снять зеркало в
+	# _modal_open_for_ads — краснеет предикат.
+	var ui = g.get("_social_ui")
+	if ui == null or ui._screen == null:
+		Selftest.check("esc stack available", false)
+		return
+	var base := g._modal_open_for_ads()
+	Selftest.check("esc stack clean before social esc test", base == false)
+	g._social._seed_demo()
+	ui.open(0)
+	ui._open_thread("dev-b")
+	ui._open_confirm("dev-b")
+	Selftest.check("ads predicate holds social confirm", g._modal_open_for_ads() == true)
+	var k := InputEventKey.new()
+	k.pressed = true
+	k.keycode = KEY_ESCAPE
+	Selftest.check("esc closes confirm first", g._handle_esc(k) == true
+		and ui._confirm != null and not ui._confirm.visible
+		and ui._screen.visible and ui._peer == "dev-b")
+	Selftest.check("esc closes thread to list next", g._handle_esc(k) == true
+		and ui._peer == "" and ui._screen.visible)
+	Selftest.check("ads predicate holds social screen", g._modal_open_for_ads() == true)
+	Selftest.check("esc closes social screen last", g._handle_esc(k) == true
+		and not ui._screen.visible)
+	Selftest.check("ads predicate releases social surfaces", g._modal_open_for_ads() == base)
 
 
 static func _thread(g: Game) -> void:
@@ -174,12 +272,45 @@ static func _thread(g: Game) -> void:
 		return
 	g._social._seed_demo()
 	ui.open(0)
+	# Task 5 Step: скролл списка сохраняется при уходе в ленту и восстанавливается
+	# после возврата. want == 42 отсекает clamp-ловушку: в headless нет кадров
+	# раскладки, диапазон прокрутки ScrollContainer не пересчитывается (ни resize,
+	# ни запрос min-size не помогают) и запись клампится в 0. Задаём ползунку
+	# рабочий диапазон — не меньше того, что посчитал бы кадр в живой игре (строки
+	# списка заведомо выше вьюпорта), — и только потом пишем позицию.
+	ui._list_scroll.get_v_scroll_bar().max_value = 300
+	ui._list_scroll.scroll_vertical = 42
+	var want: int = ui._list_scroll.scroll_vertical
 	ui._open_thread("dev-b")
 	Selftest.check("thread opens", ui._peer == "dev-b")
+	Selftest.check("list scroll captured on open", want == 42 and ui._saved_scroll == want)
+	# Офлайн-плашка Task 5: в ST Net недоступен → «Мир не на связи» видима в ленте.
+	var banner_seen := false
+	for n in ui._body.find_children("*", "Label", true, false):
+		if String(n.text) == "Мир не на связи":
+			banner_seen = true
+	Selftest.check("offline banner visible in thread", banner_seen)
 	Selftest.check("thread has bubbles", ui._body.find_child("Bubble_0", true, false) != null
 		and ui._body.find_child("Bubble_2", true, false) != null)
+	# Возврат перестраивает список: _close_thread восстанавливает позицию на
+	# свежем ScrollContainer. Без кадров раскладки его ползунок имеет range 0
+	# и запись клампится, а единственный синхронный пересчёт — вход в дерево —
+	# как раз обнуляет range. Поэтому раздаём диапазон в момент child_entered_tree
+	# и повторяем по ready (после него пересчётов больше нет): строка
+	# восстановления пишется в живой range. Убери её из _close_thread — value
+	# останется 0 и кейс «thread closes to list» покраснеет, тавтологии 0==0 нет.
+	var give_range := func(sc: ScrollContainer) -> void:
+		sc.get_v_scroll_bar().max_value = 300
+	var on_child := func(n: Node) -> void:
+		var sc := n as ScrollContainer
+		if sc != null:
+			give_range.call(sc)
+			sc.ready.connect(func() -> void: give_range.call(sc))
+	ui._body.child_entered_tree.connect(on_child)
 	ui._close_thread()
-	Selftest.check("thread closes to list", ui._peer == "")
+	ui._body.child_entered_tree.disconnect(on_child)
+	Selftest.check("thread closes to list", ui._peer == ""
+		and ui._list_scroll.scroll_vertical == ui._saved_scroll)
 	ui._open_thread(Social.SPIRIT_DEVICE)
 	Selftest.check("spirit has no input", ui._body.find_child("SpiritNoInput", true, false) != null
 		and ui._body.find_child("ThreadInput", true, false) == null)
@@ -201,6 +332,39 @@ static func _confirm(g: Game) -> void:
 	Selftest.check("confirm honest copy", body != null
 		and String(body.text).contains("Николя")
 		and String(body.text).contains("будет удалена у вас обоих"))
+	# Task 6 Step: «Удалить из друзей» кликом шлёт Net.friend_remove (в ST —
+	# offline-результат, не краш) и закрывает подтверждение; после применения
+	# нового инбокса без dev-b строка и бейдж исчезают в отрисованном списке.
+	# Мутации: снять Net.friend_remove в обработчике кнопки, снять _confirm_close
+	# после pick, не обновлять список после on_inbox.
+	var remove_btn: Button = null
+	for n in ui._confirm.find_children("*", "Button", true, false):
+		if n is Button and String(n.text) == "Удалить из друзей":
+			remove_btn = n
+	if remove_btn == null:
+		Selftest.check("remove button found", false)
+		ui.close()
+		return
+	var fired := {"n": 0}
+	var cb := func(_r: Dictionary) -> void: fired["n"] = int(fired["n"]) + 1
+	Net.friend_remove_result.connect(cb)
+	remove_btn.pressed.emit()
+	if Net.friend_remove_result.is_connected(cb):
+		Net.friend_remove_result.disconnect(cb)
+	Selftest.check("remove click sends friend_remove", int(fired["n"]) == 1)
+	Selftest.check("confirm closes after remove pick", not ui._confirm.visible)
+	g._social.on_inbox({"ok": true, "friends": [
+		{"device_id": "npc-spirit", "nick": "Светик", "unread": 0, "avatar": {},
+			"last_seen": "", "last_msg_preview": ""},
+		{"device_id": "dev-c", "nick": "Аня", "unread": 0, "avatar": {},
+			"last_seen": "", "last_msg_preview": ""}],
+		"incoming": [], "outgoing": [], "unread_total": 0, "requests_total": 0})
+	ui._refresh_list()
+	Selftest.check("removed friend row disappears",
+		ui._body.find_children("FriendRow_dev-b", "", true, false).is_empty()
+		and ui._body.find_children("FriendRow_*", "", true, false).size() == 2)
+	g._engine._refresh_header()
+	Selftest.check("badge clears after inbox applied", g._social_btn.text == "Друзья")
 	ui._confirm_close()
 	ui.close()
 
@@ -211,3 +375,39 @@ static func _search_helpers(g: Game) -> void:
 	Selftest.check("friend state text", SocialUI._friend_state_text("Николя", s) == "в друзьях"
 		and SocialUI._friend_state_text("Мирра", s) == "заявка отправлена"
 		and SocialUI._friend_state_text("Некто", s) == "в друзья")
+
+
+static func _send_failures(g: Game) -> void:
+	# F3/F4 (мутационно-реактивные): снять ветку race_lost в _detail_text —
+	# краснеет 1-й кейс; снять offline-ветку или type-guard detail в
+	# Social.on_send — краснеют «offline notice»/«unmapped copy» (422-список
+	# иначе падает на String-параметр show_send_error, pending-пузырёк исчезает
+	# молча). Опасные результаты шём через Net.signal-эмиссию: runtime-ошибка
+	# внутри коннекта не рвёт кадр сюиты (Signal::emit — C++-граница), проверки
+	# ниже исполняются честно даже при откате фикса. В ST main.gd держит
+	# социал-коннекты за гейтом _net_enabled = not _selftest (main.gd:604),
+	# поэтому обработчик подключаем временно сами — ровно как рантайм
+	# (main.gd:641) — и снимаем после проверок. Пир dev-x не заведён в
+	# threads — thread() остаётся видимостью optimistic-хвоста.
+	Selftest.check("race_lost copy", SocialUI._detail_text("race_lost")
+		== "Заявка не прошла, попробуй ещё раз.")
+	var ui = g.get("_social_ui")
+	if ui == null or ui._err_line == null:
+		Selftest.check("send failure feedback wired", false)
+		return
+	if not Net.message_send_result.is_connected(g._social.on_send):
+		Net.message_send_result.connect(g._social.on_send)
+	g._social.set_awaiting_peer("dev-x")
+	g._social.optimistic_send("dev-x", "горстка эфира")
+	Net.message_send_result.emit({"ok": false, "offline": true})
+	Selftest.check("offline refuse shows offline notice",
+		ui._err_line.text == "Мир не на связи")
+	Selftest.check("offline refuse rolls back pending", g._social.thread("dev-x").is_empty())
+	g._social.optimistic_send("dev-x", "вторая горстка")
+	Net.message_send_result.emit({"ok": false, "detail": [{"loc": ["body"]}]})
+	Selftest.check("422 list detail maps to unmapped copy",
+		ui._err_line.text == "Сервер не понял запрос.")
+	Selftest.check("422 refuse rolls back pending", g._social.thread("dev-x").is_empty())
+	if Net.message_send_result.is_connected(g._social.on_send):
+		Net.message_send_result.disconnect(g._social.on_send)
+	g._social.set_awaiting_peer("")

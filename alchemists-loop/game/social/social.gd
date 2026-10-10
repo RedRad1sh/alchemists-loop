@@ -152,7 +152,17 @@ func on_send(result: Dictionary) -> void:
 	if peer != "":
 		optimistic.erase(peer)
 		if g._social_ui != null:
-			g._social_ui.show_send_error(result.get("detail", ""))
+			# F4: detail нетипизирован — при 422 сервер шлёт СПИСОК, в String-
+			# параметр show_send_error его не гоним (паттерн main.gd
+			# `_on_friend_respond`); при отсутствии detail (offline-отказ)
+			# молча исчезать pending-пузырьку не даём — показываем офлайн-текст.
+			var detail = result.get("detail", "")
+			if detail is String and detail != "":
+				g._social_ui.show_send_error(detail)
+			elif detail is String and result.get("offline", false) == true:
+				g._social_ui.show_send_error("offline")
+			else:
+				g._social_ui.show_send_error("unmapped")
 
 func send_message(peer: String, body: String) -> void:
 	set_awaiting_peer(peer)

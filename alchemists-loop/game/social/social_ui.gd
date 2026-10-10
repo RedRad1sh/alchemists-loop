@@ -132,16 +132,23 @@ static func _detail_text(code: String) -> String:
 		"npc": return SPIRIT_INPUT_HINT + "."
 		"bad_device_id": return "Странное имя устройства."
 		"request_not_found": return "Этой заявки уже нет."
+		"race_lost": return "Заявка не прошла, попробуй ещё раз."
 		"not_registered": return "Профиль ещё не зарегистрирован."
 		"missing_peer": return "Не выбран собеседник."
+		"offline": return "Мир не на связи"
 		"": return ""
 	return "Сервер не понял запрос."
 
 func _refresh_list() -> void:
 	if _body == null:
 		return
+	# F1: нажатая кнопка/строка зовёт перестройку из-под собственного сигнала —
+	# мгновенный free() убивает эмиттера посреди emission («freed while emitting»,
+	# рантайм валится). Снимаем с родителя сразу (имя свободно для нового узла в
+	# том же кадре), объект доживает до конца кадра.
 	for child in _body.get_children():
-		child.free()
+		_body.remove_child(child)
+		child.queue_free()
 	_search_card = null
 	var seg := HBoxContainer.new()
 	seg.name = "SocialSegments"
@@ -366,8 +373,11 @@ func _open_thread(peer: String) -> void:
 	_build_thread()
 
 func _build_thread() -> void:
+	# F1: тот же приём, что в _refresh_list — строка списка может открыть ленту
+	# из своего gui_input, освобождать её мгновенно нельзя.
 	for child in _body.get_children():
-		child.free()
+		_body.remove_child(child)
+		child.queue_free()
 	var head := HBoxContainer.new()
 	head.name = "ThreadHeader"
 	var back := g._small_button("Назад", Vector2(96, 34), 1)
@@ -425,8 +435,11 @@ func _build_thread() -> void:
 func _rebuild_bubbles() -> void:
 	if _thread_col == null:
 		return
+	# F1: пересборка пузырей идёт из signal-колбэков (on_messages/on_send),
+	# мгновенный free() недопустим — см. _refresh_list.
 	for child in _thread_col.get_children():
-		child.free()
+		_thread_col.remove_child(child)
+		child.queue_free()
 	var previous_day := ""
 	var index := 0
 	for message in g._social.thread(_peer):
@@ -486,10 +499,10 @@ func _open_confirm(peer: String) -> void:
 		_confirm.z_index = 21
 		_confirm.add_to_group("modal_ui")
 		_screen.add_child(_confirm)
-	var old := _confirm.get_node_or_null("ConfirmDim")
-	if old != null:
-		old.queue_free()
+	# F5: одно удаление вместо дубля (ConfirmDim снимался дважды); снятие с
+	# родителя сразу освобождает имена для новых узлов в том же кадре.
 	for child in _confirm.get_children():
+		_confirm.remove_child(child)
 		child.queue_free()
 	var dim := ColorRect.new()
 	dim.name = "ConfirmDim"
