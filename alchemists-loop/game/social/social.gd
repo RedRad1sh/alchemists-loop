@@ -140,6 +140,10 @@ func on_send(result: Dictionary) -> void:
 	# не доставлен, клиент обязан это показать честной лентой (урок Fix #3).
 	var peer := _awaiting_peer
 	if result.get("ok", false) == true:
+		# Блуждающий ok без ожидающего пира: не дёргаем Net.messages(dev,"",0)
+		# и не троим ленты — тот же guard, что в ветке отказа ниже.
+		if peer == "":
+			return
 		optimistic.erase(peer)
 		load_thread(peer)          # добрать серверный id/sent_at
 		if g._social_ui != null and g._social_ui.visible_thread() == peer:
