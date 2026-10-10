@@ -14,6 +14,10 @@ static func run(g: Game) -> void:
 	_cache(g)
 	_save_keys(g)
 	_wiring(g)
+	_screen(g)
+	_thread(g)
+	_confirm(g)
+	_search_helpers(g)
 
 static func _net_requests(_g: Game) -> void:
 	# вызов реальных методов: в ST Net синхронно сливает очередь в offline,
@@ -145,3 +149,65 @@ static func _wiring(g: Game) -> void:
 	g._social.on_inbox({"ok": true, "friends": [], "incoming": [],
 		"outgoing": [], "unread_total": 0, "requests_total": 0})
 	g._engine._refresh_header()
+
+
+static func _screen(g: Game) -> void:
+	var ui = g.get("_social_ui")
+	Selftest.check("social screen built", ui != null and ui._screen != null)
+	if ui == null or ui._screen == null:
+		return
+	Selftest.check("social screen hidden", not ui._screen.visible)
+	Selftest.check("social screen z20 group", ui._screen.z_index == 20
+		and ui._screen.is_in_group("modal_ui"))
+	g._social._seed_demo()
+	ui.open(0)
+	Selftest.check("friends segment", ui._tab == 0 and ui._body != null)
+	ui.open(1)
+	Selftest.check("requests segment", ui._tab == 1 and ui._body != null)
+	ui.close()
+
+
+static func _thread(g: Game) -> void:
+	var ui = g.get("_social_ui")
+	if ui == null:
+		Selftest.check("social thread available", false)
+		return
+	g._social._seed_demo()
+	ui.open(0)
+	ui._open_thread("dev-b")
+	Selftest.check("thread opens", ui._peer == "dev-b")
+	Selftest.check("thread has bubbles", ui._body.find_child("Bubble_0", true, false) != null
+		and ui._body.find_child("Bubble_2", true, false) != null)
+	ui._close_thread()
+	Selftest.check("thread closes to list", ui._peer == "")
+	ui._open_thread(Social.SPIRIT_DEVICE)
+	Selftest.check("spirit has no input", ui._body.find_child("SpiritNoInput", true, false) != null
+		and ui._body.find_child("ThreadInput", true, false) == null)
+	ui.close()
+
+
+static func _confirm(g: Game) -> void:
+	var ui = g.get("_social_ui")
+	if ui == null:
+		Selftest.check("social confirm available", false)
+		return
+	g._social._seed_demo()
+	ui.open(0)
+	ui._open_confirm("dev-b")
+	var body: Label = null
+	if ui._confirm != null:
+		body = ui._confirm.find_child("ConfirmBody", true, false) as Label
+	Selftest.check("confirm z21", ui._confirm != null and ui._confirm.z_index == 21)
+	Selftest.check("confirm honest copy", body != null
+		and String(body.text).contains("Николя")
+		and String(body.text).contains("будет удалена у вас обоих"))
+	ui._confirm_close()
+	ui.close()
+
+
+static func _search_helpers(g: Game) -> void:
+	var s := Social.new(g)
+	s._seed_demo()
+	Selftest.check("friend state text", SocialUI._friend_state_text("Николя", s) == "в друзьях"
+		and SocialUI._friend_state_text("Мирра", s) == "заявка отправлена"
+		and SocialUI._friend_state_text("Некто", s) == "в друзья")

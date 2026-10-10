@@ -141,6 +141,18 @@ func _refresh_rating() -> void:
 	if _net_enabled:
 		Net.rating(_device_id)
 
+## R1: SocialUI может переиспользовать публичные строки уже загруженного рейтинга.
+## Кэш не меняет порядок и не раскрывает новые данные — это только маленький
+## ник-индекс поверх существующего ответа /api/rating.
+func social_rating_cache_has(nick: String) -> bool:
+	return not social_rating_row_by_nick(nick).is_empty()
+
+func social_rating_row_by_nick(nick: String) -> Dictionary:
+	for raw in _rating_cache.get("rows", []):
+		if raw is Dictionary and String(raw.get("nick", "")) == nick:
+			return raw
+	return {}
+
 
 func _on_net_rating_result(result: Dictionary) -> void:
 	if _rating_list == null:

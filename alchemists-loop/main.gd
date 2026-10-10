@@ -437,9 +437,7 @@ var _feed_list: VBoxContainer = null
 
 var _spirit: Spirit  # Светик (R9)
 var _social: Social  # S1 друзья: кэш инбокса, ленты, optimistic (game/social/social.gd)
-# SocialUI появится в Task 4-6; класс ещё не существует, поэтому поле без типа —
-# типизированная декларация на несуществующий class_name дала бы Parse Error.
-var _social_ui = null
+var _social_ui: SocialUI = null
 var _social_btn: Button  # S1: кнопка «Друзья» в ether_row, бейдж правит core._refresh_header
 var _admin: AdminConsole  # админ-консоль (~)
 # Размер комплекта фиксирован генератором каталога (SET_SIZE = 25).
@@ -568,6 +566,14 @@ func _ready() -> void:
 			_demo_harness._action_experiment = true
 		elif a == "--action=brewprofile":
 			_demo_harness._action_brewprofile = true
+		elif a == "--action=social":
+			_demo_harness._action_social = true
+		elif a == "--action=social_requests":
+			_demo_harness._action_social_requests = true
+		elif a == "--action=social_thread":
+			_demo_harness._action_social_thread = true
+		elif a == "--action=social_confirm":
+			_demo_harness._action_social_confirm = true
 		elif a == "--action=circle":
 			_demo_harness._action_circle = true
 		elif a == "--action=sigilcoll":
@@ -634,6 +640,9 @@ func _ready() -> void:
 		Net.messages_result.connect(_social.on_messages)
 		Net.message_send_result.connect(_social.on_send)
 		Net.social_inbox_result.connect(_on_social_inbox_arrived)
+		Net.friend_respond_result.connect(_on_friend_respond)
+		Net.friend_remove_result.connect(_on_social_action_result)
+		Net.friend_block_result.connect(_on_social_action_result)
 	# План 2 (жила/круг): connects вне _net_enabled-блока — хендлеры сами
 	# гейтят offline/ok, а ST эмитит сигналы напрямую (suite_vein_circle).
 	Net.cycle_result.connect(_retention._on_net_cycle_result)
@@ -664,6 +673,14 @@ func _ready() -> void:
 		_shop._open_consent.call_deferred()
 	if _demo_harness._demo:
 		_demo_harness._apply_demo_state()
+	if _demo_harness._demo and (_demo_harness._action_social or _demo_harness._action_social_requests
+			or _demo_harness._action_social_thread or _demo_harness._action_social_confirm):
+		_social._seed_demo()
+		_social_ui.open(1 if _demo_harness._action_social_requests else 0)
+		if _demo_harness._action_social_thread:
+			_social_ui._open_thread("dev-b")
+		elif _demo_harness._action_social_confirm:
+			_social_ui._open_confirm("dev-b")
 	_engine._refresh()
 	if not _selftest and _engine._experiment_pending_pair.size() == 2:
 		_online._resume_pending_experiment.call_deferred()
@@ -906,6 +923,21 @@ func _open_social() -> void:
 	if _social_ui == null:
 		return
 	_social_ui.open(0)
+
+func _on_friend_respond(result: Dictionary) -> void:
+	if result.get("ok", false) == true:
+		_social.refresh()
+		_engine._refresh_header()
+		if _social_ui != null and _social_ui._screen != null and _social_ui._screen.visible:
+			_social_ui._refresh_list()
+	else:
+		var detail = result.get("detail", "")
+		if _social_ui != null:
+			_social_ui.show_send_error(detail if detail is String else "unmapped")
+
+func _on_social_action_result(result: Dictionary) -> void:
+	if _social_ui != null:
+		_social_ui._on_friend_action_result(result)
 
 # ---------- R14: см. game/demo.gd (616-620) ----------
 
@@ -1282,6 +1314,8 @@ func _build_ui() -> void:
 	_home._build_decor_popup()
 	_home._build_color_picker()
 	_home._build_house_popup()
+	_social_ui = SocialUI.new(self)
+	_social_ui.build()
 	# Событие мира — глобальный QTE поверх текущей вкладки, не кнопка в «Мире».
 	_online._build_event_qte()
 	# UX-слой онлайн-части (тосты + индикатор сети) — поверх страниц,
