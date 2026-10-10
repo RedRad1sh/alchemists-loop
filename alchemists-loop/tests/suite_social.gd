@@ -13,6 +13,7 @@ static func run(g: Game) -> void:
 	_pure_logic(g)
 	_cache(g)
 	_save_keys(g)
+	_wiring(g)
 
 static func _net_requests(_g: Game) -> void:
 	# вызов реальных методов: в ST Net синхронно сливает очередь в offline,
@@ -126,3 +127,21 @@ static func _save_keys(g: Game) -> void:
 	Selftest.check("legacy save ok", t.friends().is_empty())
 	t.from_save(data)
 	Selftest.check("roundtrip", t.unread_total() == 2)
+
+static func _wiring(g: Game) -> void:
+	# Мутации: убрать кнопку «Друзья» из ether_row, сузить её ниже 96,
+	# не звать _refresh_header после inbox (бейдж не отрендерится).
+	# Проверки экрана (z-группа, скрытость) — в сюите Task 4,SocialUI ещё нет.
+	# g.get() вместо g._social_btn: до реализации поля прямой доступ дал бы
+	# SCRIPT ERROR и молча сорвал бы прогон — а нам нужны честные FAIL-строки.
+	var b: Button = g.get("_social_btn")
+	Selftest.check("social button exists", b != null)
+	Selftest.check("button width holds badge", b != null and b.custom_minimum_size.x >= 96)
+	g._social.on_inbox({"ok": true, "friends": [], "incoming": [],
+		"outgoing": [], "unread_total": 2, "requests_total": 0})
+	g._engine._refresh_header()
+	Selftest.check("badge renders after inbox", b != null and b.text == "Друзья •2")
+	# Не оставляем мусор в живом кэше: ниже по прогону идут другие сюиты.
+	g._social.on_inbox({"ok": true, "friends": [], "incoming": [],
+		"outgoing": [], "unread_total": 0, "requests_total": 0})
+	g._engine._refresh_header()

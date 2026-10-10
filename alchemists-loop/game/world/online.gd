@@ -1699,7 +1699,8 @@ func _build_toast_stack() -> void:
 	_ux_layer.add_child(_toast_stack)
 
 
-func _toast(text: String, kind: int = NoticeKind.INFO, duration := 3.0) -> void:
+func _toast(text: String, kind: int = NoticeKind.INFO, duration := 3.0,
+		on_tap: Callable = Callable()) -> void:
 	if text.strip_edges() == "":
 		return
 	if _toast_stack == null:
@@ -1755,16 +1756,32 @@ func _toast(text: String, kind: int = NoticeKind.INFO, duration := 3.0) -> void:
 	tween.set_parallel(true)
 	tween.tween_property(panel, "modulate:a", 1.0, 0.18)
 	tween.tween_property(panel, "position:x", -10.0, 0.18).from(16.0)
-	var timer := g.get_tree().create_timer(duration)
-	timer.timeout.connect(func() -> void:
-		if not is_instance_valid(panel):
+	# Закрытие — единственная функция на два пути (таймер и тап). Флаг и саму
+	# лямбду объявляем до on_tap-обёртки: GDScript захватывает локальные по
+	# значению в момент создания лямбды. Флаг — в boxed Array: ссылка на
+	# массив общая, повторного фейда/queue_free не будет.
+	var dismissed := [false]
+	var dismiss := func() -> void:
+		if dismissed[0] or not is_instance_valid(panel):
 			return
+		dismissed[0] = true
 		var hide_tween := g.create_tween()
 		hide_tween.set_parallel(true)
 		hide_tween.tween_property(panel, "modulate:a", 0.0, 0.2)
 		hide_tween.tween_property(panel, "position:x", 20.0, 0.2)
 		hide_tween.chain().tween_callback(panel.queue_free)
-	, CONNECT_ONE_SHOT)
+	if on_tap.is_valid():
+		# Кликабельный тост: панель ловит мышь (стек остаётся IGNORE), левый тап
+		# зовит on_tap и закрывает тост тем же путём, что и таймер.
+		panel.mouse_filter = Control.MOUSE_FILTER_STOP
+		panel.gui_input.connect(func(ev: InputEvent) -> void:
+			if ev is InputEventMouseButton and ev.pressed and (
+					ev as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+				on_tap.call()
+				dismiss.call()
+		)
+	var timer := g.get_tree().create_timer(duration)
+	timer.timeout.connect(dismiss, CONNECT_ONE_SHOT)
 
 
 static func _find_toast_label(panel: PanelContainer) -> Label:

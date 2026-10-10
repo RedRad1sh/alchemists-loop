@@ -440,6 +440,7 @@ var _social: Social  # S1 друзья: кэш инбокса, ленты, optim
 # SocialUI появится в Task 4-6; класс ещё не существует, поэтому поле без типа —
 # типизированная декларация на несуществующий class_name дала бы Parse Error.
 var _social_ui = null
+var _social_btn: Button  # S1: кнопка «Друзья» в ether_row, бейдж правит core._refresh_header
 var _admin: AdminConsole  # админ-консоль (~)
 # Размер комплекта фиксирован генератором каталога (SET_SIZE = 25).
 const SIGIL_SET_SIZE := 25
@@ -627,6 +628,12 @@ func _ready() -> void:
 		# вайп). В селфтесте блок не выполняется: _net_enabled = not _selftest.
 		Net.account_delete_result.connect(_online._on_account_delete_result)
 		_online._retry_pending_account_delete()
+		# S1 социалка: результаты Net маршрутизируем в Social; social_inbox_result
+		# дополнительно идёт в хук шапки/тоста (оба коннекта на один сигнал).
+		Net.social_inbox_result.connect(_social.on_inbox)
+		Net.messages_result.connect(_social.on_messages)
+		Net.message_send_result.connect(_social.on_send)
+		Net.social_inbox_result.connect(_on_social_inbox_arrived)
 	# План 2 (жила/круг): connects вне _net_enabled-блока — хендлеры сами
 	# гейтят offline/ok, а ST эмитит сигналы напрямую (suite_vein_circle).
 	Net.cycle_result.connect(_retention._on_net_cycle_result)
@@ -664,6 +671,9 @@ func _ready() -> void:
 		_retention._circle_track_visit()
 	if not _selftest and _online._net_enabled:
 		Net.me(_online._net_nick, _online._device_id)
+	if not _selftest and _online._net_enabled:
+		# S1: пулл инбокса при входе — сразу после me; до ответа шапку держит кэш.
+		Net.social_inbox(_online._device_id)
 	if not _selftest:
 		_spirit._companion_hello.call_deferred()
 	if _demo_harness._shot_tab >= 0:
@@ -879,6 +889,23 @@ func _ready() -> void:
 	else:
 		# Вход в игру: приветственный звук (не в selftest-прогоне).
 		Sfx.game_start()
+
+# ---------- S1 социалка: хук после инбокса и открытие экрана ----------
+
+func _on_social_inbox_arrived(result: Dictionary) -> void:
+	if result.get("ok", false) != true:
+		return
+	_engine._refresh_header()
+	if _social.should_show_toast():
+		_social.mark_toast_shown()
+		_online._toast("Тебе написали. Загляни к друзьям.",
+			Online.NoticeKind.INFO, 6.0, _open_social)
+
+func _open_social() -> void:
+	# SocialUI приедет в Task 4; до этого клик по кнопке/тосту не должен падать.
+	if _social_ui == null:
+		return
+	_social_ui.open(0)
 
 # ---------- R14: см. game/demo.gd (616-620) ----------
 
@@ -1192,6 +1219,11 @@ func _build_ui() -> void:
 	market_btn.tooltip_text = "Покупки, награды за просмотр и приватность"
 	market_btn.pressed.connect(_shop.open)
 	ether_row.add_child(market_btn)
+	var friends_btn := _small_button("Друзья", Vector2(96, 34), 2)
+	friends_btn.tooltip_text = "Друзья, заявки и личные сообщения"
+	friends_btn.pressed.connect(_open_social)
+	ether_row.add_child(friends_btn)
+	_social_btn = friends_btn
 	_engine._collection_label = _label("", 14)
 	_engine._collection_label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	root.add_child(_engine._collection_label)
