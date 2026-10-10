@@ -199,17 +199,22 @@ per-player seed = `sha256(device_id#day)[:8]`.
 ### Социальные интеракции S1 (друзья и переписка)
 
 Ключ всех сущностей — `device_id`; ник только витрина и вход поиска
-(`target_nick` в `POST /api/friend/request`, ник UNIQUE). Отсутствие
-`device_id` даёт 422 валидации FastAPI, прочие отказы — коды из `detail`
-(латинский snake_case, числа-лимиты в `detail` не кладутся).
+(`target_nick` в `POST /api/friend/request`, ник UNIQUE). Прочие отказы — коды
+из `detail` (латинский snake_case, числа-лимиты в `detail` не кладутся).
+
+Отсутствие/некорректный `device_id` разбирается в двух местах: отсутствие или
+слишком короткое поле — 422 валидации FastAPI (`detail` там — список объектов
+ошибок, не строка); формально прошедшее валидацию, но пустое после trim или
+содержащее `|` — 400 `bad_device_id` из хендлера (`_social_id`, `min_length`
+видно сырую строку до trim).
 
 | Метод | Вход | Успех | Ошибки |
 |---|---|---|---|
-| `POST /api/friend/request` | `{device_id, target_nick}` | `{ok, state, peer}` | 400 `target_not_found`/`bot`/`self`; 403 `blocked`; 409 `already_friends`; 429 `friend_limit`/`pending_limit` |
+| `POST /api/friend/request` | `{device_id, target_nick}` | `{ok, state, peer}` | 400 `target_not_found`/`bot`/`self`; 403 `blocked`; 409 `already_friends`; 429 `friend_limit`/`pending_limit`; 503 `race_lost` |
 | `POST /api/friend/respond` | `{device_id, requester_device, accept}` | `{ok, accepted, peer}` | 400 `self`; 403 `blocked`; 404 `request_not_found`; 429 `friend_limit` |
 | `POST /api/friend/remove` | `{device_id, peer_device}` | `{ok}` | 400 `npc`; 404 `not_friends` |
-| `POST /api/friend/block` | `{device_id, peer_device}` | `{ok}` | 400 `npc`/`self` |
-| `POST /api/friend/unblock` | `{device_id, peer_device}` | `{ok}` | — |
+| `POST /api/friend/block` | `{device_id, target_device}` | `{ok}` | 400 `npc`/`self` |
+| `POST /api/friend/unblock` | `{device_id, target_device}` | `{ok}` | — |
 | `GET /api/social/inbox` | `device_id` | `{ok, friends, incoming, outgoing, unread_total, requests_total, friend_limit}` | 404 `not_registered` |
 | `GET /api/messages` | `device_id, peer_device, since_id, limit` | `{ok, messages:[{id, from_me, body, sent_at}]}` | 400 `missing_peer`; 403 `blocked`; 404 `not_friends` |
 | `POST /api/message/send` | `{device_id, peer_device, body}` | `{ok, id, sent_at}` | 400 `empty`/`too_long`; 403 `blocked`/`npc`; 404 `not_friends`; 429 `daily_limit` |
