@@ -84,6 +84,7 @@ static func _pure_logic(g: Game) -> void:
 	Selftest.check("seen empty", Social.last_seen_text("", "2026-10-10") == "")
 	Selftest.check("preview short", Social.preview_cut("привет", 60) == "привет")
 	Selftest.check("preview cut word", Social.preview_cut("a b c d e f g h i j k l m n o p q r s t u v w x y z a b c d e f g h i j k l m n o p q r s t u v w x y z", 60).length() <= 60)
+	Selftest.check("preview no-space fits", Social.preview_cut("х".repeat(80), 60).length() <= 60)
 
 static func _cache(g: Game) -> void:
 	# Мутации: ok=false затирает кэш; absent keys падают; 422-список роняет

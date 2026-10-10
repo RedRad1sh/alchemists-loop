@@ -63,9 +63,12 @@ static func preview_cut(body: String, max_len: int) -> String:
 	body = body.replace("\n", " ")
 	if body.length() <= max_len:
 		return body
-	var cut := body.substr(0, max_len)
+	# Многоточие учитывается внутри max_len: итог всегда ≤ max_len даже при
+	# жёсткой резке без пробела; sp >= 0 (а не > 0) — ведущий пробел тоже
+	# схлопывается в «…», а не даёт результат длины max_len+1.
+	var cut := body.substr(0, max_len - 1)
 	var sp := cut.rfind(" ")
-	if sp > 0:
+	if sp >= 0:
 		cut = cut.substr(0, sp)
 	return cut + "…"
 
