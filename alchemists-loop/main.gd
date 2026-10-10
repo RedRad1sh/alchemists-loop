@@ -436,6 +436,10 @@ var _set_rows: VBoxContainer = null
 var _feed_list: VBoxContainer = null
 
 var _spirit: Spirit  # Светик (R9)
+var _social: Social  # S1 друзья: кэш инбокса, ленты, optimistic (game/social/social.gd)
+# SocialUI появится в Task 4-6; класс ещё не существует, поэтому поле без типа —
+# типизированная декларация на несуществующий class_name дала бы Parse Error.
+var _social_ui = null
 var _admin: AdminConsole  # админ-консоль (~)
 # Размер комплекта фиксирован генератором каталога (SET_SIZE = 25).
 const SIGIL_SET_SIZE := 25
@@ -478,6 +482,7 @@ func _ready() -> void:
 	_resonance = Resonance.new(self)
 	_retort = Retort.new(self)
 	_home = Home.new(self)
+	_social = Social.new(self)  # S1: до _saves/сборки UI; кнопки и коннекты — Task 3
 	_shop = Shop.new(self)
 	_online = Online.new(self)
 	_spirit = Spirit.new(self)

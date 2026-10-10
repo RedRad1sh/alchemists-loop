@@ -10,6 +10,9 @@ class_name SuiteSocial
 static func run(g: Game) -> void:
 	_net_requests(g)
 	_dispatch_emits(g)
+	_pure_logic(g)
+	_cache(g)
+	_save_keys(g)
 
 static func _net_requests(_g: Game) -> void:
 	# вызов реальных методов: в ST Net синхронно сливает очередь в offline,
@@ -68,3 +71,57 @@ static func _dispatch_emits(_g: Game) -> void:
 	Selftest.check("dispatch emits friend_remove", int(counts.get("friend_remove", 0)) == 1)
 	Selftest.check("dispatch emits friend_block", int(counts.get("friend_block", 0)) == 1)
 	Selftest.check("dispatch emits friend_unblock", int(counts.get("friend_unblock", 0)) == 1)
+
+static func _pure_logic(g: Game) -> void:
+	# Мутации: сменить порог «99+», сломать «вчера», обрезать пословно не по
+	# пробелу, применить not-ok инбокс поверх кэша, не откатить optimistic.
+	Selftest.check("badge 0 -> plain", Social.badge_for(0) == "Друзья")
+	Selftest.check("badge 2 -> dot", Social.badge_for(2) == "Друзья •2")
+	Selftest.check("badge 150 -> cap", Social.badge_for(150) == "Друзья •99+")
+	Selftest.check("seen today", Social.last_seen_text("2026-10-10T09:00:00", "2026-10-10") == "был(а) сегодня")
+	Selftest.check("seen yesterday", Social.last_seen_text("2026-10-09T23:59:59", "2026-10-10") == "был(а) вчера")
+	Selftest.check("seen 3 days", Social.last_seen_text("2026-10-07T09:00:00", "2026-10-10") == "был(а) 3 дня назад")
+	Selftest.check("seen empty", Social.last_seen_text("", "2026-10-10") == "")
+	Selftest.check("preview short", Social.preview_cut("привет", 60) == "привет")
+	Selftest.check("preview cut word", Social.preview_cut("a b c d e f g h i j k l m n o p q r s t u v w x y z a b c d e f g h i j k l m n o p q r s t u v w x y z", 60).length() <= 60)
+
+static func _cache(g: Game) -> void:
+	# Мутации: ok=false затирает кэш; absent keys падают; 422-список роняет
+	# разбор; optimistic не убирается при отказе.
+	var s := Social.new(g)
+	s.on_inbox({"ok": false, "detail": "not_registered"})
+	Selftest.check("not ok keeps cache empty", s.friends().is_empty())
+	s.on_inbox({"ok": true, "friends": [
+		{"device_id": "npc-spirit", "nick": "Светик", "unread": 1,
+		 "last_msg_preview": "Здравствуй", "last_msg_at": "2026-10-10T08:00:00",
+		 "last_seen": "", "avatar": {}},
+		{"device_id": "dev-b", "nick": "Николя", "unread": 0,
+		 "last_msg_preview": "", "last_msg_at": "", "last_seen": "2026-10-09T12:00:00",
+		 "avatar": {}}],
+		"incoming": [{"device_id": "dev-c", "nick": "Аня", "avatar": {},
+			"last_seen": "", "requested_at": "2026-10-10T07:00:00"}],
+		"outgoing": [{"nick": "Варя", "requested_at": ""}],
+		"unread_total": 1, "requests_total": 1, "friend_limit": 50})
+	Selftest.check("inbox applied", s.friends().size() == 2 and s.unread_total() == 1)
+	Selftest.check("friend by nick", s.friend_by_nick("Николя").get("device_id", "") == "dev-b")
+	Selftest.check("outgoing by nick", s.is_outgoing_to("Варя"))
+	s.set_awaiting_peer("dev-b")
+	s.on_send({"ok": false, "offline": true})
+	s.optimistic_send("dev-b", "горстка")
+	Selftest.check("optimistic visible", s.thread("dev-b").size() == 1
+		and s.thread("dev-b")[0].get("pending", false))
+	s.on_send({"ok": false, "detail": "daily_limit"})
+	Selftest.check("optimistic rolled back", s.thread("dev-b").is_empty())
+
+static func _save_keys(g: Game) -> void:
+	# Мутации: key переименован; старый сейв без ключей роняет загрузку.
+	var s := Social.new(g)
+	s.on_inbox({"ok": true, "friends": [{"device_id": "d", "nick": "N", "unread": 2}],
+		"incoming": [], "outgoing": [], "unread_total": 2, "requests_total": 0})
+	var data := s.to_save()
+	Selftest.check("save shape", data.has("social_cache") and data.has("social_last_read"))
+	var t := Social.new(g)
+	t.from_save({})                       # старый сейв — не падает
+	Selftest.check("legacy save ok", t.friends().is_empty())
+	t.from_save(data)
+	Selftest.check("roundtrip", t.unread_total() == 2)
