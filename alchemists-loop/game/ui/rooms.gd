@@ -90,9 +90,11 @@ func build(game: Game, page: VBoxContainer) -> void:
 	_deck_btn = SceneProps.make_prop("deck", 56, "Аркан Сигилов: ежедневные крафты")
 	_deck_btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	_deck_btn.offset_left = 8
-	_deck_btn.offset_top = -72
 	_deck_btn.offset_right = 64
-	_deck_btn.offset_bottom = -16
+	# R17-fix: та же высота, что у карточки круга, плюс зазор над ней — иначе
+	# BrewBar (120px) перекрывает колоду и её тап-зону.
+	_deck_btn.offset_top = -238
+	_deck_btn.offset_bottom = -182
 	_deck_btn.pressed.connect(func() -> void: g._sigil_ui._open_sigil_modal())
 	_host.add_child(_deck_btn)
 	_scroll_btn = SceneProps.make_prop("scroll", 56, "Заказы гильдии")
@@ -134,12 +136,21 @@ func build(game: Game, page: VBoxContainer) -> void:
 	prize.add_theme_color_override("font_color", UIStyle.GOLD)
 	prize.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	chbox.add_child(prize)
-	_circle_card.pressed.connect(func() -> void:
-		g._sheet.open("circle", "Дневной круг"))
+	_circle_card.pressed.connect(_open_circle)
 	_host.add_child(_circle_card)
 	_refresh_chrome()
 	refresh_unlocks()
 	refresh_circle_card()
+
+
+func _open_circle() -> void:
+	# Карта видна всегда (peek), но страница «Круг» существует только после
+	# разблокировки: без гейта тап молча не открывал ничего.
+	if not g._engine._mode_unlocked("circle"):
+		g._online._set_status(g._pages._mode_hint("circle"))
+		Sfx.error()
+		return
+	g._sheet.open("circle", "Дневной круг")
 
 
 func _make_arrow(right: bool) -> Button:
@@ -288,9 +299,24 @@ func _on_gui_input(event: InputEvent) -> void:
 			if mb.pressed:
 				_press_x = mb.position.x
 			else:
-				var dx := mb.position.x - _press_x
-				_press_x = -1.0
-				if dx < -60.0:
-					set_room(_room_idx + 1)
-				elif dx > 60.0:
-					set_room(_room_idx - 1)
+				_end_swipe(mb.position.x)
+	elif event is InputEventScreenTouch:
+		# Сенсор: на телефоне свайп между комнатами приходил только как
+		# InputEventScreenTouch — с мышью карусель не листалась.
+		var st := event as InputEventScreenTouch
+		if st.pressed:
+			_press_x = st.position.x
+		else:
+			_end_swipe(st.position.x)
+
+
+func _end_swipe(release_x: float) -> void:
+	if _press_x < 0.0:
+		# релиз без предыдущего нажатия (эмуляция мыши из тач-события) — не листаем
+		return
+	var dx := release_x - _press_x
+	_press_x = -1.0
+	if dx < -60.0:
+		set_room(_room_idx + 1)
+	elif dx > 60.0:
+		set_room(_room_idx - 1)

@@ -49,9 +49,10 @@ func build(game: Game) -> void:
 	_title.add_theme_color_override("font_color", UIStyle.GOLD)
 	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(_title)
-	var close := g._small_button("Закрыть", Vector2(110, 40))
-	close.pressed.connect(func() -> void: close())
-	head.add_child(close)
+	var close_btn := g._small_button("Закрыть", Vector2(110, 40))
+	close_btn.name = "SheetClose"
+	close_btn.pressed.connect(func() -> void: close())
+	head.add_child(close_btn)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED

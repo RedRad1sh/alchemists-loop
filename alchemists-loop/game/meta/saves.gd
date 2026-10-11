@@ -101,6 +101,7 @@ func _save_game() -> void:
 		"server_recipes": g._online._server_recipes,
 		"companion_met": g._spirit._companion_met,
 		"companion_affinity": g._spirit._companion_affinity,
+		"companion_pending_aff": g._spirit._companion_pending_aff,
 		"cosmetic_theme": g._home._cosmetic_theme,
 		"cosmetic_aura": g._home._cosmetic_aura,
 		"cosmetic_house": g._home._cosmetic_house,
@@ -312,6 +313,7 @@ func _load_game() -> void:
 	g._engine.sage_gold = maxi(0, int(data.get("sage_gold", 0)))
 	g._spirit._companion_met = bool(data.get("companion_met", false))
 	g._spirit._companion_affinity = maxi(0, int(data.get("companion_affinity", 0)))
+	g._spirit._companion_pending_aff = maxi(0, int(data.get("companion_pending_aff", 0)))
 	if data.get("cosmetic_theme") is String:
 		g._home._cosmetic_theme = String(data["cosmetic_theme"])
 	if data.get("cosmetic_aura") is String:

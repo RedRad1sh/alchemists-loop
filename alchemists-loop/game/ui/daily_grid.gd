@@ -32,7 +32,36 @@ func _today() -> String:
 
 
 func _yesterday() -> String:
-	return Time.get_date_string_from_unix_time(int(Time.get_unix_time_from_system()) - 86400)
+	# Вчерашний день — по той же локальной календарной базе, что и _today().
+	# Unix-арифметика (get_date_string_from_unix_time) даёт UTC: в часовой зоне
+	# дальше UTC+1 вчерашний локальный день не совпадал с сегодняшним, и стрик
+	# обнулялся при двух подряд дейликах.
+	var d := Time.get_date_dict_from_system(false)
+	return _prev_day(int(d["year"]), int(d["month"]), int(d["day"]))
+
+
+static func _prev_day(year: int, month: int, day: int) -> String:
+	var y := year
+	var m := month
+	var dd := day - 1
+	if dd == 0:
+		m -= 1
+		if m == 0:
+			m = 12
+			y -= 1
+		dd = _days_in_month(y, m)
+	return "%04d-%02d-%02d" % [y, m, dd]
+
+
+static func _days_in_month(year: int, month: int) -> int:
+	match month:
+		2:
+			if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0):
+				return 29
+			return 28
+		4, 6, 9, 11:
+			return 30
+	return 31
 
 
 func build(game: Game) -> void:
@@ -88,10 +117,11 @@ func build(game: Game) -> void:
 	_claim_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_claim_btn.pressed.connect(_on_claim)
 	col.add_child(_claim_btn)
-	var close := g._small_button("Закрыть", Vector2(120, 40))
-	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	close.pressed.connect(func() -> void: close())
-	col.add_child(close)
+	var close_btn := g._small_button("Закрыть", Vector2(120, 40))
+	close_btn.name = "DailyClose"
+	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close_btn.pressed.connect(func() -> void: close())
+	col.add_child(close_btn)
 
 
 func _reward_text(i: int) -> String:
@@ -138,6 +168,10 @@ func _refresh() -> void:
 		else:
 			sb = UIStyle.box(Color(0.06, 0.10, 0.15, 0.9), UIStyle.LINE, 12, 1)
 		cell.add_theme_stylebox_override("panel", sb)
+		if int((REWARDS[i] as Array)[2]) > 0 and not g._spirit._companion_unlocked:
+			cell.tooltip_text = "Светик ещё спит: дружба накопится и применится после пробуждения"
+		else:
+			cell.tooltip_text = ""
 	_claim_btn.disabled = claimed_today
 	_claim_btn.text = "Забрано ✓" if claimed_today else "Забрать"
 

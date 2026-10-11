@@ -1519,12 +1519,12 @@ func _on_tab_changed(index: int) -> void:
 		_bottom_nav.refresh(index)
 	if index == TAB_EXPERIMENT and _rooms != null:
 		_rooms.refresh_unlocks()
-	if index == 2:
+	if index == TAB_WORLD:
 		_refetch_world()
 		_resonance._fetch_echoes()
-	elif index == 4:
+	elif index == TAB_RATING:
 		_online._refresh_rating()
-	elif index == 5:
+	elif index == TAB_TOOLS:
 		_pages._ensure_modes()
 	# Единственная граница, где interstitial показывается: смена вкладки при
 	# полностью закрытых модалах, достроенном UI и незанятой варке/верстаке.
