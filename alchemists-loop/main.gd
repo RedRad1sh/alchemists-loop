@@ -574,6 +574,8 @@ func _ready() -> void:
 			_demo_harness._action_social_thread = true
 		elif a == "--action=social_confirm":
 			_demo_harness._action_social_confirm = true
+		elif a == "--action=social_search":
+			_demo_harness._action_social_search = true
 		elif a == "--action=circle":
 			_demo_harness._action_circle = true
 		elif a == "--action=sigilcoll":
@@ -641,6 +643,7 @@ func _ready() -> void:
 		Net.message_send_result.connect(_social.on_send)
 		Net.social_inbox_result.connect(_on_social_inbox_arrived)
 		Net.friend_respond_result.connect(_on_friend_respond)
+		Net.friend_request_result.connect(_on_friend_request_result)
 		Net.friend_remove_result.connect(_on_social_action_result)
 		Net.friend_block_result.connect(_on_social_action_result)
 	# План 2 (жила/круг): connects вне _net_enabled-блока — хендлеры сами
@@ -674,13 +677,26 @@ func _ready() -> void:
 	if _demo_harness._demo:
 		_demo_harness._apply_demo_state()
 	if _demo_harness._demo and (_demo_harness._action_social or _demo_harness._action_social_requests
-			or _demo_harness._action_social_thread or _demo_harness._action_social_confirm):
+			or _demo_harness._action_social_thread or _demo_harness._action_social_confirm
+			or _demo_harness._action_social_search):
 		_social._seed_demo()
+		if _demo_harness._action_social_search:
+			# R1: карточка поиска строится из уже кэшированных строк рейтинга —
+			# живого сервера в демо может не быть, поэтому строку «Николя» кладём
+			# в _rating_cache (то же поле, что наполняет _on_net_rating_result).
+			_online._rating_cache = {"rows": [
+				{"nick": "Николя", "rank": 2, "avatar": {},
+					"last_seen": "2026-10-10T07:10:00", "discoveries": 3,
+					"elements": 2, "points": 5, "house_built": true,
+					"house_guests": 1}]}
 		_social_ui.open(1 if _demo_harness._action_social_requests else 0)
 		if _demo_harness._action_social_thread:
 			_social_ui._open_thread("dev-b")
 		elif _demo_harness._action_social_confirm:
 			_social_ui._open_confirm("dev-b")
+		elif _demo_harness._action_social_search:
+			# приёмка задачи 7: карточка с кнопкой состояния из кэша друзей
+			_social_ui._search("Николя")
 	_engine._refresh()
 	if not _selftest and _engine._experiment_pending_pair.size() == 2:
 		_online._resume_pending_experiment.call_deferred()
@@ -938,6 +954,21 @@ func _on_friend_respond(result: Dictionary) -> void:
 func _on_social_action_result(result: Dictionary) -> void:
 	if _social_ui != null:
 		_social_ui._on_friend_action_result(result)
+
+func _on_friend_request_result(result: Dictionary) -> void:
+	# R8 (задача 7): единая точка отказа заявки «в друзья» — глобальный тост.
+	# Строкам рейтинга и карточке гостя свои err_line не нужны; bot/self/
+	# blocked/лимиты проходят через эту же ветку. detail нетипизирован: при
+	# 422 сервер шлёт СПИСОК, при офлайне ключа нет вовсе — тостим только по
+	# строковому коду (SocialUI._detail_text ждёт String). Успех — обновляем
+	# кэш (кнопки перерисуют состояние на ближайшей перестройке строк).
+	if result.get("ok", false) == true:
+		_social.refresh()
+		_engine._refresh_header()
+		return
+	var detail = result.get("detail")
+	if detail is String and detail != "":
+		_online._toast(SocialUI._detail_text(detail), Online.NoticeKind.WARNING)
 
 # ---------- R14: см. game/demo.gd (616-620) ----------
 

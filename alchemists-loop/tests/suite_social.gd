@@ -21,6 +21,7 @@ static func run(g: Game) -> void:
 	_confirm(g)
 	_search_helpers(g)
 	_send_failures(g)
+	_friend_buttons(g)
 
 static func _net_requests(_g: Game) -> void:
 	# вызов реальных методов: в ST Net синхронно сливает очередь в offline,
@@ -411,3 +412,114 @@ static func _send_failures(g: Game) -> void:
 	if Net.message_send_result.is_connected(g._social.on_send):
 		Net.message_send_result.disconnect(g._social.on_send)
 	g._social.set_awaiting_peer("")
+
+
+static func _friend_buttons(g: Game) -> void:
+	# Task 7: кнопки «в друзья» в строках рейтинга и карточке гостя + R8-тост.
+	# Мутации: не позвать SocialUI.attach в _render_rating_rows (краснеют
+	# «rating rows…»); не перестраивать строку гостей в _on_house_profile
+	# (краснеет «guest card…»); снять коннект/хендлер friend_request_result в
+	# main.gd (краснеют «R8…»); перепутать ветки _friend_state_text (краснеют
+	# текстовые проверки состояний); снять disabled/состояние в attach.
+	g._social._seed_demo()
+	# attach точечно: состояние из кэша по нику, ширина Vector2(110,30) (высоту
+	# _small_button клампит к 38 — сверяем только заказанную ширину), тап →
+	# Net.friend_request (в ST drainage-offline — эмиссия безопасна и ловится).
+	var row := HBoxContainer.new()
+	var fresh: Button = SocialUI.attach(g, row, "Некто")
+	Selftest.check("attach fresh: text/state/size", fresh != null and fresh.text == "в друзья"
+		and not fresh.disabled and fresh.custom_minimum_size.x == 110
+		and row.get_child_count() == 1)
+	var fr_fired := {"n": 0}
+	var fr_cb := func(_r: Dictionary) -> void: fr_fired["n"] = int(fr_fired["n"]) + 1
+	Net.friend_request_result.connect(fr_cb)
+	fresh.pressed.emit()
+	if Net.friend_request_result.is_connected(fr_cb):
+		Net.friend_request_result.disconnect(fr_cb)
+	Selftest.check("attach press sends friend_request", int(fr_fired["n"]) == 1)
+	var done: Button = SocialUI.attach(g, row, "Николя")
+	Selftest.check("attach friend: «в друзьях» disabled", done.text == "в друзьях" and done.disabled)
+	var sent: Button = SocialUI.attach(g, row, "Мирра")
+	Selftest.check("attach outgoing: «заявка отправлена» disabled",
+		sent.text == "заявка отправлена" and sent.disabled)
+	row.queue_free()
+	# Строки рейтинга: билдер _render_rating_rows зовёт attach(g, row, nick)
+	# после имени — состояние пересчитывается на каждой перерисовке вкладки.
+	if g._online._rating_list == null:
+		Selftest.check("rating rows available", false)
+	else:
+		g._online._render_rating_rows({"ok": true, "rows": [
+			{"rank": 1, "nick": "Николя", "discoveries": 3, "elements": 2, "points": 5},
+			{"rank": 2, "nick": "Мирра", "discoveries": 1, "elements": 1, "points": 2},
+			{"rank": 3, "nick": "Некто", "discoveries": 0, "elements": 0, "points": 0}]})
+		var texts: Array = []
+		for b in g._online._rating_list.find_children("*", "Button", true, false):
+			texts.append(String((b as Button).text))
+		Selftest.check("rating rows carry per-nick friend states",
+			texts.count("в друзьях") == 1 and texts.count("заявка отправлена") == 1
+			and texts.count("в друзья") == 1)
+		for c in g._online._rating_list.get_children():
+			g._online._rating_list.remove_child(c)
+			c.queue_free()
+	# Карточка гостя (home.gd, свой профиль house_visitors): ряд кнопок рядом со
+	# строкой гостей. get() — до реализации поля прямой g._home._guests_row дал бы
+	# ошибку компляции сюты вместо честного FAIL.
+	var grows: HBoxContainer = g._home.get("_guests_row")
+	if grows == null:
+		Selftest.check("guest friend row exists", false)
+	else:
+		var wk_old = g._home.get("house_gift_week")
+		var cnt_old = g._home.get("house_gift_count")
+		g._home._on_house_profile(1, [{"nick": "Николя"}, {"nick": "Мирра"}, {"nick": "Некто"}])
+		var gt: Array = []
+		for c in grows.get_children():
+			gt.append(String((c as Button).text))
+		Selftest.check("guest card shows friend states",
+			gt == ["в друзьях", "заявка отправлена", "в друзья"])
+		g._home._on_house_profile(0, [])
+		g._home.set("house_gift_week", wk_old)
+		g._home.set("house_gift_count", cnt_old)
+	# R8: единая точка отказа заявки — глобальный тост из main.gd. Опасные
+	# результаты шём через Net-эмиссию (Signal::emit — C++-граница, рантайм-
+	# ошибка хендлера не рвёт кадр сюты; паттерн _send_failures). Хендлер и
+	# коннект в ST гейтятся _net_enabled, поэтому вешаем связку сами.
+	var handler_exists: bool = g.has_method("_on_friend_request_result")
+	Selftest.check("R8 handler exists in main", handler_exists)
+	if handler_exists:
+		var bound := Callable(g, "_on_friend_request_result")
+		if not Net.friend_request_result.is_connected(bound):
+			Net.friend_request_result.connect(bound)
+		var stack_before := 0
+		if g._online._toast_stack != null:
+			stack_before = g._online._toast_stack.get_child_count()
+		Net.friend_request_result.emit({"ok": false, "detail": "bot"})
+		var toast_texts: Array = []
+		if g._online._toast_stack != null:
+			for p in g._online._toast_stack.get_children():
+				var l := Online._find_toast_label(p as PanelContainer)
+				if l != null:
+					toast_texts.append(l.text)
+		Selftest.check("R8 bot refusal surfaces as global toast",
+			toast_texts.has("Это ученик гильдии, заявки он не принимает."))
+		var stack_after := 0
+		if g._online._toast_stack != null:
+			stack_after = g._online._toast_stack.get_child_count()
+		Net.friend_request_result.emit({"ok": false, "detail": [{"loc": ["body"]}]})
+		var stack_now := 0
+		if g._online._toast_stack != null:
+			stack_now = g._online._toast_stack.get_child_count()
+		Selftest.check("R8 non-String detail adds no toast", stack_now == stack_after)
+		var inbox_fired := {"n": 0}
+		var in_cb := func(_r: Dictionary) -> void: inbox_fired["n"] = int(inbox_fired["n"]) + 1
+		Net.social_inbox_result.connect(in_cb)
+		Net.friend_request_result.emit({"ok": true})
+		if Net.social_inbox_result.is_connected(in_cb):
+			Net.social_inbox_result.disconnect(in_cb)
+		Selftest.check("R8 ok refreshes inbox", int(inbox_fired["n"]) == 1)
+		if Net.friend_request_result.is_connected(bound):
+			Net.friend_request_result.disconnect(bound)
+		if g._online._toast_stack != null:
+			while g._online._toast_stack.get_child_count() > stack_before:
+				var last := g._online._toast_stack.get_child(g._online._toast_stack.get_child_count() - 1)
+				g._online._toast_stack.remove_child(last)
+				last.queue_free()

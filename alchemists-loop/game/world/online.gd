@@ -226,6 +226,11 @@ func _render_rating_rows(result: Dictionary) -> void:
 		var st := g._label("открытий %d · веществ %d · очки %d%s" % [disc, elems, pts, extra], 11)
 		st.add_theme_color_override("font_color", Color(0.55, 0.62, 0.68))
 		v.add_child(st)
+		# S1 §9.3 (задача 7): кнопка «в друзья» сразу после имени — состояние
+		# пересчитывается из кэша Social на каждой перерисовке строки. Отказы
+		# заявки (bot/self/blocked/лимиты) идут единой точкой в глобальный тост
+		# (R8, коннект friend_request_result в main.gd) — err_line строке не нужен.
+		SocialUI.attach(g, row, nick)
 		if has_house:
 			var btn := g._small_button("Домик", Vector2(80, 36), 1)
 			btn.pressed.connect(g._home._open_player_house.bind(nick))
