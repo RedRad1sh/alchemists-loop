@@ -95,6 +95,11 @@ _load_dotenv()
 # Уменьшите через LLM_MAX_ATTEMPTS, чтобы недоступная LLM отваливалась быстрее.
 MAX_ATTEMPTS = int(os.environ.get("LLM_MAX_ATTEMPTS", "3"))
 
+# generate_card_identity вызывается внутри ритуала крафта (игрок ждёт), поэтому
+# потолка попыток здесь меньше, чем у генерации веществ: основная модель + одна
+# запасная. Настраивается тем же окружением, что и остальной бюджет LLM.
+IDENTITY_ATTEMPTS = int(os.environ.get("LLM_IDENTITY_ATTEMPTS", "2"))
+
 # Дефолтный пул бесплатных моделей OpenRouter. Список free-моделей регулярно
 # меняется: сверяться с https://openrouter.ai/api/v1/models (фильтр ":free").
 # Актуально на 2026-09-11. Ротация размазывает лимиты. Если какая-то модель
@@ -232,9 +237,10 @@ description — одна короткая фраза на русском (до 2
 имени результата в начале. Пример для Огонь+Вода: "Вода, вскипевшая под жаром,
 поднялась в воздух невидимым дыханием."
 
-Ставь combinable=true, только если у двух входных понятий есть прямой,
-общеизвестный, одношаговый результат, непосредственно объяснимый ОБОИМИ
-понятиями. Допустимые механизмы:
+Ставь combinable=true, если у двух входных понятий есть понятный одношаговый
+результат, объяснимый ОБОИМИ понятиями. Прямая и общеизвестная связь — лучший
+вариант, но не единственный: бытовая, ироничная или поэтическая связь тоже
+годится, если оба входа в ней реально участвуют. Допустимые механизмы:
 - construction — части образуют целое или конструкцию:
   Кирпич+Кирпич=Стена, Кирпич+Стена=Дом, Стена+Стена=Комната;
 - group — два объекта образуют пару, группу или множество:
@@ -258,8 +264,9 @@ description — одна короткая фраза на русском (до 2
    (Стена+Стена=Ртуть — ЗАПРЕЩЕНО).
 6. Отсылки разрешены, только если сильно оправданы (см. механизм reference).
    Слабая или натянутая отсылка — не повод: верни combinable=false.
-7. Сомневаешься — верни {"combinable": false}. Честный отказ лучше натянутого
-   результата.
+7. Решает тест на удаление (правило 2), а не сомнения: если результат объясняется
+   ОБОИМИ входами и исчезает при замене любого из них — {"combinable": true}.
+   {"combinable": false} — только когда объяснения обоими входами нет вовсе.
 8. name — конкретное русское слово или словосочетание из 1-4 слов, именительный
    падеж, только кириллица и пробелы, с заглавной буквы, БЕЗ дефисов, цифр и
    латиницы.
@@ -272,7 +279,7 @@ description — одна короткая фраза на русском (до 2
 Примеры ответов:
 Кирпич+Кирпич -> {"combinable": true, "name": "Стена", "glyph": "wall", "description": "Кирпичи, уложенные в ряд, стали преградой.", "tag": "камень"}
 Огонь+Вода    -> {"combinable": true, "name": "Пар", "glyph": "steam", "description": "Вода, вскипевшая под жаром, поднялась в воздух.", "tag": "вода"}
-Камень+Камень -> {"combinable": false}
+Камень+Камень -> {"combinable": true, "name": "Куча камней", "glyph": "cluster(5)", "description": "Два валуна, легшие рядом, сложились в небрежный холмик.", "tag": "камень"}
 Птица+Пепел   -> {"combinable": false}
 """
 
@@ -505,7 +512,16 @@ class LLMGenerator:
         # «Магии» цепочкой крафтов (2026-10-06).
         self._gen_model: str = self.models[0] if self.models else ""
         self._valid_model: str = self.models[1] if len(self.models) > 1 else self._gen_model
-        self._rot = 0
+
+    def _gen_chain(self) -> list[str]:
+        """Модели для генерации: основная первой, остальные — бэкапы.
+
+        Роль закреплена за models[0] (и это же обещает .env.example: «первая
+        модель — основная, остальные подключаются при 429/5xx/сети»), но
+        закрепление роли не означает закрепления попытки: 403 на основной
+        модели иначе съедал все MAX_ATTEMPTS, и запасная не вызывалась никогда.
+        """
+        return [self._gen_model] + [m for m in self.models if m != self._gen_model]
 
     def available(self) -> bool:
         if self.provider in ("off", ""):
@@ -541,8 +557,10 @@ class LLMGenerator:
                  a_name, b_name, self.provider, ", ".join(self.models))
         feedback = ""
         errors: list[str] = []
+        chain = self._gen_chain()
+        refused = False
         for attempt in range(MAX_ATTEMPTS):
-            model = self._gen_model
+            model = chain[attempt % len(chain)]
             try:
                 raw = self._call_once(model, a_name, b_name, feedback)
             except LLMError as e:
@@ -567,6 +585,7 @@ class LLMGenerator:
                          a_name, b_name, time.time() - t_start)
                 feedback = COMBINABLE_FEEDBACK % (a_name, b_name)
                 errors.append(f"{model}: combinable=false")
+                refused = True
                 continue
 
             name = valid["name"]
@@ -575,7 +594,6 @@ class LLMGenerator:
                 # кандидат совпал с ингредиентом (огонь+уголь=уголь): ретраи
                 # бессмысленны — отдаём как есть, сервер привяжет пару
                 # к существующему веществу по имени
-                self._rot = (self._rot + attempt + 1) % len(self.models)
                 log.info("пара «%s» + «%s» → «%s» (совпал с ингредиентом, без ретраев)",
                          a_name, b_name, name)
                 return _with_flavor({"combinable": True, "name": name}, valid)
@@ -586,10 +604,18 @@ class LLMGenerator:
                 errors.append(f"{model}: кандидат «{name}» отклонён ({reason})")
                 continue
 
-            self._rot = (self._rot + attempt + 1) % len(self.models)
             log.info("пара «%s» + «%s» → «%s» (модель %s, %.1fs)",
                      a_name, b_name, name, model, time.time() - t_start)
             return _with_flavor({"combinable": True, "name": name}, valid)
+
+        if refused:
+            # Модель ответила «не сочетается» и ни одна перепроверка не
+            # переубедила. Это решение, а не технический сбой: сервер обязан
+            # записать rejected_pairs, иначе пара останется кандидатом и
+            # каждый новый вызов будет платить те же MAX_ATTEMPTS заново.
+            log.info("пара «%s» + «%s»: отказ подтверждён (%d попыток, %.1fs)",
+                     a_name, b_name, MAX_ATTEMPTS, time.time() - t_start)
+            return {"combinable": False}
 
         # Ни одна модель не дала валидного ответа (сеть/429/битый формат).
         # Это технический сбой: НЕ помечаем пару как «не сочетается» — она
@@ -620,8 +646,9 @@ class LLMGenerator:
         log.info("намёк на «%s» + «%s»: генерирую", a_name, b_name)
         feedback = ""
         errors: list[str] = []
+        chain = self._gen_chain()
         for attempt in range(MAX_ATTEMPTS):
-            model = self._gen_model
+            model = chain[attempt % len(chain)]
             try:
                 raw = self._call_hint_once(model, a_name, b_name, feedback)
             except LLMError as e:
@@ -634,7 +661,6 @@ class LLMGenerator:
                 feedback = HINT_FORMAT_FEEDBACK
                 errors.append(f"{model}: ответ не соответствует формату")
                 continue
-            self._rot = (self._rot + attempt + 1) % len(self.models)
             log.info("намёк на «%s» + «%s» готов (модель %s, %.1fs)",
                      a_name, b_name, model, time.time() - t_start)
             return valid
@@ -656,20 +682,23 @@ class LLMGenerator:
         if not self.api_key or not self.models:
             return self._template_identity(ingredient_names, rarity)
 
-        # Одна попытка LLM с коротким таймаутом: ритуал крафта не должен
-        # ждать 3 ретрая (qwen локальная часто отвечает не по формату).
+        # Потолок попыток для ритуала крафта: основная модель + одна запасная.
+        # Три полноценных ретрая здесь лишние (qwen локальная часто отвечает не
+        # по формату), но и одна попытка на одной модели не оставляла игроку
+        # ничего, кроме шаблона, если у основной модели 403/429.
         t_start = time.time()
         log.info("identity для хроматика (ингредиенты: %s): генерирую",
                  ", ".join(ingredient_names))
         errors: list[str] = []
-        for attempt in range(1):
-            model = self._gen_model
+        chain = self._gen_chain()
+        for attempt in range(min(IDENTITY_ATTEMPTS, len(chain))):
+            model = chain[attempt]
             try:
                 raw = self._call_identity_once(model, ingredient_names, rarity)
             except LLMError as e:
                 log.warning("identity: %s → %s", model, e)
                 errors.append(f"{model}: {e}")
-                break
+                continue
             try:
                 data = _extract_json(raw)
                 name = str(data.get("name", "")).strip()
@@ -679,8 +708,7 @@ class LLMGenerator:
             except Exception:
                 log.warning("identity: %s → ответ не по формату", model)
                 errors.append(f"{model}: не по формату")
-                break
-            self._rot = (self._rot + attempt + 1) % len(self.models)
+                continue
             log.info("identity готов (модель %s, %.1fs)", model, time.time() - t_start)
             return {"name": name[:80], "lore": lore[:400]}
         log.warning("identity: не удался (%.1fs): %s; шаблон-фолбэк",
@@ -871,16 +899,23 @@ class LLMGenerator:
         # (max_completion_tokens/reasoning_effort) или заваливает JSON-валидацию
         # (400 json_validate_failed) → повторяем в «совместимом» виде без них.
         # 503 «не осталось провайдеров после фильтрации параметров» — та же
-        # причина: прокси не находит провайдера с такими параметрами.
+        # причина: прокси не находит провайдера с такими параметрами. Формулировка
+        # приходит и по-русски, и по-английски, поэтому ключи списки двух сторон.
         if r.status_code in (400, 503) and any(
             key in r.text.lower()
-            for key in ("response_format", "json", "reasoning", "max_tokens", "unsupported", "провайдер", "фильтрац")
+            for key in ("response_format", "json", "reasoning", "max_tokens", "unsupported",
+                        "провайдер", "фильтрац",
+                        "provider", "filter", "endpoint", "not supported", "does not support")
         ):
-            log.info("%s: 400 (%s…) — повторяю в совместимом виде",
-                     model, r.text.strip()[:80].replace("\n", " "))
+            log.info("%s: %s (%s…) — повторяю в совместимом виде",
+                     model, r.status_code, r.text.strip()[:80].replace("\n", " "))
             payload.pop("response_format", None)
             payload.pop("reasoning_effort", None)
+            # Оба лимитных поля: провайдеры называют то же ограничение то
+            # max_tokens, то max_completion_tokens. Снять только второе —
+            # оставить в ретрае причину, из-за которой первый запрос и упал.
             payload.pop("max_completion_tokens", None)
+            payload.pop("max_tokens", None)
             try:
                 r = requests.post(url, json=payload, headers=headers, timeout=self.timeout)
             except requests.RequestException as e:
