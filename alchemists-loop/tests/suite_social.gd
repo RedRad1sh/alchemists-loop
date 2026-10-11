@@ -479,47 +479,111 @@ static func _friend_buttons(g: Game) -> void:
 		g._home._on_house_profile(0, [])
 		g._home.set("house_gift_week", wk_old)
 		g._home.set("house_gift_count", cnt_old)
-	# R8: единая точка отказа заявки — глобальный тост из main.gd. Опасные
-	# результаты шём через Net-эмиссию (Signal::emit — C++-граница, рантайм-
-	# ошибка хендлера не рвёт кадр сюты; паттерн _send_failures). Хендлер и
-	# коннект в ST гейтятся _net_enabled, поэтому вешаем связку сами.
+	# R8: единая точка отказа заявки — глобальный тост. Опасные результаты шём
+	# через Net-эмиссию (Signal::emit — C++-граница, рантайм-ошибка хендлера не
+	# рвёт кадр сюты; паттерн _send_failures). Прод-связку НЕ подменяем
+	# самодельным connect: main.gd коннектит хендлер вне _net_enabled-гейта
+	# (хендлер сам разбирает offline/отсутствие detail), поэтому в ST она живая
+	# и проверяется рантаймом — удалить строку connect в main.gd = красный
+	# «wired»-ассерт, а не молчаливый PASS.
 	var handler_exists: bool = g.has_method("_on_friend_request_result")
 	Selftest.check("R8 handler exists in main", handler_exists)
+	Selftest.check("R8 handler wired to Net.friend_request_result in main.gd",
+		handler_exists and Net.friend_request_result.is_connected(Callable(g, "_on_friend_request_result")))
 	if handler_exists:
-		var bound := Callable(g, "_on_friend_request_result")
-		if not Net.friend_request_result.is_connected(bound):
-			Net.friend_request_result.connect(bound)
-		var stack_before := 0
-		if g._online._toast_stack != null:
-			stack_before = g._online._toast_stack.get_child_count()
+		var stack_before := _toast_count(g)
 		Net.friend_request_result.emit({"ok": false, "detail": "bot"})
-		var toast_texts: Array = []
-		if g._online._toast_stack != null:
-			for p in g._online._toast_stack.get_children():
-				var l := Online._find_toast_label(p as PanelContainer)
-				if l != null:
-					toast_texts.append(l.text)
+		var toast_texts := _toast_texts(g)
+		var stack_bot := _toast_count(g)
 		Selftest.check("R8 bot refusal surfaces as global toast",
-			toast_texts.has("Это ученик гильдии, заявки он не принимает."))
-		var stack_after := 0
-		if g._online._toast_stack != null:
-			stack_after = g._online._toast_stack.get_child_count()
+			toast_texts.has("Это ученик гильдии, заявки он не принимает.")
+			and stack_bot == stack_before + 1)
+		# Глобальные constraints плана: при 422 сервер шлёт detail СПИСОКом
+		# (не String) — такой отказ показывается unmapped-копией «Сервер не
+		# понял запрос.», молчание здесь = потерянный отказ. Проверяем и текст,
+		# и что стек вырос ровно на одну панель (паттерн соседей по R8).
 		Net.friend_request_result.emit({"ok": false, "detail": [{"loc": ["body"]}]})
-		var stack_now := 0
-		if g._online._toast_stack != null:
-			stack_now = g._online._toast_stack.get_child_count()
-		Selftest.check("R8 non-String detail adds no toast", stack_now == stack_after)
+		toast_texts = _toast_texts(g)
+		var stack_422 := _toast_count(g)
+		Selftest.check("R8 422 list detail surfaces the unmapped toast",
+			stack_422 == stack_bot + 1 and toast_texts.has("Сервер не понял запрос."))
+		# Офлайн-результат (ключа detail нет вовсе) остаётся молчаливым: текст
+		# «сервер недоступен» — не задача 7, но и «сервер не понял» был бы
+		# враньём. Проверка краснеет, если else-ветка станет безусловной.
+		Net.friend_request_result.emit({"ok": false, "offline": true})
+		Selftest.check("R8 offline refusal (no detail) adds no toast",
+			_toast_count(g) == stack_422)
+		# Успех заявки: ok → хендлер зовёт Social.refresh(), а применённый ответ
+		# инбокса переводит ника в «заявка отправлена». В ST Net drenage-offline
+		# и on_inbox коннектится внутри _net_enabled, поэтому ok-инбокс с
+		# «Некто» подаём сами (on_inbox соединяем на время проверки). Ассерт —
+		# на ОТРИСОВАННОЙ кнопке строки рейтинга, а не только на эмиссии Net.
 		var inbox_fired := {"n": 0}
 		var in_cb := func(_r: Dictionary) -> void: inbox_fired["n"] = int(inbox_fired["n"]) + 1
 		Net.social_inbox_result.connect(in_cb)
+		var inbox_was_connected := Net.social_inbox_result.is_connected(g._social.on_inbox)
+		if not inbox_was_connected:
+			Net.social_inbox_result.connect(g._social.on_inbox)
 		Net.friend_request_result.emit({"ok": true})
+		Selftest.check("R8 ok refreshes inbox", int(inbox_fired["n"]) == 1)
+		Net.social_inbox_result.emit({"ok": true, "friends": g._social.friends(),
+			"incoming": g._social.incoming(), "outgoing": [{"nick": "Некто"}],
+			"unread_total": 0, "requests_total": 1, "friend_limit": 50})
+		if not inbox_was_connected:
+			if Net.social_inbox_result.is_connected(g._social.on_inbox):
+				Net.social_inbox_result.disconnect(g._social.on_inbox)
 		if Net.social_inbox_result.is_connected(in_cb):
 			Net.social_inbox_result.disconnect(in_cb)
-		Selftest.check("R8 ok refreshes inbox", int(inbox_fired["n"]) == 1)
-		if Net.friend_request_result.is_connected(bound):
-			Net.friend_request_result.disconnect(bound)
-		if g._online._toast_stack != null:
-			while g._online._toast_stack.get_child_count() > stack_before:
-				var last := g._online._toast_stack.get_child(g._online._toast_stack.get_child_count() - 1)
-				g._online._toast_stack.remove_child(last)
-				last.queue_free()
+		if g._online._rating_list == null:
+			Selftest.check("R8 success re-renders the friend button", false)
+		else:
+			g._online._render_rating_rows({"ok": true, "rows": [
+				{"rank": 3, "nick": "Некто", "discoveries": 0, "elements": 0, "points": 0}]})
+			var pending_n := 0
+			var fresh_n := 0
+			var pend_btn: Button = null
+			for b in g._online._rating_list.find_children("*", "Button", true, false):
+				var btn := b as Button
+				if btn.text == "заявка отправлена":
+					pending_n += 1
+					pend_btn = btn
+				elif btn.text == "в друзья":
+					fresh_n += 1
+			Selftest.check("R8 success renders the button as «заявка отправлена»",
+				pending_n == 1 and fresh_n == 0 and pend_btn != null and pend_btn.disabled)
+			for c in g._online._rating_list.get_children():
+				g._online._rating_list.remove_child(c)
+				c.queue_free()
+		# «Серверный» инбокс и тосты — локальные состояния этого кейса:
+		# возвращаем демо-посев и срезаем стек тостов к входу в блок.
+		g._social._seed_demo()
+		_trim_toasts(g, stack_before)
+
+
+static func _toast_count(g: Game) -> int:
+	# Стек тостов: 0 если _toast_stack ещё не построен (проверка не молчит —
+	# соседние R8-ассерты тогда краснеют по числу панелей).
+	if g._online._toast_stack == null:
+		return 0
+	return g._online._toast_stack.get_child_count()
+
+
+static func _toast_texts(g: Game) -> Array:
+	var out: Array = []
+	if g._online._toast_stack == null:
+		return out
+	for p in g._online._toast_stack.get_children():
+		var l := Online._find_toast_label(p as PanelContainer)
+		if l != null:
+			out.append(l.text)
+	return out
+
+
+static func _trim_toasts(g: Game, keep: int) -> void:
+	# F1-паттерн: снимаем с родителя сразу, free — в конце кадра.
+	if g._online._toast_stack == null:
+		return
+	while g._online._toast_stack.get_child_count() > keep:
+		var last := g._online._toast_stack.get_child(g._online._toast_stack.get_child_count() - 1)
+		g._online._toast_stack.remove_child(last)
+		last.queue_free()

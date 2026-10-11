@@ -643,7 +643,6 @@ func _ready() -> void:
 		Net.message_send_result.connect(_social.on_send)
 		Net.social_inbox_result.connect(_on_social_inbox_arrived)
 		Net.friend_respond_result.connect(_on_friend_respond)
-		Net.friend_request_result.connect(_on_friend_request_result)
 		Net.friend_remove_result.connect(_on_social_action_result)
 		Net.friend_block_result.connect(_on_social_action_result)
 	# План 2 (жила/круг): connects вне _net_enabled-блока — хендлеры сами
@@ -651,6 +650,11 @@ func _ready() -> void:
 	Net.cycle_result.connect(_retention._on_net_cycle_result)
 	Net.vein_find_result.connect(_retention._on_net_vein_find_result)
 	Net.vein_pour_result.connect(_retention._on_net_vein_pour_result)
+	# S1/R8 (задача 7): коннект вне _net_enabled-гейта — хендлер сам
+	# разбирает offline/отсутствие detail, а selftest эмитит
+	# friend_request_result напрямую. Под гейтом связки в ST не было бы, и
+	# удаление строки connect не краснило бы ничего (FIX-2 ревьюера).
+	Net.friend_request_result.connect(_on_friend_request_result)
 	# Аркан Сигилов
 	Net.sigil_daily_result.connect(_sigil._on_daily_result)
 	Net.sigil_craft_result.connect(_sigil._on_craft_result)
@@ -689,6 +693,10 @@ func _ready() -> void:
 					"last_seen": "2026-10-10T07:10:00", "discoveries": 3,
 					"elements": 2, "points": 5, "house_built": true,
 					"house_guests": 1}]}
+			# Баннер «данные от Nс назад» (online.gd) считает возраст от
+			# _rating_cache_at_ms: без него посев демо выглядит как вечный
+			# кэш, открытый «когда-то».
+			_online._rating_cache_at_ms = Time.get_ticks_msec()
 		_social_ui.open(1 if _demo_harness._action_social_requests else 0)
 		if _demo_harness._action_social_thread:
 			_social_ui._open_thread("dev-b")
@@ -960,7 +968,8 @@ func _on_friend_request_result(result: Dictionary) -> void:
 	# Строкам рейтинга и карточке гостя свои err_line не нужны; bot/self/
 	# blocked/лимиты проходят через эту же ветку. detail нетипизирован: при
 	# 422 сервер шлёт СПИСОК, при офлайне ключа нет вовсе — тостим только по
-	# строковому коду (SocialUI._detail_text ждёт String). Успех — обновляем
+	# строковому коду, не-String detail (422-список) — unmapped-копией, а
+	# офлайн (detail отсутствует) молчит. Успех — обновляем
 	# кэш (кнопки перерисуют состояние на ближайшей перестройке строк).
 	if result.get("ok", false) == true:
 		_social.refresh()
@@ -969,6 +978,13 @@ func _on_friend_request_result(result: Dictionary) -> void:
 	var detail = result.get("detail")
 	if detail is String and detail != "":
 		_online._toast(SocialUI._detail_text(detail), Online.NoticeKind.WARNING)
+	elif result.has("detail"):
+		# 422: detail приходит СПИСОКом (словарь/массив ошибки валидации) —
+		# по глобальным constraints плана такой ответ показываем unmapped-
+		# копией «Сервер не понял запрос», а не молчим. Офлайн-результат
+		# (ключа detail нет вовсе) молчит сознательно: «Мир не на связи» —
+		# не задача 7.
+		_online._toast(SocialUI._detail_text("unmapped"), Online.NoticeKind.WARNING)
 
 # ---------- R14: см. game/demo.gd (616-620) ----------
 
