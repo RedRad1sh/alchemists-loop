@@ -1563,24 +1563,24 @@ func _show_sigil_craft_ritual(rarity: String) -> void:
 	print("RITUAL: show, rarity=", rarity)
 	if _sigil_craft_ritual != null and is_instance_valid(_sigil_craft_ritual):
 		_sigil_craft_ritual.queue_free()
-		
+
 	var strength := 0.7
 	match rarity:
 		"epic": strength = 0.85
 		"legendary": strength = 1.0
 		"mythic", "chromatic": strength = 1.2
-		
+
 	var r := SigilCraftRitual.new()
 	r.accent = main._rarity_color(rarity)
 	r.strength = strength
-	
+
 	# КЛЮЧЕВОЕ: Подключаем сигнал показа карты и автозакрытие
 	r.on_card_reveal.connect(_on_ritual_card_reveal)
 	r.on_complete.connect(_close_sigil_craft_ritual)
-	
+
 	_sigil_craft_ritual = r
 	add_child(r)
-	
+
 func _on_ritual_card_reveal(rect: Rect2, payload: Variant) -> void:
 	print("RITUAL: card reveal signal received")
 	if payload != null:
@@ -1645,9 +1645,9 @@ func _on_sigil_craft_completed(craft_id: String, rarity: String, llm_name: Strin
 	_sigil_pending_craft = {}
 	# Сохраняем результат
 	_pending_craft_result = {"craft_id": craft_id, "rarity": rarity, "llm_name": llm_name}
-	
+
 	if _sigil_craft_ritual != null and is_instance_valid(_sigil_craft_ritual):
-		# Отдаём данные ритуалу. 
+		# Отдаём данные ритуалу.
 		# Если он ещё не дошёл до фазы удержания (4.85с), он подождёт.
 		# Если уже ждёт — немедленно начнёт вспышку и эмитнет on_card_reveal.
 		_sigil_craft_ritual.deliver_result(_pending_craft_result)
