@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+  <!-- badge_rank — огонёк свечи 🕯️ (ранг Огонька очага, подкрашивается кодом через modulate) -->
+  <circle cx="12" cy="12" r="11" fill="#3FAFBF" stroke="#1E5D66" stroke-width="1"/>
+  <!-- candle body -->
+  <rect x="10" y="12" width="4" height="6" rx="0.5" fill="#FFFFFF" stroke="none"/>
+  <!-- wick -->
+  <path d="M12 12 L12 10.5" stroke="#FFFFFF" stroke-width="1"/>
+  <!-- flame -->
+  <path d="M12 6 C13.5 7.5 13.5 9 12 10 C10.5 9 10.5 7.5 12 6 Z" fill="#FFD98A" stroke="#FFFFFF" stroke-width="1"/>
+</svg>
