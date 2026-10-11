@@ -1924,6 +1924,15 @@ func _close_top_modal() -> bool:
 		# быть не могут, порядок этих двух веток не важен.
 		main._home._close_house_popup()
 		return true
+	elif main._social_ui != null and main._social_ui._confirm != null and main._social_ui._confirm.visible:
+		main._social_ui._confirm_close()
+		return true
+	elif main._social_ui != null and main._social_ui._peer != "":
+		main._social_ui._close_thread()
+		return true
+	elif main._social_ui != null and main._social_ui._screen != null and main._social_ui._screen.visible:
+		main._social_ui.close()
+		return true
 	elif main._home != null and main._home._house_screen != null and main._home._house_screen.visible:
 		# Полноэкранный дом (z=20) — нижняя поверхность: декор-магазин, палитра и
 		# гостевой домик лежат поверх него и закрываются раньше.
@@ -1986,6 +1995,12 @@ func _modal_open_for_ads() -> bool:
 	if main._home != null and main._home._color_picker != null and main._home._color_picker.visible:
 		return true
 	if main._home != null and main._home._house_popup != null and main._home._house_popup.visible:
+		return true
+	if main._social_ui != null and main._social_ui._confirm != null and main._social_ui._confirm.visible:
+		return true
+	if main._social_ui != null and main._social_ui._peer != "":
+		return true
+	if main._social_ui != null and main._social_ui._screen != null and main._social_ui._screen.visible:
 		return true
 	if main._home != null and main._home._house_screen != null and main._home._house_screen.visible:
 		return true

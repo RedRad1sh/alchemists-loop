@@ -154,6 +154,9 @@ func _save_game() -> bool:
 		"fair_local_brews": g._retention._fair_local_brews,
 		"fair_off_claim_week": g._retention._fair_off_claim_week
 	}
+	# S1 социалка: ключи social_cache/social_last_read — единый источник формы
+	# (Social.to_save()); плоская сборка, как week_cache/cycle_cache выше.
+	data.merge(g._social.to_save())
 	var file := FileAccess.open(g.TEMP_PATH, FileAccess.WRITE)
 	if file == null:
 		push_warning("Не удалось открыть временный файл сохранения.")
@@ -442,6 +445,8 @@ func _load_game() -> void:
 	g._retention._week_cache = data.get("week_cache", {}) if data.get("week_cache", {}) is Dictionary else {}
 	g._retention._vein_cap_total = maxi(0, int(data.get("vein_cap_total", 0)))
 	g._retention._cycle_cache = data.get("cycle_cache", {}) if data.get("cycle_cache", {}) is Dictionary else {}
+	# S1 социалка: type-guard на старые сейвы (без ключей) — внутри from_save.
+	g._social.from_save(data)
 	g._retention._vein_finds.clear()
 	if data.get("vein_pending_finds") is Array:
 		for f in data["vein_pending_finds"]:

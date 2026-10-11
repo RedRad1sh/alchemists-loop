@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+  <!-- badge_new — NEW (новичок ≤24ч с первым открытием), бирюзовый -->
+  <circle cx="12" cy="12" r="11" fill="#3FAFBF" stroke="#1E5D66" stroke-width="1"/>
+  <path d="M7 9 L7 15" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M10 15 L10 9 L14 15 L14 9" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M16 9 L16 13 M16 13 L18 13" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/>
+</svg>

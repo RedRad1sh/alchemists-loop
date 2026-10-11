@@ -26,6 +26,7 @@ var house_visited_day: Dictionary = {}   # γ: nick -> "YYYY-MM-DD" (локал�
 var house_gift_week := ""                # γ: ISO-неделя последнего недельного подарка хосту
 var house_gift_count := 0                # γ: подарков уже выдано на текущей неделе
 var _guests_lbl: Label = null            # γ: строка о гостях на странице дома
+var _guests_row: HBoxContainer = null    # S1 (задача 7): кнопки «в друзья» у гостей из house_visitors
 var _house_visit_btn: Button = null      # γ: кнопка визита в гостевом попапе (собирается один раз)
 var _house_popup_nick := ""              # γ: чей домик сейчас открыт в гостевом попапе
 var _theme_custom_on := false
@@ -352,6 +353,13 @@ func _build_house_page(page: VBoxContainer) -> void:
 	_guests_lbl = g._label("", 12)
 	_guests_lbl.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
 	page.add_child(_guests_lbl)
+	# S1 §9.3 (задача 7): карточка гостя — кнопки «в друзья» рядом со строкой
+	# гостей. Ник приходит из house_visitors (device_id клиенту недоступен),
+	# заявка идёт по нику через общий SocialUI.attach; отказ — тостом (R8).
+	_guests_row = HBoxContainer.new()
+	_guests_row.name = "GuestFriendActions"
+	_guests_row.add_theme_constant_override("separation", 8)
+	page.add_child(_guests_row)
 
 	page.add_child(g._label("Тема лаборатории (фон)", 14))
 	var theme_grid := GridContainer.new()
@@ -1363,13 +1371,13 @@ func _mark_visited(host_nick: String) -> void:
 func _on_house_profile(week_visits: int, visitors: Array) -> void:
 	# Спека §7.2: строка о гостях и лента «кто именно». Имена приходят только из
 	# GET /api/me по своему device_id — чужой GET /api/house их не отдаёт.
+	var parts := PackedStringArray()
+	for v in visitors.slice(0, 3):
+		var d: Dictionary = v
+		var n := String(d.get("nick", ""))
+		if n != "":
+			parts.append(n)
 	if _guests_lbl != null:
-		var parts := PackedStringArray()
-		for v in visitors.slice(0, 3):
-			var d: Dictionary = v
-			var n := String(d.get("nick", ""))
-			if n != "":
-				parts.append(n)
 		if parts.is_empty():
 			if week_visits == 0:
 				_guests_lbl.text = "Пока никто не заглядывал."
@@ -1382,6 +1390,16 @@ func _on_house_profile(week_visits: int, visitors: Array) -> void:
 				_guests_lbl.text = "За неделю тебя навестили: %d" % week_visits
 			else:
 				_guests_lbl.text = "За неделю тебя навестили: %s" % names
+	# S1 §9.3 (задача 7): карточка гостя — кнопка «в друзья» на каждого гостя
+	# строки (ник, не device_id — сервер резолвит сам; боты-гости получат отказ
+	# кодом `bot` — по R8 он приходит глобальным тостом из main.gd). Снятие с
+	# родителя перед queue_free — паттерн F1: пересборка идёт из-под Net-сигнала.
+	if _guests_row != null:
+		for c in _guests_row.get_children():
+			_guests_row.remove_child(c)
+			c.queue_free()
+		for n in parts:
+			SocialUI.attach(g, _guests_row, n)
 	_check_house_gift(week_visits)
 
 
