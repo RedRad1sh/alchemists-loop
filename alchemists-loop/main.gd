@@ -576,6 +576,8 @@ func _ready() -> void:
 			_demo_harness._action_social_confirm = true
 		elif a == "--action=social_search":
 			_demo_harness._action_social_search = true
+		elif a == "--action=social_badge":
+			_demo_harness._action_social_badge = true
 		elif a == "--action=circle":
 			_demo_harness._action_circle = true
 		elif a == "--action=sigilcoll":
@@ -682,7 +684,7 @@ func _ready() -> void:
 		_demo_harness._apply_demo_state()
 	if _demo_harness._demo and (_demo_harness._action_social or _demo_harness._action_social_requests
 			or _demo_harness._action_social_thread or _demo_harness._action_social_confirm
-			or _demo_harness._action_social_search):
+			or _demo_harness._action_social_search or _demo_harness._action_social_badge):
 		_social._seed_demo()
 		if _demo_harness._action_social_search:
 			# R1: карточка поиска строится из уже кэшированных строк рейтинга —
@@ -697,14 +699,20 @@ func _ready() -> void:
 			# _rating_cache_at_ms: без него посев демо выглядит как вечный
 			# кэш, открытый «когда-то».
 			_online._rating_cache_at_ms = Time.get_ticks_msec()
-		_social_ui.open(1 if _demo_harness._action_social_requests else 0)
-		if _demo_harness._action_social_thread:
-			_social_ui._open_thread("dev-b")
-		elif _demo_harness._action_social_confirm:
-			_social_ui._open_confirm("dev-b")
-		elif _demo_harness._action_social_search:
-			# приёмка задачи 7: карточка с кнопкой состояния из кэша друзей
-			_social_ui._search("Николя")
+		if _demo_harness._action_social_badge:
+			# Приёмка Task 8 Step 3: бейдж «Друзья •N» в шапке БЕЗ открытия экрана —
+			# сид + перерисовка (_engine._refresh() ниже зовёт _refresh_header,
+			# бейдж считает Social.badge_for).
+			pass
+		else:
+			_social_ui.open(1 if _demo_harness._action_social_requests else 0)
+			if _demo_harness._action_social_thread:
+				_social_ui._open_thread("dev-b")
+			elif _demo_harness._action_social_confirm:
+				_social_ui._open_confirm("dev-b")
+			elif _demo_harness._action_social_search:
+				# приёмка задачи 7: карточка с кнопкой состояния из кэша друзей
+				_social_ui._search("Николя")
 	_engine._refresh()
 	if not _selftest and _engine._experiment_pending_pair.size() == 2:
 		_online._resume_pending_experiment.call_deferred()
@@ -955,9 +963,8 @@ func _on_friend_respond(result: Dictionary) -> void:
 		if _social_ui != null and _social_ui._screen != null and _social_ui._screen.visible:
 			_social_ui._refresh_list()
 	else:
-		var detail = result.get("detail", "")
 		if _social_ui != null:
-			_social_ui.show_send_error(detail if detail is String else "unmapped")
+			_social_ui.show_send_error(SocialUI._refusal_code(result))
 
 func _on_social_action_result(result: Dictionary) -> void:
 	if _social_ui != null:
@@ -978,12 +985,15 @@ func _on_friend_request_result(result: Dictionary) -> void:
 	var detail = result.get("detail")
 	if detail is String and detail != "":
 		_online._toast(SocialUI._detail_text(detail), Online.NoticeKind.WARNING)
-	elif result.has("detail"):
+	elif result.has("detail") or String(result.get("error", "")).contains("422"):
 		# 422: detail приходит СПИСОКом (словарь/массив ошибки валидации) —
 		# по глобальным constraints плана такой ответ показываем unmapped-
-		# копией «Сервер не понял запрос», а не молчим. Офлайн-результат
-		# (ключа detail нет вовсе) молчит сознательно: «Мир не на связи» —
-		# не задача 7.
+		# копией «Сервер не понял запрос», а не молчим. Сквозной 422 (T8 Step 0,
+		# решение контролёра): гейт T28 в net.gd:501-502 не поднимает не-String
+		# detail наверх, поэтому настоящий HTTP 422 доходит СЮДА без ключа
+		# detail, только с error:"HTTP 422" — тот же unmapped-текст по строке
+		# error. Офлайн-результат (ключа detail нет и в error нет 422) молчит
+		# сознательно: «Мир не на связи» — не задача 7.
 		_online._toast(SocialUI._detail_text("unmapped"), Online.NoticeKind.WARNING)
 
 # ---------- R14: см. game/demo.gd (616-620) ----------

@@ -557,5 +557,20 @@ func _on_friend_action_result(result: Dictionary) -> void:
 		if _screen != null and _screen.visible and _peer == "":
 			_refresh_list()
 	else:
-		var detail = result.get("detail", "")
-		show_send_error(detail if detail is String else "unmapped")
+		show_send_error(_refusal_code(result))
+
+static func _refusal_code(result: Dictionary) -> String:
+	# T8 Step 0 (ruling контролёра), единый разбор отказа для err-line-поверхностей
+	# (respond в main.gd, remove/block здесь). detail не типизирован: 422-список
+	# → «unmapped»; сквозной HTTP 422 под гейтом T28 (net.gd:501-502, не трогаем)
+	# приходит БЕЗ ключа detail, только error:"HTTP 422" — тоже «unmapped», иначе
+	# отказ молча теряется (нарушение глобального ограничения «422 показывать
+	# „Сервер не понял запрос“»). Офлайн (detail отсутствует, 422 в error нет)
+	# остаётся пустой строкой, как раньше. Мутации: снять строку с contains("422")
+	# — краснеют 422-кейсы _refusal_422; убрать пустое условие → краснеют
+	# offline-пины того же блока.
+	var detail = result.get("detail", "")
+	var code: String = detail if detail is String else "unmapped"
+	if code == "" and String(result.get("error", "")).contains("422"):
+		code = "unmapped"
+	return code

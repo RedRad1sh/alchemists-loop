@@ -51,6 +51,7 @@ var _action_social_requests := false
 var _action_social_thread := false
 var _action_social_confirm := false
 var _action_social_search := false
+var _action_social_badge := false
 var _experiment_input_done := false
 var _brew_profile_started := false
 var _brew_profile_frame := 0

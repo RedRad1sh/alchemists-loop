@@ -22,6 +22,8 @@ static func run(g: Game) -> void:
 	_search_helpers(g)
 	_send_failures(g)
 	_friend_buttons(g)
+	_refusal_422(g)
+	_toast(g)
 
 static func _net_requests(_g: Game) -> void:
 	# вызов реальных методов: в ST Net синхронно сливает очередь в offline,
@@ -587,3 +589,108 @@ static func _trim_toasts(g: Game, keep: int) -> void:
 		var last := g._online._toast_stack.get_child(g._online._toast_stack.get_child_count() - 1)
 		g._online._toast_stack.remove_child(last)
 		last.queue_free()
+
+
+static func _refusal_422(g: Game) -> void:
+	# Task 8 Step 0 (ruling контролёра): сквозная 422-копия. Net под гейтом T28
+	# (net.gd:501-502, не трогаем — его пинит собственный мутационный тест)
+	# НЕ поднимает не-String detail наверх, поэтому настоящий HTTP 422 приходит
+	# в соц-хендлеры как {ok:false, error:"HTTP 422"} БЕЗ ключа detail. Глобальное
+	# ограничение плана: 422 показывать «Сервер не понял запрос» — молчание здесь
+	# и есть потерянный отказ. Мутации: снять 422-ветки в хендлерах — краснеют
+	# три «422 …»-кейса; сделать offline-отказ болтливым — краснеют два
+	# «still silent/blanks»-кейса; потрогать гейт net.gd — краснеет его пин-тест.
+	g._social._seed_demo()
+	# — R8-поверхность (friend_request): тост. Прод-коннект в ST живой
+	# (main.gd коннектит _on_friend_request_result вне _net_enabled-гейта).
+	var stack_before := _toast_count(g)
+	Net.friend_request_result.emit({"ok": false, "error": "HTTP 422", "message": "HTTP 422"})
+	var texts := _toast_texts(g)
+	Selftest.check("422 request refusal without detail toasts unmapped copy",
+		_toast_count(g) == stack_before + 1 and texts.has("Сервер не понял запрос."))
+	Net.friend_request_result.emit({"ok": false, "offline": true})
+	Selftest.check("offline request refusal (no detail, no 422) stays silent",
+		_toast_count(g) == stack_before + 1)
+	_trim_toasts(g, stack_before)
+	# — Экран/модалка (respond, remove/block): err-line. Прод-коннекты этих
+	# сигналов под _net_enabled-гейтом (main.gd:645-647), в ST их нет —
+	# подключаем хендлеры временно, паттерн _send_failures; опасные результаты
+	# шём эмиссией (Signal::emit — C++-граница, рантайм-ошибка хендлера не рвёт
+	# кадр сюты).
+	var ui = g.get("_social_ui")
+	if ui == null or ui._err_line == null:
+		Selftest.check("422 err-line surfaces wired", false)
+		return
+	var respond_cb := Callable(g, "_on_friend_respond")
+	var respond_was := Net.friend_respond_result.is_connected(respond_cb)
+	if not respond_was:
+		Net.friend_respond_result.connect(respond_cb)
+	ui.show_send_error("")
+	Net.friend_respond_result.emit({"ok": false, "error": "HTTP 422"})
+	Selftest.check("422 respond refusal shows unmapped on err line",
+		ui._err_line.text == "Сервер не понял запрос.")
+	Net.friend_respond_result.emit({"ok": false, "offline": true})
+	Selftest.check("offline respond refusal still blanks err line",
+		ui._err_line.text == "")
+	if not respond_was and Net.friend_respond_result.is_connected(respond_cb):
+		Net.friend_respond_result.disconnect(respond_cb)
+	# remove/block идут через общего делегата main._on_social_action_result →
+	# SocialUI._on_friend_action_result; вешаем на friend_remove_result и
+	# friend_block_result обе дорожки одной проверкой.
+	var action_cb := Callable(g, "_on_social_action_result")
+	for sig in [Net.friend_remove_result, Net.friend_block_result]:
+		if not sig.is_connected(action_cb):
+			sig.connect(action_cb)
+	ui.show_send_error("")
+	Net.friend_remove_result.emit({"ok": false, "error": "HTTP 422"})
+	Selftest.check("422 remove refusal shows unmapped on err line",
+		ui._err_line.text == "Сервер не понял запрос.")
+	Net.friend_block_result.emit({"ok": false, "error": "HTTP 422"})
+	Selftest.check("422 block refusal shows unmapped on err line",
+		ui._err_line.text == "Сервер не понял запрос.")
+	Net.friend_block_result.emit({"ok": false, "offline": true})
+	Selftest.check("offline block refusal still blanks err line",
+		ui._err_line.text == "")
+	for sig in [Net.friend_remove_result, Net.friend_block_result]:
+		if sig.is_connected(action_cb):
+			sig.disconnect(action_cb)
+
+
+static func _toast(g: Game) -> void:
+	# Task 8 Step 1: клик-тост верифицирует поведение, привезённое Task 3
+	# (online.gd:_toast 4-й параметр on_tap; panel STOP + gui_input только при
+	# валидном колбэке; общий dismiss с boxed dismissed). Мутации: снять
+	# STOP-присваивание — краснеет «clickable»; сделать STOP безусловным —
+	# краснеет «without callback stays IGNORE»; убрать IGNORE стека — краснеет
+	# «stack itself stays IGNORE» (стек ловил бы мышь поверх всей шапки).
+	# 4-й аргумент в сигнатуре — signature-проверка через сам факт компиляции.
+	var stack0 := _toast_count(g)
+	var tapped := {"n": 0}
+	g._online._toast("Тост с тапом", Online.NoticeKind.INFO, 5.0,
+		func() -> void: tapped["n"] += 1)
+	var s: VBoxContainer = g._online._toast_stack
+	var last: PanelContainer = s.get_child(s.get_child_count() - 1) as PanelContainer
+	Selftest.check("toast 4-arg call appends panel", _toast_count(g) == stack0 + 1)
+	Selftest.check("toast with valid on_tap is clickable (STOP)",
+		last != null and last.mouse_filter == Control.MOUSE_FILTER_STOP)
+	g._online._toast("Обычный тост", Online.NoticeKind.INFO, 5.0)
+	last = s.get_child(s.get_child_count() - 1) as PanelContainer
+	Selftest.check("toast without callback stays IGNORE",
+		last != null and last.mouse_filter == Control.MOUSE_FILTER_IGNORE)
+	Selftest.check("toast stack itself stays IGNORE",
+		s.mouse_filter == Control.MOUSE_FILTER_IGNORE)
+	_trim_toasts(g, stack0)
+	# Двойной тап (замечание ревью Task 3): dismissed-флаг сторожит только
+	# закрытие, on_tap может прилететь второй раз за жизнь панели. Колбэк
+	# соц-тоста — _open_social → SocialUI.open(0); второй вызов обязан быть
+	# безвредным: экран виден, один свежий сегментный ряд, уровень списка.
+	var ui = g.get("_social_ui")
+	g._open_social()
+	g._open_social()
+	Selftest.check("double open from toast tap is harmless", ui != null
+		and ui._screen != null and ui._screen.visible and ui._peer == ""
+		and ui._body != null
+		and ui._body.find_children("SocialSegments", "", true, false).size() == 1
+		and ui._body.find_children("FriendRow_*", "", true, false).size() == 3)
+	ui.close()
+
