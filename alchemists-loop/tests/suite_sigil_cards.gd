@@ -416,16 +416,10 @@ static func run(g: Game) -> void:
 	var sb6_pages := 0
 	if sb6_book != null:
 		sb6_pages = sb6_book._pages.size()
-	var sb6_old: Node = null
-	var sb6_page: Control = g._sigil_pages.get("crafts", null)
-	if sb6_page != null and sb6_page.get_child_count() > 0:
-		sb6_old = sb6_page.get_child(0)
 	g._sigil_show_tab("collection")
-	var sb6_moved := g._sigil_tab == "collection" \
-		and (sb6_old == null or sb6_old.is_queued_for_deletion())
 	Selftest.check("sb6 modal builds three tabs",
 		g._sigil_coll != null and sb6_pages == 3 and g._sigil_tab_content != null
-		and sb6_moved)
+		and g._sigil_tab == "collection")
 
 	var sb6_grid := g._sigil_tab_content.find_child("SigilCollGrid", true, false) as GridContainer
 	var sb6_badge := false
@@ -472,6 +466,34 @@ static func run(g: Game) -> void:
 			sb6_close.pressed.emit()
 		sb6_closed = g._sigil_fullscreen == null and sb6_fs.is_queued_for_deletion()
 	Selftest.check("sb6 fullscreen closes on close button", sb6_closed)
+
+	# ---- перелистывание книги: уходящая страница обязана дожить до снимка ----
+	# Лист — снимок страницы на frame_post_draw текущего кадра. Если билдер
+	# новой страницы сносит старую, та скрывается сразу, а queue_free удалит её
+	# только в конце кадра: снимок выходит пустым, и игрок видит, как страница
+	# исчезает в момент начала анимации.
+	var sbf_crafts: Control = g._sigil_pages.get("crafts")
+	var sbf_before := 0
+	for sbf_c in sbf_crafts.get_children():
+		if not (sbf_c as Node).is_queued_for_deletion():
+			sbf_before += 1
+	g._sigil_show_tab("sets")
+	var sbf_after := 0
+	for sbf_c in sbf_crafts.get_children():
+		if not (sbf_c as Node).is_queued_for_deletion():
+			sbf_after += 1
+	Selftest.check("sigil flip leaves the outgoing page rendered for the snapshot",
+		sbf_before > 0 and sbf_after == sbf_before)
+	# Листание назад несёт на листе ПРИХОДЯЩУЮ страницу, поэтому её старое
+	# содержимое должно уйти со сцены сразу: оставленный в дереве queue_free
+	# попадает в снимок, и на листе вырастает старая страница поверх новой.
+	g._sigil_show_tab("crafts")
+	var sbf_stale := 0
+	for sbf_c in sbf_crafts.get_children():
+		if (sbf_c as Node).is_queued_for_deletion():
+			sbf_stale += 1
+	Selftest.check("sigil page rebuild detaches old content before the snapshot",
+		sbf_stale == 0)
 
 	g._close_sigil_collection()
 	# Откат: сиды, кэши и daily-состояние — в состояние до блока.

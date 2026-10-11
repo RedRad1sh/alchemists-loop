@@ -99,10 +99,13 @@ func _ensure_nodes() -> void:
 		title.ellipsis_char = "…"
 		title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
 		title.add_theme_constant_override("outline_size", 6)
-		# Название карточки — «display»-шрифт (Divagon из theme.json), fallback default.
-		var disp := get_theme_default_font()
-		if has_theme_font("display", "Label"):
-			disp = get_theme_font("display", "Label")
+		# Название карточки — рунический шрифт. Берём его напрямую через UIStyle,
+		# а не только из темы: карточка рендерится и в SubViewport, а туда тема не
+		# доходит (SubViewport рвёт цепочку). get_theme_font в таком случае отдаёт
+		# встроенный Open Sans, поэтому тема — только запасной путь.
+		var disp: Font = UIStyle.runic()
+		if disp == null:
+			disp = get_theme_font("runic", "Label")
 		title.add_theme_font_override("font", disp)
 		add_child(title)
 	if glitch == null:
@@ -156,6 +159,9 @@ func _refresh() -> void:
 	sparkles.setup(SigilFinishView.Part.SPARKLES, options, palette, seed_value, layout.icon_center(), layout.radius)
 	if options.show_icon:
 		icon.setup(SigilGeneratorRegistry.get_generator(recipe.result_type), icon_ctx, SigilRng.new(seed_value).fork("icon"), palette.ink, palette.accent)
+	# Редкость задаём до setup(): у SigilOptions поля rarity нет, а setup()
+	# перечитывает её только если оно там есть.
+	frame.rarity = recipe.rarity
 	frame.setup(options, palette, seed_value)
 	glitch.setup(palette.glitch, seed_value)
 	queue_redraw()
