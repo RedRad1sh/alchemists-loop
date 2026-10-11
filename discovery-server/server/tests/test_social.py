@@ -107,6 +107,49 @@ class TestSchema:
         finally:
             bare.close()
 
+    def test_blocks_blocked_index_in_both_paths(self, tmp_path, monkeypatch):
+        """Индекс по blocked_device живёт в schema.sql И в миграции 002.
+
+        PK (blocker_device, blocked_device) левым префиксом покрывает только
+        blocker_device, а каскад удаления аккаунта чистит и по blocked_device:
+        без индекса это SCAN всей таблицы. Правка schema.sql сама по себе
+        развёрнутую БД не касается — поэтому отдельный migrations/002_*.sql.
+        """
+        import sqlite3
+
+        def index_names(conn):
+            return {r["name"] for r in
+                    conn.execute("PRAGMA index_list(blocks)").fetchall()}
+
+        srv = _srv(tmp_path, monkeypatch)
+        srv.init_db()
+        conn = srv.get_db()
+        try:
+            assert "ix_blocks_blocked" in index_names(conn), index_names(conn)
+        finally:
+            conn.close()
+
+        mig_path = os.path.join(SERVER_DIR, "migrations", "002_blocks_blocked_index.sql")
+        assert os.path.exists(mig_path), mig_path
+        with open(mig_path, "r", encoding="utf-8") as f:
+            ddl = f.read()
+        bare = sqlite3.connect(str(tmp_path / "bare_blocks.db"))
+        bare.row_factory = sqlite3.Row
+        bare.execute("CREATE TABLE IF NOT EXISTS blocks (blocker_device TEXT NOT NULL, "
+                     "blocked_device TEXT NOT NULL, created_at TEXT NOT NULL, "
+                     "PRIMARY KEY (blocker_device, blocked_device))")
+        bare.executescript(ddl)
+        try:
+            assert "ix_blocks_blocked" in index_names(bare), index_names(bare)
+            # повторное применение не падает: форма идемпотентна, как 001_social.sql
+            bare.executescript(ddl)
+            plan = [r[3] for r in bare.execute(
+                "EXPLAIN QUERY PLAN DELETE FROM blocks "
+                "WHERE blocker_device = ? OR blocked_device = ?", ("a", "b")).fetchall()]
+        finally:
+            bare.close()
+        assert any("MULTI-INDEX OR" in p for p in plan), plan
+
     def test_pair_key_is_primary_key_of_friend_edges(self, tmp_path, monkeypatch):
         """Одна строка на пару — на уровне БД, а не проверками в коде."""
         srv = _srv(tmp_path, monkeypatch)
@@ -676,7 +719,94 @@ class TestRemoveAndBlock:
         assert _count(srv, "SELECT COUNT(*) AS c FROM friend_edges") == 0, \
             "отказ не должен оставлять ребро"
 
+    def test_calling_as_a_seeded_bot_is_rejected(self, tmp_path, monkeypatch):
+        """`bot-*` — id рейтинговых ботов из seed.py, не игрок.
+
+        device_id не аутентифицирован, поэтому вызов от имени бота открывал бы
+        чужие ленты (GET /api/messages с read_at-побочным эффектом) и писал бы
+        письма от бота, а POST /api/me перекладывал бы ник бота на устройство
+        игрока. Тот же `_social_caller`, что и для Светика: правило одинаковое
+        с обеих сторон пары.
+        """
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        # Боты уже в players с первого init_db (seed.py), отдельная регистрация
+        # не нужна: проверяем, что их id нельзя заявить от своего имени.
+        conn = srv.get_db()
+        try:
+            original = conn.execute(
+                "SELECT nick FROM players WHERE device_id = 'bot-0'").fetchone()["nick"]
+        finally:
+            conn.close()
+        _send(client, b, a, "чужое")
+        masked = {"device_id": "bot-0", "target_nick": "Мира"}
+        cases = [
+            ("get", "/api/social/inbox", {"device_id": "bot-0"}),
+            ("get", "/api/messages", {"device_id": "bot-0", "peer_device": a}),
+            ("json", "/api/message/send",
+             {"device_id": "bot-0", "peer_device": a, "body": "от бота"}),
+            ("json", "/api/friend/request", masked),
+            ("json", "/api/friend/respond",
+             {"device_id": "bot-0", "requester_device": a, "accept": True}),
+            ("json", "/api/friend/remove", {"device_id": "bot-0", "peer_device": a}),
+            ("json", "/api/friend/block", {"device_id": "bot-0", "target_device": a}),
+            ("json", "/api/friend/unblock", {"device_id": "bot-0", "target_device": a}),
+            ("json", "/api/me", {"device_id": "bot-0", "nick": "Перевертыш"}),
+        ]
+        for kind, route, payload in cases:
+            if kind == "get":
+                r = client.get(route, params=payload)
+            else:
+                r = client.post(route, json=payload)
+            assert (r.status_code, r.json().get("detail")) == (400, "bot"), \
+                "%s -> %s %s" % (route, r.status_code, r.text)
+        # ни одна ветка не дошла до БД: лента не прочитана, писем нет,
+        # ник бота не переехал на чужое устройство
+        conn = srv.get_db()
+        try:
+            unread = conn.execute(
+                "SELECT COUNT(*) AS c FROM messages WHERE from_device = ? "
+                "AND read_at IS NULL", (b,)).fetchone()["c"]
+            forged = conn.execute(
+                "SELECT COUNT(*) AS c FROM messages WHERE from_device = 'bot-0'"
+            ).fetchone()["c"]
+            nick = conn.execute(
+                "SELECT nick FROM players WHERE device_id = 'bot-0'").fetchone()["nick"]
+            edges = conn.execute(
+                "SELECT COUNT(*) AS c FROM friend_edges WHERE a_device = 'bot-0' "
+                "OR b_device = 'bot-0'").fetchone()["c"]
+        finally:
+            conn.close()
+        assert unread == 1, "чужое письмо пары осталось непрочитанным"
+        assert forged == 0, "письмо от имени бота не записано"
+        assert nick == original, "ник бота не перевыпущен"
+        assert edges == 0, "бот не вошёл в социальный граф"
+
+    def test_caller_id_with_pipe_is_rejected_everywhere(self, tmp_path, monkeypatch):
+        """`|` внутри device_id делает canonical_pair_key неоднозначным
+        (key("ab","c|d") == key("ab|c","d")), поэтому граница стоит до БД и на
+        вызывающей стороне тоже, а не только на собеседнике."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        poisoned = "dev|a"
+        assert client.get("/api/social/inbox",
+                          params={"device_id": poisoned}).status_code == 400
+        r = client.get("/api/messages",
+                       params={"device_id": poisoned, "peer_device": "dev-a"})
+        assert (r.status_code, r.json()["detail"]) == (400, "bad_device_id"), r.text
+        r = client.post("/api/message/send",
+                        json={"device_id": poisoned, "peer_device": "dev-a",
+                              "body": "размытая пара"})
+        assert (r.status_code, r.json()["detail"]) == (400, "bad_device_id"), r.text
+        r = client.post("/api/me", json={"device_id": poisoned, "nick": "Обход"})
+        assert (r.status_code, r.json()["detail"]) == (400, "bad_device_id"), r.text
+        assert _count(srv, "SELECT COUNT(*) AS c FROM players WHERE device_id = ?",
+                      (poisoned,)) == 0
+
     def test_poisoned_spirit_edge_heals_on_inbox(self, tmp_path, monkeypatch):
+
         """_ensure_spirit_edge становится само-лечащей: уже отравленное
         pending-ребро (единственная форма, которую оставлял request от имени
         npc-spirit до фикса) чинится UPDATE'ом без миграции — иначе живой БД
@@ -844,7 +974,10 @@ class TestMessages:
                         json={"device_id": a, "peer_device": b, "body": "m%d" % i})
         r = client.get("/api/messages",
                        params={"device_id": a, "peer_device": b, "limit": 2})
-        assert len(r.json()["messages"]) == 2, r.json()
+        got = [m["body"] for m in r.json()["messages"]]
+        # Хвост, а не начало: клиент открывает ленту с since_id=0 и без
+        # прокрутки, поэтому страница обязана догонять свежие письма.
+        assert got == ["m3", "m4"], r.json()
         r = client.get("/api/messages",
                        params={"device_id": a, "peer_device": b, "limit": 100})
         assert r.status_code == 200 and len(r.json()["messages"]) == 5, r.text
@@ -852,6 +985,33 @@ class TestMessages:
         r = client.get("/api/messages",
                        params={"device_id": a, "peer_device": b, "limit": 5000})
         assert r.status_code == 422, r.text
+
+    def test_read_at_stops_at_returned_page_boundary(self, tmp_path, monkeypatch):
+        """Граница прочтения = id последнего отданного сообщения.
+
+        Чужое письмо, оставшееся за хвостом страницы, не должно терять бейдж:
+        UPDATE без `id <= ?` пометил бы прочитанным то, чего игрок не видел.
+        """
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        for i in range(3):
+            client.post("/api/message/send",
+                        json={"device_id": b, "peer_device": a, "body": "t%d" % i})
+        r = client.get("/api/messages",
+                       params={"device_id": a, "peer_device": b, "limit": 1})
+        shown = r.json()["messages"][0]["id"]
+        conn = srv.get_db()
+        try:
+            rows = conn.execute(
+                "SELECT id, read_at FROM messages WHERE from_device = 'dev-b' "
+                "ORDER BY id").fetchall()
+        finally:
+            conn.close()
+        read = {row["id"]: row["read_at"] for row in rows}
+        assert read[shown] is not None, "отданное письмо прочитано"
+        assert all(read[i] is None for i in read if i > shown), \
+            "неотданное письмо остаётся непрочитанным"
 
     def test_strangers_and_missing_peer(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
@@ -1179,6 +1339,31 @@ class TestInbox:
         finally:
             conn.close()
         assert len(rows) == 1 and rows[0]["last_inbox_day"] == "2026-10-09", rows
+
+    def test_last_inbox_day_never_rewinds(self, tmp_path, monkeypatch):
+        """MAX(excluded, текущий): откат часов не сдвигает отметку назад.
+
+        Триггер «return» (задача 8) сравнивает last_inbox_day со сегодняшним
+        днём. Запись, уехавшая в прошлое, сделала бы игрока «вернувшимся» на
+        каждом следующем заходе, пока часы не догонят — переписку это спамит
+        весточкой.
+        """
+        srv = _srv(tmp_path, monkeypatch)
+        clock = {"now": _dt.datetime(2026, 10, 9, 8, 0)}
+        monkeypatch.setattr(srv, "_now_dt", lambda: clock["now"])
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        _inbox(client, "dev-a")
+        clock["now"] = _dt.datetime(2026, 10, 5, 8, 0)
+        _inbox(client, "dev-a")
+        conn = srv.get_db()
+        try:
+            day = conn.execute(
+                "SELECT last_inbox_day FROM social_state WHERE device_id='dev-a'"
+            ).fetchone()["last_inbox_day"]
+        finally:
+            conn.close()
+        assert day == "2026-10-09", day
 
     def test_prune_age_boundary_is_exclusive(self, tmp_path, monkeypatch):
         """Граница `<`, а не `<=`: строке ровно MSG_RETENTION_DAYS дней — жить.

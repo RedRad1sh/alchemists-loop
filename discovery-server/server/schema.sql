@@ -380,6 +380,10 @@ CREATE TABLE IF NOT EXISTS blocks (
     created_at TEXT NOT NULL,
     PRIMARY KEY (blocker_device, blocked_device)
 );
+-- PK покривает только blocker_device. Каскад удаления аккаунта чистит строки
+-- и по blocked_device (DELETE ... OR blocked_device = ?); без индекса вторая
+-- ветка OR — полный скан blocks.
+CREATE INDEX IF NOT EXISTS ix_blocks_blocked ON blocks(blocked_device);
 
 CREATE TABLE IF NOT EXISTS spirit_messages (
     device_id TEXT NOT NULL,

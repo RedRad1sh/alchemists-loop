@@ -208,16 +208,34 @@ per-player seed = `sha256(device_id#day)[:8]`.
 содержащее `|` — 400 `bad_device_id` из хендлера (`_social_id`, `min_length`
 видно сырую строку до trim).
 
+Зарезервированные id нельзя заявить от своего имени: `device_id` вызывающей
+стороны проходит `_social_caller`, который добавляет к той же границе 400 `npc`
+для `npc-spirit` и 400 `bot` для `bot-*` (боты рейтинга заводятся `seed.py` и в
+социальном графе не существуют). Без этого вызов от имени Светика читал бы чужую
+ленту со Светиком и ставил там `read_at`, а `send` писал бы поддельные письма от
+духа. Собеседник (`peer_device`, `target_device`, `requester_device`,
+`target_nick`) проверяется отдельно и симметрично: дух запрещён с обеих сторон
+тяжёлых операций, бот — и как цель заявки, и как автор блока.
+
 | Метод | Вход | Успех | Ошибки |
 |---|---|---|---|
-| `POST /api/friend/request` | `{device_id, target_nick}` | `{ok, state, peer}` | 400 `target_not_found`/`bot`/`self`; 403 `blocked`; 409 `already_friends`; 429 `friend_limit`/`pending_limit`; 503 `race_lost` |
-| `POST /api/friend/respond` | `{device_id, requester_device, accept}` | `{ok, accepted, peer}` | 400 `self`; 403 `blocked`; 404 `request_not_found`; 429 `friend_limit` |
-| `POST /api/friend/remove` | `{device_id, peer_device}` | `{ok}` | 400 `npc`; 404 `not_friends` |
-| `POST /api/friend/block` | `{device_id, target_device}` | `{ok}` | 400 `npc`/`self` |
-| `POST /api/friend/unblock` | `{device_id, target_device}` | `{ok}` | — |
-| `GET /api/social/inbox` | `device_id` | `{ok, friends, incoming, outgoing, unread_total, requests_total, friend_limit}` | 404 `not_registered` |
-| `GET /api/messages` | `device_id, peer_device, since_id, limit` | `{ok, messages:[{id, from_me, body, sent_at}]}` | 400 `missing_peer`; 403 `blocked`; 404 `not_friends` |
-| `POST /api/message/send` | `{device_id, peer_device, body}` | `{ok, id, sent_at}` | 400 `empty`/`too_long`; 403 `blocked`/`npc`; 404 `not_friends`; 429 `daily_limit` |
+| `POST /api/friend/request` | `{device_id, target_nick}` | `{ok, state, peer}` | 400 `target_not_found`/`bot`/`self`/`npc`; 403 `blocked`; 409 `already_friends`; 429 `friend_limit`/`pending_limit`; 503 `race_lost` |
+| `POST /api/friend/respond` | `{device_id, requester_device, accept}` | `{ok, accepted, peer}` | 400 `npc`/`bot`/`self`; 403 `blocked`; 404 `request_not_found`; 429 `friend_limit` |
+| `POST /api/friend/remove` | `{device_id, peer_device}` | `{ok}` | 400 `npc`/`bot`; 404 `not_friends` |
+| `POST /api/friend/block` | `{device_id, target_device}` | `{ok}` | 400 `npc`/`bot`/`self` |
+| `POST /api/friend/unblock` | `{device_id, target_device}` | `{ok}` | 400 `npc`/`bot` |
+| `GET /api/social/inbox` | `device_id` | `{ok, friends, incoming, outgoing, unread_total, requests_total, friend_limit}` | 400 `npc`/`bot`; 404 `not_registered` |
+| `GET /api/messages` | `device_id, peer_device, since_id, limit` | `{ok, messages:[{id, from_me, body, sent_at}]}` | 400 `missing_peer`/`npc`/`bot`; 403 `blocked`; 404 `not_friends` |
+| `POST /api/message/send` | `{device_id, peer_device, body}` | `{ok, id, sent_at}` | 400 `empty`/`too_long`/`npc`/`bot`; 403 `blocked`/`npc`; 404 `not_friends`; 429 `daily_limit` |
+
+`GET /api/messages` отдаёт хвост, а не начало: строки пары отбираются
+`ORDER BY id DESC LIMIT` от `since_id` и возвращаются в хронологическом порядке.
+Клиент открывает переписку с `since_id=0` и без прокрутки, поэтому начало ленты
+показывало бы самые старые письма (их до `MSG_KEEP_PER_PAIR=200` при `limit=100`),
+а свежие игрок не догонял бы ничем. Открытие ленты и есть прочтение: `read_at`
+ставится в том же запросе, только чужим сообщениям (`from_device != me`) и только
+не выше границы отданной страницы — письмо, прилетевшее после выборки, сохраняет
+бейдж до следующего открытия.
 
 `GET /api/social/inbox` — единственная точка, которую клиент зовёт при входе в
 игру и при открытии экрана. В неё собраны все побочные эффекты слоя: уборка
