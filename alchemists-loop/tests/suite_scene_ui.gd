@@ -52,4 +52,35 @@ static func run(g: Game) -> void:
 	Selftest.check("brew bar above nav",
 			g._brew_bar.offset_bottom == -76 and g._brew_bar.offset_top == -196)
 
+	# R16: bottom-sheet — reparent бокса туда и обратно
+	Selftest.check("sheet closed initially", not g._sheet.is_open())
+	var res_box: Control = g._pages._mode_pages.get("resonance")
+	Selftest.check("resonance box built", res_box != null)
+	if res_box != null:
+		var orig_parent := res_box.get_parent()
+		g._sheet.open("resonance", "Отголоски")
+		Selftest.check("sheet opens resonance", g._sheet.is_open()
+				and res_box.get_parent() == g._sheet._host_box)
+		g._sheet.close()
+		Selftest.check("sheet restores parent", not g._sheet.is_open()
+				and res_box.get_parent() == orig_parent)
+
+	# R16: карточка круга на сцене
+	Selftest.check("circle card present", g._rooms._circle_card != null
+			and g._rooms._circle_slots.size() == 3)
+
+	# R16: дейли-сетка — один claim в день, стрик и награда
+	var s0 := g._engine.ether + g._engine.ether_overflow
+	g._daily.open()
+	Selftest.check("daily opens", g._daily.is_open())
+	g._daily._on_claim()
+	var s1 := g._engine.ether + g._engine.ether_overflow
+	Selftest.check("daily claim grants", g._daily.streak == 1
+			and g._daily.claim_day == g._daily._today() and s1 >= s0 + 30)
+	g._daily._on_claim()
+	Selftest.check("daily no double claim", g._daily.streak == 1
+			and g._engine.ether + g._engine.ether_overflow == s1)
+	g._daily.close()
+	Selftest.check("daily closes", not g._daily.is_open())
+
 	g._tabs_ref.current_tab = st_tab

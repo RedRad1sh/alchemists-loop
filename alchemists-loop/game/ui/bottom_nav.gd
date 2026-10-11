@@ -15,7 +15,7 @@ var _items: Array = []  # {key, tab, btn, icon: TextureRect, label: Label, dot: 
 func _specs() -> Array:
 	return [
 		{"key": "lab", "tab": Game.TAB_EXPERIMENT, "icon": "cauldron", "label": "Лаборатория"},
-		{"key": "book", "tab": Game.TAB_LAB, "icon": "book", "label": "Книга"},
+		{"key": "book", "tab": Game.TAB_LAB, "icon": "book", "label": "Гримуар"},
 		{"key": "world", "tab": Game.TAB_WORLD, "icon": "globe", "label": "Мир"},
 		{"key": "house", "tab": -1, "icon": "home", "label": "Дом"},
 		{"key": "rating", "tab": Game.TAB_RATING, "icon": "trophy", "label": "Рейтинг"},

@@ -106,6 +106,13 @@ func build(game: Game, root: VBoxContainer) -> void:
 	pouch_btn.pressed.connect(g._shop.open)
 	row.add_child(pouch_btn)
 
+	# Дары цикла — дейли-сетка возврата
+	var gift_btn := g._header_button(0)
+	UIIcon.into_button(gift_btn, "gift", 24)
+	gift_btn.tooltip_text = "Дары цикла: ежедневные награды за возврат"
+	gift_btn.pressed.connect(func() -> void: g._daily.open())
+	row.add_child(gift_btn)
+
 	# звук
 	g._sound_btn = g._header_button(0)
 	UIIcon.into_button(g._sound_btn, "volume", 24)

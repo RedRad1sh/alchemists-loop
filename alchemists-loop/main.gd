@@ -360,6 +360,11 @@ var _sound_btn: Button
 var _hud: HudBar = null        # R15: компактная шапка (hud.gd)
 var _bottom_nav: BottomNav = null  # R15: нижний иконковый таб-бар (bottom_nav.gd)
 var _rooms: RoomCarousel = null    # R15: карусель комнат Лаборатории (rooms.gd)
+var _sheet: BottomSheet = null     # R16: bottom-sheet панелей устройств (sheet.gd)
+var _daily: DailyGrid = null       # R16: дейли-сетка «Дары цикла» (daily_grid.gd)
+# R16: сейв-поля дейли-сетки читаются раньше постройки UI — держим до build.
+var _daily_claim_day_save := ""
+var _daily_streak_save := 0
 
 # --- оформление: Manrope + Kenney UI (9-slice) ---
 var _font_reg: Font = null
@@ -1327,6 +1332,13 @@ func _build_ui() -> void:
 	_bottom_nav.refresh(_tabs_ref.current_tab)
 	# Контент не должен уезжать под нижний бар: поднимаем низ корневого хоста.
 	margin.offset_bottom = -14 - BottomNav.NAV_H
+	# R16: bottom-sheet устройств и дейли-сетка — поверх страниц, ниже модалок.
+	_sheet = BottomSheet.new()
+	_sheet.build(self)
+	_daily = DailyGrid.new()
+	_daily.build(self)
+	_daily.claim_day = _daily_claim_day_save
+	_daily.streak = _daily_streak_save
 	_spirit._build_companion()
 	_build_popup()
 	_build_confirm()

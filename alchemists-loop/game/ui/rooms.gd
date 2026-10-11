@@ -17,6 +17,10 @@ var _props: Dictionary = {}
 var _press_x: float = -1.0
 var _deck_btn: Button = null
 var _scroll_btn: Button = null
+var _circle_card: Button = null
+var _circle_slots: Array = []
+
+const TOOL_TITLES := {"spring": "Родник", "bench": "Верстак", "retort": "Реторта"}
 
 
 func build(game: Game, page: VBoxContainer) -> void:
@@ -99,8 +103,41 @@ func build(game: Game, page: VBoxContainer) -> void:
 	_scroll_btn.offset_bottom = 96
 	_scroll_btn.pressed.connect(func() -> void: g._progress_ui._open_progress_popup("orders"))
 	_host.add_child(_scroll_btn)
+
+	# Карточка «Круг дня» (концепт: 3 «?»-слота + приз) — открывает круг в sheet.
+	_circle_card = Button.new()
+	_circle_card.name = "CircleCard"
+	_circle_card.flat = true
+	var card_sb := UIStyle.box(Color(0.05, 0.09, 0.14, 0.92), UIStyle.TEAL_DIM, 14, 1)
+	for st in ["normal", "hover", "pressed", "focus"]:
+		_circle_card.add_theme_stylebox_override(st, card_sb)
+	_circle_card.tooltip_text = "Дневной круг: цель + заказы + открытия — забери награду"
+	_circle_card.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_circle_card.offset_left = -170
+	_circle_card.offset_right = 170
+	_circle_card.offset_top = -70
+	_circle_card.offset_bottom = -26
+	var chbox := HBoxContainer.new()
+	chbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	chbox.add_theme_constant_override("separation", 14)
+	chbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_circle_card.add_child(chbox)
+	for glyph in ["✦", "❖", "✧"]:
+		var sl := g._label(glyph, 16)
+		sl.add_theme_color_override("font_color", UIStyle.GOLD)
+		sl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chbox.add_child(sl)
+		_circle_slots.append(sl)
+	var prize := g._label("+%d⚡" % Game.CIRCLE_REWARD, 14)
+	prize.add_theme_color_override("font_color", UIStyle.GOLD)
+	prize.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chbox.add_child(prize)
+	_circle_card.pressed.connect(func() -> void:
+		g._sheet.open("circle", "Дневной круг"))
+	_host.add_child(_circle_card)
 	_refresh_chrome()
 	refresh_unlocks()
+	refresh_circle_card()
 
 
 func _make_arrow(right: bool) -> Button:
@@ -173,10 +210,8 @@ func _open_tool(key: String) -> void:
 		g._online._set_status(g._pages._mode_hint(key))
 		Sfx.error()
 		return
-	Sfx.click()
-	if g._tabs_ref != null:
-		g._tabs_ref.current_tab = Game.TAB_TOOLS
-	g._pages._select_mode(key)
+	# R16: устройство открывается bottom-sheet прямо в сцене, без перескока.
+	g._sheet.open(key, TOOL_TITLES.get(key, key))
 
 
 func refresh_unlocks() -> void:
@@ -214,8 +249,29 @@ func _refresh_chrome() -> void:
 		_deck_btn.visible = _room_idx == 0
 	if _scroll_btn != null:
 		_scroll_btn.visible = _room_idx == 0
+	if _circle_card != null:
+		_circle_card.visible = _room_idx == 0
 	for i in _dots.size():
 		(_dots[i] as ColorRect).color = UIStyle.TEAL if i == _room_idx else Color(0.35, 0.45, 0.55, 0.5)
+
+
+## Статусы трёх слотов круга: цель дня / заказы / открытия дня.
+func refresh_circle_card() -> void:
+	if _circle_card == null or g._retention == null:
+		return
+	var states := [
+		g._retention._circle_challenge_done() or g._retention._circle_local_done(),
+		g._retention._circle_orders_done(),
+		g._retention._circle_disc_done(),
+	]
+	for i in _circle_slots.size():
+		var sl: Label = _circle_slots[i]
+		if states[i]:
+			sl.text = "✓"
+			sl.add_theme_color_override("font_color", UIStyle.TEAL)
+		else:
+			sl.text = ["✦", "❖", "✧"][i]
+			sl.add_theme_color_override("font_color", UIStyle.GOLD)
 
 
 func _on_gui_input(event: InputEvent) -> void:

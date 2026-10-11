@@ -88,6 +88,8 @@ func _save_game() -> void:
 		"order_day": g._guild._order_day,
 		"order_targets": g._guild._order_targets_cache,
 		"order_done": g._guild._order_done.keys(),
+		"daily_claim_day": g._daily.claim_day if g._daily != null else g._daily_claim_day_save,
+		"daily_streak": g._daily.streak if g._daily != null else g._daily_streak_save,
 		"last_ts": Time.get_unix_time_from_system(),
 		"sage_gold": g._engine.sage_gold,
 		"journal": g._hub._log_events.slice(0, 20),
@@ -284,6 +286,10 @@ func _load_game() -> void:
 			g._progress_ui._set_done[String(cat)] = true
 	if data.get("order_day") is String:
 		g._guild._order_day = String(data["order_day"])
+	if data.get("daily_claim_day") is String:
+		g._daily_claim_day_save = String(data["daily_claim_day"])
+	if typeof(data.get("daily_streak")) in [TYPE_INT, TYPE_FLOAT]:
+		g._daily_streak_save = clampi(int(data["daily_streak"]), 0, 100000)
 	if data.get("order_targets") is Array:
 		g._guild._order_targets_cache.clear()
 		for t in data["order_targets"]:

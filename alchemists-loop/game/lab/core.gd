@@ -926,6 +926,8 @@ func _refresh_header() -> void:
 			g._hud.rate_chip.text = "+%.2f/с" % _ether_rate()
 	if g._bottom_nav != null:
 		g._bottom_nav.refresh_badges()
+	if g._rooms != null:
+		g._rooms.refresh_circle_card()
 	var nxt := _next_milestone(inventory.size())
 	var atlas := ""
 	if nxt > 0:
