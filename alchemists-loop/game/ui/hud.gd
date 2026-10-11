@@ -139,7 +139,7 @@ func build(game: Game, root: VBoxContainer) -> void:
 	home_btn.tooltip_text = "Дом Светика: построй домик, обставь его, смени тему и ауру"
 	home_btn.pressed.connect(g._home._open_workshop)
 	row2.add_child(home_btn)
-	g._social_btn = g._small_button("Друзья", Vector2(88, 34), 2)
+	g._social_btn = g._small_button("Друзья", Vector2(96, 34), 2)
 	g._social_btn.tooltip_text = "Друзья, заявки и личные сообщения"
 	g._social_btn.pressed.connect(g._open_social)
 	row2.add_child(g._social_btn)

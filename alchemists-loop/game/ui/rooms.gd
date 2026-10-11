@@ -194,14 +194,13 @@ func set_room(i: int) -> void:
 	var old: Control = _rooms[_room_idx]
 	var nxt: Control = _rooms[i]
 	_room_idx = i
+	# Видимость переключаем сразу (детерминизм тестов и мгновенный отклик),
+	# tween — только мягкое появление новой комнаты.
+	old.visible = false
+	nxt.modulate.a = 0.0
 	nxt.visible = true
 	var tw := g.create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(old, "modulate:a", 0.0, 0.14)
 	tw.tween_property(nxt, "modulate:a", 1.0, 0.14)
-	tw.chain().tween_callback(func() -> void:
-		old.visible = _rooms.find(old) == _room_idx
-		old.modulate.a = 1.0)
 	Sfx.click()
 	_refresh_chrome()
 
