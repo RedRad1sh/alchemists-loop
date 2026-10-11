@@ -526,6 +526,16 @@ func _ready() -> void:
 	for a in args:
 		if a == "--action=upgrades":
 			_demo_harness._action_upgrades = true
+		elif a == "--action=up10":
+			_demo_harness._action_up10 = true
+		elif a == "--action=tool":
+			_demo_harness._action_tool = true
+		elif a == "--action=daily":
+			_demo_harness._action_daily = true
+		elif a == "--action=master":
+			_demo_harness._action_master = true
+		elif a == "--action=field":
+			_demo_harness._action_field = true
 		elif a == "--action=hint":
 			_demo_harness._action_hint = true
 		elif a == "--action=event":
@@ -746,6 +756,18 @@ func _ready() -> void:
 			tc.current_tab = _demo_harness._shot_tab
 	if _demo_harness._demo and _demo_harness._action_upgrades:
 		_hub._open_upgrades()
+	# R16/R17: состояния новой сцены для геом-дампов и локальных скриншотов.
+	if _demo_harness._demo and _demo_harness._action_up10:
+		_hub._open_upgrades()
+		_hub._pick_up_qty(10)
+	if _demo_harness._demo and _demo_harness._action_tool:
+		_rooms._open_tool("spring")
+	if _demo_harness._demo and _demo_harness._action_daily:
+		_daily.open()
+	if _demo_harness._demo and _demo_harness._action_master:
+		_rooms.set_room(1)
+	if _demo_harness._demo and _demo_harness._action_field:
+		_pages._toggle_experiment_drawer()
 	if _demo_harness._demo and _demo_harness._action_hint:
 		# для кадра подсказку жмём ближе к моменту съёмки, чтобы кольцо было видно
 		if _demo_harness._shot_path != "":

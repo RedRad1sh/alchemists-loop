@@ -21,6 +21,11 @@ var _geom_frame := 0
 var _probe := false
 var _shot_scroll := -1
 var _action_upgrades := false
+var _action_up10 := false  # R17: попап улучшений с чипом ×10
+var _action_tool := false  # R16: bottom-sheet устройства (Родник)
+var _action_daily := false  # R16: дейли-сетка «Дары цикла»
+var _action_master := false  # R17: комната 2 — Мастерская
+var _action_field := false  # R17: лаборатория с закрытым пикером (поле)
 var _action_hint := false
 var _action_event := false
 var _action_companion := false
@@ -154,20 +159,40 @@ func _probe_pixels(img: Image) -> void:
 
 func _dump_geom() -> void:
 	for child in g.get_children():
-		_walk_dump(child, 0)
+		_walk_dump(child, 0, 0)
 	print("window=", g.get_window().size)
 
-func _walk_dump(node: Node, depth: int) -> void:
+func _walk_dump(node: Node, depth: int, eff_z: int) -> void:
 	var pad := ""
 	for i in depth:
 		pad += "  "
 	if node is Control:
 		var c: Control = node
 		var r := c.get_global_rect()
-		print("%s%s [%s] pos=%s size=%s vis=%s min=%s" % [
-			pad, c.name, c.get_class(), r.position, r.size, c.visible, c.get_combined_minimum_size()])
+		# R17: текст Label/Button в дампе — по нему wireframe-схема читается
+		# как макет, а не как набор прямоугольников.
+		var txt := ""
+		if c is Label:
+			txt = (c as Label).text
+		elif c is Button:
+			txt = (c as Button).text
+		txt = txt.replace("\n", " ⏎ ")
+		if txt.length() > 60:
+			txt = txt.substr(0, 57) + "..."
+		var tail := ""
+		if txt != "":
+			tail = ' text="' + txt + '"'
+		print("%s%s [%s] pos=%s size=%s vis=%s min=%s z=%d" % [
+			pad, c.name, c.get_class(), r.position, r.size, c.visible, c.get_combined_minimum_size(), eff_z] + tail)
+	var child_z := eff_z
+	if node is CanvasItem:
+		var ci: CanvasItem = node
+		if ci.z_as_relative:
+			child_z += ci.z_index
+		else:
+			child_z = ci.z_index
 	for child in node.get_children():
-		_walk_dump(child, depth + 1)
+		_walk_dump(child, depth + 1, child_z)
 func _apply_demo_state() -> void:
 	for base_id in ["water", "fire", "air", "earth"]:
 		g._engine.inventory[base_id] = 100
@@ -346,6 +371,11 @@ func _tick_demo() -> bool:
 	# Кадровый тик харнеса, вызывается из Game._process. True — кадр поглощён (return).
 	if _geom:
 		_geom_frame += 1
+		if _geom_frame == 10:
+			# R17: в headless окно по умолчанию 64×64 — разворачиваем в проектный
+			# портрет (project.godot 540×960), чтобы контейнеры разложились
+			# реальными размерами, и ждём несколько кадров перераскладки.
+			g.get_window().size = Vector2i(540, 960)
 		if _geom_frame >= 50:
 			_dump_geom()
 			g.get_tree().quit(0)

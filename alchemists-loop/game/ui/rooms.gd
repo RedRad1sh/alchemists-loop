@@ -115,8 +115,10 @@ func build(game: Game, page: VBoxContainer) -> void:
 	_circle_card.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	_circle_card.offset_left = -170
 	_circle_card.offset_right = 170
-	_circle_card.offset_top = -70
-	_circle_card.offset_bottom = -26
+	# R17-fix: карта должна висеть НАД варочной панелью (BrewBar 120px + зазор),
+	# иначе панель перекрывает её (поймано wireframe-сверкой геометрии).
+	_circle_card.offset_top = -160
+	_circle_card.offset_bottom = -116
 	var chbox := HBoxContainer.new()
 	chbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	chbox.add_theme_constant_override("separation", 14)
@@ -200,6 +202,11 @@ func _build_workshop(box: VBoxContainer) -> void:
 		cell.add_child(prop)
 		var nm := g._label(String(spec["name"]), 13)
 		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		# R17-fix: autowrap-лейбл в узкой HBox-ячейке даёт min-ширину 1px и
+		# сжимается в столбик (поймано wireframe-сверкой); подпись короткая —
+		# перенос не нужен, ширина фиксируется по размеру пропа.
+		nm.autowrap_mode = TextServer.AUTOWRAP_OFF
+		nm.custom_minimum_size = Vector2(int(spec["size"]), 0)
 		nm.add_theme_color_override("font_color", UIStyle.TEXT)
 		cell.add_child(nm)
 		_props[String(spec["key"])] = prop

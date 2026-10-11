@@ -68,6 +68,9 @@ static func run(g: Game) -> void:
 	# R16: карточка круга на сцене
 	Selftest.check("circle card present", g._rooms._circle_card != null
 			and g._rooms._circle_slots.size() == 3)
+	var brew_bar: Control = g.find_child("BrewBar", true, false)
+	Selftest.check("circle card above brew bar", brew_bar != null
+			and not g._rooms._circle_card.get_global_rect().intersects(brew_bar.get_global_rect()))
 
 	# R16: дейли-сетка — один claim в день, стрик и награда
 	var s0 := g._engine.ether + g._engine.ether_overflow
