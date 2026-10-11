@@ -1101,7 +1101,21 @@ func _process(delta: float) -> void:
 	# and all consumers have committed the same completed time slice.
 	var save_was_frozen := _saves._save_frozen
 	_saves._save_frozen = true
-	var work: Dictionary = _workshop_scheduler.advance(delta)
+	# Кадры не идут, пока приложение приостановлено, о границе online/offline
+	# судит настенное время, а не delta: иначе пропуск за resume считается
+	# обычным онлайном и обходит офлайн-потолок и лимиты автономности.
+	var wall := Time.get_unix_time_from_system()
+	var gap := wall - _workshop.last_simulated_at if _workshop.last_simulated_at > 0.0 else 0.0
+	var work: Dictionary = {}
+	if not _selftest and gap >= Game.OFFLINE_MIN_SEC:
+		_saves._save_frozen = save_was_frozen
+		_saves._grant_offline()
+		_saves._save_frozen = true
+	else:
+		work = _workshop_scheduler.advance(delta)
+	# Водораздел = настенная метка последнего просимулированного кадра.
+	if not _workshop.is_read_only() and _workshop.last_simulated_at < wall:
+		_workshop.last_simulated_at = wall
 	_saves._save_frozen = save_was_frozen
 	if int(work.get("steps", 0)) > 0 or int(work.get("spring_items", 0)) > 0:
 		_engine._refresh()

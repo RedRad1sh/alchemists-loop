@@ -22,6 +22,7 @@ static func run(g: Game) -> void:
 	view.setup(g, w)
 	Selftest.check("workshop UI real add button exists", view.find_child("Add_line_1", true, false) is Button)
 	await _screen(g, w, view)
+	await _hidden_page(g, view)
 	view.queue_free()
 	await g.get_tree().process_frame
 	await _materials(g, w, script)
@@ -178,6 +179,22 @@ static func _screen(g: Game, w: Workshop, view: Node) -> void:
 	w.changed.emit()
 	Selftest.check("workshop deleted view disconnects changed safely", w.changed.get_connections().size() < connection_count and w.lines == jobs)
 	g.add_child(view)
+
+static func _hidden_page(g: Game, view: Node) -> void:
+	# Re-adding the view above arms one deferred refresh; consume it first,
+	# otherwise it draws after the page is hidden and proves nothing.
+	await g.get_tree().process_frame
+	view.visible = false
+	view._status = "Скрытая страница"
+	view._schedule_refresh()
+	await g.get_tree().process_frame
+	Selftest.check("workshop hidden page skips the per frame model refresh",
+		_text(view, "CommandStatus") != "Скрытая страница")
+	view.visible = true
+	Selftest.check("workshop page draws accumulated state when shown",
+		_text(view, "CommandStatus") == "Скрытая страница")
+	view._status = ""
+	view.refresh()
 
 static func _materials(g: Game, w: Workshop, script: Script) -> void:
 	Selftest.check("workshop material planning API exists", w.has_method("queue_missing_materials") and w.has_method("missing_materials_preview"))

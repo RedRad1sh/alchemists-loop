@@ -7,6 +7,7 @@ var _cards: Array = []
 var _drafts: Array = []
 var _refresh_pending := false
 var _refreshing := false
+var _stale_while_hidden := false
 var _poll_seconds := 0.0
 var _live_hash := 0
 var _status := ""
@@ -37,6 +38,7 @@ func setup(game: Game, model: Workshop) -> void:
 
 func refresh() -> void:
 	_refresh_pending = false
+	_stale_while_hidden = false
 	if not is_instance_valid(g) or workshop == null or is_queued_for_deletion() or _cards.is_empty():
 		return
 	_refreshing = true
@@ -360,8 +362,20 @@ func _open_experiment() -> void:
 func _schedule_refresh() -> void:
 	if _refresh_pending or not is_inside_tree() or is_queued_for_deletion():
 		return
+	# Активная линия обновляет таймер каждый кадр, поэтому changed приходит
+	# каждый кадр. Страницу под другой вкладкой TabContainer видно быть не может,
+	# а пересбор подписей ради невидимого кадра стоит реальных кадров: копят
+	# накопленное и рисуем одним проходом при первом показе.
+	if not is_visible_in_tree():
+		_stale_while_hidden = true
+		return
 	_refresh_pending = true
 	call_deferred("refresh")
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_VISIBILITY_CHANGED and is_visible_in_tree() and _stale_while_hidden:
+		_stale_while_hidden = false
+		refresh()
 
 func _connect_model() -> void:
 	if workshop != null and is_inside_tree() and not workshop.changed.is_connected(_schedule_refresh):
