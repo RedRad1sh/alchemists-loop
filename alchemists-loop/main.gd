@@ -578,6 +578,10 @@ func _ready() -> void:
 			_demo_harness._action_social_search = true
 		elif a == "--action=social_badge":
 			_demo_harness._action_social_badge = true
+		elif a == "--action=social_rating":
+			_demo_harness._action_social_rating = true
+		elif a == "--action=social_guest":
+			_demo_harness._action_social_guest = true
 		elif a == "--action=circle":
 			_demo_harness._action_circle = true
 		elif a == "--action=sigilcoll":
@@ -684,7 +688,8 @@ func _ready() -> void:
 		_demo_harness._apply_demo_state()
 	if _demo_harness._demo and (_demo_harness._action_social or _demo_harness._action_social_requests
 			or _demo_harness._action_social_thread or _demo_harness._action_social_confirm
-			or _demo_harness._action_social_search or _demo_harness._action_social_badge):
+			or _demo_harness._action_social_search or _demo_harness._action_social_badge
+			or _demo_harness._action_social_rating or _demo_harness._action_social_guest):
 		_social._seed_demo()
 		if _demo_harness._action_social_search:
 			# R1: карточка поиска строится из уже кэшированных строк рейтинга —
@@ -699,10 +704,12 @@ func _ready() -> void:
 			# _rating_cache_at_ms: без него посев демо выглядит как вечный
 			# кэш, открытый «когда-то».
 			_online._rating_cache_at_ms = Time.get_ticks_msec()
-		if _demo_harness._action_social_badge:
+		if _demo_harness._action_social_badge or _demo_harness._action_social_rating \
+				or _demo_harness._action_social_guest:
 			# Приёмка Task 8 Step 3: бейдж «Друзья •N» в шапке БЕЗ открытия экрана —
 			# сид + перерисовка (_engine._refresh() ниже зовёт _refresh_header,
-			# бейдж считает Social.badge_for).
+			# бейдж считает Social.badge_for). FIX-E: rating/guest — свои ветки
+			# ниже (вкладка РЕЙТИНГ / экран дома), соц-экран не открываем.
 			pass
 		else:
 			_social_ui.open(1 if _demo_harness._action_social_requests else 0)
@@ -762,6 +769,47 @@ func _ready() -> void:
 	if _demo_harness._demo and _demo_harness._action_rating:
 		if _tabs_ref != null:
 			_tabs_ref.current_tab = TAB_RATING
+	if _demo_harness._demo and _demo_harness._action_social_rating:
+		# FIX-E приёмка: вкладка РЕЙТИНГ с рядами и кнопками состояний заявки.
+		# Строки — из посева (паттерн social_search: живой сервер в демо-приёмке
+		# не нужен); SocialUI.attach в ряду рисует состояние по кэшу Social,
+		# посевному _seed_demo выше: Николя «в друзьях», Мирра «заявка
+		# отправлена», Некто «в друзья».
+		_online._rating_cache = {"rows": [
+			{"nick": "Николя", "rank": 1, "avatar": {},
+				"last_seen": "2026-10-10T07:10:00", "discoveries": 3,
+				"elements": 2, "points": 5, "house_built": true, "house_guests": 1},
+			{"nick": "Мирра", "rank": 2, "avatar": {},
+				"last_seen": "2026-10-09T21:40:00", "discoveries": 2,
+				"elements": 1, "points": 3, "house_built": true, "house_guests": 0},
+			{"nick": "Некто", "rank": 3, "avatar": {},
+				"last_seen": "2026-10-08T12:00:00", "discoveries": 1,
+				"elements": 1, "points": 1, "house_built": false, "house_guests": 0}]}
+		_online._rating_cache_at_ms = Time.get_ticks_msec()
+		_online._render_rating_rows(_online._rating_cache)
+		if _tabs_ref != null:
+			_tabs_ref.current_tab = TAB_RATING
+	if _demo_harness._demo and _demo_harness._action_social_guest:
+		# FIX-E приёмка: экран дома + GuestFriendActions (row кнопок состояний
+		# рядом со строкой гостей) на том же посеве: «в друзьях»/«заявка
+		# отправлена»/«в друзья».
+		_home._open_house_screen()
+		_home._on_house_profile(2, [{"nick": "Николя"}, {"nick": "Мирра"}, {"nick": "Некто"}])
+		# Строка гостей лежит глубоко в длинном скролле дома — дотягиваем её до
+		# кадра приёмки: через несколько кадров после раскладки прокручиваем
+		# HouseScroll так, чтобы GuestFriendActions встал у верхнего края
+		# (паттерн --scroll: кадр 20/40, съёмка на 50-м).
+		var _scroll_to_guests := func() -> void:
+			var sc: ScrollContainer = _home._house_scroll
+			if sc == null:
+				return
+			var row := sc.find_child("GuestFriendActions", true, false) as Control
+			if row == null:
+				return
+			var delta: float = row.get_global_transform_with_canvas().origin.y \
+				- sc.get_global_transform_with_canvas().origin.y
+			sc.scroll_vertical = maxi(0, int(sc.scroll_vertical + delta - 8))
+		get_tree().create_timer(0.25).timeout.connect(_scroll_to_guests)
 	if _demo_harness._demo and _demo_harness._action_decor:
 		_home._cosmetic_house = true
 		_home.house_owned = {"rug": ["rug_1"]}
@@ -945,6 +993,14 @@ func _on_social_inbox_arrived(result: Dictionary) -> void:
 	if result.get("ok", false) != true:
 		return
 	_engine._refresh_header()
+	# FIX-B: прилёт нового инбокса перерисовывает ОТКРЫТЫЙ список соц-экрана.
+	# После Принять/Удалить/Заблокировать обработчики зовут _social.refresh()
+	# и мгновенный _refresh_list() от СТАРОГО кэша (ответ ещё в пути) — строка
+	# жила до ре-открытия экрана. Гейт _peer == "": ленту не затаптываем,
+	# перестройка списка штатно пересобирает и поисковую карточку.
+	if _social_ui != null and _social_ui._screen != null and _social_ui._screen.visible \
+			and _social_ui.visible_thread() == "":
+		_social_ui._refresh_list()
 	if _social.should_show_toast():
 		_social.mark_toast_shown()
 		_online._toast("Тебе написали. Загляни к друзьям.",

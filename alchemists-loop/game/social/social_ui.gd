@@ -276,7 +276,14 @@ static func _friend_state_text(nick: String, s: Social) -> String:
 
 static func attach(game: Game, row: HBoxContainer, nick: String) -> Button:
 	var text := _friend_state_text(nick, game._social)
-	var b := game._small_button(text, Vector2(110, 30), 1 if text == "в друзья" else 0)
+	# FIX-E (ширина подписи): «заявка отправлена» — 131 px тем же шрифтом
+	# подписей кнопок (font_size 14, _font_semi; замер get_string_size в
+	# selftest), при content_margin 12+12 в Vector2(110,30) не влезает
+	# (доступно 86). Это состояние расширяем до 156 px (131+24=155, +1 на
+	# округление); короткие «в друзьях»/«в друзья» держим на прежней ширине,
+	# чтобы не распирать ряды рейтинга и карточку гостя.
+	var min_w := 156.0 if text == "заявка отправлена" else 110.0
+	var b := game._small_button(text, Vector2(min_w, 30), 1 if text == "в друзья" else 0)
 	b.disabled = text != "в друзья"
 	if text == "в друзья":
 		b.pressed.connect(func() -> void:
@@ -486,7 +493,10 @@ func _close_thread() -> void:
 	_confirm_close()
 	_refresh_list()
 	if _list_scroll != null:
-		_list_scroll.scroll_vertical = _saved_scroll
+		# FIX-D: свежесозданный ScrollContainer ещё не посчитал range прокрутки —
+		# синхронная запись клампится в 0 в живой игре; отложенная приходит после
+		# расклада кадра и ложится в настоящий диапазон.
+		_list_scroll.set_deferred("scroll_vertical", _saved_scroll)
 
 func _open_confirm(peer: String) -> void:
 	var friend := g._social.friend_by_device(peer)

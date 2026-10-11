@@ -935,13 +935,15 @@ func _refresh_header() -> void:
 		g._hub._up_btn.add_theme_color_override("font_color",
 			Color(1.0, 0.88, 0.45) if affordable > 0 else Color(0.8, 0.85, 0.9))
 	if g._social_btn != null:
-		# S1 бейдж непрочитанных: приём тот же, что у _up_btn выше, — один
+		# S1 бейдж: приём тот же, что у _up_btn выше, — один
 		# add_theme_color_override с тернарником; акцент — палитра UIStyle.GOLD,
 		# нейтральный цвет — прежний нейтральный оттенок блока.
-		var unread := g._social.unread_total()
-		g._social_btn.text = Social.badge_for(unread)
+		# FIX-C (спека 542/575): N = unread_total + requests_total (>99→99+),
+		# не один unread — заявка в друзья тоже «непрочитанное» для пользователя.
+		var total := g._social.total()
+		g._social_btn.text = Social.badge_for(total)
 		g._social_btn.add_theme_color_override("font_color",
-			UIStyle.GOLD if unread > 0 else Color(0.8, 0.85, 0.9))
+			UIStyle.GOLD if total > 0 else Color(0.8, 0.85, 0.9))
 
 func _refresh_book() -> void:
 	if _book_list == null:

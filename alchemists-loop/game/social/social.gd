@@ -13,7 +13,8 @@ var cache := {}                       # снапшот inbox
 var threads := {}                     # peer_device -> Array[Dictionary]
 var last_read_id := {}                # peer_device -> int (для since_id)
 var optimistic := {}                  # peer_device -> Array pending-письмо
-var prev_unread_total := -1           # до последнего inbox (условие тоста)
+var prev_total := -1                  # до последнего inbox: СУММА unread+requests
+                                      # (спека 542/575: бейдж и тост считают сумму)
 var _awaiting_peer := ""              # R3: контекст для messages_result
 var _session_toast_shown := false     # R4
 
@@ -78,7 +79,7 @@ func refresh() -> void:
 func on_inbox(result: Dictionary) -> void:
 	if result.get("ok", false) != true:
 		return
-	prev_unread_total = unread_total()
+	prev_total = total()
 	cache = result
 
 func friends() -> Array: return cache.get("friends", [])
@@ -86,6 +87,7 @@ func incoming() -> Array: return cache.get("incoming", [])
 func outgoing() -> Array: return cache.get("outgoing", [])
 func unread_total() -> int: return int(cache.get("unread_total", 0))
 func requests_total() -> int: return int(cache.get("requests_total", 0))
+func total() -> int: return unread_total() + requests_total()
 
 func friend_by_device(dev: String) -> Dictionary:
 	for f in friends():
@@ -122,6 +124,13 @@ func on_messages(result: Dictionary) -> void:
 			rows.append(m)
 	rows.sort_custom(func(a, b): return int(a.get("id", 0)) < int(b.get("id", 0)))
 	threads[peer] = rows
+	# FIX-A: асинхронный прилёт от живого сервера обязан перерисовать открытую
+	# ленту этого пира — иначе экран остаётся наpre-response кэше (а после
+	# успешной отправки optimistic-хвост стёрт, и refresh_thread из on_send
+	# рисует СТАРЫЙ снапшот: своё письмо невидимкой). Только что записанный
+	# threads[peer] — свежий источник; перерисовка ровно для видимого пира.
+	if g._social_ui != null and g._social_ui.visible_thread() == peer:
+		g._social_ui.refresh_thread()
 
 func thread(peer: String) -> Array:
 	var out: Array = threads.get(peer, []).duplicate()
@@ -172,9 +181,10 @@ func send_message(peer: String, body: String) -> void:
 		g._social_ui.refresh_thread()
 
 func should_show_toast() -> bool:
-	if _session_toast_shown or unread_total() <= 0:
+	# FIX-C (спека 542): тост при росте СУММЫ unread+requests, не одного unread.
+	if _session_toast_shown or total() <= 0:
 		return false
-	return prev_unread_total != unread_total()
+	return prev_total != total()
 
 func mark_toast_shown() -> void:
 	_session_toast_shown = true

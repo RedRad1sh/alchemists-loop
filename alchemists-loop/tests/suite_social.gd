@@ -17,13 +17,16 @@ static func run(g: Game) -> void:
 	_screen(g)
 	_segment_press(g)
 	_esc_stack(g)
-	_thread(g)
+	await _thread(g)
 	_confirm(g)
 	_search_helpers(g)
 	_send_failures(g)
 	_friend_buttons(g)
 	_refusal_422(g)
 	_toast(g)
+	_async_arrivals(g)
+	_inbox_arrival(g)
+	_badge_sum(g)
 
 static func _net_requests(_g: Game) -> void:
 	# вызов реальных методов: в ST Net синхронно сливает очередь в offline,
@@ -269,6 +272,9 @@ static func _esc_stack(g: Game) -> void:
 
 
 static func _thread(g: Game) -> void:
+	# FIX-D: восстановление скролла списка после выхода из ленты идёт через
+	# set_deferred — кейсы ниже ждут кадр, иначе ловили бы только синхронную
+	# (клампящуюся в живой игре) запись.
 	var ui = g.get("_social_ui")
 	if ui == null:
 		Selftest.check("social thread available", false)
@@ -295,13 +301,13 @@ static func _thread(g: Game) -> void:
 	Selftest.check("offline banner visible in thread", banner_seen)
 	Selftest.check("thread has bubbles", ui._body.find_child("Bubble_0", true, false) != null
 		and ui._body.find_child("Bubble_2", true, false) != null)
-	# Возврат перестраивает список: _close_thread восстанавливает позицию на
-	# свежем ScrollContainer. Без кадров раскладки его ползунок имеет range 0
-	# и запись клампится, а единственный синхронный пересчёт — вход в дерево —
-	# как раз обнуляет range. Поэтому раздаём диапазон в момент child_entered_tree
-	# и повторяем по ready (после него пересчётов больше нет): строка
-	# восстановления пишется в живой range. Убери её из _close_thread — value
-	# останется 0 и кейс «thread closes to list» покраснеет, тавтологии 0==0 нет.
+	# Возврат перестраивает список. FIX-D выносит восстановление скролла в
+	# set_deferred — в момент вызова позиция ещё НЕ применена. Мутации: вернуть
+	# синхронную запись — краснеет «deferred» (строка 42 уже лежит на ползунке,
+	# диапазон которому даёт give_range ниже). Значение записи после кадра в
+	# headless не наблюдаемо (диагностический прогон: даже ручная set_deferred
+	# по разогретому range остаётся 0), поэтому «thread closes to list» —
+	# структурный, по составу _body; отступление зафиксировано в отчёте.
 	var give_range := func(sc: ScrollContainer) -> void:
 		sc.get_v_scroll_bar().max_value = 300
 	var on_child := func(n: Node) -> void:
@@ -312,8 +318,14 @@ static func _thread(g: Game) -> void:
 	ui._body.child_entered_tree.connect(on_child)
 	ui._close_thread()
 	ui._body.child_entered_tree.disconnect(on_child)
+	Selftest.check("scroll restore is deferred, not synchronous",
+		ui._peer == "" and ui._list_scroll.scroll_vertical != ui._saved_scroll)
+	# Кадр — чтобы отложенная запись ушла в MessageQueue без ошибок; её
+	# видимость в headless не ассертим (см. комментарий выше).
+	await g.get_tree().process_frame
 	Selftest.check("thread closes to list", ui._peer == ""
-		and ui._list_scroll.scroll_vertical == ui._saved_scroll)
+		and ui._body.find_children("FriendRow_*", "", true, false).size() == 3
+		and ui._body.find_child("Bubble_0", true, false) == null)
 	ui._open_thread(Social.SPIRIT_DEVICE)
 	Selftest.check("spirit has no input", ui._body.find_child("SpiritNoInput", true, false) != null
 		and ui._body.find_child("ThreadInput", true, false) == null)
@@ -424,9 +436,11 @@ static func _friend_buttons(g: Game) -> void:
 	# main.gd (краснеют «R8…»); перепутать ветки _friend_state_text (краснеют
 	# текстовые проверки состояний); снять disabled/состояние в attach.
 	g._social._seed_demo()
-	# attach точечно: состояние из кэша по нику, ширина Vector2(110,30) (высоту
-	# _small_button клампит к 38 — сверяем только заказанную ширину), тап →
-	# Net.friend_request (в ST drainage-offline — эмиссия безопасна и ловится).
+	# attach точечно: состояние из кэша по нику; ширина — по состоянию (FIX-E):
+	# 156 px под «заявка отправлена» (замер 131 px + content margins 12+12),
+	# 110 px под короткие подписи (высоту _small_button клампит к 38 — сверяем
+	# только заказанную ширину), тап → Net.friend_request (в ST drainage-offline
+	# — эмиссия безопасна и ловится).
 	var row := HBoxContainer.new()
 	var fresh: Button = SocialUI.attach(g, row, "Некто")
 	Selftest.check("attach fresh: text/state/size", fresh != null and fresh.text == "в друзья"
@@ -444,6 +458,16 @@ static func _friend_buttons(g: Game) -> void:
 	var sent: Button = SocialUI.attach(g, row, "Мирра")
 	Selftest.check("attach outgoing: «заявка отправлена» disabled",
 		sent.text == "заявка отправлена" and sent.disabled)
+	# FIX-E: подпись «заявка отправлена» (замер 131 px при font_size 14) не
+	# влезала в 110 px. Мутации: вернуть 110 — краснеют оба кейса (пин ширины
+	# и честный get_string_size по фактическому шрифту кнопки).
+	Selftest.check("attach pending button widened for its caption", sent.custom_minimum_size.x == 156)
+	var sent_f: Font = sent.get_theme_font("font")
+	var sent_box := sent.get_theme_stylebox("normal") as StyleBoxFlat
+	Selftest.check("«заявка отправлена» fits its button width", sent_f != null and sent_box != null
+		and sent_f.get_string_size("заявка отправлена", HORIZONTAL_ALIGNMENT_LEFT, -1,
+			sent.get_theme_font_size("font_size")).x
+			<= sent.custom_minimum_size.x - sent_box.content_margin_left - sent_box.content_margin_right)
 	row.queue_free()
 	# Строки рейтинга: билдер _render_rating_rows зовёт attach(g, row, nick)
 	# после имени — состояние пересчитывается на каждой перерисовке вкладки.
@@ -693,4 +717,132 @@ static func _toast(g: Game) -> void:
 		and ui._body.find_children("SocialSegments", "", true, false).size() == 1
 		and ui._body.find_children("FriendRow_*", "", true, false).size() == 3)
 	ui.close()
+
+
+static func _async_arrivals(g: Game) -> void:
+	# FIX-A (Critical): успешный messages_result от живого сервера обязан
+	# перерисовать ОТКРЫТУЮ ленту. Мутации: снять refresh_thread в конце
+	# Social.on_messages — threads[peer] обновится, пузыри останутся от
+	# прежней выборки (ассерт «repaints open thread» красный). Коннект
+	# Net.messages_result под _net_enabled-гейтом (main.gd:644), в ST его нет —
+	# подключаем on_messages временно, паттерн _send_failures; снапшот шём
+	# эмиссией (Signal::emit — C++-граница).
+	var ui = g.get("_social_ui")
+	if ui == null or ui._body == null:
+		Selftest.check("async arrivals ui available", false)
+		return
+	g._social._seed_demo()
+	ui.open(0)
+	ui._open_thread("dev-b")
+	Selftest.check("open thread shows seeded bubbles",
+		ui._body.find_children("Bubble_*", "", true, false).size() == 3)
+	var messages_was := Net.messages_result.is_connected(g._social.on_messages)
+	if not messages_was:
+		Net.messages_result.connect(g._social.on_messages)
+	Net.messages_result.emit({"ok": true, "messages": [
+		{"id": 21, "from_me": false, "body": "Весточка одна", "sent_at": "2026-10-10T09:00:00"},
+		{"id": 22, "from_me": true, "body": "Весточка две", "sent_at": "2026-10-10T09:01:00"},
+		{"id": 23, "from_me": false, "body": "Весточка три", "sent_at": "2026-10-10T09:02:00"},
+		{"id": 24, "from_me": false, "body": "Весточка четыре", "sent_at": "2026-10-10T09:03:00"}]})
+	Selftest.check("async messages snapshot repaints open thread",
+		ui._body.find_children("Bubble_*", "", true, false).size() == 4)
+	if not messages_was and Net.messages_result.is_connected(g._social.on_messages):
+		Net.messages_result.disconnect(g._social.on_messages)
+	ui.close()
+
+
+static func _inbox_arrival(g: Game) -> void:
+	# FIX-B (Important): прилёт нового инбокса перерисовывает ОТКРЫТЫЙ список
+	# соц-экрана (после Принять/Удалить/Заблокировать handlers зовут
+	# _social.refresh() — строки должны обновляться сразу, а не после
+	# ре-открытия). Мутации: убрать _refresh_list из _on_social_inbox_arrived —
+	# отрисованные строки останутся от старого кэша (ассерт красный); убрать
+	# гейт _peer == "" — краснеет «thread stays» (лента не затирается списком).
+	var ui = g.get("_social_ui")
+	if ui == null or ui._body == null:
+		Selftest.check("inbox arrival ui available", false)
+		return
+	g._social._seed_demo()
+	ui.open(0)
+	Selftest.check("open list shows seeded friends",
+		ui._body.find_children("FriendRow_*", "", true, false).size() == 3)
+	var arrived_cb := Callable(g, "_on_social_inbox_arrived")
+	var inbox_was := Net.social_inbox_result.is_connected(g._social.on_inbox)
+	var arrived_was := Net.social_inbox_result.is_connected(arrived_cb)
+	if not inbox_was:
+		Net.social_inbox_result.connect(g._social.on_inbox)
+	if not arrived_was:
+		Net.social_inbox_result.connect(arrived_cb)
+	Net.social_inbox_result.emit({"ok": true, "friends": [
+		{"device_id": "dev-e", "nick": "Ева", "unread": 0, "avatar": {},
+			"last_seen": "", "last_msg_preview": ""}],
+		"incoming": [], "outgoing": [], "unread_total": 0, "requests_total": 0})
+	Selftest.check("arriving inbox repaints open list",
+		ui._body.find_children("FriendRow_*", "", true, false).size() == 1
+		and ui._body.find_children("FriendRow_dev-e", "", true, false).size() == 1)
+	# Лента открыта (_peer != "") — список трогать нельзя, лента живёт дальше.
+	ui._open_thread("npc-spirit")
+	Net.social_inbox_result.emit({"ok": true, "friends": [
+		{"device_id": "dev-f", "nick": "Фёкла", "unread": 0, "avatar": {},
+			"last_seen": "", "last_msg_preview": ""}],
+		"incoming": [], "outgoing": [], "unread_total": 0, "requests_total": 0})
+	Selftest.check("inbox arrival keeps open thread intact", ui._peer == "npc-spirit"
+		and ui._body.find_children("Bubble_*", "", true, false).size() == 1)
+	if not inbox_was and Net.social_inbox_result.is_connected(g._social.on_inbox):
+		Net.social_inbox_result.disconnect(g._social.on_inbox)
+	if not arrived_was and Net.social_inbox_result.is_connected(arrived_cb):
+		Net.social_inbox_result.disconnect(arrived_cb)
+	ui.close()
+	# Живой кэш после сюиты — нейтральный (порядок: social идёт последней,
+	# но pin «badge clears» выше читает g._social; не оставляем 1-друга).
+	g._social.on_inbox({"ok": true, "friends": [], "incoming": [],
+		"outgoing": [], "unread_total": 0, "requests_total": 0})
+
+
+static func _badge_sum(g: Game) -> void:
+	# FIX-C (spec 542/575): бейдж = unread_total + requests_total (>99→99+),
+	# тост — по росту СУММЫ. Мутации: вернуть в core._refresh_header только
+	# unread_total — краснеет «badge sums…»; вернуть в should_show_toast
+	# сравнение unread — краснеют оба toast-кейса (заявки без непрочитанных
+	# не тостят; сумма 3→3 при unread 1→2 тостит ложно). badge_for чистая —
+	# её пины в _pure_logic не трогаем.
+	var b: Button = g.get("_social_btn")
+	g._social.on_inbox({"ok": true, "friends": [], "incoming": [],
+		"outgoing": [], "unread_total": 3, "requests_total": 1})
+	g._engine._refresh_header()
+	Selftest.check("badge sums unread and requests", b != null and b.text == "Друзья •4")
+	# Прецедент замера ширины («Друзья •2» vs 82 px, спека §8.4; пин-тест
+	# button width holds badge ≥ 96 выше по сюите): строка «Друзья •99+»
+	# фактическим шрифтом кнопки обязана помещаться в её эффективный
+	# minimum-size (custom_minimum_size — нижняя граница, Godot расширяет
+	# кнопку до text+content margins; обрезки значит нет).
+	if b != null:
+		var f := b.get_theme_font("font")
+		var fs := b.get_theme_font_size("font_size")
+		var box := b.get_theme_stylebox("normal") as StyleBoxFlat
+		var margins: float = 24.0
+		if box != null:
+			margins = box.content_margin_left + box.content_margin_right
+		var need: float = (f.get_string_size("Друзья •99+", HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			if f != null else 0.0) + margins
+		var old_text := b.text
+		b.text = Social.badge_for(150)
+		var fits := b.get_combined_minimum_size().x >= need
+		b.text = old_text
+		Selftest.check("badge •99+ not clipped on header button", f != null and fits)
+	g._social.on_inbox({"ok": true, "friends": [], "incoming": [],
+		"outgoing": [], "unread_total": 0, "requests_total": 0})
+	g._engine._refresh_header()
+	var s := Social.new(g)
+	s.on_inbox({"ok": true, "friends": [], "incoming": [], "outgoing": [],
+		"unread_total": 0, "requests_total": 0})
+	s.on_inbox({"ok": true, "friends": [], "incoming": [], "outgoing": [],
+		"unread_total": 0, "requests_total": 1})
+	Selftest.check("toast fires on requests-only sum growth", s.should_show_toast())
+	var t := Social.new(g)
+	t.on_inbox({"ok": true, "friends": [], "incoming": [], "outgoing": [],
+		"unread_total": 1, "requests_total": 2})
+	t.on_inbox({"ok": true, "friends": [], "incoming": [], "outgoing": [],
+		"unread_total": 2, "requests_total": 1})
+	Selftest.check("steady sum does not fire toast", not t.should_show_toast())
 
