@@ -276,10 +276,15 @@ func _up_lvl(id: String) -> int:
 	return int(upgrades.get(id, 0))
 
 func _up_cost(id: String) -> int:
+	return _up_cost_at(id, _up_lvl(id))
+
+
+## R17: цена уровня на произвольном уровне — для оптовых покупок 1/10/100.
+func _up_cost_at(id: String, lvl: int) -> int:
 	var u := _up_def(id)
 	if u.is_empty():
 		return 1 << 29
-	return int(float(u["base"]) * pow(float(u["growth"]), _up_lvl(id)))
+	return int(float(u["base"]) * pow(float(u["growth"]), lvl))
 
 func _sage_multiplier() -> float:
 	# Prestige remains useful, but cannot make regeneration grow without bound.
@@ -530,7 +535,7 @@ func _buy_mastery() -> bool:
 	_refresh()
 	return true
 
-func _buy_upgrade(id: String) -> bool:
+func _buy_upgrade(id: String, qty: int = 1) -> bool:
 	var u := _up_def(id)
 	if u.is_empty():
 		return false
@@ -539,20 +544,25 @@ func _buy_upgrade(id: String) -> bool:
 		Sfx.error()
 		_refresh()
 		return false
-	var lvl := _up_lvl(id)
-	if lvl >= int(u["max"]):
-		status_text = "«%s» прокачана до максимума." % String(u["name"])
+	# R17: оптовая покупка (1/10/100) — до qty уровней, пока хватает эфира.
+	var bought := 0
+	for _i in maxi(qty, 1):
+		var lvl := _up_lvl(id)
+		if lvl >= int(u["max"]):
+			break
+		if not _spend_ether(_up_cost(id)):
+			break
+		upgrades[id] = lvl + 1
+		bought += 1
+	if bought == 0:
+		if _up_lvl(id) >= int(u["max"]):
+			status_text = "«%s» прокачана до максимума." % String(u["name"])
+		else:
+			status_text = "Не хватает эфира на «%s»: нужно %d, есть %d." % [u["name"], _up_cost(id), ether]
 		Sfx.error()
 		_refresh()
 		return false
-	var cost := _up_cost(id)
-	if not _spend_ether(cost):
-		status_text = "Не хватает эфира на «%s»: нужно %d, есть %d." % [u["name"], cost, ether]
-		Sfx.error()
-		_refresh()
-		return false
-	upgrades[id] = lvl + 1
-	status_text = "Улучшено: %s (ур. %d)." % [u["name"], lvl + 1]
+	status_text = "Улучшено: %s (ур. %d)." % [String(u["name"]), _up_lvl(id)]
 	g._progress_ui._ach_update()
 	Sfx.divide()
 	Input.vibrate_handheld(15)

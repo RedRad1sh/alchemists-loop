@@ -83,4 +83,35 @@ static func run(g: Game) -> void:
 	g._daily.close()
 	Selftest.check("daily closes", not g._daily.is_open())
 
+	# R17: оптовая покупка улучшений (×1/×10/×100)
+	var eng := g._engine
+	var prev_lvl := eng._up_lvl("ether_cap")
+	var prev_ether := eng.ether
+	eng.upgrades["ether_cap"] = 0
+	eng.ether = 100000000
+	var want := 0
+	for k in 8:
+		want += eng._up_cost_at("ether_cap", k)
+	Selftest.check("bulk buy stops at max", eng._buy_upgrade("ether_cap", 10)
+			and eng._up_lvl("ether_cap") == 8 and eng.ether == 100000000 - want)
+	Selftest.check("bulk buy at max refused", not eng._buy_upgrade("ether_cap", 10)
+			and eng._up_lvl("ether_cap") == 8)
+	# частичная покупка: эфира хватает только на 2 уровня из 10
+	eng.upgrades["ether_cap"] = 0
+	eng.ether = eng._up_cost_at("ether_cap", 0) + eng._up_cost_at("ether_cap", 1) + 5
+	Selftest.check("bulk buy limited by ether", eng._buy_upgrade("ether_cap", 10)
+			and eng._up_lvl("ether_cap") == 2 and eng.ether == 5)
+	# qty=1 (вызов без аргумента) — точная цена одного уровня
+	eng.ether = eng._up_cost_at("ether_cap", 2) + 7
+	Selftest.check("single buy exact cost", eng._buy_upgrade("ether_cap")
+			and eng._up_lvl("ether_cap") == 3 and eng.ether == 7)
+	# UI: чипы множителя переключаются
+	g._hub._pick_up_qty(10)
+	Selftest.check("qty chip 10", g._hub._up_qty == 10)
+	g._hub._pick_up_qty(1)
+	Selftest.check("qty chip back to 1", g._hub._up_qty == 1)
+	eng.upgrades["ether_cap"] = prev_lvl
+	eng.ether = prev_ether
+	eng._refresh()
+
 	g._tabs_ref.current_tab = st_tab

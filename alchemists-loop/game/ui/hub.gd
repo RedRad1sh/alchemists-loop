@@ -9,6 +9,8 @@ var _up_btn: Button
 var _up_popup: Control
 var _up_dim: ColorRect
 var _up_rows: VBoxContainer
+var _up_qty := 1  # R17: множитель покупки 1/10/100
+var _up_qty_btns: Array = []
 var _profile_dim: Control = null
 var _profile_popup: Control = null
 var _profile_avatar: Avatar = null
@@ -582,6 +584,21 @@ func _build_upgrade_popup() -> void:
 	hint.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
 	col.add_child(hint)
 
+	# R17: множитель покупки — 1 / 10 / 100.
+	var qty_row := HBoxContainer.new()
+	qty_row.add_theme_constant_override("separation", 6)
+	qty_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(qty_row)
+	for q in [1, 10, 100]:
+		var qb := Button.new()
+		qb.text = "×%d" % q
+		qb.custom_minimum_size = Vector2(72, 34)
+		qb.focus_mode = Control.FOCUS_NONE
+		qb.pressed.connect(_pick_up_qty.bind(q))
+		qty_row.add_child(qb)
+		_up_qty_btns.append(qb)
+	_sync_up_qty_chips()
+
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(0, 380)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -739,6 +756,22 @@ func _do_prestige() -> void:
 	_log_event("Перегонка: +%d Золота мудрецов (всего %d)" % [gain, g._engine.sage_gold])
 	Sfx.legendary()
 
+## R17: выбор множителя покупки; перерисовывает строки с новой ценой.
+func _pick_up_qty(q: int) -> void:
+	_up_qty = q
+	_sync_up_qty_chips()
+	_rebuild_up_rows()
+	Sfx.click()
+
+
+## R17: активный чип подсвечивается золотом.
+func _sync_up_qty_chips() -> void:
+	var vals := [1, 10, 100]
+	for i in _up_qty_btns.size():
+		var qb: Button = _up_qty_btns[i]
+		qb.modulate = Color(1.0, 0.86, 0.35) if vals[i] == _up_qty else Color(0.7, 0.76, 0.82)
+
+
 func _rebuild_up_rows() -> void:
 	if _up_rows == null:
 		return
@@ -822,8 +855,19 @@ func _up_row(u: Dictionary) -> Button:
 		st.text = "максимум"
 		st.add_theme_color_override("font_color", Color(1.0, 0.88, 0.45))
 	else:
-		var cost := g._engine._up_cost(id)
+		# R17: покупаем до _up_qty уровней (без превышения максимума),
+		# цена — сумма растущих; рядом показываем итоговую дельту.
+		var n := maxi(1, mini(_up_qty, mx - lvl))
+		var cost := 0
+		for k in n:
+			cost += g._engine._up_cost_at(id, lvl + k)
 		st.text = "Стоимость: %d ⚡" % cost
+		if n > 1:
+			st.text += " за %d шт." % n
+		if id == "ether_regen":
+			st.text += "\nитог: +%.2f эфир/с" % (0.35 * n)
+		elif id == "ether_cap":
+			st.text += "\nитог: +%d к капе" % (50 * n)
 		st.add_theme_color_override("font_color", Color(0.45, 0.95, 0.9) if g._engine._available_ether() >= cost else Color(0.75, 0.6, 0.55))
-		b.pressed.connect(g._engine._buy_upgrade.bind(id))
+		b.pressed.connect(g._engine._buy_upgrade.bind(id, n))
 	return b
