@@ -354,6 +354,8 @@ var RECIPES := [
 
 # ---------- состояние ----------
 var _engine: Core  # движок: варка/dnd/refresh/автоварка (R13)
+var _workshop: Workshop
+var _workshop_scheduler: RefCounted
 
 # ---------- UI ----------
 var _sound_btn: Button
@@ -504,6 +506,8 @@ func _ready() -> void:
 	_pages = Pages.new(self)
 	_hub = Hub.new(self)
 	_engine = Core.new(self)
+	_workshop = Workshop.new(self)
+	_workshop_scheduler = load("res://game/lab/workshop_scheduler.gd").new(self, _workshop)
 	_demo_harness = Demo.new(self)
 	_demo_harness._demo = args.has("--demo")
 	_demo_harness._geom = args.has("--geom")
@@ -916,16 +920,19 @@ func _process(delta: float) -> void:
 	if _demo_harness._tick_demo():
 		return
 	_engine.autosave_clock += delta
-	_engine.regen_clock += delta * _engine._ether_rate()
-	if _engine.regen_clock >= 1.0:
-		var ticks := int(_engine.regen_clock)
-		_engine.regen_clock -= float(ticks)
-		_engine.ether = mini(_engine._max_ether(), _engine.ether + ticks)
+	# One resource timeline; suppress callback saves until queue counters/cursor
+	# and all consumers have committed the same completed time slice.
+	var save_was_frozen := _saves._save_frozen
+	_saves._save_frozen = true
+	var work: Dictionary = _workshop_scheduler.advance(delta)
+	_saves._save_frozen = save_was_frozen
+	if int(work.get("steps", 0)) > 0 or int(work.get("spring_items", 0)) > 0:
+		_engine._refresh()
+		_saves._save_game()
+	elif int(work.get("ether_gained", 0)) > 0:
 		_engine._refresh_header()
-	_engine._spring_tick(delta)
 	_engine._gift_tick(delta)
 	_pages._experiment_tick()
-	_pages._bench_tick(delta)
 	_online._event_tick(delta)
 	if _engine.brewing and _engine._progress != null:
 		_engine.brew_elapsed += delta
@@ -960,6 +967,11 @@ func _process(delta: float) -> void:
 		_live_card_node.set_tilt(tilt_n)
 	for i in range(floaters.size() - 1, -1, -1):
 		var f: Dictionary = floaters[i]
+		# Restored state may retain a Label freed with its old UI owner.
+		# Validate the untyped reference before assigning it to a Label variable.
+		if not is_instance_valid(f.get("l")):
+			floaters.remove_at(i)
+			continue
 		f["t"] += delta
 		var lb: Label = f["l"]
 		lb.position.y -= 52.0 * delta
@@ -979,6 +991,10 @@ func _notification(what: int) -> void:
 # ================= состояние =================
 
 func _init_new_game() -> bool:
+	# Synthesis callbacks run synchronously inside a resource commit. They must
+	# not replace the world that the transaction is still updating.
+	if not _engine._resource_mutation_allowed():
+		return false
 	# U9 (T12): новый старт во время активной потребляющей трассы/эксперимента
 	# бросает сонные корутины на свежий подарочный запас — отказываемся с хинтом.
 	if _engine.brewing or _engine._auto or _engine._experiment_pending_pair.size() == 2:
@@ -1014,9 +1030,21 @@ func _init_new_game() -> bool:
 	_online._pending_requests.clear()
 	_engine._craft_job.clear()
 	_engine._blueprints.clear()
+	_reset_world_clock()
+	_workshop.reset_new_game()
 	_engine.attempts = 0
 	_engine.successes = 0
 	return true
+
+func _reset_world_clock() -> void:
+	# Monotone stamps belong to one world. An explicit reset starts a new time
+	# boundary, even if the previous world was saved with a far-future clock.
+	_last_ts = Time.get_unix_time_from_system()
+	_engine.regen_clock = 0.0
+	_engine.autosave_clock = 0.0
+	_engine._gift_clock = 0.0
+	_pages._spring_clock = 0.0
+	_pages._bench_clock = 0.0
 
 # ---------- R14: см. game/demo.gd (829-852) ----------
 

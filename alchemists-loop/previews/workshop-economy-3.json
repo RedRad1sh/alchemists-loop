@@ -1,0 +1,1940 @@
+{
+	"assumptions": {
+		"catalog": "res://../discovery-server/server/data/sigil_catalog.json",
+		"network": false,
+		"prices": "Core._pair_cost and WorkshopBalance",
+		"rewards": "tracked separately from gross ether spent",
+		"source": "real Game/Core/Guild/WorkshopScheduler/SigilManager",
+		"unfinished": "reported as incomplete/stall"
+	},
+	"bounded": {
+		"chosen_budget": 1200,
+		"max_events": 100000,
+		"offline_seconds": [
+			60,
+			3600,
+			28800.0
+		],
+		"operation_limit": 4000
+	},
+	"budget_comparison": [
+		{
+			"catalog_ether_cost": 50,
+			"chosen_budget": 1200,
+			"exact_base_materials": {},
+			"id": "flood",
+			"planner_ether": 100,
+			"planner_ok": true,
+			"planner_operations": 5,
+			"rarity": "common",
+			"within_budget": true
+		},
+		{
+			"catalog_ether_cost": 400,
+			"chosen_budget": 1200,
+			"exact_base_materials": {},
+			"id": "axe",
+			"planner_ether": 246,
+			"planner_ok": true,
+			"planner_operations": 11,
+			"rarity": "epic",
+			"within_budget": true
+		},
+		{
+			"catalog_ether_cost": 800,
+			"chosen_budget": 1200,
+			"exact_base_materials": {},
+			"id": "boat",
+			"planner_ether": 200,
+			"planner_ok": true,
+			"planner_operations": 8,
+			"rarity": "legendary",
+			"within_budget": true
+		}
+	],
+	"catalog_offers": [
+		{
+			"ether_cost": 50,
+			"id": "flood",
+			"ingredients": {
+				"cloud": 10,
+				"spark": 11,
+				"storm": 6
+			},
+			"rarity": "common",
+			"recipe_seed": 75291763859797
+		},
+		{
+			"ether_cost": 400,
+			"id": "axe",
+			"ingredients": {
+				"seed": 24,
+				"tree": 28,
+				"wood": 12
+			},
+			"rarity": "epic",
+			"recipe_seed": 8789165823134
+		},
+		{
+			"ether_cost": 800,
+			"id": "boat",
+			"ingredients": {
+				"plant": 33,
+				"seed": 34,
+				"tree": 45,
+				"wood": 45
+			},
+			"rarity": "legendary",
+			"recipe_seed": 79355973704567
+		}
+	],
+	"chromatic": {
+		"ether_cost": 1200,
+		"ingredients": [
+			{
+				"item_id": "storm",
+				"qty": 1
+			},
+			{
+				"item_id": "cloud",
+				"qty": 1
+			},
+			{
+				"item_id": "spark",
+				"qty": 1
+			},
+			{
+				"item_id": "wood",
+				"qty": 1
+			}
+		],
+		"recipe_seed": 265004185407301,
+		"status": "deterministic_catalog_derived_input",
+		"valid": true
+	},
+	"finite_discoveries": [
+		{
+			"committed": true,
+			"content_layer": 1,
+			"item": "dust",
+			"mastery_per_unit": 1,
+			"xp_after": 104,
+			"xp_before": 103
+		},
+		{
+			"committed": true,
+			"content_layer": 1,
+			"item": "mist",
+			"mastery_per_unit": 1,
+			"xp_after": 105,
+			"xp_before": 104
+		},
+		{
+			"committed": true,
+			"content_layer": 1,
+			"item": "steam",
+			"mastery_per_unit": 1,
+			"xp_after": 106,
+			"xp_before": 105
+		},
+		{
+			"committed": true,
+			"content_layer": 2,
+			"item": "boulder",
+			"mastery_per_unit": 2,
+			"xp_after": 110,
+			"xp_before": 106
+		},
+		{
+			"committed": true,
+			"content_layer": 2,
+			"item": "cloud",
+			"mastery_per_unit": 2,
+			"xp_after": 112,
+			"xp_before": 110
+		},
+		{
+			"committed": true,
+			"content_layer": 2,
+			"item": "lava",
+			"mastery_per_unit": 2,
+			"xp_after": 115,
+			"xp_before": 112
+		},
+		{
+			"committed": true,
+			"content_layer": 2,
+			"item": "mountain",
+			"mastery_per_unit": 2,
+			"xp_after": 118,
+			"xp_before": 115
+		},
+		{
+			"committed": true,
+			"content_layer": 2,
+			"item": "mud",
+			"mastery_per_unit": 2,
+			"xp_after": 120,
+			"xp_before": 118
+		},
+		{
+			"committed": true,
+			"content_layer": 2,
+			"item": "plant",
+			"mastery_per_unit": 2,
+			"xp_after": 123,
+			"xp_before": 120
+		},
+		{
+			"committed": true,
+			"content_layer": 2,
+			"item": "sand",
+			"mastery_per_unit": 2,
+			"xp_after": 126,
+			"xp_before": 123
+		},
+		{
+			"committed": true,
+			"content_layer": 2,
+			"item": "smoke",
+			"mastery_per_unit": 2,
+			"xp_after": 128,
+			"xp_before": 126
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "ash",
+			"mastery_per_unit": 3,
+			"xp_after": 131,
+			"xp_before": 128
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "beast",
+			"mastery_per_unit": 3,
+			"xp_after": 137,
+			"xp_before": 131
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "bird",
+			"mastery_per_unit": 3,
+			"xp_after": 143,
+			"xp_before": 137
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "blade",
+			"mastery_per_unit": 3,
+			"xp_after": 146,
+			"xp_before": 143
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "ceramic",
+			"mastery_per_unit": 3,
+			"xp_after": 149,
+			"xp_before": 146
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "chain",
+			"mastery_per_unit": 3,
+			"xp_after": 152,
+			"xp_before": 149
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "fish",
+			"mastery_per_unit": 3,
+			"xp_after": 158,
+			"xp_before": 152
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "fog",
+			"mastery_per_unit": 3,
+			"xp_after": 164,
+			"xp_before": 158
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "glass",
+			"mastery_per_unit": 3,
+			"xp_after": 167,
+			"xp_before": 164
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "gold",
+			"mastery_per_unit": 3,
+			"xp_after": 170,
+			"xp_before": 167
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "grass",
+			"mastery_per_unit": 3,
+			"xp_after": 176,
+			"xp_before": 170
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "ice",
+			"mastery_per_unit": 3,
+			"xp_after": 179,
+			"xp_before": 176
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "magma",
+			"mastery_per_unit": 3,
+			"xp_after": 182,
+			"xp_before": 179
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "obsidian",
+			"mastery_per_unit": 3,
+			"xp_after": 188,
+			"xp_before": 182
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "rain",
+			"mastery_per_unit": 3,
+			"xp_after": 194,
+			"xp_before": 188
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "rust",
+			"mastery_per_unit": 3,
+			"xp_after": 197,
+			"xp_before": 194
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "seed",
+			"mastery_per_unit": 3,
+			"xp_after": 204,
+			"xp_before": 197
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "sky",
+			"mastery_per_unit": 3,
+			"xp_after": 210,
+			"xp_before": 204
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "smog",
+			"mastery_per_unit": 3,
+			"xp_after": 216,
+			"xp_before": 210
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "soul",
+			"mastery_per_unit": 3,
+			"xp_after": 225,
+			"xp_before": 216
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "storm",
+			"mastery_per_unit": 3,
+			"xp_after": 232,
+			"xp_before": 225
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "swamp",
+			"mastery_per_unit": 3,
+			"xp_after": 241,
+			"xp_before": 232
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "volcano",
+			"mastery_per_unit": 3,
+			"xp_after": 247,
+			"xp_before": 241
+		},
+		{
+			"committed": true,
+			"content_layer": 3,
+			"item": "wall",
+			"mastery_per_unit": 3,
+			"xp_after": 250,
+			"xp_before": 247
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "child",
+			"mastery_per_unit": 4,
+			"xp_after": 261,
+			"xp_before": 250
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "coin",
+			"mastery_per_unit": 4,
+			"xp_after": 265,
+			"xp_before": 261
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "crystal",
+			"mastery_per_unit": 4,
+			"xp_after": 275,
+			"xp_before": 265
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "dragon",
+			"mastery_per_unit": 4,
+			"xp_after": 279,
+			"xp_before": 275
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "egg",
+			"mastery_per_unit": 4,
+			"xp_after": 290,
+			"xp_before": 279
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "farmer",
+			"mastery_per_unit": 4,
+			"xp_after": 301,
+			"xp_before": 290
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "flood",
+			"mastery_per_unit": 4,
+			"xp_after": 305,
+			"xp_before": 301
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "food",
+			"mastery_per_unit": 4,
+			"xp_after": 309,
+			"xp_before": 305
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "fortress",
+			"mastery_per_unit": 4,
+			"xp_after": 316,
+			"xp_before": 309
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "golem",
+			"mastery_per_unit": 4,
+			"xp_after": 321,
+			"xp_before": 316
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "hail",
+			"mastery_per_unit": 4,
+			"xp_after": 328,
+			"xp_before": 321
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "herd",
+			"mastery_per_unit": 4,
+			"xp_after": 344,
+			"xp_before": 328
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "island",
+			"mastery_per_unit": 4,
+			"xp_after": 348,
+			"xp_before": 344
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "king",
+			"mastery_per_unit": 4,
+			"xp_after": 362,
+			"xp_before": 348
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "lens",
+			"mastery_per_unit": 4,
+			"xp_after": 372,
+			"xp_before": 362
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "lightning",
+			"mastery_per_unit": 4,
+			"xp_after": 384,
+			"xp_before": 372
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "lye",
+			"mastery_per_unit": 4,
+			"xp_after": 388,
+			"xp_before": 384
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "marsh",
+			"mastery_per_unit": 4,
+			"xp_after": 392,
+			"xp_before": 388
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "mushroom",
+			"mastery_per_unit": 4,
+			"xp_after": 399,
+			"xp_before": 392
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "sandstorm",
+			"mastery_per_unit": 4,
+			"xp_after": 413,
+			"xp_before": 399
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "school",
+			"mastery_per_unit": 4,
+			"xp_after": 429,
+			"xp_before": 413
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "smith",
+			"mastery_per_unit": 4,
+			"xp_after": 440,
+			"xp_before": 429
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "snow",
+			"mastery_per_unit": 4,
+			"xp_after": 450,
+			"xp_before": 440
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "sprout",
+			"mastery_per_unit": 4,
+			"xp_after": 454,
+			"xp_before": 450
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "statue",
+			"mastery_per_unit": 4,
+			"xp_after": 462,
+			"xp_before": 454
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "sun",
+			"mastery_per_unit": 4,
+			"xp_after": 466,
+			"xp_before": 462
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "swimmer",
+			"mastery_per_unit": 4,
+			"xp_after": 477,
+			"xp_before": 466
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "thinker",
+			"mastery_per_unit": 4,
+			"xp_after": 488,
+			"xp_before": 477
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "tool",
+			"mastery_per_unit": 4,
+			"xp_after": 500,
+			"xp_before": 488
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "tornado",
+			"mastery_per_unit": 4,
+			"xp_after": 512,
+			"xp_before": 500
+		},
+		{
+			"committed": true,
+			"content_layer": 4,
+			"item": "tree",
+			"mastery_per_unit": 4,
+			"xp_after": 523,
+			"xp_before": 512
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "adobe",
+			"mastery_per_unit": 5,
+			"xp_after": 531,
+			"xp_before": 523
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "desert",
+			"mastery_per_unit": 5,
+			"xp_after": 549,
+			"xp_before": 531
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "flower",
+			"mastery_per_unit": 5,
+			"xp_after": 567,
+			"xp_before": 549
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "forest",
+			"mastery_per_unit": 5,
+			"xp_after": 575,
+			"xp_before": 567
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "fulgurite",
+			"mastery_per_unit": 5,
+			"xp_after": 583,
+			"xp_before": 575
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "grove",
+			"mastery_per_unit": 5,
+			"xp_after": 610,
+			"xp_before": 583
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "jewelry",
+			"mastery_per_unit": 5,
+			"xp_after": 615,
+			"xp_before": 610
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "leather",
+			"mastery_per_unit": 5,
+			"xp_after": 626,
+			"xp_before": 615
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "light",
+			"mastery_per_unit": 5,
+			"xp_after": 641,
+			"xp_before": 626
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "machine",
+			"mastery_per_unit": 5,
+			"xp_after": 670,
+			"xp_before": 641
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "rainbow",
+			"mastery_per_unit": 5,
+			"xp_after": 691,
+			"xp_before": 670
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "soap",
+			"mastery_per_unit": 5,
+			"xp_after": 696,
+			"xp_before": 691
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "stream",
+			"mastery_per_unit": 5,
+			"xp_after": 701,
+			"xp_before": 696
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "telescope",
+			"mastery_per_unit": 5,
+			"xp_after": 716,
+			"xp_before": 701
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "toy",
+			"mastery_per_unit": 5,
+			"xp_after": 733,
+			"xp_before": 716
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "treasure",
+			"mastery_per_unit": 5,
+			"xp_after": 745,
+			"xp_before": 733
+		},
+		{
+			"committed": true,
+			"content_layer": 5,
+			"item": "wood",
+			"mastery_per_unit": 5,
+			"xp_after": 762,
+			"xp_before": 745
+		},
+		{
+			"committed": true,
+			"content_layer": 6,
+			"item": "axe",
+			"mastery_per_unit": 6,
+			"xp_after": 768,
+			"xp_before": 762
+		},
+		{
+			"committed": true,
+			"content_layer": 6,
+			"item": "boat",
+			"mastery_per_unit": 6,
+			"xp_after": 791,
+			"xp_before": 768
+		},
+		{
+			"committed": true,
+			"content_layer": 6,
+			"item": "coal",
+			"mastery_per_unit": 6,
+			"xp_after": 814,
+			"xp_before": 791
+		},
+		{
+			"committed": true,
+			"content_layer": 6,
+			"item": "dye",
+			"mastery_per_unit": 6,
+			"xp_after": 820,
+			"xp_before": 814
+		},
+		{
+			"committed": true,
+			"content_layer": 6,
+			"item": "fruit",
+			"mastery_per_unit": 6,
+			"xp_after": 826,
+			"xp_before": 820
+		},
+		{
+			"committed": true,
+			"content_layer": 6,
+			"item": "garden",
+			"mastery_per_unit": 6,
+			"xp_after": 868,
+			"xp_before": 826
+		},
+		{
+			"committed": true,
+			"content_layer": 6,
+			"item": "hammer",
+			"mastery_per_unit": 6,
+			"xp_after": 892,
+			"xp_before": 868
+		},
+		{
+			"committed": true,
+			"content_layer": 6,
+			"item": "house",
+			"mastery_per_unit": 6,
+			"xp_after": 918,
+			"xp_before": 892
+		},
+		{
+			"committed": true,
+			"content_layer": 6,
+			"item": "hunt",
+			"mastery_per_unit": 6,
+			"xp_after": 930,
+			"xp_before": 918
+		},
+		{
+			"committed": true,
+			"content_layer": 6,
+			"item": "plank",
+			"mastery_per_unit": 6,
+			"xp_after": 965,
+			"xp_before": 930
+		},
+		{
+			"committed": true,
+			"content_layer": 6,
+			"item": "village",
+			"mastery_per_unit": 6,
+			"xp_after": 997,
+			"xp_before": 965
+		},
+		{
+			"committed": true,
+			"content_layer": 7,
+			"item": "barrel",
+			"mastery_per_unit": 6,
+			"xp_after": 1038,
+			"xp_before": 997
+		},
+		{
+			"committed": true,
+			"content_layer": 7,
+			"item": "cabin",
+			"mastery_per_unit": 6,
+			"xp_after": 1044,
+			"xp_before": 1038
+		},
+		{
+			"committed": true,
+			"content_layer": 7,
+			"item": "town",
+			"mastery_per_unit": 6,
+			"xp_after": 1082,
+			"xp_before": 1044
+		},
+		{
+			"committed": true,
+			"content_layer": 7,
+			"item": "wine",
+			"mastery_per_unit": 6,
+			"xp_after": 1088,
+			"xp_before": 1082
+		}
+	],
+	"finite_discoveries_complete": true,
+	"natural_scenario": {
+		"complete": true,
+		"gross_ether_spent": 7376,
+		"mastery": 1088,
+		"operations": 466,
+		"reason": ""
+	},
+	"profiles": [
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 0,
+			"gross_ether_spent": 16,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 1,
+			"operations": 1,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 0,
+			"gross_ether_spent": 14,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 1,
+			"operations": 1,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 0,
+			"gross_ether_spent": 16,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 1,
+			"operations": 1,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 1 for autonomy 1.",
+					"requested_autonomy": 1,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 0,
+			"gross_ether_spent": 14,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 1,
+			"operations": 1,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 1 for autonomy 1.",
+					"requested_autonomy": 1,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 0,
+			"gross_ether_spent": 16,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 1,
+			"operations": 1,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 2 for autonomy 2.",
+					"requested_autonomy": 2,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 0,
+			"gross_ether_spent": 14,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 1,
+			"operations": 1,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 2 for autonomy 2.",
+					"requested_autonomy": 2,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 1,
+			"gross_ether_spent": 32,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 2,
+			"operations": 2,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 1,
+			"gross_ether_spent": 28,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 2,
+			"operations": 2,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 1,
+			"blueprint": false,
+			"equipment_rank": 1,
+			"gross_ether_spent": 32,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 2,
+			"operations": 2,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 1,
+			"blueprint": true,
+			"equipment_rank": 1,
+			"gross_ether_spent": 28,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 2,
+			"operations": 2,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 1,
+			"blueprint": false,
+			"equipment_rank": 1,
+			"gross_ether_spent": 32,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 2,
+			"operations": 2,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 2 for autonomy 2.",
+					"requested_autonomy": 2,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 1,
+			"blueprint": true,
+			"equipment_rank": 1,
+			"gross_ether_spent": 28,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 2,
+			"operations": 2,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 2 for autonomy 2.",
+					"requested_autonomy": 2,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 3,
+			"gross_ether_spent": 54,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 4,
+			"operations": 4,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 3,
+			"gross_ether_spent": 50,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 4,
+			"operations": 4,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 1,
+			"blueprint": false,
+			"equipment_rank": 3,
+			"gross_ether_spent": 54,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 4,
+			"operations": 4,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 1,
+			"blueprint": true,
+			"equipment_rank": 3,
+			"gross_ether_spent": 50,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 4,
+			"operations": 4,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 2,
+			"blueprint": false,
+			"equipment_rank": 3,
+			"gross_ether_spent": 54,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 4,
+			"operations": 4,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 2,
+			"blueprint": true,
+			"equipment_rank": 3,
+			"gross_ether_spent": 50,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 4,
+			"operations": 4,
+			"profile": "early",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 0,
+			"gross_ether_spent": 34,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 3,
+			"operations": 2,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 0,
+			"gross_ether_spent": 30,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 3,
+			"operations": 2,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 0,
+			"gross_ether_spent": 34,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 3,
+			"operations": 2,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 1 for autonomy 1.",
+					"requested_autonomy": 1,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 0,
+			"gross_ether_spent": 30,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 3,
+			"operations": 2,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 1 for autonomy 1.",
+					"requested_autonomy": 1,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 0,
+			"gross_ether_spent": 34,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 3,
+			"operations": 2,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 2 for autonomy 2.",
+					"requested_autonomy": 2,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 0,
+			"gross_ether_spent": 30,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 3,
+			"operations": 2,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 2 for autonomy 2.",
+					"requested_autonomy": 2,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 1,
+			"gross_ether_spent": 50,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 4,
+			"operations": 3,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 1,
+			"gross_ether_spent": 44,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 4,
+			"operations": 3,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 1,
+			"blueprint": false,
+			"equipment_rank": 1,
+			"gross_ether_spent": 50,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 4,
+			"operations": 3,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 1,
+			"blueprint": true,
+			"equipment_rank": 1,
+			"gross_ether_spent": 44,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 4,
+			"operations": 3,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 1,
+			"blueprint": false,
+			"equipment_rank": 1,
+			"gross_ether_spent": 50,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 4,
+			"operations": 3,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 2 for autonomy 2.",
+					"requested_autonomy": 2,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 1,
+			"blueprint": true,
+			"equipment_rank": 1,
+			"gross_ether_spent": 44,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 4,
+			"operations": 3,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 2 for autonomy 2.",
+					"requested_autonomy": 2,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 3,
+			"gross_ether_spent": 83,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 8,
+			"operations": 6,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 3,
+			"gross_ether_spent": 77,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 8,
+			"operations": 6,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 1,
+			"blueprint": false,
+			"equipment_rank": 3,
+			"gross_ether_spent": 83,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 8,
+			"operations": 6,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 1,
+			"blueprint": true,
+			"equipment_rank": 3,
+			"gross_ether_spent": 77,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 8,
+			"operations": 6,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 2,
+			"blueprint": false,
+			"equipment_rank": 3,
+			"gross_ether_spent": 83,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 8,
+			"operations": 6,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 2,
+			"blueprint": true,
+			"equipment_rank": 3,
+			"gross_ether_spent": 77,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 8,
+			"operations": 6,
+			"profile": "intermediate",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 0,
+			"gross_ether_spent": 116,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 12,
+			"operations": 6,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 0,
+			"gross_ether_spent": 103,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 12,
+			"operations": 6,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 0,
+			"gross_ether_spent": 116,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 12,
+			"operations": 6,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 1 for autonomy 1.",
+					"requested_autonomy": 1,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 0,
+			"gross_ether_spent": 103,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 12,
+			"operations": 6,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 1 for autonomy 1.",
+					"requested_autonomy": 1,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 0,
+			"gross_ether_spent": 116,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 12,
+			"operations": 6,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 2 for autonomy 2.",
+					"requested_autonomy": 2,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 0,
+			"gross_ether_spent": 103,
+			"incomplete": false,
+			"items": 1,
+			"lines": 1,
+			"mastery": 12,
+			"operations": 6,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 2 for autonomy 2.",
+					"requested_autonomy": 2,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 1,
+			"gross_ether_spent": 132,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 13,
+			"operations": 7,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 1,
+			"gross_ether_spent": 117,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 13,
+			"operations": 7,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 1,
+			"blueprint": false,
+			"equipment_rank": 1,
+			"gross_ether_spent": 132,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 13,
+			"operations": 7,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 1,
+			"blueprint": true,
+			"equipment_rank": 1,
+			"gross_ether_spent": 117,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 13,
+			"operations": 7,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 1,
+			"blueprint": false,
+			"equipment_rank": 1,
+			"gross_ether_spent": 132,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 13,
+			"operations": 7,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 2 for autonomy 2.",
+					"requested_autonomy": 2,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 1,
+			"blueprint": true,
+			"equipment_rank": 1,
+			"gross_ether_spent": 117,
+			"incomplete": false,
+			"items": 2,
+			"lines": 2,
+			"mastery": 13,
+			"operations": 7,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [
+				{
+					"reason": "WorkshopBalance requires rank 2 for autonomy 2.",
+					"requested_autonomy": 2,
+					"status": "equipment_rank_gate"
+				}
+			],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": false,
+			"equipment_rank": 3,
+			"gross_ether_spent": 209,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 26,
+			"operations": 14,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 0,
+			"autonomy_effective": 0,
+			"blueprint": true,
+			"equipment_rank": 3,
+			"gross_ether_spent": 194,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 26,
+			"operations": 14,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 1,
+			"blueprint": false,
+			"equipment_rank": 3,
+			"gross_ether_spent": 209,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 26,
+			"operations": 14,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 1,
+			"autonomy_effective": 1,
+			"blueprint": true,
+			"equipment_rank": 3,
+			"gross_ether_spent": 194,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 26,
+			"operations": 14,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 2,
+			"blueprint": false,
+			"equipment_rank": 3,
+			"gross_ether_spent": 209,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 26,
+			"operations": 14,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		},
+		{
+			"autonomy": 2,
+			"autonomy_effective": 2,
+			"blueprint": true,
+			"equipment_rank": 3,
+			"gross_ether_spent": 194,
+			"incomplete": false,
+			"items": 4,
+			"lines": 4,
+			"mastery": 26,
+			"operations": 14,
+			"profile": "developed",
+			"reward_ether": 0,
+			"simulated_seconds": 28800.0,
+			"stalls": [],
+			"status": "complete"
+		}
+	],
+	"schema": 1,
+	"xp_after_material_preparation": 103,
+	"xp_at_person": 3
+}

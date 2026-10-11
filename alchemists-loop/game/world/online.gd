@@ -387,8 +387,11 @@ func _experiment_pending_matches(a: String, b: String) -> bool:
 func _grant_local_acquisition(slug: String) -> Array:
 	# единая точка «первое локальное получение вещества из мира»: +1 в инвентарь,
 	# circular-эффект Круга и грант первооткрытия; возвращает новые вехи
+	if not g._engine._resource_mutation_allowed() or not g.ITEMS.has(slug):
+		return []
 	var first_open := not g._engine.inventory.has(slug)
 	g._engine.inventory[slug] = int(g._engine.inventory.get(slug, 0)) + 1
+	g._engine._award_synthesis(slug)
 	g._retention._circle_on_discovery(first_open)
 	if first_open:
 		return g._engine._grant_first_open(slug)
@@ -742,6 +745,17 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 			return
 		_set_status("Мир не ответил: %s" % msg if msg != "" else "Туман рассеялся… (мир недоступен)")
 
+func _validated_server_layer(raw: Variant) -> int:
+	# Validate before conversion: strings, booleans and fractional depths must
+	# not become legitimate mastery layers through int() coercion.
+	if typeof(raw) != TYPE_INT and typeof(raw) != TYPE_FLOAT:
+		return 0
+	var layer := float(raw)
+	if not is_finite(layer) or layer <= 0.0 or layer >= float(1 << 29) \
+			or layer != floor(layer):
+		return 0
+	return int(layer)
+
 func _apply_server_element(d) -> String:
 	"""Зарегистрировать элемент с сервера в локальных данных; вернуть slug ("" если не вышло)."""
 	if typeof(d) != TYPE_DICTIONARY:
@@ -782,7 +796,7 @@ func _apply_server_element(d) -> String:
 			g.ITEMS[slug]["d"] = dsc
 		if _server_elements.has(slug):
 			_server_elements[slug] = g.ITEMS[slug]
-	_server_layers[slug] = int(dd.get("layer", 0))
+	_server_layers[slug] = _validated_server_layer(dd.get("layer", 0))
 	return slug
 
 func _register_server_recipe(a: String, b: String, out: String) -> void:

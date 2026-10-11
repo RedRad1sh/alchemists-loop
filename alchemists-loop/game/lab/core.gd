@@ -84,6 +84,9 @@ var _experiment_pending_pair: Array[String] = []
 var _craft_job: Dictionary = {}
 var _blueprints: Dictionary = {}
 var _production_discount := 1.0
+# Only the synchronous commit owns this guard; the cauldron's coroutine keeps
+# its separate brewing/epoch mutex while waiting for the timer.
+var _resource_commit_busy := false
 
 func _init(game: Game) -> void:
 	g = game
@@ -375,7 +378,7 @@ func _plan_ether_cost(plan: Dictionary, limit_ops: int = -1, discount: float = 1
 
 func _grant_ether(amount: int, _reason: String = "") -> int:
 	# Instant rewards use this funnel. Direct energy respects the active cap;
-	# the rest becomes a visible, non-energy reserve for mastery rites.
+	# the rest becomes a visible reserve spendable through _spend_ether.
 	if amount <= 0:
 		return 0
 	var direct := mini(amount, maxi(0, _max_ether() - ether))
@@ -401,6 +404,8 @@ func _experiment_cooldown_remaining() -> float:
 	return maxf(0.0, Game.EXPERIMENT_COOLDOWN_SEC - elapsed)
 
 func _experiment_status(a: String, b: String) -> Dictionary:
+	if not _resource_mutation_allowed():
+		return {"ok": false, "reason": "Котёл завершает текущую операцию."}
 	_experiment_sync_day()
 	# U9 (T11): единый мьютекс потребляющих трасс — эксперимент нельзя начать
 	# посреди ручной варки, автоплана или шага верстака.
@@ -462,12 +467,14 @@ func _finish_experiment_inputs(a: String, b: String, full_refund: bool) -> void:
 
 func _experiment_succeeded(slug: String, a: String, b: String) -> void:
 	# U9 (T12): зеркальный guard — успех без висящего эксперимента начислять нельзя.
-	if _experiment_pending_pair.size() != 2:
+	if not _resource_mutation_allowed() or not g.ITEMS.has(slug) \
+			or not g._online._experiment_pending_matches(a, b):
 		return
 	known_recipes[g._pair_key(a, b)] = true
 	inventory[slug] = int(inventory.get(slug, 0)) + 1
 	successes += 1
 	_experiment_pending_pair.clear()
+	_award_synthesis(slug)
 	status_text = "Эксперимент удался: открыто новое вещество «%s»." % g._online._item_name(slug)
 	Analytics.track("experiment_result", {"left": a, "right": b, "result": "created", "output": slug})
 	_refresh()
@@ -499,7 +506,17 @@ func _spend_ether(amount: int) -> bool:
 	return true
 
 func _spend_mastery_ether(amount: int) -> bool:
-	return _spend_ether(amount)
+	return _resource_mutation_allowed() and _spend_ether(amount)
+
+func _resource_mutation_allowed() -> bool:
+	return not _resource_commit_busy
+
+func _award_synthesis(item_id: String) -> int:
+	# Dynamic until the model/main integration lands; known repeats count too.
+	var workshop = g.get("_workshop")
+	if workshop == null or not workshop.has_method("on_synthesis"):
+		return 0
+	return int(workshop.call("on_synthesis", item_id))
 
 func _stage_ops() -> int:
 	# A2: этап автоварки растёт от ранга печати (3 → 4 → 5). Константа — база;
@@ -514,6 +531,8 @@ func _mastery_cost() -> int:
 	return int(round(float(Game.ETHER_MASTERY_BASE) * pow(Game.ETHER_MASTERY_GROWTH, mastery_rank)))
 
 func _buy_mastery() -> bool:
+	if not _resource_mutation_allowed():
+		return false
 	var cost := _mastery_cost()
 	if not _spend_mastery_ether(cost):
 		status_text = "Для печати мастерства нужно %d ⚡ (эфир + резерв)." % cost
@@ -531,6 +550,8 @@ func _buy_mastery() -> bool:
 	return true
 
 func _buy_upgrade(id: String) -> bool:
+	if not _resource_mutation_allowed():
+		return false
 	var u := _up_def(id)
 	if u.is_empty():
 		return false
@@ -562,6 +583,11 @@ func _buy_upgrade(id: String) -> bool:
 	return true
 
 func _mode_unlocked(key: String) -> bool:
+	if key == "bench":
+		var workshop = g.get("_workshop")
+		# Unsupported state stays reachable so the view can explain the update
+		# requirement; production commands themselves remain read-only.
+		return inventory.has("person") or (workshop != null and (workshop.unlocked or workshop.is_read_only()))
 	if key == "spring":
 		return inventory.has("plant")
 	if key == "resonance":
@@ -674,7 +700,7 @@ var _brew_epoch := 0  # инкрементируется при старте в�
 
 func _can_brew() -> bool:
 	# U9 (T11): верстак — тоже потребляющая трасса, ручная варка с ним не совмещается.
-	if brewing or g._pages._bench_busy or selected.size() != 2:
+	if not _resource_mutation_allowed() or brewing or g._pages._bench_busy or selected.size() != 2:
 		return false
 	return _available_ether() >= _pair_cost(selected[0], selected[1], _production_discount)
 
@@ -1245,7 +1271,7 @@ func _on_confirm_brew() -> void:
 
 func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
 	# U9 (T11): автоплан — часть единого мьютекса потребляющих трасс.
-	if brewing or _auto or g._pages._bench_busy:
+	if not _resource_mutation_allowed() or brewing or _auto or g._pages._bench_busy:
 		status_text = "Котёл занят: дождись завершения текущей варки или производства."
 		Sfx.error()
 		_refresh()
@@ -1408,7 +1434,7 @@ func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
 
 func _run_bench_plan(item_id: String, plan: Dictionary) -> bool:
 	# фоновая варка верстака: не трогает котёл и не блокирует игрока
-	if brewing or _auto or g._pages._bench_busy:
+	if not _resource_mutation_allowed() or brewing or _auto or g._pages._bench_busy:
 		return false
 	var total := int(plan["total"])
 	var route_discount := Game.BLUEPRINT_DISCOUNT if _blueprints.has(item_id) else 1.0
@@ -1477,22 +1503,68 @@ func _run_bench_plan(item_id: String, plan: Dictionary) -> bool:
 	g._saves._save_game()
 	return true
 
-func _commit_brew(a: String, b: String) -> Dictionary:
+func _commit_brew(a: String, b: String, context: Dictionary = {}) -> Dictionary:
+	if not _resource_mutation_allowed():
+		return _brew_rejected("busy")
+	_resource_commit_busy = true
+	# Replay keeps existing deduplicated riddle/vein deferred work, but cannot
+	# enqueue per-operation HTTP just because the device has already reconnected.
+	# The network gate is restored synchronously, including all rejected returns.
+	var raw_source = context.get("source", "")
+	var offline: bool = typeof(raw_source) == TYPE_STRING and raw_source == "offline_workshop"
+	var net_enabled := g._online._net_enabled
+	if offline:
+		g._online._net_enabled = false
+	var result := _commit_brew_locked(a, b, context)
+	if offline:
+		g._online._net_enabled = net_enabled
+	_resource_commit_busy = false
+	return result
+
+func _brew_rejected(reason: String) -> Dictionary:
+	return {"failed": true, "output": "", "newly_learned": false,
+		"reason": reason, "ether_spent": 0, "mastery_awarded": 0}
+
+func _commit_brew_locked(a: String, b: String, context: Dictionary) -> Dictionary:
+	var discount := _production_discount
+	var production := false
+	var source := "recipe"
+	if not context.is_empty():
+		if typeof(context.get("source")) != TYPE_STRING \
+				or typeof(context.get("production")) != TYPE_BOOL:
+			return _brew_rejected("context")
+		source = context["source"]
+		production = context["production"]
+		if source not in ["manual", "production", "workshop", "offline_workshop"] \
+				or production != (source != "manual"):
+			return _brew_rejected("context")
+		var raw_discount = context.get("discount")
+		if typeof(raw_discount) != TYPE_INT and typeof(raw_discount) != TYPE_FLOAT:
+			return _brew_rejected("context")
+		discount = float(raw_discount)
+		if not is_finite(discount) or discount <= 0.0 or discount > 1.0:
+			return _brew_rejected("context")
 	var recipe := g._online._find_recipe(a, b)
 	var output := String(recipe.get("out", "")) if not recipe.is_empty() else ""
+	if production:
+		if recipe.is_empty() or not known_recipes.has(g._pair_key(a, b)) \
+				or output == "" or not g.ITEMS.has(output):
+			return _brew_rejected("recipe")
+		if int(inventory.get(output, 0)) >= Game.CRAFT_INVENTORY_STACK_CAP:
+			return _brew_rejected("inventory")
 	var first_time := output != "" and not inventory.has(output)
 	var brew_cost := Game.BREW_COST
 	if first_time:
 		brew_cost += _discovery_fee_for_layer(_content_layer(output))
-	brew_cost = maxi(1, int(round(float(brew_cost) * _production_discount)))
+	brew_cost = maxi(1, int(round(float(brew_cost) * discount)))
 	# U9 (T11): повторная проверка прямо перед списанием (fail-closed): между
 	# гейтом трассы и этим моментом лежат await, за которые ингредиенты мог
 	# съесть другой потребитель. Не хватает — выходим без списания реагентов
 	# И без траты эфира (коммит атомарен с этой проверки).
 	if not g._online._has_ingredients(a, b):
-		return {"failed": true, "output": "", "newly_learned": false, "reason": "ingredients"}
+		return _brew_rejected("ingredients")
 	if not _spend_ether(brew_cost):
-		return {"failed": true, "output": "", "newly_learned": false, "reason": "ether"}
+		return _brew_rejected("ether")
 	inventory[a] = int(inventory[a]) - 1
 	inventory[b] = int(inventory[b]) - 1
 	attempts += 1
@@ -1500,14 +1572,16 @@ func _commit_brew(a: String, b: String) -> Dictionary:
 	g._riddles._atlas_attempt(a, b)
 	if recipe.is_empty():
 		_grant_ether(Game.FAILURE_REFUND, "failed_brew")
-		Analytics.track("combine_try", {"left": a, "right": b, "result": "fail", "source": "recipe"})
-		return {"failed": true, "output": "", "newly_learned": false}
+		Analytics.track("combine_try", {"left": a, "right": b, "result": "fail", "source": source})
+		return {"failed": true, "output": "", "newly_learned": false,
+			"ether_spent": brew_cost, "mastery_awarded": 0}
 	var key := g._pair_key(a, b)
 	var newly_learned := not known_recipes.has(key)
 	known_recipes[key] = true
 	inventory[output] = int(inventory.get(output, 0)) + 1
 	_layer_cache.erase(output)
 	successes += 1
+	var mastery_awarded := _award_synthesis(output)
 	g._retention._circle_on_discovery(first_time)
 	g._retention._circle_on_local_brew(output)
 	var milestones: Array = []
@@ -1527,5 +1601,7 @@ func _commit_brew(a: String, b: String) -> Dictionary:
 	# только здесь (отмена/провал не платят и не сгорают молча — она сбросится
 	# следующим успешным путём или новой модалкой).
 	g._retention._circle_on_goal_brew(output)
-	Analytics.track("combine_try", {"left": a, "right": b, "result": "new" if newly_learned else "known", "output": output, "source": "recipe"})
-	return {"failed": false, "output": output, "newly_learned": newly_learned, "milestones": milestones}
+	if source != "offline_workshop":
+		Analytics.track("combine_try", {"left": a, "right": b, "result": "new" if newly_learned else "known", "output": output, "source": source})
+	return {"failed": false, "output": output, "newly_learned": newly_learned,
+		"milestones": milestones, "ether_spent": brew_cost, "mastery_awarded": mastery_awarded}

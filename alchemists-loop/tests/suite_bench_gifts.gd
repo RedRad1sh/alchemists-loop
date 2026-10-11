@@ -3,6 +3,9 @@ class_name SuiteBenchGifts
 # верстак/дары (оп B1).
 
 static func run(g: Game) -> void:
+	var fixture := WorkshopFixture.new(g)
+	fixture.capture(g._workshop_scheduler)
+	g._workshop.import_state({"version": 1, "unlocked": true})
 	# верстак: варит выбранное сам
 	g._pages._bench_target = "steam"
 	g._pages._bench_on = true
@@ -13,20 +16,27 @@ static func run(g: Game) -> void:
 	g._engine.ether = 200
 	g.BREW_SECONDS = 0.05
 	g._pages._bench_tick(Game.BENCH_INTERVAL + 0.01)
-	Selftest.check("bench keeps kettle free", not g._engine.brewing and g._pages._bench_busy)
+	var stage: Dictionary = g._workshop_scheduler.get("_stats").duplicate(true)
+	Selftest.check("bench keeps kettle free", not g._engine.brewing and not g._pages._bench_busy
+		and g._engine._resource_mutation_allowed())
 	await g.get_tree().create_timer(0.5).timeout
 	Selftest.check("bench brews solo", int(g._engine.inventory.get("steam", 0)) >= 1
-		and g._engine.ether <= 200 - Game.BREW_COST + 2)
-	Selftest.check("bench released", not g._pages._bench_busy and not g._engine.brewing)
+		and int(stage.get("ether_spent", 0)) > 0
+		and g._engine.ether == 200 + int(stage.get("ether_gained", 0)) - int(stage.get("ether_spent", 0))
+		and int(g._engine.inventory.get("fire", 0)) == 5 - int(g._engine.inventory.get("steam", 0))
+		and int(g._engine.inventory.get("water", 0)) == 5 - int(g._engine.inventory.get("steam", 0)))
+	Selftest.check("bench released", not g._pages._bench_busy and not g._engine.brewing
+		and g._engine._resource_mutation_allowed())
 	g._pages._bench_on = false
 
-	# потолка накопления больше нет: верстак варит выше прежнего лимита
+	# Старый малый потолок снят: запас растёт до общего предела стека.
 	g._engine.inventory["steam"] = 12
 	g._pages._bench_target = "steam"
 	g._pages._bench_on = true
 	g._pages._bench_clock = 0.0
 	g._pages._bench_tick(Game.BENCH_INTERVAL + 0.01)
-	Selftest.check("bench ignores old cap", g._pages._bench_busy)
+	Selftest.check("bench ignores old cap", not g._pages._bench_busy
+		and int(g._engine.inventory.get("steam", 0)) > 12 and g._engine._resource_mutation_allowed())
 	await g.get_tree().create_timer(0.5).timeout
 	Selftest.check("bench brews above old cap", int(g._engine.inventory.get("steam", 0)) > 12)
 	g._pages._bench_on = false
@@ -68,6 +78,8 @@ static func run(g: Game) -> void:
 	g._engine.inventory["water"] = 200
 	g._engine.inventory["steam"] = 0
 	g._engine.ether = 100000
+	# This independent offline window starts with no retained online credit.
+	g._workshop.import_state({"version": 1, "unlocked": true})
 	g._pages._bench_target = "steam"
 	g._pages._bench_on = true
 	g.BREW_SECONDS = 0.05
@@ -96,7 +108,7 @@ static func run(g: Game) -> void:
 	Selftest.check("u38 gift poster matches const", u38_desc.contains("%d мин" % int(Game.GIFT_INTERVAL / 60.0)))
 	var u38_found := 0
 	for u38_c in g._pages._bench_page_labels:
-		if String(u38_c).contains("%d с" % int(Game.BENCH_INTERVAL)) and String(u38_c).contains("без потолка"):
+		if String(u38_c).contains("%d с" % int(Game.BENCH_INTERVAL)) and String(u38_c).contains("общего предела стека"):
 			u38_found += 1
 	Selftest.check("u38 bench poster matches const", u38_found >= 1)
 
@@ -126,3 +138,4 @@ static func run(g: Game) -> void:
 	sm4._on_collection_result({"ok": true, "cards": {}, "extras": []})
 	g._pages._bench_target = ""
 	Selftest.check("sb4 offline bench uses halved interval", sb4_offline)
+	fixture.finish()

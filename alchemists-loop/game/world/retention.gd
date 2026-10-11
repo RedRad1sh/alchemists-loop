@@ -5,11 +5,12 @@ class_name Retention
 
 var g: Game
 
-# дневной круг (v29): визиты/серия, открытия дня, кэш цели дня, вехи
+# дневной круг (v29): визиты/серия, успешные синтезы дня, кэш цели дня, вехи
 var _circle_days: Array = []
 var _circle_run := 0
 var _circle_last := ""
 var _hearth_claim := ""
+# Имена полей сохранены для старых сейвов: открытия дня теперь считаются синтезами.
 var _circle_disc_day := ""
 var _circle_disc := 0
 var _circle_reward_day := ""
@@ -44,7 +45,7 @@ func _init(game: Game) -> void:
 	g = game
 
 # ---------- дневной круг: контейнер суточного слоя + очаг + вечные вехи (v29) ----------
-# Три строки дня (цель, заказы, открытия) + награда за закрытие; очаг копит дни
+# Три строки дня (цель, заказы, успешные синтезы) + награда за закрытие; очаг копит дни
 # визитов мягко (пропуск не штрафует, лишь обнуляет множитель серии); вехи дней
 # и вечных очков цели дают постоянный кап/реген и ауру «Очаг».
 
@@ -93,9 +94,9 @@ func _circle_claim_hearth() -> void:
 	g._engine._refresh()
 
 
-func _circle_on_discovery(first_time: bool) -> void:
-	if not first_time:
-		return
+func _circle_on_discovery(_first_time: bool) -> void:
+	# Совместимый hook: вызывается один раз после успешной варки/получения из мира.
+	# Новизна не требуется — повторы доступны и после завершения коллекции.
 	var today := _circle_today()
 	if _circle_disc_day != today:
 		_circle_disc_day = today
@@ -204,7 +205,7 @@ func _circle_reward_claimable() -> bool:
 
 func _circle_claim_reward() -> void:
 	if not _circle_closed():
-		g._engine.status_text = "Круг ещё не закрыт: нужны цель дня, заказы 3/3 и %d открытий." % Game.CIRCLE_DISC_GOAL
+		g._engine.status_text = "Круг ещё не закрыт: нужны цель дня, заказы 3/3 и %d успешных синтезов." % Game.CIRCLE_DISC_GOAL
 		Sfx.error()
 		return
 	if _circle_reward_day == _circle_today():
@@ -395,7 +396,7 @@ func _build_circle_page(container: VBoxContainer) -> void:
 	col.add_theme_constant_override("separation", 8)
 	pad.add_child(col)
 	col.add_child(g._label("Дневной круг", 17))
-	var desc := g._label("Цель дня + заказы гильдии + открытия дня — в одном месте. Закрой круг и забери награду; очаг помнит каждый твой день.", 12)
+	var desc := g._label("Цель дня + заказы гильдии + успешные синтезы дня (новые и повторные) — в одном месте. Закрой круг и забери награду; очаг помнит каждый твой день.", 12)
 	desc.add_theme_color_override("font_color", Color(0.62, 0.74, 0.82))
 	col.add_child(desc)
 	_circle_head = g._label("", 13)
@@ -478,7 +479,7 @@ func _refresh_circle_page() -> void:
 		orow.add_theme_color_override("font_color", Color(0.55, 0.8, 0.6))
 	_circle_list.add_child(orow)
 	var dn := _circle_disc if _circle_disc_day == _circle_today() else 0
-	var drow := g._label("Открытия дня: %d/%d%s" % [dn, Game.CIRCLE_DISC_GOAL, " ✓" if _circle_disc_done() else ""], 14)
+	var drow := g._label("Успешные синтезы дня: %d/%d%s" % [dn, Game.CIRCLE_DISC_GOAL, " ✓" if _circle_disc_done() else ""], 14)
 	if _circle_disc_done():
 		drow.add_theme_color_override("font_color", Color(0.55, 0.8, 0.6))
 	_circle_list.add_child(drow)
