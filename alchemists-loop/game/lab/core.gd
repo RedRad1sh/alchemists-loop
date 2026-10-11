@@ -911,7 +911,21 @@ func _refresh() -> void:
 func _refresh_header() -> void:
 	if not is_instance_valid(_ether_label):
 		return
-	_ether_label.text = "⚡%d/%d · рез:%d · +%.1f/с" % [ether, _max_ether(), ether_overflow, _ether_rate()]
+	# R15: счётчик компактный («⚡ 120/230»), резерв — только если nonzero,
+	# доход вынесен в отдельный чип HUD.
+	var _rez := ""
+	if ether_overflow > 0:
+		_rez = " · рез:%d" % ether_overflow
+	_ether_label.text = "⚡ %d/%d%s" % [ether, _max_ether(), _rez]
+	# R15: HUD-капсула — кап-бар и чип дохода; старый формат строки сохранён.
+	if g._hud != null:
+		if is_instance_valid(g._hud.cap_bar):
+			g._hud.cap_bar.max_value = _max_ether()
+			g._hud.cap_bar.value = ether
+		if is_instance_valid(g._hud.rate_chip):
+			g._hud.rate_chip.text = "+%.2f/с" % _ether_rate()
+	if g._bottom_nav != null:
+		g._bottom_nav.refresh_badges()
 	var nxt := _next_milestone(inventory.size())
 	var atlas := ""
 	if nxt > 0:

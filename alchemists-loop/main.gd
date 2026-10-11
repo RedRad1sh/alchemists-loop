@@ -357,6 +357,9 @@ var _engine: Core  # движок: варка/dnd/refresh/автоварка (R1
 
 # ---------- UI ----------
 var _sound_btn: Button
+var _hud: HudBar = null        # R15: компактная шапка (hud.gd)
+var _bottom_nav: BottomNav = null  # R15: нижний иконковый таб-бар (bottom_nav.gd)
+var _rooms: RoomCarousel = null    # R15: карусель комнат Лаборатории (rooms.gd)
 
 # --- оформление: Manrope + Kenney UI (9-slice) ---
 var _font_reg: Font = null
@@ -1278,108 +1281,12 @@ func _build_ui() -> void:
 	root.set_size(margin.size)
 	call_deferred("_fit_ui_root_after_layout", margin, root)
 
-	# шапка
-	var head := HBoxContainer.new()
-	head.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	root.add_child(head)
-	# Заголовок игры — рунический display-шрифт: это логотип, а не заголовок
-	# раздела. 19 px, а не 22-24: при ширине 540 px ряд из шести кнопок 46×46
-	# оставляет заголовку ~216 px, а рунический в 22 px требует 235 px и при
-	# AUTOWRAP_WORD_SMART уезжает на две строки; в 19 px это 203 px.
-	var title := _label("ПЕТЛЯ АЛХИМИКА", 19)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if _font_runic != null:
-		title.add_theme_font_override("font", _font_runic)
-	elif _font_xbold != null:
-		title.add_theme_font_override("font", _font_xbold)
-	title.add_theme_color_override("font_color", Color(0.94, 0.97, 1.0))
-	head.add_child(title)
-	# Ряд шапки — одинаковые квадраты 46×46 с иконками Atheneum 24 px. Размер
-	# задала таро-кнопка Аркана (спека: строго квадратная 46×46); остальные были
-	# 46×36, поэтому ряд шёл рваным по высоте, а аватар жил в своей 9-slice
-	# текстуре вместо общего UIStyle-хрома.
-	var quests_btn := _header_button(2)
-	# На золотой кнопке белая база иконки не читается — тёмные чернила.
-	UIIcon.into_button(quests_btn, "star", 24, Color("2a1d05"))
-	quests_btn.tooltip_text = "Задания Светика, достижения, комплекты, заказы"
-	quests_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	quests_btn.pressed.connect(_progress_ui._open_progress_popup)
-	head.add_child(quests_btn)
-	var sigil_btn := _tarot_button()
-	_sigil_header_btn = sigil_btn
-	sigil_btn.tooltip_text = "Аркан Сигилов: ежедневные крафты"
-	sigil_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	sigil_btn.pressed.connect(_sigil_ui._open_sigil_modal)
-	head.add_child(sigil_btn)
-	# «▲N» → родная иконка trend_up + счётчик текстом (core._refresh_header).
-	# Если SVG не импортирован (текстуры нет), _refresh_header оставит глиф «▲».
-	var up_icon := UIIcon.texture("trend_up")
-	_hub._up_btn = _header_button(0)
-	if up_icon != null:
-		_hub._up_btn.icon = up_icon
-	else:
-		_hub._up_btn.text = "▲"
-	_hub._up_btn.tooltip_text = "Улучшения"
-	_hub._up_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_hub._up_btn.pressed.connect(_hub._open_upgrades)
-	head.add_child(_hub._up_btn)
-	_sound_btn = _header_button(0)
-	UIIcon.into_button(_sound_btn, "volume", 24)
-	_sound_btn.tooltip_text = "Настройки звука"
-	_sound_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_sound_btn.pressed.connect(_hub._open_settings)
-	head.add_child(_sound_btn)
-	var log_btn := _header_button(0)
-	UIIcon.into_button(log_btn, "book", 24)
-	log_btn.tooltip_text = "Журнал событий"
-	log_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	log_btn.pressed.connect(_hub._open_journal)
-	head.add_child(log_btn)
-	var me_btn := _header_button(0)
-	me_btn.tooltip_text = "Профиль: твоё имя и аватар"
-	me_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	me_btn.pressed.connect(_hub._open_profile)
-	var cc := CenterContainer.new()
-	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	me_btn.add_child(cc)
-	_me_avatar = _make_avatar(_online._net_nick, 24)
-	cc.add_child(_me_avatar)
-	head.add_child(me_btn)
-
-	var ether_row := HBoxContainer.new()
-	ether_row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	ether_row.add_theme_constant_override("separation", 8)
-	root.add_child(ether_row)
-	_engine._ether_label = _label("", 14)
-	_engine._ether_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_engine._ether_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_engine._ether_label.clip_text = true
-	ether_row.add_child(_engine._ether_label)
-	var home_btn := _small_button("Дом", Vector2(82, 34), 2)
-	home_btn.tooltip_text = "Дом Светика: построй домик, обставь его, смени тему и ауру"
-	home_btn.pressed.connect(_home._open_workshop)
-	ether_row.add_child(home_btn)
-	var market_btn := _small_button("Лавка", Vector2(82, 34), 1)
-	market_btn.tooltip_text = "Покупки, награды за просмотр и приватность"
-	market_btn.pressed.connect(_shop.open)
-	ether_row.add_child(market_btn)
-	var friends_btn := _small_button("Друзья", Vector2(96, 34), 2)
-	friends_btn.tooltip_text = "Друзья, заявки и личные сообщения"
-	friends_btn.pressed.connect(_open_social)
-	ether_row.add_child(friends_btn)
-	_social_btn = friends_btn
-	_engine._collection_label = _label("", 14)
-	_engine._collection_label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	root.add_child(_engine._collection_label)
-	_guild._quest_label = Button.new()
-	_guild._quest_label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	_guild._quest_label.flat = true
-	_guild._quest_label.add_theme_font_size_override("font_size", 13)
-	_guild._quest_label.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_guild._quest_label.tooltip_text = "Нажми, чтобы открыть задания и достижения"
-	_guild._quest_label.pressed.connect(_progress_ui._open_progress_popup)
-	root.add_child(_guild._quest_label)
+	# HUD (R15): компактная шапка «аватар · эфир-капсула · доход · действия»
+	# и строка цели по концепту concepts/ui-lab-main-paging.png. Старые узлы
+	# (аватар, эфир/коллекция-лейблы, квест-чип, Друзья) воссоздаёт HudBar —
+	# контракты тестов (_me_avatar, _social_btn, _ether_label…) сохранены.
+	_hud = HudBar.new()
+	_hud.build(self, root)
 
 	var tabs := TabContainer.new()
 	tabs.name = "Tabs"
@@ -1398,7 +1305,9 @@ func _build_ui() -> void:
 	root.add_child(tabs)
 
 	var experiment := _make_page(tabs, "Эксперимент")
-	_pages._build_experiment_location(experiment)
+	# R15: комната-карусель — сцена эксперимента + Мастерская (rooms.gd).
+	_rooms = RoomCarousel.new()
+	_rooms.build(self, experiment)
 	var lab := _make_page(tabs, "Лаборатория")
 	_pages._build_lab(lab)
 	var world := _make_page(tabs, "Мир")
@@ -1408,8 +1317,16 @@ func _build_ui() -> void:
 	var tools := _make_page(tabs, "Инструменты")
 	_pages._build_tools_page(tools)
 	_apply_tab_icons(tabs)
+	# R15: верхний TabBar спрятан — навигация живёт в нижнем иконковом баре,
+	# который переключает тот же TabContainer (контракты тестов не трогаем).
+	tabs.get_tab_bar().visible = false
 
 	_build_brew_bar()
+	_bottom_nav = BottomNav.new()
+	_bottom_nav.build(self, self)
+	_bottom_nav.refresh(_tabs_ref.current_tab)
+	# Контент не должен уезжать под нижний бар: поднимаем низ корневого хоста.
+	margin.offset_bottom = -14 - BottomNav.NAV_H
 	_spirit._build_companion()
 	_build_popup()
 	_build_confirm()
@@ -1475,8 +1392,9 @@ func _build_brew_bar() -> void:
 	bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	bar.offset_left = 12
 	bar.offset_right = -12
-	bar.offset_top = -132
-	bar.offset_bottom = -12
+	# R15: панель варки стоит над нижним таб-баром (BottomNav.NAV_H = 64).
+	bar.offset_top = -196
+	bar.offset_bottom = -76
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := _panel_style(Color(0.07, 0.10, 0.15, 0.96), 18)
 	bar.add_theme_stylebox_override("panel", sb)
@@ -1563,6 +1481,10 @@ func _build_brew_bar() -> void:
 func _on_tab_changed(index: int) -> void:
 	_update_brew_bar_visibility()
 	_spirit._refresh_companion_visible()
+	if _bottom_nav != null:
+		_bottom_nav.refresh(index)
+	if index == TAB_EXPERIMENT and _rooms != null:
+		_rooms.refresh_unlocks()
 	if index == 2:
 		_refetch_world()
 		_resonance._fetch_echoes()
@@ -1598,7 +1520,9 @@ func _refetch_world() -> void:
 func _update_brew_bar_visibility() -> void:
 	if _brew_bar == null:
 		return
-	var on_lab := _tabs_ref == null or _tabs_ref.current_tab == TAB_LAB
+	# R15: action-бар виден в обеих боевых вкладках (сцена Эксперимента и Книга).
+	var on_lab := _tabs_ref == null or _tabs_ref.current_tab == TAB_LAB \
+			or _tabs_ref.current_tab == TAB_EXPERIMENT
 	_brew_bar.visible = on_lab
 	if _engine._repeat_btn != null:
 		_engine._repeat_btn.disabled = _engine.brewing or _engine._last_pair.size() != 2

@@ -158,6 +158,7 @@ static func run(g: Game) -> void:
 	await SuiteSigilCards.run(g)
 	await SuiteSigilLore.run(g)
 	await SuiteSocial.run(g)
+	await SuiteSceneUi.run(g)
 
 	_u20_wipe([g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH] + U20_ST_FILES)
 	g.SAVE_PATH = "user://alchemy_save.json"
