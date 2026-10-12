@@ -46,6 +46,8 @@ var _experiment_cauldron: CauldronView = null
 var _experiment_cauldron_title: Label = null
 var _experiment_cauldron_frame: PanelContainer = null
 var _experiment_drawer: PanelContainer = null
+var _experiment_win_dim: ColorRect = null  # R18: эксперимент — отдельное окно
+var _experiment_win: PanelContainer = null
 var _experiment_drawer_button: Button = null
 var _experiment_drawer_label: Label = null
 var _experiment_reagent_search: LineEdit = null
@@ -221,6 +223,64 @@ func _build_lab(page: VBoxContainer) -> void:
 	var bottom_pad := Control.new()
 	bottom_pad.custom_minimum_size = Vector2(0, 150)
 	page.add_child(bottom_pad)
+
+
+## R18: эксперимент больше не живёт в сцене комнаты — это отдельное окно:
+## свободное поле открытий без лишнего интерфейса (арена + котёл + drawer).
+func _build_experiment_window(host: Node) -> void:
+	_experiment_win_dim = ColorRect.new()
+	_experiment_win_dim.color = Color(0, 0, 0, 0.55)
+	_experiment_win_dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_experiment_win_dim.z_index = 24
+	_experiment_win_dim.visible = false
+	_experiment_win_dim.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed:
+			_close_experiment_window()
+	)
+	host.add_child(_experiment_win_dim)
+	var win := PanelContainer.new()
+	_experiment_win = win
+	win.name = "ExperimentWindow"
+	win.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	win.offset_left = 10
+	win.offset_top = 10
+	win.offset_right = -10
+	win.offset_bottom = -10
+	win.z_index = 25
+	win.visible = false
+	win.add_theme_stylebox_override("panel",
+		UIStyle.box(Color(0.05, 0.09, 0.14, 0.97), UIStyle.TEAL_DIM, 18, 1))
+	host.add_child(win)
+	var page := VBoxContainer.new()
+	page.add_theme_constant_override("separation", 8)
+	win.add_child(page)
+	var head := HBoxContainer.new()
+	head.alignment = BoxContainer.ALIGNMENT_END
+	page.add_child(head)
+	var close := g._small_button("✕ Закрыть", Vector2(120, 40), 0)
+	close.pressed.connect(_close_experiment_window)
+	head.add_child(close)
+	_build_experiment_location(page)
+
+
+func _open_experiment_window() -> void:
+	if _experiment_win == null:
+		return
+	_experiment_win_dim.visible = true
+	_experiment_win.visible = true
+	Sfx.click()
+
+
+func _close_experiment_window() -> void:
+	if _experiment_win == null:
+		return
+	_experiment_win_dim.visible = false
+	_experiment_win.visible = false
+	Sfx.click()
+
+
+func _experiment_win_open() -> bool:
+	return _experiment_win != null and _experiment_win.visible
 
 
 func _build_experiment_location(page: VBoxContainer) -> void:

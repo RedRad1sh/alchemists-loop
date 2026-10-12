@@ -31,6 +31,7 @@ PROP_SPRITES = {
     "Prop_retort": "retort.png",
     "Prop_deck": "deck.png",
     "Prop_scroll": "scroll.png",
+    "Prop_cauldron": "cauldron.png",
 }
 
 BG = (13, 20, 30)

@@ -1819,6 +1819,9 @@ func _close_top_modal() -> bool:
 	if main._sheet != null and main._sheet.is_open():
 		main._sheet.close()
 		return true
+	if main._pages != null and main._pages._experiment_win_open():
+		main._pages._close_experiment_window()
+		return true
 	if main._admin != null and main._admin.is_visible():
 		main._admin.close()
 		Sfx.click()
@@ -1932,6 +1935,8 @@ func _modal_open_for_ads() -> bool:
 	if main._daily != null and main._daily.is_open():
 		return true
 	if main._sheet != null and main._sheet.is_open():
+		return true
+	if main._pages != null and main._pages._experiment_win_open():
 		return true
 	if main._admin != null and main._admin.is_visible():
 		return true

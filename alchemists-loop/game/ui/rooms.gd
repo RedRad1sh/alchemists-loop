@@ -15,6 +15,7 @@ var _dots: Array = []
 var _left_btn: Button = null
 var _right_btn: Button = null
 var _props: Dictionary = {}
+var _cauldron_btn: Button = null
 var _press_x: float = -1.0
 var _deck_btn: Button = null
 var _scroll_btn: Button = null
@@ -55,7 +56,8 @@ func build(game: Game, page: VBoxContainer) -> void:
 	r1.add_theme_constant_override("separation", 8)
 	_host.add_child(r1)
 	_rooms.append(r1)
-	g._pages._build_experiment_location(r1)
+	# R18: комната 1 — иммерсивная сцена; эксперимент ушёл в отдельное окно.
+	_build_lab_scene(r1)
 	# эксперимент рассчитывает, что скролл вкладки выключен; обёртка ломает его
 	# поиск родителя — выключаем явно через цепочку страницы
 	var margin := page.get_parent() as Control
@@ -198,6 +200,33 @@ func _make_arrow(right: bool) -> Button:
 		btn.text = ">" if right else "<"
 		btn.add_theme_color_override("font_color", UIStyle.GOLD)
 	return btn
+
+
+## R18: сцена лаборатории: кликабельный котёл-герой (открывает окно
+## эксперимента), колода и свиток уже навешены поверх в build().
+func _build_lab_scene(box: VBoxContainer) -> void:
+	var top := Control.new()
+	top.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(top)
+	var cauldron := SceneProps.make_prop("cauldron", 170,
+			"Котёл — тапни: окно эксперимента, открывай новые вещества")
+	cauldron.name = "Prop_cauldron"
+	cauldron.pressed.connect(func() -> void:
+		g._pages._open_experiment_window()
+	)
+	var mid := HBoxContainer.new()
+	mid.alignment = BoxContainer.ALIGNMENT_CENTER
+	mid.add_child(cauldron)
+	box.add_child(mid)
+	_cauldron_btn = cauldron
+	var hint := g._label("Котёл — место эксперимента: открывай новые вещества.", 13)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
+	box.add_child(hint)
+	var bottom := Control.new()
+	bottom.custom_minimum_size = Vector2(0, 150)
+	bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(bottom)
 
 
 func _build_workshop(box: VBoxContainer) -> void:

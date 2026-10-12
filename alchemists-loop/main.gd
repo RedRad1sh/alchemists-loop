@@ -536,6 +536,8 @@ func _ready() -> void:
 			_demo_harness._action_master = true
 		elif a == "--action=field":
 			_demo_harness._action_field = true
+		elif a == "--action=experiment":
+			_demo_harness._action_experiment = true
 		elif a == "--action=hint":
 			_demo_harness._action_hint = true
 		elif a == "--action=event":
@@ -768,6 +770,8 @@ func _ready() -> void:
 		_rooms.set_room(1)
 	if _demo_harness._demo and _demo_harness._action_field:
 		_pages._toggle_experiment_drawer()
+	if _demo_harness._demo and _demo_harness._action_experiment:
+		_pages._open_experiment_window()
 	if _demo_harness._demo and _demo_harness._action_hint:
 		# для кадра подсказку жмём ближе к моменту съёмки, чтобы кольцо было видно
 		if _demo_harness._shot_path != "":
@@ -1335,6 +1339,9 @@ func _build_ui() -> void:
 	# R15: комната-карусель — сцена эксперимента + Мастерская (rooms.gd).
 	_rooms = RoomCarousel.new()
 	_rooms.build(self, experiment)
+	# R18: окно эксперимента строится сразу (все _experiment_*-узлы на месте),
+	# но скрыто до открытия — сцена комнаты остаётся иммерсивной.
+	_pages._build_experiment_window(self)
 	var lab := _make_page(tabs, "Лаборатория")
 	_pages._build_lab(lab)
 	var world := _make_page(tabs, "Мир")
