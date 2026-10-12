@@ -8,6 +8,7 @@ var g: Game
 var _companion = null
 var _companion_met := false
 var _companion_unlocked := false
+var _companion_pending_aff := 0
 var _spirit_name := "Светик"
 var _player_name := ""
 var _companion_idle_clock := 0.0
@@ -134,8 +135,13 @@ func _companion_unlock() -> void:
 	if _companion_unlocked:
 		return
 	_companion_unlocked = true
+	var pending := _companion_pending_aff
+	_companion_pending_aff = 0
 	_refresh_companion_visible()
 	g._saves._save_game()
+	if pending > 0:
+		_companion_gain(pending)
+		g._saves._save_game()
 	g._hub._log_event("Светик пробудился из первой искры!")
 	g._engine.status_text = "Искра вспыхнула — и в ней проснулся Светик!"
 	_companion_hello()
@@ -571,6 +577,9 @@ func _companion_apply_level() -> void:
 
 func _companion_gain(points: int) -> void:
 	if not _companion_unlocked:
+		# Награда дейли-сетки («дружба») может выпасть до пробуждения Светика.
+		# Точка не должна пропадать: копим и применяем целиком при разблокировке.
+		_companion_pending_aff += points
 		return
 	_companion_affinity += points
 	var new_lv := _companion_level_for(_companion_affinity)

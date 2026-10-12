@@ -114,12 +114,14 @@ func _new_progress_list_page(page_name: String) -> VBoxContainer:
 	margin.add_child(inner)
 	return inner
 
-func _open_progress_popup() -> void:
+func _open_progress_popup(start_tab: String = "") -> void:
 	_rebuild_quest_rows()
 	_rebuild_ach_rows()
 	_rebuild_set_rows()
 	_rebuild_order_rows()
-	_prog_tabs.current_tab = 0
+	# R15: сценические объекты открывают попап сразу на нужной закладке.
+	var idx: int = {"": 0, "map": 0, "spirit": 1, "sets": 2, "orders": 3}.get(start_tab, 0)
+	_prog_tabs.current_tab = idx
 	_prog_dim.visible = true
 	_prog_popup.visible = true
 	Sfx.click()

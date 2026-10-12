@@ -1087,6 +1087,10 @@ func _ensure_modes() -> void:
 func _apply_tools_selection() -> void:
 	for k in _mode_pages:
 		(_mode_pages[k] as Control).visible = (k == _tools_sel)
+	# Страница, переехавшая в bottom-sheet, видима по воле листа, а не по выбору
+	# во вкладке «Инструменты»: иначе любой _refresh() гасит открытую панель.
+	if g._sheet != null and g._sheet.is_open() and g._sheet._cur_box != null:
+		(g._sheet._cur_box as Control).visible = true
 	for k in _mode_chips:
 		var chip: Button = _mode_chips[k]
 		var unlocked := g._engine._mode_unlocked(String(k))
