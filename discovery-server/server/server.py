@@ -132,8 +132,8 @@ except ValueError:
 # в клиентской экономике. Кэшированные/curated ответы лимит не расходуют.
 # Квота резервируется на сервере по ФАКТУ обращения к генератору (см.
 # _generate_for_pair), а не по клиентскому флагу experiment.
-EXPERIMENT_COOLDOWN_SEC = float(os.environ.get("ALCHEMY_EXPERIMENT_COOLDOWN_SEC", "5"))
-EXPERIMENT_DAILY_LIMIT = int(os.environ.get("ALCHEMY_EXPERIMENT_DAILY_LIMIT", "200"))
+EXPERIMENT_COOLDOWN_SEC = float(os.environ.get("ALCHEMY_EXPERIMENT_COOLDOWN_SEC", "0.5"))
+EXPERIMENT_DAILY_LIMIT = int(os.environ.get("ALCHEMY_EXPERIMENT_DAILY_LIMIT", "500"))
 EXPERIMENT_GLOBAL_DAILY_LIMIT = int(os.environ.get("ALCHEMY_EXPERIMENT_GLOBAL_DAILY_LIMIT", "10000"))
 # Письма Светика — отдельный дневной бюджет LLM-вызовов (не смешивать с
 # экспериментами): генерация намёка тоже стоит денег.

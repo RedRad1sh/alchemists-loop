@@ -315,12 +315,13 @@ cooldown 60 секунд; при `LLMError` или пустой загадке �
 |------------|--------------|----------|
 | `LLM_PROVIDER` | `local` | `local` (по умолчанию) \| `openrouter` \| `openai_compatible` \| `mock` \| `off` |
 | `OPENROUTER_API_KEY` (или `LLM_API_KEY`) | — | ключ API |
-| `LLM_MODELS` | 6 бесплатных моделей | список через запятую (ротация по кругу) |
+| `LLM_MODELS` | 6 бесплатных моделей | через запятую: первая — генератор, вторая — валидатор, остальные — запасные при 403/429/5xx/сети |
 | `LLM_BASE_URL` | — | для `openai_compatible`: Groq `https://api.groq.com/openai/v1`, Together `https://api.together.xyz/v1`, Mistral `https://api.mistral.ai/v1`, Fireworks, Ollama и т.п. |
 | `LLM_TIMEOUT` | `30` | таймаут одного запроса, сек |
 | `LLM_MAX_ATTEMPTS` | `3` | попыток генерации на пару; меньше = быстрее отказ при недоступной LLM |
-| `ALCHEMY_EXPERIMENT_COOLDOWN_SEC` | `5` | cooldown внешнего Experiment на device |
-| `ALCHEMY_EXPERIMENT_DAILY_LIMIT` | `200` | внешний LLM budget на device/day |
+| `LLM_IDENTITY_ATTEMPTS` | `2` | попыток на identity хроматической карты — вызов внутри ритуала крафта, игрок ждёт |
+| `ALCHEMY_EXPERIMENT_COOLDOWN_SEC` | `0.5` | cooldown внешнего Experiment на device |
+| `ALCHEMY_EXPERIMENT_DAILY_LIMIT` | `500` | внешний LLM budget на device/day |
 | `ALCHEMY_EXPERIMENT_GLOBAL_DAILY_LIMIT` | `10000` | общий внешний LLM budget/day |
 | `ALCHEMY_RECEIPT_VALIDATION_URL` | — | T22: эндпоинт валидатора чеков (см. `/api/receipt/verify`). Пусто → проверки нет, сервер отвечает 503 `vendor_validation_disabled` |
 | `ALCHEMY_RECEIPT_SERVICE_KEY` | — | T22: сервисный ключ валидатора; гейт включён только когда заданы ОБЕ переменные |
