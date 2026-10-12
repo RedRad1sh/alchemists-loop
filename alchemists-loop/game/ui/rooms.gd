@@ -108,10 +108,10 @@ func build(game: Game, page: VBoxContainer) -> void:
 	# прежняя модалка Аркана Сигилов.
 	_tome_btn = SceneProps.make_prop("tome", 110, "Фолиант Аркана: ежедневные крафты")
 	_tome_btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	_tome_btn.offset_left = 32
-	_tome_btn.offset_right = 132
-	_tome_btn.offset_top = -426
-	_tome_btn.offset_bottom = -316
+	_tome_btn.offset_left = 10
+	_tome_btn.offset_right = 110
+	_tome_btn.offset_top = -460
+	_tome_btn.offset_bottom = -350
 	_tome_btn.pressed.connect(func() -> void: g._sigil_ui._open_sigil_modal())
 	_host.add_child(_tome_btn)
 
@@ -128,6 +128,10 @@ func build(game: Game, page: VBoxContainer) -> void:
 	_circle_card.offset_right = 170
 	# R17-fix: карта должна висеть НАД варочной панелью (BrewBar 120px + зазор),
 	# иначе панель перекрывает её (поймано wireframe-сверкой геометрии).
+	# R19b: карточка круга ушла вправо вниз — центр пола занят котлом.
+	_circle_card.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_circle_card.offset_left = -348
+	_circle_card.offset_right = -8
 	_circle_card.offset_top = -160
 	_circle_card.offset_bottom = -116
 	var chbox := HBoxContainer.new()
@@ -206,19 +210,15 @@ func _build_lab_scene(box: VBoxContainer) -> void:
 	cauldron.pressed.connect(func() -> void:
 		g._pages._open_experiment_window()
 	)
-	var mid := HBoxContainer.new()
-	mid.alignment = BoxContainer.ALIGNMENT_CENTER
-	mid.add_child(cauldron)
-	box.add_child(mid)
+	# R19b: котёл НЕ летает — стоит на полу по центру сцены; якоря явные,
+	# крепим к хосту карусели (VBox-поток не даёт абсолютного позиционирования).
+	cauldron.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	cauldron.offset_left = -85
+	cauldron.offset_right = 85
+	cauldron.offset_top = -332
+	cauldron.offset_bottom = -162
+	_host.add_child(cauldron)
 	_cauldron_btn = cauldron
-	var hint := g._label("Котёл — место эксперимента: открывай новые вещества.", 13)
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
-	box.add_child(hint)
-	var bottom := Control.new()
-	bottom.custom_minimum_size = Vector2(0, 150)
-	bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(bottom)
 
 
 func _build_workshop(box: VBoxContainer) -> void:
