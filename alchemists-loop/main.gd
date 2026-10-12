@@ -1559,12 +1559,18 @@ func _refetch_world() -> void:
 func _update_brew_bar_visibility() -> void:
 	if _brew_bar == null:
 		return
-	# R15: action-бар виден в обеих боевых вкладках (сцена Эксперимента и Книга).
+	# R18: сцена иммерсивна — action-бар эксперимента виден только в окне
+	# эксперимента (поверх dim, z=26) и во вкладке варки «Лаборатория».
+	var win_open := _pages != null and _pages._experiment_win_open()
 	var on_lab := _tabs_ref == null or _tabs_ref.current_tab == TAB_LAB \
-			or _tabs_ref.current_tab == TAB_EXPERIMENT
+			or (_tabs_ref.current_tab == TAB_EXPERIMENT and win_open)
 	_brew_bar.visible = on_lab
+	_brew_bar.z_index = 26 if win_open else 0
 	if _engine._repeat_btn != null:
 		_engine._repeat_btn.disabled = _engine.brewing or _engine._last_pair.size() != 2
+
+func _on_experiment_window_toggled(_open: bool) -> void:
+	_update_brew_bar_visibility()
 
 func _load_font(path: String) -> Font:
 	if ResourceLoader.exists(path):

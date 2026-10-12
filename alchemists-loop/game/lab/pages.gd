@@ -227,7 +227,11 @@ func _build_lab(page: VBoxContainer) -> void:
 
 ## R18: эксперимент больше не живёт в сцене комнаты — это отдельное окно:
 ## свободное поле открытий без лишнего интерфейса (арена + котёл + drawer).
+var _win_host: Node = null
+
+
 func _build_experiment_window(host: Node) -> void:
+	_win_host = host
 	_experiment_win_dim = ColorRect.new()
 	_experiment_win_dim.color = Color(0, 0, 0, 0.55)
 	_experiment_win_dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -268,6 +272,8 @@ func _open_experiment_window() -> void:
 		return
 	_experiment_win_dim.visible = true
 	_experiment_win.visible = true
+	if _win_host != null and _win_host.has_method("_on_experiment_window_toggled"):
+		_win_host._on_experiment_window_toggled(true)
 	Sfx.click()
 
 
@@ -276,6 +282,8 @@ func _close_experiment_window() -> void:
 		return
 	_experiment_win_dim.visible = false
 	_experiment_win.visible = false
+	if _win_host != null and _win_host.has_method("_on_experiment_window_toggled"):
+		_win_host._on_experiment_window_toggled(false)
 	Sfx.click()
 
 
