@@ -57,7 +57,11 @@ static func make_prop(icon: String, size_px: int, tooltip: String) -> Button:
 	glowr.offset_right = size_px * 0.25
 	glowr.offset_bottom = size_px * 0.25
 	btn.add_child(glowr)
-	var path := SCENE_DIR + icon + ".svg"
+	# R17c: сгенерированные PNG-спрайты приоритетны; SVG — фолбэк,
+	# пока не все устройства переведены на генерацию.
+	var path := SCENE_DIR + icon + ".png"
+	if not ResourceLoader.exists(path):
+		path = SCENE_DIR + icon + ".svg"
 	if ResourceLoader.exists(path):
 		var spr := TextureRect.new()
 		spr.name = "Sprite"
