@@ -74,7 +74,7 @@ static func modal_panel(accent: Color = GOLD) -> StyleBoxFlat:
 
 ## Поле Эксперимента (под ним рисуется шейдер UIFx.field_decor).
 static func arena_style() -> StyleBoxFlat:
-	var sb := box(Color(0.03, 0.05, 0.085, 0.94), Color(TEAL_DIM.r, TEAL_DIM.g, TEAL_DIM.b, 0.45), 22, 1)
+	var sb := box(Color(0.03, 0.05, 0.085, 0.55), Color(TEAL_DIM.r, TEAL_DIM.g, TEAL_DIM.b, 0.45), 22, 1)
 	sb.shadow_color = Color(0.05, 0.35, 0.35, 0.20)
 	sb.shadow_size = 14
 	_margins(sb, 0, 0, 0, 0)

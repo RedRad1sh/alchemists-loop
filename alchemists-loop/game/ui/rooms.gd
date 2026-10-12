@@ -9,6 +9,7 @@ class_name RoomCarousel
 var g: Game
 var _host: Control = null
 var _rooms: Array = []
+var _backdrops: Array = []  # R17f: фоны комнат
 var _room_idx := 0
 var _dots: Array = []
 var _left_btn: Button = null
@@ -32,6 +33,20 @@ func build(game: Game, page: VBoxContainer) -> void:
 	_host.clip_contents = true
 	_host.gui_input.connect(_on_gui_input)
 	page.add_child(_host)
+
+	# R17f: атмосферные фоны комнат (генерированы в стиле референса),
+	# лежат ПОД комнатами; видимость синхронна с set_room.
+	for bpath in ["res://assets/ui/scene/bg_lab.png", "res://assets/ui/scene/bg_workshop.png"]:
+		var bd := TextureRect.new()
+		bd.name = "RoomBackdrop_" + bpath.get_file().get_basename()
+		bd.texture = load(bpath) as Texture2D
+		bd.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		bd.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bd.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		bd.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bd.visible = _backdrops.is_empty()  # первая (лаборатория) видима
+		_host.add_child(bd)
+		_backdrops.append(bd)
 
 	# комната 1: существующий Эксперимент (ядро-луп)
 	var r1 := VBoxContainer.new()
@@ -252,6 +267,8 @@ func set_room(i: int) -> void:
 	old.visible = false
 	nxt.modulate.a = 0.0
 	nxt.visible = true
+	for b in _backdrops.size():
+		_backdrops[b].visible = (b == i)
 	var tw := g.create_tween()
 	tw.tween_property(nxt, "modulate:a", 1.0, 0.14)
 	Sfx.click()

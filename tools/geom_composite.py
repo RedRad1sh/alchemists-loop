@@ -92,16 +92,26 @@ def render(nodes, out, title, assets_root):
             cx, cy = (x0 + n["w"] / 2, y0 + n["h"] / 2)
             img.alpha_composite(spr, (int(cx - spr.width / 2), int(cy - spr.height / 2)))
             continue
+        if name.startswith("RoomBackdrop_"):
+            bfile = name.split("_", 1)[1] + ".png"
+            bg_img = Image.open(f"{assets_root}/{SCENE_DIR}/{bfile}").convert("RGBA")
+            bg_img = bg_img.resize((int(n["w"]), int(n["h"])), Image.LANCZOS)
+            img.paste(bg_img, (int(x0), int(y0)))
+            continue
         if cls == "TextureRect":
             continue  # Glow/Sprite внутри пропов — уже в арте
         if cls == "ColorRect":
             if "Dim" in name:
                 draw.rectangle([x0, y0, x1, y1], fill=DIM)
             elif name == "FieldDecor":
-                draw.rectangle([x0, y0, x1, y1], fill=(17, 26, 38, 255))
+                # на устройстве это полупрозрачный шейдерный слой — рисуем таким же
+                draw.rectangle([x0, y0, x1, y1], fill=(17, 26, 38, 110))
             continue
         if cls in ("PanelContainer", "Panel"):
-            draw.rounded_rectangle([x0, y0, x1, y1], 10, fill=PANEL_FILL,
+            fill = PANEL_FILL
+            if n["h"] > 500 and n["w"] > 400:
+                fill = (21, 31, 44, 140)  # арена эксперимента полупрозрачна
+            draw.rounded_rectangle([x0, y0, x1, y1], 10, fill=fill,
                                    outline=PANEL_LINE)
             continue
         if cls == "Button":
