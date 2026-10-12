@@ -12,6 +12,7 @@ const FALLBACK := {
 	"retort": "⚗",
 	"deck": "✦",
 	"scroll": "✉",
+	"tome": "❖",
 }
 
 static var _glow: ImageTexture = null

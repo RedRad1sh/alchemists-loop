@@ -17,8 +17,7 @@ var _right_btn: Button = null
 var _props: Dictionary = {}
 var _cauldron_btn: Button = null
 var _press_x: float = -1.0
-var _deck_btn: Button = null
-var _scroll_btn: Button = null
+var _tome_btn: Button = null
 var _circle_card: Button = null
 var _circle_slots: Array = []
 
@@ -104,24 +103,17 @@ func build(game: Game, page: VBoxContainer) -> void:
 
 	# Объекты-сцены комнаты 1 (концепт ui-lab-scene-props.png): колода Аркана
 	# и свиток заказов гильдии живут прямо в лаборатории.
-	_deck_btn = SceneProps.make_prop("deck", 56, "Аркан Сигилов: ежедневные крафты")
-	_deck_btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	_deck_btn.offset_left = 8
-	_deck_btn.offset_right = 64
-	# R17-fix: та же высота, что у карточки круга, плюс зазор над ней — иначе
-	# BrewBar (120px) перекрывает колоду и её тап-зону.
-	_deck_btn.offset_top = -238
-	_deck_btn.offset_bottom = -182
-	_deck_btn.pressed.connect(func() -> void: g._sigil_ui._open_sigil_modal())
-	_host.add_child(_deck_btn)
-	_scroll_btn = SceneProps.make_prop("scroll", 56, "Заказы гильдии")
-	_scroll_btn.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	_scroll_btn.offset_left = -64
-	_scroll_btn.offset_top = 40
-	_scroll_btn.offset_right = -8
-	_scroll_btn.offset_bottom = 96
-	_scroll_btn.pressed.connect(func() -> void: g._progress_ui._open_progress_popup("orders"))
-	_host.add_child(_scroll_btn)
+	# R19: колоду карт заменил фолиант на столике (фон: столик слева, столешница
+	# ~y515); свиток теперь приклеен к стене прямо в фоне. Тап по фолианту —
+	# прежняя модалка Аркана Сигилов.
+	_tome_btn = SceneProps.make_prop("tome", 110, "Фолиант Аркана: ежедневные крафты")
+	_tome_btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	_tome_btn.offset_left = 32
+	_tome_btn.offset_right = 132
+	_tome_btn.offset_top = -426
+	_tome_btn.offset_bottom = -316
+	_tome_btn.pressed.connect(func() -> void: g._sigil_ui._open_sigil_modal())
+	_host.add_child(_tome_btn)
 
 	# Карточка «Круг дня» (концепт: 3 «?»-слота + приз) — открывает круг в sheet.
 	_circle_card = Button.new()
@@ -309,10 +301,8 @@ func _refresh_chrome() -> void:
 		_left_btn.visible = _room_idx > 0
 	if _right_btn != null:
 		_right_btn.visible = _room_idx < _rooms.size() - 1
-	if _deck_btn != null:
-		_deck_btn.visible = _room_idx == 0
-	if _scroll_btn != null:
-		_scroll_btn.visible = _room_idx == 0
+	if _tome_btn != null:
+		_tome_btn.visible = _room_idx == 0
 	if _circle_card != null:
 		_circle_card.visible = _room_idx == 0
 	for i in _dots.size():

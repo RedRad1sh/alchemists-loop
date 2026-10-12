@@ -133,12 +133,13 @@ static func run(g: Game) -> void:
 
 	# R17c: замечания ревью по сцене (геометрия пропов, свайп, лист, гейт круга,
 	# локальный календарь дейли-стрика, ненаказуемая дружба).
-	# 1) Колода не должна лежать под варочной панелью и под картой круга.
-	var deck: Control = g._rooms._deck_btn
-	Selftest.check("deck clear of brew bar", deck != null and brew_bar != null
+	# 1) R19: фолиант на столике не должен лежать под варочной панелью и под
+	# картой круга.
+	var deck: Control = g._rooms._tome_btn
+	Selftest.check("tome clear of brew bar", deck != null and brew_bar != null
 			and deck.visible and deck.get_global_rect().size.x > 0.0
 			and not deck.get_global_rect().intersects(brew_bar.get_global_rect()))
-	Selftest.check("deck clear of circle card", deck != null
+	Selftest.check("tome clear of circle card", deck != null
 			and not deck.get_global_rect().intersects(g._rooms._circle_card.get_global_rect()))
 
 	# 2) Свайп пальцем: карусель принимала только мышь.
