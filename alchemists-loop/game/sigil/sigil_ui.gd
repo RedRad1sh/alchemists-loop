@@ -1211,7 +1211,8 @@ func _sigil_craft_row(craft: Dictionary) -> Control:
 	var rc: Color = main._rarity_color(rarity)
 	var accent: Color = Color(1.0, 0.55, 0.12) if is_chromatic else rc
 	var shortages := _sigil_shortages(craft)
-	var can_afford: bool = shortages.is_empty() and main._engine.ether >= ether_cost
+	var has_ether: bool = main._engine._available_ether() >= ether_cost
+	var can_afford: bool = shortages.is_empty() and has_ether
 	var n_ing := int((craft.get("ingredients", []) as Array).size())
 	var title := _sigil_craft_title(craft)
 	# Высота по содержимому: Button не контейнер и сам её не посчитает.
@@ -1279,7 +1280,7 @@ func _sigil_craft_row(craft: Dictionary) -> Control:
 	var price: Label = main._label("%d эфира" % ether_cost, 15)
 	price.autowrap_mode = TextServer.AUTOWRAP_OFF
 	price.add_theme_color_override("font_color",
-		Color(0.62, 0.85, 0.66) if main._engine.ether >= ether_cost else Color(0.92, 0.48, 0.42))
+		Color(0.62, 0.85, 0.66) if has_ether else Color(0.92, 0.48, 0.42))
 	info.add_child(price)
 
 	if not shortages.is_empty():
@@ -1501,10 +1502,14 @@ func _sigil_shortage_text(shortages: Array) -> String:
 
 func _sigil_shortages(craft: Dictionary) -> Array:
 	var out: Array = []
+	# Проверяем весь рецепт до списания, включая повторения одного реагента.
+	var totals := {}
 	for ing in craft.get("ingredients", []):
 		var d := ing as Dictionary
 		var elem_id := str(d.get("item_id", ""))
-		var needed := int(d.get("qty", 0))
+		totals[elem_id] = int(totals.get(elem_id, 0)) + int(d.get("qty", 0))
+	for elem_id in totals:
+		var needed := int(totals[elem_id])
 		var have := int(main._engine.inventory.get(elem_id, 0))
 		if have < needed:
 			out.append("%s (%d/%d)" % [main._online._item_name(elem_id), have, needed])
@@ -1537,6 +1542,8 @@ func _sigil_rarity_title(rarity: String) -> String:
 func _open_sigil_craft(craft: Dictionary) -> void:
 	# Экран крафта — весь в SigilCraftBoard (game/sigil/sigil_craft_board.gd):
 	# вёрстка, ячейки-фантомы, drag&drop, кнопка. Здесь только подключение.
+	if not _sigil_pending_craft.is_empty() or _sigil_craft_ritual != null:
+		return
 	if _sigil_craft_screen != null:
 		_close_sigil_craft_screen()
 	Sfx.click()
@@ -1556,24 +1563,24 @@ func _show_sigil_craft_ritual(rarity: String) -> void:
 	print("RITUAL: show, rarity=", rarity)
 	if _sigil_craft_ritual != null and is_instance_valid(_sigil_craft_ritual):
 		_sigil_craft_ritual.queue_free()
-		
+
 	var strength := 0.7
 	match rarity:
 		"epic": strength = 0.85
 		"legendary": strength = 1.0
 		"mythic", "chromatic": strength = 1.2
-		
+
 	var r := SigilCraftRitual.new()
 	r.accent = main._rarity_color(rarity)
 	r.strength = strength
-	
+
 	# КЛЮЧЕВОЕ: Подключаем сигнал показа карты и автозакрытие
 	r.on_card_reveal.connect(_on_ritual_card_reveal)
 	r.on_complete.connect(_close_sigil_craft_ritual)
-	
+
 	_sigil_craft_ritual = r
 	add_child(r)
-	
+
 func _on_ritual_card_reveal(rect: Rect2, payload: Variant) -> void:
 	print("RITUAL: card reveal signal received")
 	if payload != null:
@@ -1592,32 +1599,55 @@ func _close_sigil_craft_ritual() -> void:
 
 
 func _on_sigil_board_confirmed(craft: Dictionary) -> void:
-	# Атомарный крафт: ресурсы списываются сразу (спека: карточка уже у игрока)
+	if not main._engine._resource_mutation_allowed():
+		return
+	# Повторный сигнал от закрытой доски (в том числе после sync-offline)
+	# и второй крафт до ответа не должны списывать ресурсы повторно.
+	if _sigil_craft_screen == null or _sigil_craft_screen.is_queued_for_deletion() \
+			or not _sigil_pending_craft.is_empty():
+		return
+	var shortages := _sigil_shortages(craft)
+	if not shortages.is_empty():
+		main._engine.status_text = _sigil_shortage_text(shortages)
+		main._engine._refresh()
+		Sfx.error()
+		return
 	var ether_cost: int = main._sigil.craft_ether_cost(craft)
-	main._engine.ether = max(0, main._engine.ether - ether_cost)
+	if not main._engine._spend_ether(ether_cost):
+		main._engine.status_text = "Не хватает эфира: нужно %d." % ether_cost
+		main._engine._refresh()
+		Sfx.error()
+		return
+	# Без await между проверкой всего рецепта и дебетом ингредиентов.
 	for ing in craft.get("ingredients", []):
 		var d := ing as Dictionary
 		var elem_id := str(d.get("item_id", ""))
 		var needed := int(d.get("qty", 0))
 		var have := int(main._engine.inventory.get(elem_id, 0))
-		main._engine.inventory[elem_id] = max(0, have - needed)
+		main._engine.inventory[elem_id] = have - needed
+	_sigil_pending_craft = craft.duplicate(true)
+	_sigil_pending_craft["charged_ether_cost"] = ether_cost
+	_pending_craft_result = {}
 	main._saves._save_game()
 	Sfx.craft_start()
 	var craft_id := str(craft.get("id", ""))
-	_sigil_pending_craft = craft.duplicate(true)
-	main._sigil.craft_card(main._online._device_id, craft_id)
-	# Торжественный ритуал трансмутации (окно крафта закрывается, ритуал поверх).
+	# Доска и ритуал меняются ДО запроса: отказ может прийти синхронно.
 	_close_sigil_craft_screen()
 	_show_sigil_craft_ritual(str(craft.get("rarity", "common")))
+	main._sigil.craft_card(main._online._device_id, craft_id)
 
 
 ## Сервер подтвердил крафт: показываем готовую карточку.
 func _on_sigil_craft_completed(craft_id: String, rarity: String, llm_name: String) -> void:
+	if not _sigil_pending_craft.is_empty() \
+			and str(_sigil_pending_craft.get("id", "")) != craft_id:
+		return
+	_sigil_pending_craft = {}
 	# Сохраняем результат
 	_pending_craft_result = {"craft_id": craft_id, "rarity": rarity, "llm_name": llm_name}
-	
+
 	if _sigil_craft_ritual != null and is_instance_valid(_sigil_craft_ritual):
-		# Отдаём данные ритуалу. 
+		# Отдаём данные ритуалу.
 		# Если он ещё не дошёл до фазы удержания (4.85с), он подождёт.
 		# Если уже ждёт — немедленно начнёт вспышку и эмитнет on_card_reveal.
 		_sigil_craft_ritual.deliver_result(_pending_craft_result)
@@ -1664,14 +1694,16 @@ func _show_pending_craft_card(craft_id: String, rarity: String, llm_name: String
 
 ## Сервер отказал: возвращаем списанное, иначе ресурсы сгорают молча.
 func _on_sigil_craft_failed(err: String) -> void:
-	_close_sigil_craft_ritual()
 	var craft := _sigil_pending_craft
-	_sigil_pending_craft = {}
 	if craft.is_empty():
 		return
-	# Возврат — по той же скидочной цене, что и списание (ruling T4-fix):
-	# «−10% стоимости эфира крафтов этого комплекта» покрывает весь ether-учёт.
-	main._engine.ether += main._sigil.craft_ether_cost(craft)
+	# Гасим квитанцию до возврата: повторный отказ уже ничего не начислит.
+	_sigil_pending_craft = {}
+	_pending_craft_result = {}
+	_close_sigil_craft_ritual()
+	# Флаги скидки могли измениться за время запроса. Возвращаем ровно дебет,
+	# соблюдая активный кап: остаток сохранится в резерве.
+	main._engine._grant_ether(int(craft.get("charged_ether_cost", 0)), "sigil_craft_refund")
 	for ing in craft.get("ingredients", []):
 		var d := ing as Dictionary
 		var elem_id := str(d.get("item_id", ""))

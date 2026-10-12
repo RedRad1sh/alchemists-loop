@@ -259,23 +259,41 @@ static func run(g: Game) -> void:
 		"milestones": {"fire": [6]}})
 	var sb4_craft := {"set": "fire", "ether_cost": 400}
 	var sb4_cost := sm.craft_ether_cost(sb4_craft) == 360
-	# Возврат при отказе крафта идёт через craft_ether_cost, не по сырой цене:
-	# живой хендлер main.gd берёт крафт из _sigil_pending_craft (сейв уходит в ST).
+	# Возврат берёт фактически списанную цену из квитанции, а сверх капа
+	# попадает в резерв. Снимки возвращают оба баланса и состояние фикстуры.
 	var sb4_ether := g._engine.ether
+	var sb4_reserve := g._engine.ether_overflow
+	var sb4_status := g._engine.status_text
+	var sb4_pending := g._sigil_pending_craft.duplicate(true)
+	var sb4_preview := sm._preview_cache.duplicate()
+	var sb4_save := _sb5_file_text(g.SAVE_PATH)
+	var sb4_temp := _sb5_file_text(g.TEMP_PATH)
+	var sb4_backup := _sb5_file_text(g.BACKUP_PATH)
 	g._sigil_pending_craft = {"id": "d_r", "set": "fire", "ether_cost": 400,
-		"ingredients": []}
+		"charged_ether_cost": 360, "ingredients": []}
 	g._on_sigil_craft_failed("offline")
-	sb4_cost = sb4_cost and g._engine.ether == sb4_ether + 360 \
+	sb4_cost = sb4_cost and g._engine.ether + g._engine.ether_overflow \
+		== sb4_ether + sb4_reserve + 360 \
 		and g._sigil_pending_craft.is_empty()
 	g._engine.ether = sb4_ether
+	g._engine.ether_overflow = sb4_reserve
 	# Гейт открытия модалки — по той же скидочной цене: при эфире 380 (между
 	# 360 и 400) открытие должно состояться; сырая цена молча отсекла бы.
 	g._engine.ether = 380
+	sm._preview_cache["d_o"] = ImageTexture.create_from_image(
+		Image.create(4, 4, false, Image.FORMAT_RGBA8))
 	g._open_sigil_craft({"id": "d_o", "set": "fire", "ether_cost": 400,
 		"ingredients": []})
 	sb4_cost = sb4_cost and g._sigil_craft_screen != null
 	g._close_sigil_craft_screen()
 	g._engine.ether = sb4_ether
+	g._engine.ether_overflow = sb4_reserve
+	g._engine.status_text = sb4_status
+	g._sigil_pending_craft = sb4_pending
+	sm._preview_cache = sb4_preview
+	_sb5_restore_file(g.SAVE_PATH, sb4_save)
+	_sb5_restore_file(g.TEMP_PATH, sb4_temp)
+	_sb5_restore_file(g.BACKUP_PATH, sb4_backup)
 	sm._on_collection_result({"ok": true, "cards": {}, "extras": [],
 		"milestones": {"fire": [3]}})
 	sb4_cost = sb4_cost and sm.craft_ether_cost(sb4_craft) == 400
@@ -284,6 +302,8 @@ static func run(g: Game) -> void:
 
 	# Откат: не оставляем флаги живому менеджеру (сидирование без записи на диск).
 	sm._on_collection_result({"ok": true, "cards": {}, "extras": []})
+
+	_sigil_transaction_checks(g)
 
 	# ---- Task 5: гигиена каталога — settled-флаги (M1), version-гейт (M2),
 	# guard кэша превью (D10) ----
@@ -838,6 +858,248 @@ static func run(g: Game) -> void:
 	sm._server_collection = {}
 	sm._server_extras = []
 	sm._milestones_claimed = {}
+
+
+## Поведение живой доски/транспорта: снимаем только обработчик ответа менеджера,
+## чтобы наблюдать списание до ответа. Net в selftest всё равно не открывает сокет.
+static func _sigil_transaction_checks(g: Game) -> void:
+	var ui := g._sigil_ui
+	var sm := g._sigil
+	var engine := g._engine
+	var saved_ether := engine.ether
+	var saved_reserve := engine.ether_overflow
+	var saved_inventory := engine.inventory.duplicate(true)
+	var saved_status := engine.status_text
+	var saved_milestones := sm._milestones_claimed.duplicate(true)
+	var saved_preview := sm._preview_cache.duplicate()
+	var saved_device := sm._last_device_id
+	var saved_pending := ui._sigil_pending_craft.duplicate(true)
+	var saved_result := ui._pending_craft_result.duplicate(true)
+	var saved_screen := ui._sigil_craft_screen
+	var saved_data := ui._sigil_craft_data.duplicate(true)
+	var saved_placed := ui._sigil_placed.duplicate(true)
+	var saved_ritual := ui._sigil_craft_ritual
+	var saved_files := {}
+	for path in [g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH]:
+		saved_files[path] = _sb5_file_text(path)
+	ui._sigil_craft_screen = null
+	ui._sigil_craft_ritual = null
+	ui._sigil_pending_craft = {}
+	ui._pending_craft_result = {}
+	sm._milestones_claimed = {}
+	var craft := {"id": "sigil_tx", "set": "fire", "ether_cost": 50,
+		"rarity": "common", "ingredients": [
+			{"item_id": "fire", "qty": 5}, {"item_id": "water", "qty": 7}]}
+	var request_count := [0]
+	var observe_request := func(_result: Dictionary) -> void: request_count[0] += 1
+	Net.sigil_craft_result.connect(observe_request)
+	Net.sigil_craft_result.disconnect(sm._on_craft_result)
+
+	engine.ether = 0
+	engine.ether_overflow = 50
+	engine.inventory = {"fire": 8, "water": 11}
+	var row := ui._sigil_craft_row(craft) as Button
+	g.add_child(row)
+	var price_color := Color.TRANSPARENT
+	for label in row.find_children("*", "Label", true, false):
+		if (label as Label).text == "50 эфира":
+			price_color = (label as Label).get_theme_color("font_color")
+	Selftest.check("sigil row affordability includes reserve", not row.disabled)
+	Selftest.check("sigil price tint includes reserve",
+		price_color.is_equal_approx(Color(0.62, 0.85, 0.66)))
+	row.queue_free()
+	engine.ether_overflow = 49
+	var poor_row := ui._sigil_craft_row(craft) as Button
+	Selftest.check("sigil row rejects insufficient combined ether", poor_row.disabled)
+	poor_row.free()
+
+	# Доска уже открыта: ресурс мог уйти на другую операцию после строки меню.
+	engine.ether = 30
+	engine.ether_overflow = 19
+	var board := _sigil_transaction_board(g, craft)
+	var before_inventory := engine.inventory.duplicate(true)
+	var requests_before: int = request_count[0]
+	board._craft_btn.pressed.emit()
+	Selftest.check("sigil confirm insufficient ether is mutation free",
+		engine.ether == 30 and engine.ether_overflow == 19
+		and engine.inventory == before_inventory and request_count[0] == requests_before
+		and ui._sigil_pending_craft.is_empty() and ui._sigil_craft_ritual == null
+		and ui._sigil_craft_screen == board)
+
+	engine.ether = 20
+	engine.ether_overflow = 60
+	engine.inventory = {"fire": 8, "water": 6}
+	board = _sigil_transaction_board(g, craft)
+	before_inventory = engine.inventory.duplicate(true)
+	requests_before = request_count[0]
+	board._craft_btn.pressed.emit()
+	Selftest.check("sigil confirm insufficient ingredient is mutation free",
+		engine.ether == 20 and engine.ether_overflow == 60
+		and engine.inventory == before_inventory and request_count[0] == requests_before
+		and ui._sigil_pending_craft.is_empty() and ui._sigil_craft_screen == board)
+
+	var repeated := craft.duplicate(true)
+	repeated["ingredients"] = [{"item_id": "fire", "qty": 3},
+		{"item_id": "fire", "qty": 5}]
+	engine.ether = 20
+	engine.ether_overflow = 60
+	engine.inventory = {"fire": 7}
+	board = _sigil_transaction_board(g, repeated)
+	requests_before = request_count[0]
+	board._craft_btn.pressed.emit()
+	Selftest.check("sigil confirm validates total repeated ingredients",
+		engine.ether == 20 and engine.ether_overflow == 60
+		and engine.inventory == {"fire": 7} and request_count[0] == requests_before
+		and ui._sigil_pending_craft.is_empty())
+
+	engine.ether = 20
+	engine.ether_overflow = 60
+	engine.inventory = {"fire": 8, "water": 11}
+	board = _sigil_transaction_board(g, craft)
+	requests_before = request_count[0]
+	board._craft_btn.pressed.emit()
+	Selftest.check("sigil confirm debits current and reserve exactly",
+		engine.ether == 0 and engine.ether_overflow == 30
+		and engine.inventory == {"fire": 3, "water": 4}
+		and request_count[0] == requests_before + 1)
+	Selftest.check("sigil pending receipt records charged ether",
+		int(ui._sigil_pending_craft.get("charged_ether_cost", -1)) == 50)
+	var charged_ether := engine.ether
+	var charged_reserve := engine.ether_overflow
+	var charged_inventory := engine.inventory.duplicate(true)
+	requests_before = request_count[0]
+	board._craft_btn.pressed.emit()
+	ui._on_sigil_board_confirmed(craft)
+	ui._open_sigil_craft(craft)
+	Selftest.check("sigil overlapping confirmation sends and charges once",
+		engine.ether == charged_ether and engine.ether_overflow == charged_reserve
+		and engine.inventory == charged_inventory and request_count[0] == requests_before
+		and ui._sigil_craft_screen == null)
+
+	sm._milestones_claimed = {"fire": [6]}
+	sm.craft_failed.emit("test_discount_added")
+	Selftest.check("sigil refund uses charged total when discount appears",
+		engine.ether + engine.ether_overflow == 80
+		and engine.inventory == {"fire": 8, "water": 11}
+		and ui._sigil_pending_craft.is_empty())
+	var refunded_ether := engine.ether
+	var refunded_reserve := engine.ether_overflow
+	var refunded_inventory := engine.inventory.duplicate(true)
+	sm.craft_failed.emit("duplicate_failure")
+	Selftest.check("sigil duplicate failure cannot mint resources",
+		engine.ether == refunded_ether and engine.ether_overflow == refunded_reserve
+		and engine.inventory == refunded_inventory)
+
+	engine.ether = 20
+	engine.ether_overflow = 60
+	engine.inventory = {"fire": 8, "water": 11}
+	var discounted_craft := craft.duplicate(true)
+	board = _sigil_transaction_board(g, discounted_craft)
+	board._craft_btn.pressed.emit()
+	Selftest.check("sigil discount debit is recorded exactly",
+		engine.ether + engine.ether_overflow == 35
+		and int(ui._sigil_pending_craft.get("charged_ether_cost", -1)) == 45)
+	# Изменение флагов и исходного словаря не должно менять квитанцию.
+	sm._milestones_claimed = {}
+	discounted_craft["ether_cost"] = 400
+	(discounted_craft["ingredients"] as Array)[0]["qty"] = 99
+	sm.craft_failed.emit("test_discount_removed")
+	Selftest.check("sigil refund keeps receipt when discount disappears",
+		engine.ether + engine.ether_overflow == 80
+		and engine.inventory == {"fire": 8, "water": 11})
+
+	var cap := engine._max_ether()
+	engine.ether = cap
+	engine.ether_overflow = 15
+	engine.inventory = {"fire": 8, "water": 11}
+	board = _sigil_transaction_board(g, craft)
+	board._craft_btn.pressed.emit()
+	engine.ether = cap  # регенерация/награда заполнила кап до ответа
+	sm.craft_failed.emit("test_at_cap")
+	Selftest.check("sigil capped refund goes to reserve without loss",
+		engine.ether == cap and engine.ether_overflow == 65
+		and engine.inventory == {"fire": 8, "water": 11})
+
+	engine.ether = 20
+	engine.ether_overflow = 60
+	engine.inventory = {"fire": 8, "water": 11}
+	board = _sigil_transaction_board(g, craft)
+	board._craft_btn.pressed.emit()
+	sm.craft_completed.emit("sigil_tx", "common", "Проба")
+	Selftest.check("sigil successful result clears pending receipt",
+		ui._sigil_pending_craft.is_empty()
+		and engine.ether + engine.ether_overflow == 30
+		and engine.inventory == {"fire": 3, "water": 4})
+	sm.craft_failed.emit("late_duplicate_failure")
+	Selftest.check("sigil success cannot be refunded by late failure",
+		engine.ether + engine.ether_overflow == 30
+		and engine.inventory == {"fire": 3, "water": 4}
+		and ui._sigil_craft_ritual != null and not ui._pending_craft_result.is_empty())
+
+	# Настоящая синхронная offline-ветка: подключаем обработчик обратно.
+	Net.sigil_craft_result.connect(sm._on_craft_result)
+	engine.ether = 10
+	engine.ether_overflow = 70
+	engine.inventory = {"fire": 8, "water": 11}
+	board = _sigil_transaction_board(g, craft)
+	requests_before = request_count[0]
+	board._craft_btn.pressed.emit()
+	Selftest.check("sigil synchronous offline restores charged resources",
+		engine.ether + engine.ether_overflow == 80
+		and engine.inventory == {"fire": 8, "water": 11}
+		and request_count[0] == requests_before + 1)
+	Selftest.check("sigil synchronous offline leaves no ritual or pending residue",
+		ui._sigil_pending_craft.is_empty() and ui._pending_craft_result.is_empty()
+		and ui._sigil_craft_ritual == null and ui._sigil_craft_screen == null)
+	requests_before = request_count[0]
+	charged_inventory = engine.inventory.duplicate(true)
+	board._craft_btn.pressed.emit()
+	Selftest.check("sigil repeated offline confirmation sends no second request",
+		request_count[0] == requests_before
+		and engine.ether + engine.ether_overflow == 80
+		and engine.inventory == charged_inventory and ui._sigil_craft_ritual == null)
+	Net.sigil_craft_result.disconnect(observe_request)
+
+	ui._close_sigil_craft_screen()
+	ui._close_sigil_craft_ritual()
+	ui._sigil_pending_craft = saved_pending
+	ui._pending_craft_result = saved_result
+	ui._sigil_craft_screen = saved_screen
+	ui._sigil_craft_data = saved_data
+	ui._sigil_placed = saved_placed
+	ui._sigil_craft_ritual = saved_ritual
+	sm._milestones_claimed = saved_milestones
+	sm._preview_cache = saved_preview
+	sm._last_device_id = saved_device
+	engine.ether = saved_ether
+	engine.ether_overflow = saved_reserve
+	engine.inventory = saved_inventory
+	engine.status_text = saved_status
+	engine._refresh()
+	for path in saved_files:
+		_sb5_restore_file(path, saved_files[path])
+	Selftest.check("sigil transaction fixture restores balances and state",
+		engine.ether == saved_ether and engine.ether_overflow == saved_reserve
+		and engine.inventory == saved_inventory and engine.status_text == saved_status
+		and ui._sigil_pending_craft == saved_pending and ui._pending_craft_result == saved_result
+		and sm._milestones_claimed == saved_milestones
+		and Net.sigil_craft_result.is_connected(sm._on_craft_result))
+
+
+## Открываем настоящую доску, но сеем только её превью: рендер не нужен для debit.
+static func _sigil_transaction_board(g: Game, craft: Dictionary) -> SigilCraftBoard:
+	var ui := g._sigil_ui
+	ui._close_sigil_craft_screen()
+	ui._close_sigil_craft_ritual()
+	ui._sigil_pending_craft = {}
+	ui._pending_craft_result = {}
+	g._sigil._preview_cache[str(craft.get("id", ""))] = ImageTexture.create_from_image(
+		Image.create(4, 4, false, Image.FORMAT_RGBA8))
+	ui._open_sigil_craft(craft)
+	var board := ui._sigil_craft_screen as SigilCraftBoard
+	for ing in craft.get("ingredients", []):
+		board._place(str((ing as Dictionary).get("item_id", "")))
+	return board
 
 
 ## Текст user-файла для снапшота блока sb5: пустая строка = файла не было.

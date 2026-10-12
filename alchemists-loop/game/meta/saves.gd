@@ -14,6 +14,7 @@ var _return_craft_status := ""
 var _return_bench_steps: int = 0
 var _return_bench_items: int = 0
 var _return_bench_status: String = ""
+var _return_workshop: Dictionary = {}
 ## Зонд для selftest: разрешает прогнать офлайн-верстак напрямую, минуя
 ## _grant_offline (тот в selftest не вызывается вовсе).
 var _saves_bench_probe: bool = false
@@ -36,9 +37,16 @@ var _save_frozen := false
 # награды). Заморозка в единственной точке записи — единственный способ
 # гарантированно не пересоздать удалённый файл старым состоянием.
 
-func _save_game() -> void:
+func _save_game() -> bool:
 	if _save_frozen:
-		return
+		return false
+	# This is the authoritative online boundary, not a timer/frame callback.
+	# Build the watermark with the resources; publish it in memory only after IO.
+	var workshop_state := g._workshop.export_state()
+	var snapshot_ts := maxf(_timestamp(g._last_ts), _timestamp(Time.get_unix_time_from_system()))
+	snapshot_ts = maxf(snapshot_ts, _timestamp(workshop_state.get("last_simulated_at")))
+	if not g._workshop.is_read_only():
+		workshop_state["last_simulated_at"] = snapshot_ts
 	var data := {
 		"version": Game.SAVE_VERSION,
 		"ether": g._engine.ether,
@@ -50,6 +58,9 @@ func _save_game() -> void:
 		"experiment_pending_pair": g._engine._experiment_pending_pair,
 		"craft_job": g._engine._craft_job,
 		"blueprints": g._engine._blueprints,
+		"workshop": workshop_state,
+		"regen_clock": _clock(g._engine.regen_clock, 1.0),
+		"spring_clock": _clock(g._pages._spring_clock, Game.SPRING_INTERVAL),
 		"inventory": g._engine.inventory,
 		"known_recipes": g._engine.known_recipes.keys(),
 		"attempts": g._engine.attempts,
@@ -88,7 +99,7 @@ func _save_game() -> void:
 		"order_day": g._guild._order_day,
 		"order_targets": g._guild._order_targets_cache,
 		"order_done": g._guild._order_done.keys(),
-		"last_ts": Time.get_unix_time_from_system(),
+		"last_ts": snapshot_ts,
 		"sage_gold": g._engine.sage_gold,
 		"journal": g._hub._log_events.slice(0, 20),
 		"music_on": Sfx.music_on,
@@ -149,10 +160,16 @@ func _save_game() -> void:
 	var file := FileAccess.open(g.TEMP_PATH, FileAccess.WRITE)
 	if file == null:
 		push_warning("Не удалось открыть временный файл сохранения.")
-		return
-	file.store_string(JSON.stringify(data, "\t"))
+		return false
+	# Timers and Unix watermarks must round-trip the actual double, not a rounded
+	# presentation number that can move the durable boundary behind the memory.
+	file.store_string(JSON.stringify(data, "\t", true, true))
 	file.flush()
+	var write_error := file.get_error()
 	file.close()
+	if write_error != OK:
+		push_warning("Не удалось записать временный файл сохранения.")
+		return false
 	var save_abs := ProjectSettings.globalize_path(g.SAVE_PATH)
 	var temp_abs := ProjectSettings.globalize_path(g.TEMP_PATH)
 	var backup_abs := ProjectSettings.globalize_path(g.BACKUP_PATH)
@@ -160,14 +177,29 @@ func _save_game() -> void:
 		if FileAccess.file_exists(g.BACKUP_PATH):
 			if DirAccess.remove_absolute(backup_abs) != OK:
 				push_warning("Не удалось обновить backup.")
-				return
+				return false
 		if DirAccess.rename_absolute(save_abs, backup_abs) != OK:
 			push_warning("Не удалось создать backup.")
-			return
+			return false
 	if DirAccess.rename_absolute(temp_abs, save_abs) != OK:
 		push_warning("Не удалось установить новое сохранение.")
 		if FileAccess.file_exists(g.BACKUP_PATH):
 			DirAccess.rename_absolute(backup_abs, save_abs)
+		return false
+	g._last_ts = snapshot_ts
+	if not g._workshop.is_read_only():
+		g._workshop.last_simulated_at = snapshot_ts
+	return true
+
+static func _clock(raw: Variant, period: float) -> float:
+	if (raw is int or raw is float) and is_finite(float(raw)) and float(raw) >= 0.0 and float(raw) < period:
+		return float(raw)
+	return 0.0
+
+static func _timestamp(raw: Variant) -> float:
+	if (raw is int or raw is float) and is_finite(float(raw)) and float(raw) >= 0.0:
+		return float(raw)
+	return 0.0
 
 func _load_game() -> void:
 	var data := _read_save(g.SAVE_PATH)
@@ -175,6 +207,8 @@ func _load_game() -> void:
 		data = _read_save(g.BACKUP_PATH)
 	if data.is_empty():
 		return
+	var frozen := _save_frozen
+	_save_frozen = true
 	# U9 (T12): загрузка заменяет мир под возможными сонными корутинами —
 	# то же поколение сбросов, что у престижа и новой игры.
 	g._engine.brew_epoch += 1
@@ -209,9 +243,10 @@ func _load_game() -> void:
 			var mi := int(m)
 			if Game.MILESTONES.has(mi):
 				g._engine._milestones_done[mi] = true
+	g._online._server_layers.clear()
 	if data.get("server_layers") is Dictionary:
 		for k in data["server_layers"]:
-			g._online._server_layers[String(k)] = int(data["server_layers"][k])
+			g._online._server_layers[String(k)] = g._online._validated_server_layer(data["server_layers"][k])
 	g._online._restore_server_elements(data.get("server_elements"))
 	g._online._restore_server_recipes(data.get("server_recipes"))
 	g._guild._quests_done.clear()
@@ -292,7 +327,7 @@ func _load_game() -> void:
 	if data.get("order_done") is Array:
 		for t in data["order_done"]:
 			g._guild._order_done[String(t)] = true
-	g._last_ts = maxf(0.0, float(data.get("last_ts", 0.0)))
+	g._last_ts = _timestamp(data.get("last_ts"))
 	g._hub._log_events.clear()
 	if data.get("journal") is Array:
 		for e in data["journal"]:
@@ -481,12 +516,17 @@ func _load_game() -> void:
 			g._engine.known_recipes[key] = true
 	g._engine.known_recipes[g._pair_key("fire", "water")] = true
 	g._engine.known_recipes[g._pair_key("earth", "fire")] = true
+	g._workshop.import_state(data.get("workshop"), data)
 	if data.has("companion_unlocked"):
 		g._spirit._companion_unlocked = bool(data["companion_unlocked"])
 	else:
 		# старый сейв: Светик открыт, если уже знаком или Искра уже в запасе
 		g._spirit._companion_unlocked = g._spirit._companion_met or g._engine.inventory.has("spark")
 	g._engine.status_text = "Лаборатория восстановлена. Продолжим эксперименты!"
+	# Restore fractions only after inventory, recipes, equipment and migrations.
+	g._engine.regen_clock = _clock(data.get("regen_clock"), 1.0)
+	g._pages._spring_clock = _clock(data.get("spring_clock"), Game.SPRING_INTERVAL)
+	_save_frozen = frozen
 	_grant_offline()
 	g._progress_ui._ach_update()
 
@@ -525,17 +565,17 @@ func _spring_offline_gain(elapsed: float) -> int:
 	return mini(int(minf(elapsed, Game.OFFLINE_CAP_SEC) / Game.SPRING_INTERVAL), Game.SPRING_OFFLINE_MAX)
 
 func _bench_offline_ticks(elapsed: float) -> int:
-	# Сколько тиков верстака засчитывается за отсутствие: вполсилы живого темпа
-	# и с потолком, иначе 8 часов простоя дали бы сотни бесплатных варок.
-	if elapsed < Game.OFFLINE_MIN_SEC:
+	# Compatibility estimate only; the scheduler owns real time and execution.
+	if not is_finite(elapsed) or elapsed < Game.OFFLINE_MIN_SEC:
 		return 0
 	var eff := minf(elapsed, Game.OFFLINE_CAP_SEC)
 	var interval: float = g._sigil.bench_interval(g._pages._bench_target)
 	var ticks := int(floor(eff / interval * Game.BENCH_OFFLINE_FACTOR))
-	return mini(ticks, Game.BENCH_OFFLINE_MAX_TICKS)
+	return mini(ticks, g._workshop.offline_stage_limit())
 
 func _advance_bench_offline(elapsed: float) -> Dictionary:
-	# Каждый завершённый маршрут перепланируется в пределах офлайн-бюджета.
+	# One explicit relative simulated window, shared with all other consumers.
+	# The actual return orchestrator never chains these compatibility adapters.
 	_return_bench_steps = 0
 	_return_bench_items = 0
 	_return_bench_status = ""
@@ -545,179 +585,102 @@ func _advance_bench_offline(elapsed: float) -> Dictionary:
 		return {}
 	if not g._pages._bench_on or g._pages._bench_target == "":
 		return {}
-	var ticks := _bench_offline_ticks(elapsed)
-	if ticks <= 0:
+	if not is_finite(elapsed) or elapsed < Game.OFFLINE_MIN_SEC:
 		return {}
-
-	var item_id := g._pages._bench_target
-	var budget := ticks * maxi(g._engine._stage_ops(), 1)
-	var done := 0
-	var pause := ""
-	var previous_discount := g._engine._production_discount
-	while done < budget:
-		var plan := g._guild._plan_craft(item_id)
-		if not bool(plan.get("ok", false)) or int(plan.get("total", 0)) <= 0:
-			pause = "recipe"
-			break
-		var route_start := done
-		var discount := Game.BLUEPRINT_DISCOUNT if g._engine._blueprints.has(item_id) else 1.0
-		g._engine._production_discount = discount
-		for raw_op in plan.get("ops", []):
-			var op: Dictionary = raw_op
-			var a := String(op.get("a", ""))
-			var b := String(op.get("b", ""))
-			for _i in int(op.get("n", 0)):
-				if done >= budget:
-					pause = "budget"
-					break
-				pause = g._engine._production_pair_block(a, b)
-				if pause != "":
-					break
-				if not g._online._has_ingredients(a, b):
-					pause = "ingredients"
-					break
-				if g._engine._available_ether() < g._engine._pair_cost(a, b, discount):
-					pause = "ether"
-					break
-				var result := g._engine._commit_brew(a, b)
-				if bool(result.get("failed", true)):
-					pause = String(result.get("reason", "recipe"))
-					break
-				done += 1
-			if not pause.is_empty():
-				break
-		if done - route_start >= int(plan.get("total", 0)):
-			_return_bench_items += 1
-			g._engine._record_blueprint(item_id, plan)
-		if not pause.is_empty():
-			break
-		if done == route_start:
-			pause = "recipe"
-			break
-	g._engine._production_discount = previous_discount
-	_return_bench_steps = done
-	_return_bench_status = pause if pause != "" else "complete"
-	if done > 0:
-		Analytics.track("bench_offline", {
-			"target": item_id, "steps": done, "items": _return_bench_items,
-			"status": _return_bench_status, "ticks": ticks,
-		})
-	return {"steps": done, "items": _return_bench_items, "status": _return_bench_status}
+	if not g._pages._sync_legacy_bench():
+		return {}
+	var queues := _workshop_queues()
+	var result: Dictionary = g._workshop_scheduler.advance(elapsed, true)
+	_project_workshop(result, queues)
+	return {"steps": _return_bench_steps, "items": _return_bench_items, "status": _return_bench_status}
 
 func _advance_craft_job_offline(elapsed: float) -> Dictionary:
-	# Offline does not bypass the production operation cap. It advances at most
-	# one resumable stage, preserving the same ingredients, ether costs and
-	# intermediate outputs as the foreground runner.
+	# Another explicit single shared window; its return projects manual work only.
 	_return_craft_steps = 0
 	_return_craft_status = ""
-	if elapsed < Game.OFFLINE_MIN_SEC or g._engine._craft_job.is_empty():
+	if not is_finite(elapsed) or elapsed < Game.OFFLINE_MIN_SEC or g._engine._craft_job.is_empty():
 		return {}
-	var job: Dictionary = g._engine._craft_job
-	var item_id := String(job.get("item", ""))
-	if item_id == "":
-		return {}
-	var plan := g._guild._plan_craft(item_id)
-	if not bool(plan.get("ok", false)):
-		var frontier_plan := g._guild._plan_known_frontier(item_id)
-		var frontier: Array = frontier_plan.get("frontier", [])
-		var status := "recipe" if not frontier.is_empty() else "ingredients"
-		job["status"] = "paused_" + status
-		_return_craft_status = status
-		return {"steps": 0, "status": status}
-	var route_discount := float(job.get("discount", 1.0))
-	if route_discount <= 0.0:
-		route_discount = Game.BLUEPRINT_DISCOUNT if g._engine._blueprints.has(item_id) else 1.0
-	var available_steps := mini(g._engine._stage_ops(),
-		int(floor(minf(elapsed, Game.OFFLINE_CAP_SEC) / g._engine._brew_time())))
-	if available_steps <= 0:
-		return {}
-	var total_estimate := int(job.get("total_estimate", plan.get("total", 0)))
-	var completed := int(job.get("completed", 0))
-	g._engine._production_discount = route_discount
-	var pause_reason := ""
-	for raw_op in plan.get("ops", []):
-		var op: Dictionary = raw_op
-		var a := String(op.get("a", ""))
-		var b := String(op.get("b", ""))
-		for _i in int(op.get("n", 0)):
-			if _return_craft_steps >= available_steps:
-				pause_reason = "operation_cap"
-				break
-			var pair_block := g._engine._production_pair_block(a, b)
-			if pair_block != "":
-				pause_reason = pair_block
-				break
-			var pair_cost := g._engine._pair_cost(a, b, route_discount)
-			if not g._online._has_ingredients(a, b):
-				pause_reason = "ingredients"
-				break
-			if g._engine._available_ether() < pair_cost:
-				pause_reason = "ether"
-				break
-			var result := g._engine._commit_brew(a, b)
-			if bool(result.get("failed", true)):
-				# U9 (T11): честная причина паузы — _commit_brew теперь умеет
-				# fail-closed отказ по ингредиентам/эфиру, а не только по рецепту.
-				var commit_reason := String(result.get("reason", ""))
-				pause_reason = commit_reason if commit_reason in ["ingredients", "ether"] else "recipe"
-				break
-			completed += 1
-			_return_craft_steps += 1
-			job["completed"] = completed
-			job["status"] = "running"
-		if not pause_reason.is_empty():
-			break
-	if _return_craft_steps <= 0 and pause_reason.is_empty():
-		pause_reason = "operation_cap"
-	if completed >= total_estimate:
-		var saved_plan: Dictionary = job.get("plan", plan)
-		g._engine._record_blueprint(item_id, saved_plan)
-		Analytics.track("craft_job_complete", {
-			"target": item_id, "operations": total_estimate,
-			"blueprint": true, "repeat": false, "offline": true,
-		})
-		g._engine._craft_job.clear()
-		_return_craft_status = "complete"
-	else:
-		job["status"] = "paused_" + pause_reason
-		_return_craft_status = pause_reason
-	Analytics.track("craft_job_offline", {
-		"target": item_id, "steps": _return_craft_steps,
-		"status": _return_craft_status,
-		"completed": completed, "total": total_estimate,
-	})
-	g._engine._production_discount = 1.0
+	var queues := _workshop_queues()
+	var result: Dictionary = g._workshop_scheduler.advance(elapsed, true)
+	_project_workshop(result, queues)
 	return {"steps": _return_craft_steps, "status": _return_craft_status}
 
 func _grant_offline() -> void:
-	# idle-классика: за время отсутствия котёл копит эфир (до капа, максимум 8 ч);
-	# цифры уходят в сводку возврата, Родник докапывает (до 50 шт., если включён)
 	if g._selftest or g._last_ts <= 0.0:
 		return
 	var now := Time.get_unix_time_from_system()
-	var elapsed := now - g._last_ts
-	_return_elapsed = elapsed
-	var applied := _offline_gain(elapsed, g._engine._ether_rate(), g._engine.ether, g._engine._max_ether())
-	_return_ether = applied
-	if applied > 0:
-		g._engine.ether += applied
-		g._engine.status_text = "Пока тебя не было, котёл накопил +%d ⚡" % applied
-		g._spirit._companion_react("offline", str(applied))
-	var craft_result := _advance_craft_job_offline(elapsed)
-	if not craft_result.is_empty() and int(craft_result.get("steps", 0)) > 0:
-		g._engine.status_text = "Пока тебя не было, Производство продвинулся на %d шаг(а): %s." % [
-			int(craft_result["steps"]), String(craft_result.get("status", ""))]
-	_return_spring = 0
-	_return_spring_name = ""
-	if g._engine.spring_on and g._engine._mode_unlocked("spring"):
-		var sg := _spring_offline_gain(elapsed)
-		if sg > 0:
-			_return_spring = sg
-			_return_spring_name = g._online._item_name(g._engine.spring_source)
-			g._engine.inventory[g._engine.spring_source] = int(g._engine.inventory.get(g._engine.spring_source, 0)) + sg
-	_advance_bench_offline(elapsed)
-	g._last_ts = now
-	_save_game()
+	_return_elapsed = maxf(0.0, now - g._last_ts)
+	var queues := _workshop_queues()
+	var frozen := _save_frozen
+	_save_frozen = true
+	# Exactly one absolute replay includes ether, spring, manual chain and lines.
+	var result: Dictionary = g._workshop_scheduler.replay_offline(g._last_ts, now)
+	_project_workshop(result, queues)
+	g._last_ts = maxf(_timestamp(g._last_ts), maxf(_timestamp(result.get("consumed_until")), now))
+	if _return_ether > 0:
+		g._spirit._companion_react("offline", str(_return_ether))
+	if int(result.get("steps", 0)) > 0:
+		g._engine.status_text = "Пока тебя не было: %d операций, %d целевых веществ, +%d мастерства Мастерской." % [
+			int(result["steps"]), int(result["items"]), int(result["mastery"])]
+	_save_frozen = frozen
+	# A freeze/IO failure must not be described as durable replay progress.
+	_return_workshop["saved"] = _save_game()
+
+func _workshop_queues() -> Dictionary:
+	var queues := {}
+	for line in g._workshop.lines:
+		queues[String(line["id"])] = line["queue"].duplicate(true)
+	return queues
+
+func _project_workshop(result: Dictionary, before_queues: Dictionary) -> void:
+	_return_workshop = result.duplicate(true)
+	_return_ether = int(result.get("ether_gained", 0))
+	_return_spring = int(result.get("spring_items", 0))
+	_return_spring_name = g._online._item_name(g._engine.spring_source) if _return_spring > 0 else ""
+	_return_craft_steps = int(result.get("craft_steps", 0))
+	_return_craft_status = String(result.get("craft_status", ""))
+	_return_bench_steps = 0
+	_return_bench_items = 0
+	_return_bench_status = ""
+	var after_queues := _workshop_queues()
+	for id in _return_workshop.get("lines", {}):
+		var info: Dictionary = _return_workshop["lines"][id]
+		var remaining: Array = after_queues.get(id, [])
+		info["queue_count"] = remaining.size()
+		if g._workshop.is_read_only():
+			info["status"] = "read_only"
+		elif not g._workshop.unlocked:
+			info["status"] = "locked"
+		elif not remaining.is_empty():
+			info["status"] = remaining[0]["status"]
+			if String(info.get("reason", "")) == "": info["reason"] = remaining[0]["reason"]
+		_return_bench_steps += int(info.get("steps", 0))
+		_return_bench_items += int(info.get("items", 0))
+		var status := String(info.get("status", "idle"))
+		if status.begins_with("waiting_"):
+			_return_bench_status = status.trim_prefix("waiting_")
+		elif _return_bench_status == "" and status != "idle":
+			_return_bench_status = status
+		# The scheduler reports line totals. Job progress gives the actual target
+		# breakdown, including completed/removed batches, never planned operations.
+		var outputs := {}
+		var targets: Array[String] = []
+		var left := int(info.get("items", 0))
+		for job in before_queues.get(id, []):
+			var target := String(job["target"])
+			if not targets.has(target): targets.append(target)
+			var produced := int(job["amount"]) if job["mode"] == "batch" else int(job["produced"])
+			for after in after_queues.get(id, []):
+				if after["id"] == job["id"]:
+					produced = int(after["produced"])
+					break
+			var actual := mini(left, maxi(0, produced - int(job["produced"])))
+			if actual > 0: outputs[target] = int(outputs.get(target, 0)) + actual
+			left -= actual
+		info["outputs"] = outputs
+		info["targets"] = targets
+	if _return_bench_status == "" and _return_bench_steps > 0:
+		_return_bench_status = "complete" # empty queues, not merely processed time
 
 func _read_save(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
@@ -823,11 +786,28 @@ func _refresh_return_popup() -> void:
 		lb.add_theme_color_override("font_color", col)
 		_return_list.add_child(lb)
 	add.call("Тебя не было: %s." % g._retort._retort_left_text(_return_elapsed), 13, dim)
-	if _return_ether > 0:
+	if not _return_workshop.is_empty():
+		add.call("⚡ Котёл добавил +%d эфира; производство потратило %d." % [
+			_return_ether, int(_return_workshop.get("ether_spent", 0))], 14, bright)
+		var clock_status := String(_return_workshop.get("status", "idle"))
+		if clock_status == "complete":
+			add.call("Мастерская: время отсутствия обработано. Состояния заданий — ниже.", 13, dim)
+		elif clock_status == "idle":
+			add.call("Мастерская: нового времени для обработки нет.", 13, dim)
+		else:
+			add.call("Мастерская: обработка времени остановилась (%s)." % clock_status, 13, gold)
+		for line in _workshop_return_lines():
+			add.call(line, 14, bright)
+		if _return_craft_steps > 0 or _return_craft_status != "":
+			add.call("• Ручная цепочка: %d операций, %d целевых выходов; состояние: %s." % [
+				_return_craft_steps, int(_return_workshop.get("craft_items", 0)), _return_craft_status], 14, bright)
+		if _return_workshop.has("saved") and not bool(_return_workshop["saved"]):
+			add.call("Прогресс возврата в памяти; сохранение ещё не записано.", 13, gold)
+	elif _return_ether > 0:
 		add.call("⚡ Котёл накопил +%d эфира." % _return_ether, 14, bright)
 	else:
 		add.call("⚡ Котёл уже был полон.", 14, dim)
-	if _return_craft_steps > 0:
+	if _return_workshop.is_empty() and _return_craft_steps > 0:
 		var craft_line := "• Производство в фоне: +%d шаг(а)." % _return_craft_steps
 		if _return_craft_status == "complete":
 			craft_line = "• Производство завершил сохранённую цепочку и записал чертёж."
@@ -842,16 +822,19 @@ func _refresh_return_popup() -> void:
 		elif _return_craft_status == "inventory":
 			craft_line += " Пауза: нет места в инвентаре."
 		add.call(craft_line, 14, bright if _return_craft_status == "complete" else gold)
-	elif not g._engine._craft_job.is_empty():
+	elif _return_workshop.is_empty() and not g._engine._craft_job.is_empty():
 		add.call("• Производство ждёт продолжения: %d/%d операций." % [
 			int(g._engine._craft_job.get("completed", 0)), int(g._engine._craft_job.get("total_estimate", 0))], 14, gold)
-	if _return_spring > 0:
+	if not _return_workshop.is_empty():
+		add.call("• Родник: +%d доставок%s." % [_return_spring,
+			" «%s»" % _return_spring_name if _return_spring > 0 else ""], 14, bright if _return_spring > 0 else dim)
+	elif _return_spring > 0:
 		add.call("• Родник накапал +%d «%s»." % [_return_spring, _return_spring_name], 14, bright)
 	elif g._engine.spring_on:
 		add.call("• Родник капал потихоньку.", 14, dim)
 	else:
 		add.call("• Родник выключен — включи, и он будет капать без тебя.", 14, dim)
-	if _return_bench_steps > 0 or _return_bench_status != "":
+	if _return_workshop.is_empty() and (_return_bench_steps > 0 or _return_bench_status != ""):
 		var bench_line := "• Верстак в фоне (вполсилы): +%d варок." % _return_bench_steps
 		if _return_bench_items > 0:
 			bench_line += " «%s» готов и записан в чертёж." % g._online._item_name(g._pages._bench_target)
@@ -866,7 +849,7 @@ func _refresh_return_popup() -> void:
 		elif _return_bench_status == "budget":
 			bench_line += " Дальше — вживую."
 		add.call(bench_line, 14, bright if _return_bench_items > 0 else gold)
-	elif _return_bench_status == "" and g._pages._bench_on and g._pages._bench_target != "":
+	elif _return_workshop.is_empty() and _return_bench_status == "" and g._pages._bench_on and g._pages._bench_target != "":
 		add.call("• Верстак стоял: слишком короткое отсутствие.", 14, dim)
 	if g._retort._retort_any_ready():
 		add.call("• Реторта готова — неси кружку!", 14, gold)
@@ -921,7 +904,32 @@ func _refresh_return_popup() -> void:
 	var rl := g._retort._retort_hello_line()
 	add.call("• Светик: %s" % (rl if rl != "" else "Светик скучал и грел котёл."), 13, dim)
 
+func _workshop_return_lines() -> Array[String]:
+	var text: Array[String] = []
+	for id in _return_workshop.get("lines", {}):
+		var info: Dictionary = _return_workshop["lines"][id]
+		var outputs: Array[String] = []
+		for target in info.get("outputs", {}):
+			outputs.append("%s ×%d" % [g._online._item_name(String(target)), int(info["outputs"][target])])
+		var goals: Array[String] = []
+		for target in info.get("targets", []): goals.append(g._online._item_name(String(target)))
+		var status := String(info.get("status", "idle"))
+		var statuses := {"idle": "нет активного задания", "running": "работает",
+			"paused_user": "остановлена игроком", "waiting_ether": "ждёт эфир",
+			"waiting_ingredients": "ждёт ингредиенты", "waiting_recipe": "ждёт рецепт",
+			"waiting_inventory": "ожидает изменения запаса", "locked": "ещё закрыта",
+			"read_only": "нужна новая версия игры"}
+		var line := "• Линия %s%s: %d операций; целевой выход: %s; Мастерство Мастерской +%d; в очереди: %d. Состояние: %s." % [
+			String(id), " (%s)" % ", ".join(goals) if not goals.is_empty() else "",
+			int(info.get("steps", 0)), ", ".join(outputs) if not outputs.is_empty() else "0",
+			int(info.get("mastery", 0)), int(info.get("queue_count", 0)), String(statuses.get(status, status))]
+		var reason := String(info.get("reason", ""))
+		if reason != "": line += " Причина: " + reason
+		text.append(line)
+	return text
+
 func _inject_return_demo() -> void:
+	_return_workshop.clear()
 	_return_elapsed = 5.0 * 3600.0 + 20.0 * 60.0
 	_return_ether = 150
 	_return_spring = 18

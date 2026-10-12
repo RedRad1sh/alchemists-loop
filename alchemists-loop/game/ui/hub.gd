@@ -687,12 +687,16 @@ func _open_prestige_confirm() -> void:
 	var gain := _prestige_gain()
 	if gain <= 0:
 		return
-	_prestige_confirm_label.text = "Котёл перегонит лабораторию в чистое золото мудрецов.\n\nТеряешь: вещества, рецепты, улучшения и текущий эфир.\nСохраняешь: резерв, архивные печати, достижения, комплекты, дружбу Светика, имя.\n\nПолучишь: +%d Золота мудрецов (навсегда)." % gain
+	_prestige_confirm_label.text = "Котёл перегонит лабораторию в чистое золото мудрецов.\n\nТеряешь: вещества, рецепты, улучшения, текущий эфир и задания линий.\nСохраняешь: мастерство Мастерской, оборудование и автономность, резерв, архивные печати, достижения, комплекты, дружбу Светика, имя.\n\nПолучишь: +%d Золота мудрецов (навсегда)." % gain
 	_prestige_dim.visible = true
 	_prestige_popup.visible = true
 	Sfx.click()
 
 func _do_prestige() -> void:
+	# Keep the epoch-based cancellation of sleeping brews, but reject a reset
+	# while a synchronous resource transaction still owns the current world.
+	if not g._engine._resource_mutation_allowed():
+		return
 	var gain := _prestige_gain()
 	if gain <= 0:
 		return
@@ -706,6 +710,8 @@ func _do_prestige() -> void:
 	g._engine.upgrades.clear()
 	g._engine._craft_job.clear()
 	g._engine._blueprints.clear()
+	g._reset_world_clock()
+	g._workshop.reset_prestige()
 	g._engine.ether = Game.START_ETHER
 	g._engine.attempts = 0
 	g._engine.successes = 0

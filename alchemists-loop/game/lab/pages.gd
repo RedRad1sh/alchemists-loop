@@ -25,6 +25,7 @@ var _bench_rows: VBoxContainer
 var _bench_toggle_btn: Button
 var _bench_info: Label
 var _bench_page_labels = null
+var _workshop_view: Control = null
 var _spring_toggle_btn: Button
 var _spring_info: Label
 var _spring_pick_btn: Dictionary = {}
@@ -994,6 +995,8 @@ func _build_world(page: VBoxContainer) -> void:
 # ---------- судьбоносные режимы-вкладки ----------
 
 func _mode_hint(key: String) -> String:
+	if key == "bench" and g._workshop != null and g._workshop.is_read_only():
+		return "Сохранена новая версия Мастерской: обнови игру. Производство остановлено; сохранённые данные сохранены."
 	for m in Game.MODES:
 		if String(m["key"]) == key:
 			return String(m["hint"])
@@ -1024,13 +1027,13 @@ func _build_tools_page(page: VBoxContainer) -> void:
 
 
 func _ensure_modes() -> void:
-	if _tools_flow == null:
+	if not is_instance_valid(_tools_flow) or not is_instance_valid(_tools_sub):
 		return
 	var unlocked_keys := {}
 	var selectable_keys := {}
 	for m in Game.MODES:
 		var key := String(m["key"])
-		if not _mode_chips.has(key):
+		if not is_instance_valid(_mode_chips.get(key)):
 			var new_chip := g._small_button(String(m["title"]), Vector2(0, 40))
 			new_chip.toggle_mode = true
 			new_chip.pressed.connect(_select_mode.bind(key))
@@ -1040,13 +1043,13 @@ func _ensure_modes() -> void:
 		var chip: Button = _mode_chips[key]
 		var unlocked := g._engine._mode_unlocked(key)
 		chip.disabled = not unlocked
-		chip.tooltip_text = String(m["hint"]) if not unlocked else String(m["title"])
+		chip.tooltip_text = _mode_hint(key) if not unlocked or (key == "bench" and g._workshop.is_read_only()) else String(m["title"])
 		if unlocked:
 			unlocked_keys[key] = true
 			if not bool(m.get("hidden", false)):
 				selectable_keys[key] = true
 	for key in unlocked_keys:
-		if _mode_pages.has(key):
+		if is_instance_valid(_mode_pages.get(key)):
 			continue
 		var box := VBoxContainer.new()
 		box.add_theme_constant_override("separation", 8)
@@ -1086,8 +1089,11 @@ func _ensure_modes() -> void:
 
 func _apply_tools_selection() -> void:
 	for k in _mode_pages:
-		(_mode_pages[k] as Control).visible = (k == _tools_sel)
+		if is_instance_valid(_mode_pages[k]):
+			(_mode_pages[k] as Control).visible = (k == _tools_sel) and g._engine._mode_unlocked(String(k))
 	for k in _mode_chips:
+		if not is_instance_valid(_mode_chips[k]):
+			continue
 		var chip: Button = _mode_chips[k]
 		var unlocked := g._engine._mode_unlocked(String(k))
 		chip.button_pressed = (k == _tools_sel) and unlocked
@@ -1219,15 +1225,15 @@ func _focus_experiment(a: String, b: String) -> void:
 	_refresh_experiment_page()
 
 func _refresh_experiment_page() -> void:
-	if _experiment_a_pick == null or _experiment_b_pick == null:
+	if not is_instance_valid(_experiment_a_pick) or not is_instance_valid(_experiment_b_pick):
 		return
 	_experiment_a = _fill_experiment_picker(_experiment_a_pick, _experiment_a)
 	_experiment_b = _fill_experiment_picker(_experiment_b_pick, _experiment_b)
-	if _experiment_info == null:
+	if not is_instance_valid(_experiment_info):
 		return
 	if _experiment_a == "" or _experiment_b == "":
 		_experiment_info.text = "Нужно открыть хотя бы два вещества."
-		if _experiment_button != null:
+		if is_instance_valid(_experiment_button):
 			_experiment_button.disabled = true
 		return
 	var check := g._engine._experiment_status(_experiment_a, _experiment_b)
@@ -1245,7 +1251,7 @@ func _refresh_experiment_page() -> void:
 	else:
 		line += "\nХэш пары: v1/%s · сначала проверится серверный кэш." % key
 	_experiment_info.text = line + "\n" + String(check.get("reason", "Готово к эксперименту."))
-	if _experiment_button != null:
+	if is_instance_valid(_experiment_button):
 		_experiment_button.disabled = not bool(check.get("ok", false)) or g._engine._experiment_pending_pair.size() > 0
 
 func _build_spring_page(container: VBoxContainer) -> void:
@@ -1358,7 +1364,7 @@ func _hint_candidates() -> Array:
 var _bench_poster: Label
 
 func _bench_poster_text() -> String:
-	return "Подмастерье: варит выбранное вещество каждые %d с, без потолка накопления. Эфир списывается по обычной цене варки; скидка чертежа применяется." % int(g._sigil.bench_interval(_bench_target))
+	return "Мастерская: базовый этап каждой линии — %d с и %d операций (Архивная печать). Партия производит заданное количество; поддержание запаса проверяет общий инвентарь до общего предела стека ×%d. Эфир списывается перед каждой операцией, включая резерв; скидка чертежа и бонус скорости комплекта учитываются на линии." % [int(Game.BENCH_INTERVAL), g._engine._stage_ops(), Game.CRAFT_INVENTORY_STACK_CAP]
 
 func _build_bench_page(container: VBoxContainer) -> void:
 	container.add_child(g._label(_mode_hint("bench"), 15))
@@ -1368,22 +1374,10 @@ func _build_bench_page(container: VBoxContainer) -> void:
 	if _bench_page_labels == null:
 		_bench_page_labels = []
 	(_bench_page_labels as Array).append(bench_poster)
-	_bench_info = g._label("", 14)
-	container.add_child(_bench_info)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 320)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	container.add_child(scroll)
-	_bench_rows = VBoxContainer.new()
-	_bench_rows.add_theme_constant_override("separation", 6)
-	_bench_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_bench_rows)
-	_bench_toggle_btn = g._round_brew_button("Включить верстак")
-	_bench_toggle_btn.custom_minimum_size = Vector2(184, 42)
-	_bench_toggle_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_bench_toggle_btn.pressed.connect(_toggle_bench)
-	container.add_child(_bench_toggle_btn)
-	_rebuild_bench_rows()
+	# The existing tools page owns scrolling. The view owns commands, never time.
+	_workshop_view = load("res://game/lab/workshop_view.gd").new()
+	container.add_child(_workshop_view)
+	_workshop_view.call("setup", g, g._workshop)
 
 func _bench_candidates() -> Array:
 	var res: Array = []
@@ -1407,7 +1401,7 @@ func _bench_candidates() -> Array:
 func _rebuild_bench_rows() -> void:
 	if is_instance_valid(_bench_poster):
 		_bench_poster.text = _bench_poster_text()
-	if _bench_rows == null:
+	if not is_instance_valid(_bench_rows):
 		return
 	for child in _bench_rows.get_children():
 		_bench_rows.remove_child(child)
@@ -1443,24 +1437,99 @@ func _rebuild_bench_rows() -> void:
 		_bench_rows.add_child(b)
 
 func _on_bench_pick(item_id: String) -> void:
+	if not _legacy_bench_available(item_id):
+		g._engine.status_text = _legacy_bench_reason(item_id)
+		Sfx.error()
+		g._engine._refresh()
+		return
+	var line: Dictionary = g._workshop.lines[0]
+	_bench_on = not bool(line["paused"]) if not line["queue"].is_empty() else _bench_on
 	_bench_target = item_id
-	_bench_clock = 0.0
+	if not _sync_legacy_bench():
+		return
 	Sfx.click()
 	_rebuild_bench_rows()
 	g._engine._refresh()
 	g._saves._save_game()
 
 func _toggle_bench() -> void:
-	if _bench_target == "":
-		g._engine.status_text = "Сначала выбери на Верстаке, что варить."
+	# Explicit legacy controls resolve the actual first line, not a second job.
+	var target := _bench_target
+	var on := _bench_on
+	if g._workshop != null and not g._workshop.lines.is_empty():
+		var line: Dictionary = g._workshop.lines[0]
+		if not line["queue"].is_empty():
+			target = String(line["queue"][0]["target"])
+			on = not bool(line["paused"])
+	if not _legacy_bench_available(target):
+		g._engine.status_text = _legacy_bench_reason(target)
 		Sfx.error()
 		g._engine._refresh()
 		return
-	_bench_on = not _bench_on
-	_bench_clock = 0.0
+	_bench_target = target
+	_bench_on = not on
+	if not _sync_legacy_bench():
+		return
 	Sfx.click()
 	g._engine._refresh()
 	g._saves._save_game()
+
+func _legacy_bench_available(target: String) -> bool:
+	var model: Workshop = g._workshop
+	return model != null and model.g == g and not model.is_read_only() \
+		and (model.unlocked or g._engine.inventory.has("person")) \
+		and not model.lines.is_empty() and model.known_target_recipe(target)
+
+func _legacy_bench_reason(target: String) -> String:
+	if g._workshop == null:
+		return "Мастерская пока недоступна."
+	if g._workshop.is_read_only():
+		return _mode_hint("bench")
+	if not g._workshop.unlocked and not g._engine.inventory.has("person"):
+		return "Мастерская откроется после Человека."
+	return "Сначала выбери вещество с открытым рецептом." if target == "" else "Сначала открой рецепт этого вещества в Эксперименте."
+
+func _sync_legacy_bench() -> bool:
+	# Only an explicit old entry point calls this adapter. Main's regular
+	# scheduler never maps stale legacy fields over the player's new queues.
+	if not _legacy_bench_available(_bench_target):
+		return false
+	var model: Workshop = g._workshop
+	var line: Dictionary = model.lines[0]
+	var original := line.duplicate(true)
+	var was_unlocked := model.unlocked
+	var serial := model._next_job_serial
+	var blocked := model.is_blocking_signals()
+	model.set_block_signals(true)
+	model.unlocked = true # Legacy Person grants access, never retroactive XP.
+	var same_target: bool = not line["queue"].is_empty() and String(line["queue"][0]["target"]) == _bench_target
+	if same_target:
+		var job: Dictionary = line["queue"][0]
+		job["mode"] = "stock"
+		job["amount"] = Game.CRAFT_INVENTORY_STACK_CAP
+	else:
+		if not line["queue"].is_empty():
+			model.remove_job(String(line["id"]), String(line["queue"][0]["id"]))
+		var spec := {"target": _bench_target, "mode": "stock", "amount": Game.CRAFT_INVENTORY_STACK_CAP}
+		if not model._job_ids().has("job_legacy_bench"):
+			spec["id"] = "job_legacy_bench"
+		var result := model.enqueue(String(line["id"]), spec)
+		if not bool(result.get("ok", false)):
+			line.clear()
+			line.merge(original)
+			model.unlocked = was_unlocked
+			model._next_job_serial = serial
+			model.set_block_signals(blocked)
+			return false
+		model.reorder(String(line["id"]), line["queue"].size() - 1, 0)
+		line["phase_seconds"] = 0.0
+		line["stage_credit"] = 0
+	model.set_line_paused(String(line["id"]), not _bench_on)
+	_bench_clock = float(line["phase_seconds"])
+	model.set_block_signals(blocked)
+	if line != original or was_unlocked != model.unlocked:
+		model.changed.emit()
+	return true
 
 func _experiment_tick() -> void:
 	if _experiment_drag_token == null or not is_instance_valid(_experiment_drag_token) or _experiment_field == null:
@@ -1475,20 +1544,10 @@ func _experiment_tick() -> void:
 
 
 func _bench_tick(delta: float) -> void:
-	if not g._engine._mode_unlocked("bench") or not _bench_on or _bench_target == "":
+	if g._workshop_scheduler == null or not _sync_legacy_bench():
 		return
-	if _bench_busy or g._engine._auto:
-		return
-	_bench_clock += delta
-	if _bench_clock < g._sigil.bench_interval(_bench_target):
-		return
-	_bench_clock = 0.0
-	var plan := g._guild._plan_craft(_bench_target)
-	if not bool(plan.get("ok", false)):
-		g._engine.status_text = "Верстак ждёт: %s" % String(plan.get("reason", "нет подходящего рецепта"))
-		g._engine._refresh()
-		return
-	g._engine._run_bench_plan(_bench_target, plan)
+	g._workshop_scheduler.call("advance", delta)
+	_bench_clock = float(g._workshop.lines[0]["phase_seconds"])
 
 func _unrevealed_recipe_candidates() -> Array:
 	var res: Array = []
@@ -1515,30 +1574,40 @@ func _toggle_spring() -> void:
 	g._saves._save_game()
 
 func _refresh_mode_pages() -> void:
-	_refresh_experiment_location()
-	_refresh_experiment_page()
-	if _spring_info != null:
+	if is_instance_valid(_experiment_field):
+		_refresh_experiment_location()
+	if is_instance_valid(_experiment_a_pick) and is_instance_valid(_experiment_b_pick):
+		_refresh_experiment_page()
+	if is_instance_valid(_spring_info):
 		var spring_ready := g._engine._mode_unlocked("spring")
 		var base_name := g._online._item_name(g._engine.spring_source)
 		_spring_info.text = ("Каждые %d с: +1 «%s» — базовая стихия, без трат эфира." % [int(Game.SPRING_INTERVAL), base_name]) if spring_ready else "Родник откроется после открытия Ростка."
-		if _spring_toggle_btn != null:
+		if is_instance_valid(_spring_toggle_btn):
 			_spring_toggle_btn.disabled = not spring_ready
 			_spring_toggle_btn.text = "Остановить родник" if g._engine.spring_on else "Пустить родник"
 	for raw in _spring_pick_btn:
 		var id2 := String(raw)
 		var entry: Dictionary = _spring_pick_btn[id2]
-		(entry["mark"] as Label).text = "▼" if id2 == g._engine.spring_source else ""
-		(entry["orb"] as ElementOrb).queue_redraw()
-	if _bench_info != null:
+		if is_instance_valid(entry.get("mark")):
+			(entry["mark"] as Label).text = "▼" if id2 == g._engine.spring_source else ""
+		if is_instance_valid(entry.get("orb")):
+			(entry["orb"] as ElementOrb).queue_redraw()
+	if is_instance_valid(_bench_poster):
+		_bench_poster.text = _bench_poster_text()
+	# WorkshopView already coalesces changed callbacks and polls resource
+	# signatures. Reuse that deferred refresh, retaining all unchanged rows.
+	if is_instance_valid(_workshop_view) and not _workshop_view.is_queued_for_deletion():
+		_workshop_view.call("_schedule_refresh")
+	if is_instance_valid(_bench_info):
 		var cand := _bench_candidates()
 		var tgt := "не выбран"
 		if _bench_target != "":
 			tgt = g._online._item_name(_bench_target)
 		var state := "варится сам" if _bench_on else "на паузе"
 		_bench_info.text = "Подмастерье: %s · «%s» · рецептов доступно: %d" % [state, tgt, cand.size()]
-		if _bench_toggle_btn != null:
+		if is_instance_valid(_bench_toggle_btn):
 			_bench_toggle_btn.text = "Остановить верстак" if _bench_on else "Включить верстак"
-		if _bench_rows != null and _bench_rows.get_child_count() != cand.size():
+		if is_instance_valid(_bench_rows) and _bench_rows.get_child_count() != cand.size():
 			_rebuild_bench_rows()
 	g._retort._refresh_retort_page()
 	g._riddles._refresh_letters_page()

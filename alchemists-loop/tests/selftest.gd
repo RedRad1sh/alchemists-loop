@@ -158,6 +158,14 @@ static func run(g: Game) -> void:
 	await SuiteSigilCards.run(g)
 	await SuiteSigilLore.run(g)
 	await SuiteSocial.run(g)
+	# Dynamic loading permits a behavioral red probe before new modules exist.
+	for workshop_suite in ["mastery", "model", "context", "scheduler", "offline", "ui", "integration", "saves", "pages", "runtime", "acceptance"]:
+		var suite_path := "res://tests/suite_workshop_%s.gd" % workshop_suite
+		if FileAccess.file_exists(suite_path):
+			var suite: Script = load(suite_path)
+			Selftest.check("workshop suite loads: " + workshop_suite, suite != null and suite.can_instantiate())
+			if suite != null and suite.can_instantiate():
+				await suite.run(g)
 
 	_u20_wipe([g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH] + U20_ST_FILES)
 	g.SAVE_PATH = "user://alchemy_save.json"

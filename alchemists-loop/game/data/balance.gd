@@ -11,7 +11,7 @@ const START_ETHER := 100
 # First-time discoveries pay a depth surcharge. Known recipes still cost BREW_COST.
 const DISCOVERY_FEES := {1: 4, 2: 6, 3: 10, 4: 16, 5: 24, 6: 36}
 # Rewards that would land above the active cap go to the visible surplus reserve.
-# The reserve is not energy: it is only spendable by optional mastery rites.
+# Instant surplus stays spendable through Core._spend_ether; regen never fills it.
 const ETHER_MASTERY_BASE := 300
 const ETHER_MASTERY_GROWTH := 1.35
 
@@ -60,7 +60,7 @@ const ATLAS_MILE_EVERY := 10
 const ATLAS_CAP_EACH := 3
 const ATLAS_PENDING_MAX := 20
 # дневной круг (v29): контейнер суточного слоя + мягкий стрик-очаг + вечные вехи
-const CIRCLE_DISC_GOAL := 5    # новых открытий за день для закрытия круга
+const CIRCLE_DISC_GOAL := 5    # успешных синтезов/получений за день, включая повторы (имя совместимо)
 const CIRCLE_REWARD := 75      # эфир за закрытый круг (раз в день)
 const CIRCLE_LOCAL_POINTS := 1  # очко вех за локальную цель дня (A3); сервер, когда есть, перебивает
 const HEARTH_BASE := 10        # база награды «полешка» (× множитель серии, кап ×2)
