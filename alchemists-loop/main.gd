@@ -536,8 +536,6 @@ func _ready() -> void:
 			_demo_harness._action_master = true
 		elif a == "--action=field":
 			_demo_harness._action_field = true
-		elif a == "--action=experiment":
-			_demo_harness._action_experiment = true
 		elif a == "--action=hint":
 			_demo_harness._action_hint = true
 		elif a == "--action=event":
