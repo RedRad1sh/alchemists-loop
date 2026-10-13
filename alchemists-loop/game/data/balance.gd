@@ -101,14 +101,13 @@ const FAIR_OFFLINE_GOAL := 3     # A3: варок разных веществ з
 const FAIR_OFFLINE_FACTOR := 0.5 # без мира реген ярмарки — вполовину, ключ недели тот же
 # сводка возврата: единый экран «пока тебя не было» после долгого отсутствия
 const RETURN_GAP := 1800.0       # 30 минут — порог показа сводки
-const SPRING_OFFLINE_MAX := 50   # потолок офлайн-накопления Родника (шт.)
 const SPRING_INTERVAL := 6.0
 # Производство remains useful, but it is a paced helper rather than a free second cauldron.
 ## Верстак: без потолка накопления, зато медленнее. Длинный idle вместо
 ## короткого клика — игрок не обязан возвращаться каждые 30 секунд.
 const BENCH_INTERVAL := 40.0
 ## Офлайн-верстак идёт вполсилы и не больше 60 тиков за окно (прецедент:
-## SPRING_OFFLINE_MAX = 50). Иначе 8 часов простоя дали бы 720 варок.
+## родник ограничен буфером и окном офлайн-запаса). Иначе 8 часов простоя дали бы 720 варок.
 const BENCH_OFFLINE_FACTOR := 0.5
 const BENCH_OFFLINE_MAX_TICKS := 60
 const GIFT_INTERVAL := 120.0

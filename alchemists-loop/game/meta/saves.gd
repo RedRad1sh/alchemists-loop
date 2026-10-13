@@ -554,10 +554,20 @@ func _offline_gain(elapsed: float, rate: float, cur: int, cap: int) -> int:
 	return mini(cap, cur + gain) - cur
 
 func _spring_offline_gain(elapsed: float) -> int:
-	# сколько Родник накапал бы за отсутствие (то же окно, что у эфира, но срез)
 	if elapsed < Game.OFFLINE_MIN_SEC:
 		return 0
-	return mini(int(minf(elapsed, Game.OFFLINE_CAP_SEC) / Game.SPRING_INTERVAL), Game.SPRING_OFFLINE_MAX)
+	var offline_lvl: int = g._engine.spring_levels.get("offline", 0)
+	var window: float = SpringBalance.OFFLINE_WINDOW_SEC[offline_lvl]
+	var interval: float = g._engine.spring_interval()
+	var sources: int = g._engine.spring_sources.size()
+	var ticks: int = int(floor(minf(elapsed, window) / interval))
+	var granted: int = ticks * sources
+	var volume_cap: int = SpringBalance.VOLUME_CAP[g._engine.spring_levels.get("volume", 0)]
+	var total_free: int = 0
+	for source in g._engine.spring_sources:
+		var current_buffer: int = g._engine.spring_buffer.get(source, 0)
+		total_free += maxi(0, volume_cap - current_buffer)
+	return mini(granted, total_free)
 
 func _bench_offline_ticks(elapsed: float) -> int:
 	# Compatibility estimate only; the scheduler owns real time and execution.

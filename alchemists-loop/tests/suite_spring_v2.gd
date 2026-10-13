@@ -94,3 +94,27 @@ static func run(g: Game) -> void:
 	g._engine.spring_sources = ["water"]
 	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
 	g._engine.spring_buffer = {}
+	# T5.1: _spring_offline_gain использует окно уровня 0 (300 сек)
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	g._engine.spring_sources = ["water"]
+	g._engine.spring_buffer = {}
+	var gain_300 := g._saves._spring_offline_gain(300.0)
+	Selftest.check("spring_offline_gain 300s level 0", gain_300 == 50)  # 300/6.0 = 50
+	# T5.2: _spring_offline_gain использует окно уровня 1 (3600 сек)
+	g._engine.spring_levels["offline"] = 1
+	g._engine.spring_levels["volume"] = 7  # cap = 60000, чтобы не ограничивало
+	var gain_3600 := g._saves._spring_offline_gain(3600.0)
+	Selftest.check("spring_offline_gain 3600s level 1", gain_3600 == 600)  # 3600/6.0 = 600
+	# T5.3: _spring_offline_gain учитывает мульти-выбор
+	g._engine.spring_sources = ["water", "fire"]
+	var gain_multi := g._saves._spring_offline_gain(3600.0)
+	Selftest.check("spring_offline_gain multi-source", gain_multi == 1200)  # 600 * 2 sources
+	# T5.4: _spring_offline_gain ограничен объёмом буфера
+	g._engine.spring_levels["volume"] = 0  # cap = 100
+	g._engine.spring_buffer = {"water": 100, "fire": 100}  # оба на потолке
+	var gain_capped := g._saves._spring_offline_gain(3600.0)
+	Selftest.check("spring_offline_gain capped by buffer", gain_capped == 0)  # буфер полон
+	# Reset state for later suites
+	g._engine.spring_sources = ["water"]
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	g._engine.spring_buffer = {}
