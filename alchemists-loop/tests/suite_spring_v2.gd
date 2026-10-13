@@ -75,3 +75,22 @@ static func run(g: Game) -> void:
 	# Reset state for later suites
 	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
 	g._engine.spring_buffer = {}
+	# T4.1: Engine имеет spring_sources
+	Selftest.check("engine spring_sources exists", "spring_sources" in g._engine)
+	# T4.2: _spring_tick выдаёт по единице каждого выбранного источника
+	g._engine.spring_on = true
+	g._engine.spring_sources = ["water", "fire"]
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 1, "offline": 0}
+	g._engine.spring_buffer = {}
+	g._engine.inventory["water"] = 0
+	g._engine.inventory["fire"] = 0
+	g._pages._spring_clock = 0.0
+	g._engine._spring_tick(7.0)
+	Selftest.check("spring_tick multi-source water", g._engine.spring_buffer.get("water", 0) == 1)
+	Selftest.check("spring_tick multi-source fire", g._engine.spring_buffer.get("fire", 0) == 1)
+	Selftest.check("spring_tick multi-source inventory water", g._engine.inventory.get("water", 0) == 1)
+	Selftest.check("spring_tick multi-source inventory fire", g._engine.inventory.get("fire", 0) == 1)
+	# Reset state for later suites
+	g._engine.spring_sources = ["water"]
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	g._engine.spring_buffer = {}
