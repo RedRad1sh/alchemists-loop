@@ -203,6 +203,19 @@ static func run(g: Game) -> void:
 	Selftest.check("prestige keeps offline at 1", g._engine.spring_levels["offline"] == 1)
 	Selftest.check("prestige resets spring_buffer", g._engine.spring_buffer == {})
 	Selftest.check("prestige resets spring_sources", g._engine.spring_sources == ["water"])
+	# T10.1: SpringScreen существует
+	Selftest.check("spring_screen class exists", SpringScreen != null)
+	# T10.2: экран открывается по тапу
+	g._pages._open_spring_screen()
+	Selftest.check("spring_screen opens", is_instance_valid(g._spring_screen))
+	# T10.3: экран не перекрывает BrewBar (z_index < BrewBar)
+	Selftest.check("spring_screen z_index < brew_bar", g._spring_screen.z_index < g._brew_bar.z_index)
+	# T10.4: экран читает таблицы (число уровней не зашито)
+	var speed_rows := g._spring_screen._count_axis_rows("speed")
+	Selftest.check("spring_screen reads SPEED table", speed_rows == SpringBalance.SPEED.size())
+	# T10.5: экран закрывается
+	g._spring_screen._close()
+	Selftest.check("spring_screen closes", not is_instance_valid(g._spring_screen))
 	# T11.1: form_stage на total_level 0 = 0
 	Selftest.check("form_stage 0", SpringSprite.form_stage({"speed": 0, "volume": 0, "sources": 0, "offline": 0}) == 0)
 	# T11.2: form_stage на total_level 4 = 1

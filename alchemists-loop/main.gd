@@ -399,6 +399,7 @@ var _hub: Hub  # попапы: профиль/крафт/настройки/жу
 var _item_colors: Dictionary = {}  # кэш цветов веществ (ядро)
 var _online: Online  # рейтинг + сервер + мир (R8)
 var _brew_bar: PanelContainer
+var _spring_screen: Control
 # резонанс 2.0: отголоски (баланс/вечный счётчик с сервера + вехи в сейве)
 var _resonance: Resonance  # отголоски + родословная (R5)
 # ночная реторта: 3 слота {sub, name, started, dur} + коллекция эссенций {slug: имя}
