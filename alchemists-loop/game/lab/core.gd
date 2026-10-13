@@ -57,6 +57,7 @@ var mastery_rank: int = 0
 var spring_source := "water"
 var spring_on := false
 var spring_levels := {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+var spring_buffer := {}  # element_id -> int, сколько Родник произвёл и не потрачено
 var _source_taps := 0
 var _collect_all_ms := 0  # антиспам кнопки «Все»
 var _collect_last_gain := 1
@@ -611,10 +612,15 @@ func _spring_tick(delta: float) -> void:
 	if not _mode_unlocked("spring") or not spring_on:
 		return
 	g._pages._spring_clock += delta
-	if g._pages._spring_clock >= Game.SPRING_INTERVAL:
-		g._pages._spring_clock -= Game.SPRING_INTERVAL
-		inventory[spring_source] = int(inventory.get(spring_source, 0)) + 1
-		_refresh()
+	if g._pages._spring_clock >= spring_interval():
+		g._pages._spring_clock -= spring_interval()
+		var source: String = spring_source
+		var volume_cap: int = SpringBalance.VOLUME_CAP[spring_levels.get("volume", 0)]
+		var current_buffer: int = spring_buffer.get(source, 0)
+		if current_buffer < volume_cap:
+			spring_buffer[source] = current_buffer + 1
+			inventory[source] = int(inventory.get(source, 0)) + 1
+			_refresh()
 
 func _gift_tick(delta: float) -> void:
 	# улучшение «Дары»: +1 случайное открытое вещество каждые 2 минуты

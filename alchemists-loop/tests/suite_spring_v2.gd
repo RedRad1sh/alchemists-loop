@@ -44,3 +44,34 @@ static func run(g: Game) -> void:
 	# T2.4: spring_interval() не ниже MIN_INTERVAL
 	g._engine.spring_levels["speed"] = 100  # экстремальный уровень
 	Selftest.check("spring_interval >= MIN_INTERVAL", g._engine.spring_interval() >= SpringBalance.MIN_INTERVAL)
+	# T3.1: Engine имеет spring_buffer
+	Selftest.check("engine spring_buffer exists", "spring_buffer" in g._engine)
+	# T3.2: _spring_tick увеличивает буфер выбранного источника
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}  # reset from T2
+	g._engine.inventory["plant"] = maxi(int(g._engine.inventory.get("plant", 0)), 1)  # unlock spring mode
+	g._engine.spring_on = true
+	g._engine.spring_source = "water"
+	g._engine.spring_buffer = {}
+	g._engine.inventory["water"] = 0
+	g._pages._spring_clock = 0.0
+	g._engine._spring_tick(7.0)
+	Selftest.check("spring_tick increments buffer", g._engine.spring_buffer.get("water", 0) == 1)
+	# T3.3: _spring_tick увеличивает inventory
+	Selftest.check("spring_tick increments inventory", g._engine.inventory.get("water", 0) == 1)
+	# T3.4: буфер ограничен VOLUME_CAP
+	g._engine.spring_levels["volume"] = 0
+	g._engine.spring_buffer = {"water": 99}
+	g._engine.inventory["water"] = 99
+	g._pages._spring_clock = 0.0
+	g._engine._spring_tick(7.0)
+	Selftest.check("spring_buffer capped at VOLUME_CAP[0]", g._engine.spring_buffer.get("water", 0) == 100)
+	# T3.5: избыток сжигается (inventory не растёт сверх капа)
+	Selftest.check("spring_tick burns overflow", g._engine.inventory.get("water", 0) == 100)
+	# T3.6: трата элемента уменьшает буфер
+	g._engine.spring_buffer = {"water": 50}
+	g._engine.inventory["water"] -= 10
+	g._engine.spring_buffer["water"] = maxi(0, g._engine.spring_buffer.get("water", 0) - 10)
+	Selftest.check("spend decrements buffer", g._engine.spring_buffer.get("water", 0) == 40)
+	# Reset state for later suites
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	g._engine.spring_buffer = {}
