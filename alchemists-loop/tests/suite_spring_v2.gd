@@ -118,3 +118,39 @@ static func run(g: Game) -> void:
 	g._engine.spring_sources = ["water"]
 	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
 	g._engine.spring_buffer = {}
+	# T6.1: покупка скорости уровня 1 succeeds при достаточных ресурсах
+	g._engine.ether = 100
+	g._engine.inventory["stone"] = 20
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	var result := g._engine.spring_purchase("speed")
+	Selftest.check("spring_purchase speed L1 ok", result["ok"] == true)
+	Selftest.check("spring_purchase speed L1 ether deducted", g._engine.ether == 70)
+	Selftest.check("spring_purchase speed L1 stone deducted", g._engine.inventory.get("stone", 0) == 8)
+	Selftest.check("spring_purchase speed L1 level up", g._engine.spring_levels["speed"] == 1)
+	# T6.2: покупка не проходит при нехватке эфира
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	g._engine.ether = 10
+	g._engine.inventory["stone"] = 20
+	var result2 := g._engine.spring_purchase("speed")
+	Selftest.check("spring_purchase insufficient ether", result2["ok"] == false and "ether" in result2["error"])
+	Selftest.check("spring_purchase insufficient ether no deduction", g._engine.ether == 10)
+	# T6.3: покупка не проходит при нехватке материала
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	g._engine.ether = 100
+	g._engine.inventory["stone"] = 5
+	var result3 := g._engine.spring_purchase("speed")
+	Selftest.check("spring_purchase insufficient material", result3["ok"] == false and "stone" in result3["error"])
+	Selftest.check("spring_purchase insufficient material no deduction", g._engine.ether == 100)
+	# T6.4: покупка sources требует speed >= 3
+	g._engine.spring_levels = {"speed": 2, "volume": 0, "sources": 0, "offline": 0}
+	g._engine.ether = 200
+	g._engine.inventory["metal"] = 30
+	g._engine.inventory["glass"] = 20
+	var result4 := g._engine.spring_purchase("sources")
+	Selftest.check("spring_purchase sources req not met", result4["ok"] == false and "speed" in result4["error"])
+	# T6.5: покупка sources проходит при speed >= 3
+	g._engine.spring_levels["speed"] = 3
+	var result5 := g._engine.spring_purchase("sources")
+	Selftest.check("spring_purchase sources req met", result5["ok"] == true)
+	# Reset state for later suites
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}

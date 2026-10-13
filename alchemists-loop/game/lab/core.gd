@@ -303,6 +303,36 @@ func spring_interval() -> float:
 	var interval: float = Game.SPRING_INTERVAL * pow(SpringBalance.SPEED_FACTOR, speed_lvl)
 	return maxf(interval, SpringBalance.MIN_INTERVAL)
 
+func spring_purchase(axis: String) -> Dictionary:
+	var lvl: int = spring_levels.get(axis, 0)
+	var table: Array
+	match axis:
+		"speed": table = SpringBalance.SPEED
+		"volume": table = SpringBalance.VOLUME
+		"sources": table = SpringBalance.SOURCES
+		"offline": table = SpringBalance.OFFLINE
+		_: return {"ok": false, "error": "unknown axis"}
+	if lvl >= table.size():
+		return {"ok": false, "error": "max level"}
+	var price: Dictionary = table[lvl]
+	if price.has("req"):
+		for req_axis in price["req"]:
+			if spring_levels.get(req_axis, 0) < price["req"][req_axis]:
+				return {"ok": false, "error": "requires %s >= %d" % [req_axis, price["req"][req_axis]]}
+	var ether_cost: int = price.get("ether", 0)
+	if ether < ether_cost:
+		return {"ok": false, "error": "insufficient ether"}
+	var materials: Dictionary = price.get("materials", {})
+	for mat in materials:
+		if inventory.get(mat, 0) < materials[mat]:
+			return {"ok": false, "error": "insufficient %s" % mat}
+	ether -= ether_cost
+	for mat in materials:
+		inventory[mat] = int(inventory.get(mat, 0)) - materials[mat]
+	spring_levels[axis] = lvl + 1
+	_refresh()
+	return {"ok": true, "error": ""}
+
 func _ether_rate() -> float:
 	return (Game.BASE_ETHER_REGEN + 0.35 * float(_up_lvl("ether_regen")) + _collection_regen_bonus() \
 		+ g._progress_ui._quest_regen_bonus() + g._progress_ui._ach_regen_bonus() + g._resonance._res_regen_bonus() \
