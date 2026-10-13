@@ -203,3 +203,17 @@ static func run(g: Game) -> void:
 	Selftest.check("prestige keeps offline at 1", g._engine.spring_levels["offline"] == 1)
 	Selftest.check("prestige resets spring_buffer", g._engine.spring_buffer == {})
 	Selftest.check("prestige resets spring_sources", g._engine.spring_sources == ["water"])
+	# T11.1: form_stage на total_level 0 = 0
+	Selftest.check("form_stage 0", SpringSprite.form_stage({"speed": 0, "volume": 0, "sources": 0, "offline": 0}) == 0)
+	# T11.2: form_stage на total_level 4 = 1
+	Selftest.check("form_stage 4", SpringSprite.form_stage({"speed": 4, "volume": 0, "sources": 0, "offline": 0}) == 1)
+	# T11.3: form_stage на total_level 20 = 5
+	Selftest.check("form_stage 20", SpringSprite.form_stage({"speed": 7, "volume": 7, "sources": 3, "offline": 3}) == 5)
+	# T11.4: material_tier на уровне 0 = 0
+	Selftest.check("material_tier level 0", SpringSprite.material_tier({"speed": 0, "volume": 0, "sources": 0, "offline": 0}) == 0)
+	# T11.5: material_tier на speed 1 (stone) = 0
+	Selftest.check("material_tier speed 1", SpringSprite.material_tier({"speed": 1, "volume": 0, "sources": 0, "offline": 0}) == 0)
+	# T11.6: material_tier на speed 4 (glass + obsidian) = 2
+	Selftest.check("material_tier speed 4", SpringSprite.material_tier({"speed": 4, "volume": 0, "sources": 0, "offline": 0}) == 2)
+	# T11.7: material_tier на speed 7 (tool + crystal) = 4
+	Selftest.check("material_tier speed 7", SpringSprite.material_tier({"speed": 7, "volume": 0, "sources": 0, "offline": 0}) == 4)

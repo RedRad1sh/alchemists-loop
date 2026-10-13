@@ -106,7 +106,7 @@ static func run(g: Game) -> void:
 	g._retort._essences.clear()
 	g._engine.sage_gold = 0
 	# сводка возврата
-	Selftest.check("spring offline gain", g._saves._spring_offline_gain(3600.0) == 50 and g._saves._spring_offline_gain(60.0) == 10
+	Selftest.check("spring offline gain (new formula: window 300s at lvl 0)", g._saves._spring_offline_gain(3600.0) == 50 and g._saves._spring_offline_gain(60.0) == 10
 		and g._saves._spring_offline_gain(30.0) == 0)
 	g._saves._return_elapsed = 100.0
 	Selftest.check("return not due early", not g._saves._return_due())
