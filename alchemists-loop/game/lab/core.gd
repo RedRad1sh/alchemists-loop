@@ -56,6 +56,7 @@ var ether_overflow: int = 0
 var mastery_rank: int = 0
 var spring_source := "water"
 var spring_on := false
+var spring_levels := {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
 var _source_taps := 0
 var _collect_all_ms := 0  # антиспам кнопки «Все»
 var _collect_last_gain := 1
@@ -294,6 +295,11 @@ func _max_ether() -> int:
 		+ 40 * sage_gold + g._progress_ui._quest_cap_bonus() + g._progress_ui._ach_cap_bonus() + g._resonance._res_cap_bonus() \
 		+ g._retort._essence_cap_bonus() + g._riddles._letter_cap_bonus() + g._riddles._atlas_cap_bonus() + g._retention._circle_cap_bonus() \
 		+ g._retention._vein_cap_total + g._sigil.milestone_cap_bonus()
+
+func spring_interval() -> float:
+	var speed_lvl: int = spring_levels.get("speed", 0)
+	var interval: float = Game.SPRING_INTERVAL * pow(SpringBalance.SPEED_FACTOR, speed_lvl)
+	return maxf(interval, SpringBalance.MIN_INTERVAL)
 
 func _ether_rate() -> float:
 	return (Game.BASE_ETHER_REGEN + 0.35 * float(_up_lvl("ether_regen")) + _collection_regen_bonus() \

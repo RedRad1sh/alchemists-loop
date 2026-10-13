@@ -32,3 +32,15 @@ static func run(g: Game) -> void:
 	Selftest.check("spring_balance OFFLINE[0] req", SpringBalance.OFFLINE[0]["req"] == {"volume": 3})
 	# T1.14: OFFLINE_WINDOW_SEC[3] = 43200 (12 часов)
 	Selftest.check("spring_balance OFFLINE_WINDOW_SEC[3]", SpringBalance.OFFLINE_WINDOW_SEC[3] == 43200.0)
+	
+	# T2.1: Engine имеет spring_levels
+	Selftest.check("engine spring_levels exists", "spring_levels" in g._engine)
+	# T2.2: spring_interval() на уровне 0 = SPRING_INTERVAL
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	Selftest.check("spring_interval level 0", is_equal_approx(g._engine.spring_interval(), Game.SPRING_INTERVAL))
+	# T2.3: spring_interval() на уровне 7 = 6.0 * pow(0.85, 7) ≈ 1.9235 (спека §3.1)
+	g._engine.spring_levels["speed"] = 7
+	Selftest.check("spring_interval level 7 ≈ 1.9235", absf(g._engine.spring_interval() - 1.9235) < 0.001)
+	# T2.4: spring_interval() не ниже MIN_INTERVAL
+	g._engine.spring_levels["speed"] = 100  # экстремальный уровень
+	Selftest.check("spring_interval >= MIN_INTERVAL", g._engine.spring_interval() >= SpringBalance.MIN_INTERVAL)
