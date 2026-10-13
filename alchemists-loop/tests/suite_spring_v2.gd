@@ -154,3 +154,52 @@ static func run(g: Game) -> void:
 	Selftest.check("spring_purchase sources req met", result5["ok"] == true)
 	# Reset state for later suites
 	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	# T7.1: OFFLINE_CAP_SEC = 12 часов
+	Selftest.check("OFFLINE_CAP_SEC 12h", Game.OFFLINE_CAP_SEC == 12 * 3600.0)
+	# T7.2: регрессия — эфир при 8 ч не вырос
+	g._engine.ether = 0
+	g._engine.regen_clock = 0.0
+	var ether_8h := g._saves._offline_gain(8 * 3600.0)
+	var ether_12h := g._saves._offline_gain(12 * 3600.0)
+	Selftest.check("ether offline 8h vs 12h same", ether_8h == ether_12h)
+	# T7.3: регрессия — этапы верстака при 8 ч не выросли
+	var bench_8h := g._saves._bench_offline_ticks(8 * 3600.0)
+	var bench_12h := g._saves._bench_offline_ticks(12 * 3600.0)
+	Selftest.check("bench offline 8h vs 12h same", bench_8h == bench_12h)
+	# T8.1: сейв содержит новые ключи
+	g._engine.spring_levels = {"speed": 2, "volume": 1, "sources": 0, "offline": 0}
+	g._engine.spring_buffer = {"water": 50}
+	g._engine.spring_sources = ["water", "fire"]
+	var data: Dictionary = g._saves._serialize_game()
+	Selftest.check("save contains spring_levels", data.has("spring_levels"))
+	Selftest.check("save contains spring_buffer", data.has("spring_buffer"))
+	Selftest.check("save contains spring_sources", data.has("spring_sources"))
+	Selftest.check("save spring_levels value", data["spring_levels"] == {"speed": 2, "volume": 1, "sources": 0, "offline": 0})
+	# T8.2: загрузка восстанавливает состояния
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	g._engine.spring_buffer = {}
+	g._engine.spring_sources = ["water"]
+	g._saves._deserialize_game(data)
+	Selftest.check("load restores spring_levels", g._engine.spring_levels == {"speed": 2, "volume": 1, "sources": 0, "offline": 0})
+	Selftest.check("load restores spring_buffer", g._engine.spring_buffer == {"water": 50})
+	Selftest.check("load restores spring_sources", g._engine.spring_sources == ["water", "fire"])
+	# T8.3: fail-closed — неизвестная версия сбрасывает к уровню 0
+	data["spring_version"] = 999
+	g._saves._deserialize_game(data)
+	Selftest.check("load unknown version resets to 0", g._engine.spring_levels == {"speed": 0, "volume": 0, "sources": 0, "offline": 0})
+	# T8.4: fail-closed — отрицательные значения отбрасываются
+	data["spring_version"] = 1
+	data["spring_levels"] = {"speed": -1, "volume": 0, "sources": 0, "offline": 0}
+	g._saves._deserialize_game(data)
+	Selftest.check("load negative level resets to 0", g._engine.spring_levels == {"speed": 0, "volume": 0, "sources": 0, "offline": 0})
+	# T9.1: перегонка подрезает уровни до 3
+	g._engine.spring_levels = {"speed": 5, "volume": 3, "sources": 2, "offline": 1}
+	g._engine.spring_buffer = {"water": 100}
+	g._engine.spring_sources = ["water", "fire"]
+	g._hub._do_prestige()
+	Selftest.check("prestige cuts speed to 3", g._engine.spring_levels["speed"] == 3)
+	Selftest.check("prestige keeps volume at 3", g._engine.spring_levels["volume"] == 3)
+	Selftest.check("prestige keeps sources at 2", g._engine.spring_levels["sources"] == 2)
+	Selftest.check("prestige keeps offline at 1", g._engine.spring_levels["offline"] == 1)
+	Selftest.check("prestige resets spring_buffer", g._engine.spring_buffer == {})
+	Selftest.check("prestige resets spring_sources", g._engine.spring_sources == ["water"])

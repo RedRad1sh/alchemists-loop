@@ -1007,6 +1007,9 @@ func _init_new_game() -> bool:
 	_engine.selected.clear()
 	_engine.upgrades.clear()
 	_engine.spring_on = false
+	_engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	_engine.spring_buffer = {}
+	_engine.spring_sources = ["water"]
 	_pages._spring_clock = 0.0
 	_pages._bench_target = ""
 	_pages._bench_on = false
