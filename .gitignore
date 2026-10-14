@@ -16,3 +16,4 @@ discovery-server/server/tests/*.sqlite
 # Godot: генерируемые метаданные импорта/uid (regenerable locally)
 *.import
 *.uid
+wt/

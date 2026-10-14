@@ -726,6 +726,10 @@ func _do_prestige() -> void:
 	g._engine._source_taps = 0
 	g._engine.spring_on = false
 	g._engine.spring_source = "water"
+	for axis in g._engine.spring_levels:
+		g._engine.spring_levels[axis] = mini(g._engine.spring_levels[axis], SpringBalance.PRESTIGE_KEEP_LEVEL)
+	g._engine.spring_buffer = {}
+	g._engine.spring_sources = ["water"]
 	g._pages._bench_target = ""
 	g._pages._bench_on = false
 	g._guild._quests_done.clear()

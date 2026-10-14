@@ -56,6 +56,9 @@ var ether_overflow: int = 0
 var mastery_rank: int = 0
 var spring_source := "water"
 var spring_on := false
+var spring_levels := {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+var spring_buffer := {}  # element_id -> int, сколько Родник произвёл и не потрачено
+var spring_sources := ["water"]  # выбранные источники, длина = 1 + sources
 var _source_taps := 0
 var _collect_all_ms := 0  # антиспам кнопки «Все»
 var _collect_last_gain := 1
@@ -294,6 +297,41 @@ func _max_ether() -> int:
 		+ 40 * sage_gold + g._progress_ui._quest_cap_bonus() + g._progress_ui._ach_cap_bonus() + g._resonance._res_cap_bonus() \
 		+ g._retort._essence_cap_bonus() + g._riddles._letter_cap_bonus() + g._riddles._atlas_cap_bonus() + g._retention._circle_cap_bonus() \
 		+ g._retention._vein_cap_total + g._sigil.milestone_cap_bonus()
+
+func spring_interval() -> float:
+	var speed_lvl: int = spring_levels.get("speed", 0)
+	var interval: float = Game.SPRING_INTERVAL * pow(SpringBalance.SPEED_FACTOR, speed_lvl)
+	return maxf(interval, SpringBalance.MIN_INTERVAL)
+
+func spring_purchase(axis: String) -> Dictionary:
+	var lvl: int = spring_levels.get(axis, 0)
+	var table: Array
+	match axis:
+		"speed": table = SpringBalance.SPEED
+		"volume": table = SpringBalance.VOLUME
+		"sources": table = SpringBalance.SOURCES
+		"offline": table = SpringBalance.OFFLINE
+		_: return {"ok": false, "error": "unknown axis"}
+	if lvl >= table.size():
+		return {"ok": false, "error": "max level"}
+	var price: Dictionary = table[lvl]
+	if price.has("req"):
+		for req_axis in price["req"]:
+			if spring_levels.get(req_axis, 0) < price["req"][req_axis]:
+				return {"ok": false, "error": "requires %s >= %d" % [req_axis, price["req"][req_axis]]}
+	var ether_cost: int = price.get("ether", 0)
+	if ether < ether_cost:
+		return {"ok": false, "error": "insufficient ether"}
+	var materials: Dictionary = price.get("materials", {})
+	for mat in materials:
+		if inventory.get(mat, 0) < materials[mat]:
+			return {"ok": false, "error": "insufficient %s" % mat}
+	ether -= ether_cost
+	for mat in materials:
+		inventory[mat] = int(inventory.get(mat, 0)) - materials[mat]
+	spring_levels[axis] = lvl + 1
+	_refresh()
+	return {"ok": true, "error": ""}
 
 func _ether_rate() -> float:
 	return (Game.BASE_ETHER_REGEN + 0.35 * float(_up_lvl("ether_regen")) + _collection_regen_bonus() \
@@ -605,9 +643,14 @@ func _spring_tick(delta: float) -> void:
 	if not _mode_unlocked("spring") or not spring_on:
 		return
 	g._pages._spring_clock += delta
-	if g._pages._spring_clock >= Game.SPRING_INTERVAL:
-		g._pages._spring_clock -= Game.SPRING_INTERVAL
-		inventory[spring_source] = int(inventory.get(spring_source, 0)) + 1
+	if g._pages._spring_clock >= spring_interval():
+		g._pages._spring_clock -= spring_interval()
+		var volume_cap: int = SpringBalance.VOLUME_CAP[spring_levels.get("volume", 0)]
+		for source in spring_sources:
+			var current_buffer: int = spring_buffer.get(source, 0)
+			if current_buffer < volume_cap:
+				spring_buffer[source] = current_buffer + 1
+				inventory[source] = int(inventory.get(source, 0)) + 1
 		_refresh()
 
 func _gift_tick(delta: float) -> void:

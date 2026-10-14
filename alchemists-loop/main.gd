@@ -65,7 +65,6 @@ const FAIR_REGEN_CAP := Balance.FAIR_REGEN_CAP
 const FAIR_OFFLINE_GOAL := Balance.FAIR_OFFLINE_GOAL
 const FAIR_OFFLINE_FACTOR := Balance.FAIR_OFFLINE_FACTOR
 const RETURN_GAP := Balance.RETURN_GAP
-const SPRING_OFFLINE_MAX := Balance.SPRING_OFFLINE_MAX
 const SPRING_INTERVAL := Balance.SPRING_INTERVAL
 const BENCH_INTERVAL := Balance.BENCH_INTERVAL
 const BENCH_OFFLINE_FACTOR := Balance.BENCH_OFFLINE_FACTOR
@@ -400,6 +399,7 @@ var _hub: Hub  # попапы: профиль/крафт/настройки/жу
 var _item_colors: Dictionary = {}  # кэш цветов веществ (ядро)
 var _online: Online  # рейтинг + сервер + мир (R8)
 var _brew_bar: PanelContainer
+var _spring_screen: Control
 # резонанс 2.0: отголоски (баланс/вечный счётчик с сервера + вехи в сейве)
 var _resonance: Resonance  # отголоски + родословная (R5)
 # ночная реторта: 3 слота {sub, name, started, dur} + коллекция эссенций {slug: имя}
@@ -1199,6 +1199,9 @@ func _init_new_game() -> bool:
 	_engine.selected.clear()
 	_engine.upgrades.clear()
 	_engine.spring_on = false
+	_engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	_engine.spring_buffer = {}
+	_engine.spring_sources = ["water"]
 	_pages._spring_clock = 0.0
 	_pages._bench_target = ""
 	_pages._bench_on = false

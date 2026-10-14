@@ -145,6 +145,7 @@ static func run(g: Game) -> void:
 	await SuiteCoreBrew.run(g)
 	await SuiteLabModes.run(g)
 	await SuiteRetortReturn.run(g)
+	await SuiteSpringV2.run(g)
 	await SuiteResonanceNet.run(g)
 	await SuiteOnlineUx.run(g)
 	await SuiteBenchGifts.run(g)
