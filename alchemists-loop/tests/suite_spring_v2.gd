@@ -159,8 +159,8 @@ static func run(g: Game) -> void:
 	# T7.2: регрессия — эфир при 8 ч не вырос
 	g._engine.ether = 0
 	g._engine.regen_clock = 0.0
-	var ether_8h := g._saves._offline_gain(8 * 3600.0)
-	var ether_12h := g._saves._offline_gain(12 * 3600.0)
+	var ether_8h: int = g._saves._offline_gain(8 * 3600.0, 1.0, 0, 1000)
+	var ether_12h: int = g._saves._offline_gain(12 * 3600.0, 1.0, 0, 1000)
 	Selftest.check("ether offline 8h vs 12h same", ether_8h == ether_12h)
 	# T7.3: регрессия — этапы верстака при 8 ч не выросли
 	var bench_8h := g._saves._bench_offline_ticks(8 * 3600.0)
@@ -211,7 +211,7 @@ static func run(g: Game) -> void:
 	# T10.3: экран не перекрывает BrewBar (z_index < BrewBar)
 	Selftest.check("spring_screen z_index < brew_bar", g._spring_screen.z_index < g._brew_bar.z_index)
 	# T10.4: экран читает таблицы (число уровней не зашито)
-	var speed_rows := g._spring_screen._count_axis_rows("speed")
+	var speed_rows: int = g._spring_screen._count_axis_rows("speed")
 	Selftest.check("spring_screen reads SPEED table", speed_rows == SpringBalance.SPEED.size())
 	# T10.5: экран закрывается
 	g._spring_screen._close()

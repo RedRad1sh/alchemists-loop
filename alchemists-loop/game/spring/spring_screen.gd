@@ -63,7 +63,7 @@ func _build_axis_row(parent: VBoxContainer, axis: String, label: String) -> void
 	_axis_rows[axis] = row
 
 func _purchase(axis: String) -> void:
-	var result := _game._engine.spring_purchase(axis)
+	var result: Dictionary = _game._engine.spring_purchase(axis)
 	if result["ok"]:
 		_refresh()
 	else:
