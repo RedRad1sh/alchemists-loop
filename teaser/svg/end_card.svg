@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#35c4b5" stop-opacity="{{glow}}"/>
+      <stop offset="0.55" stop-color="#35c4b5" stop-opacity="{{glow2}}"/>
+      <stop offset="1" stop-color="#35c4b5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#bfe8e2"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="#100c18"/>
+  <circle cx="540" cy="640" r="560" fill="url(#halo)"/>
+  <g transform="translate(300,380) scale(3.75)">
+    <rect width="128" height="128" rx="26" fill="#14101c"/>
+    <rect width="128" height="128" rx="26" fill="none" stroke="#35c4b5" stroke-width="3" stroke-opacity="0.7"/>
+    <path d="M30 56 Q30 90 64 94 Q98 90 98 56 L98 52 Q64 62 30 52 Z" fill="#3a2a18"/>
+    <path d="M28 54 Q22 62 30 70" fill="none" stroke="#3a2a18" stroke-width="6" stroke-linecap="round"/>
+    <path d="M100 54 Q106 62 98 70" fill="none" stroke="#3a2a18" stroke-width="6" stroke-linecap="round"/>
+    <ellipse cx="64" cy="52" rx="34" ry="9" fill="#241a10"/>
+    <ellipse cx="64" cy="51" rx="27" ry="6.5" fill="#ffb347"/>
+    <ellipse cx="64" cy="50" rx="16" ry="3.5" fill="#ffd76a" opacity="0.8"/>
+    <circle cx="52" cy="42" r="4" fill="#ffe9b0" opacity="0.9"/>
+    <circle cx="72" cy="36" r="3" fill="#ffe9b0" opacity="0.7"/>
+    <circle cx="63" cy="28" r="2.5" fill="#ffe9b0" opacity="0.5"/>
+  </g>
+  <text x="540" y="1080" font-family="Manrope" font-weight="800" font-size="112" fill="url(#title)" text-anchor="middle">ПЕТЛЯ АЛХИМИКА</text>
+  <text x="540" y="1170" font-family="Manrope" font-weight="600" font-size="46" fill="#9fb4c4" text-anchor="middle">idle-алхимия с сервером первооткрытий</text>
+  <rect x="240" y="1260" width="600" height="112" rx="30" fill="#f5b301"/>
+  <text x="540" y="1335" font-family="Manrope" font-weight="800" font-size="52" fill="#241a00" text-anchor="middle">Android · бесплатно</text>
+  <text x="540" y="1470" font-family="Manrope" font-weight="800" font-size="50" fill="#35c4b5" text-anchor="middle">подпишись — первая варка скоро</text>
+  <text x="540" y="1830" font-family="Manrope" font-weight="500" font-size="34" fill="#5c6b7a" text-anchor="middle">godot 4.7 · opensource · без pay-to-win</text>
+</svg>
