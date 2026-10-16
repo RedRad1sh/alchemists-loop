@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """Per-cut 60s mixes: «Enchanced Alchemy» edit (same as v1) + cut-aware SFX.
 
-Key fix: game SFX tuned into the track key (D-major-pentatonic):
+SFX policy v2 ("light", по фидбеку: «слишком длинные звуки, музыку не слышно»):
+  - arcane.wav и storm.wav НЕ используем вовсе (перегружают);
+  - ни один эффект не длиннее ~1.2с (achievement 1.6с — единственный акцент финала);
+  - тримы берут громкую часть файла (по RMS-профилю), а не тихий хвост;
+  - глобальный SFX-мастер 0.85 — музыка всегда сверху.
+
+Key tuning into the track key (D-major-pentatonic):
   enter.wav   C# -> D    (+70 cents, pitch 1.0495)
   bubbles.wav F  -> F#   (+100 cents, pitch 1.0595)
 """
@@ -34,6 +40,7 @@ D_DROP = 177.82
 B_SRC0 = D_DROP - 8.6
 XF = 1.6
 CUT = 41.4
+SFX_MASTER = 0.85
 
 
 def read_wav(path):
@@ -102,6 +109,17 @@ def put(path, t0, gain_=0.6, trim=(0.0, None), fade_in=0.005, fade_out=0.03,
     sfx[i0:i0 + n, 1] += seg[:, 1] * gr
 
 
+# short loud windows (from RMS profiles):
+SPK = (2.35, 3.45)   # sparkle shimmer peak
+ENT = (2.20, 3.40)   # enter peak
+WMY = (2.40, 3.60)   # whoosh_mystery peak
+GUS = (5.00, 6.20)   # whoosh_gust peak (only for the 49.7 pre-drop breath)
+SWO = (1.10, 2.10)   # swoosh peak
+SUC = (0.00, 1.10)   # success attack
+ACV = (0.00, 1.60)   # achievement: both fanfare hits
+BUB = (0.00, 1.20)   # bubbles attack
+IGN = (1.90, 3.10)   # ignite flare peak
+
 S = lambda *a, **k: put(f"{A}/sparkle.wav", *a, **k)
 W_ = lambda *a, **k: put(f"{A}/whoosh_mystery.wav", *a, **k)
 G = lambda *a, **k: put(f"{A}/whoosh_gust.wav", *a, **k)
@@ -111,15 +129,13 @@ SU = lambda *a, **k: put(f"{A}/success.wav", *a, **k)
 AC = lambda *a, **k: put(f"{A}/achievement.wav", *a, **k)
 UN = lambda *a, **k: put(f"{A}/unlock.wav", *a, **k)
 EN = lambda *a, **k: put(f"{A}/enter.wav", *a, **k)
-AR = lambda *a, **k: put(f"{A}/arcane.wav", *a, **k)
 IG = lambda *a, **k: put(f"{A}/ignite.wav", *a, **k)
-ST = lambda *a, **k: put(f"{A}/storm.wav", *a, **k)
 ENTER_TUNED = dict(pitch=1.0495)   # C# -> D
 BUBBLES_TUNED = dict(pitch=1.0595)  # F -> F#
 
 
 def scene_events(st):
-    """SFX timeline from scene start table."""
+    """SFX timeline from scene start table (light: only short accents)."""
     ev = []
 
     def add(fn, t, **k):
@@ -130,87 +146,82 @@ def scene_events(st):
             continue
         if key in ("hookWorld", "mystery", "hookRace", "hookSvetik", "hookCozy", "hookSvetikBridge"):
             if key == "hookWorld":
-                add(UN, s + 2.2, gain_=0.30)
-                add(UN, s + 3.0, gain_=0.30, pitch=1.12)
-                add(UN, s + 3.8, gain_=0.30, pitch=0.92)
-                add(S, s + 4.35, gain_=0.38, trim=(0.2, 2.4))
+                add(UN, s + 2.2, gain_=0.26)
+                add(UN, s + 3.0, gain_=0.26, pitch=1.12)
+                add(UN, s + 3.8, gain_=0.26, pitch=0.92)
+                add(S, s + 4.35, gain_=0.28, trim=SPK)
             elif key == "mystery":
-                add(S, s + 0.3, gain_=0.36, trim=(0.2, 2.6))
-                add(W_, s + 2.3, gain_=0.34, trim=(0.6, 3.4))
-                add(S, s + 3.5, gain_=0.3, trim=(0.2, 2.0), pitch=1.15)
+                add(S, s + 0.3, gain_=0.26, trim=SPK)
+                add(W_, s + 2.3, gain_=0.26, trim=WMY)
+                add(S, s + 3.5, gain_=0.24, trim=SPK, pitch=1.15)
             elif key == "hookRace":
-                add(W_, s + 0.3, gain_=0.36, trim=(0.6, 3.2))
-                add(UN, s + 1.7, gain_=0.32)
-                add(S, s + 2.6, gain_=0.4, trim=(0.2, 2.4), pitch=1.2)
+                add(W_, s + 0.3, gain_=0.26, trim=WMY)
+                add(UN, s + 1.7, gain_=0.26)
+                add(S, s + 2.6, gain_=0.28, trim=SPK, pitch=1.2)
             elif key == "hookSvetik":
-                add(EN, s + 0.15, gain_=0.5, trim=(0.0, 3.6), **ENTER_TUNED)
-                add(S, s + 0.25, gain_=0.4, trim=(0.2, 2.2))
+                add(EN, s + 0.15, gain_=0.36, trim=ENT, **ENTER_TUNED)
+                add(S, s + 0.25, gain_=0.28, trim=SPK)
             elif key == "hookSvetikBridge":
-                add(EN, s + 0.15, gain_=0.5, trim=(0.0, 3.6), **ENTER_TUNED)
-                add(S, s + 0.25, gain_=0.4, trim=(0.2, 2.2))
-                add(SW, s + 3.5, gain_=0.38)
-                add(SW, s + 4.3, gain_=0.42)
+                add(EN, s + 0.15, gain_=0.36, trim=ENT, **ENTER_TUNED)
+                add(S, s + 0.25, gain_=0.28, trim=SPK)
+                add(SW, s + 3.5, gain_=0.28, trim=SWO)
+                add(SW, s + 4.3, gain_=0.30, trim=SWO, pitch=1.06)
             else:  # hookCozy
-                add(S, s + 0.4, gain_=0.3, trim=(0.2, 2.2))
-                add(BU, s + 0.5, gain_=0.35, trim=(0.0, 1.67), **BUBBLES_TUNED)
+                add(S, s + 0.4, gain_=0.24, trim=SPK)
+                add(BU, s + 0.5, gain_=0.28, trim=BUB, **BUBBLES_TUNED)
         elif key == "base":
-            add(SW, s + 1.5, gain_=0.42)
-            add(SW, s + 1.9, gain_=0.42, pitch=1.06)
-            add(BU, s + 2.15, gain_=0.55, trim=(0.0, 1.67), **BUBBLES_TUNED)
-            add(SU, s + 3.0, gain_=0.5, trim=(0.0, 2.6))
-            add(UN, s + 3.9, gain_=0.3, pitch=0.85)
+            add(SW, s + 1.5, gain_=0.30, trim=SWO)
+            add(SW, s + 1.9, gain_=0.30, trim=SWO, pitch=1.06)
+            add(BU, s + 2.15, gain_=0.40, trim=BUB, **BUBBLES_TUNED)
+            add(SU, s + 3.0, gain_=0.36, trim=SUC)
+            add(UN, s + 3.9, gain_=0.24, pitch=0.85)
         elif key == "world":
-            add(W_, s + 0.2, gain_=0.4, trim=(0.6, 3.2))
-            add(SW, s + 2.0, gain_=0.42)
-            add(SW, s + 2.35, gain_=0.42, pitch=1.06)
-            add(BU, s + 2.6, gain_=0.5, trim=(0.0, 1.67), **BUBBLES_TUNED)
-            add(SU, s + 4.35, gain_=0.55, trim=(0.0, 2.6))
-            add(S, s + 4.5, gain_=0.4, trim=(0.2, 2.4), pitch=1.2)
-            add(IG, s + 3.5, gain_=0.3, trim=(0.0, 1.4))
+            add(W_, s + 0.2, gain_=0.28, trim=WMY)
+            add(SW, s + 2.0, gain_=0.30, trim=SWO)
+            add(SW, s + 2.35, gain_=0.30, trim=SWO, pitch=1.06)
+            add(BU, s + 2.6, gain_=0.38, trim=BUB, **BUBBLES_TUNED)
+            add(IG, s + 3.5, gain_=0.24, trim=IGN)
+            add(SU, s + 4.35, gain_=0.40, trim=SUC)
         elif key == "show":
-            add(EN, s + 0.1, gain_=0.45, trim=(0.0, 3.6), **ENTER_TUNED)
-            add(UN, s + 1.2, gain_=0.3, pitch=1.05)
-            add(UN, s + 3.1, gain_=0.3, pitch=0.95)
-            add(S, s + 5.0, gain_=0.34, trim=(0.2, 2.2), pitch=1.15)
+            add(EN, s + 0.1, gain_=0.34, trim=ENT, **ENTER_TUNED)
+            add(UN, s + 1.2, gain_=0.26, pitch=1.05)
+            add(UN, s + 3.1, gain_=0.26, pitch=0.95)
+            add(S, s + 5.0, gain_=0.26, trim=SPK, pitch=1.15)
         elif key == "work":
-            add(G, s + 0.1, gain_=0.4, trim=(0.0, 3.0))
-            add(UN, s + 0.4, gain_=0.3)
-            add(UN, s + 0.68, gain_=0.3, pitch=1.12)
-            add(UN, s + 0.96, gain_=0.3, pitch=0.92)
-            add(S, s + 3.0, gain_=0.36, trim=(0.2, 2.2))
-            add(S, s + 4.3, gain_=0.36, trim=(0.2, 2.2), pitch=1.1)
-            add(UN, s + 4.7, gain_=0.3, pitch=0.85)
+            add(UN, s + 0.4, gain_=0.24)
+            add(UN, s + 0.68, gain_=0.24, pitch=1.12)
+            add(UN, s + 0.96, gain_=0.24, pitch=0.92)
+            add(S, s + 3.0, gain_=0.26, trim=SPK)
+            add(S, s + 4.3, gain_=0.26, trim=SPK, pitch=1.1)
+            add(UN, s + 4.7, gain_=0.24, pitch=0.85)
         elif key == "spring":
-            add(S, s + 0.5, gain_=0.34, trim=(0.2, 2.0), pitch=1.2)
-            add(BU, s + 1.2, gain_=0.28, trim=(0.0, 1.67), **BUBBLES_TUNED)
-            add(S, s + 1.8, gain_=0.34, trim=(0.2, 2.0))
-            add(S, s + 3.1, gain_=0.34, trim=(0.2, 2.0), pitch=0.9)
+            add(S, s + 0.5, gain_=0.26, trim=SPK, pitch=1.2)
+            add(BU, s + 1.2, gain_=0.22, trim=BUB, **BUBBLES_TUNED)
+            add(S, s + 3.1, gain_=0.26, trim=SPK, pitch=0.9)
         elif key == "sigil":
-            add(W_, s + 1.7, gain_=0.4, trim=(0.6, 3.0))
-            add(SU, s + 2.55, gain_=0.5, trim=(0.0, 2.6))
-            add(S, s + 2.6, gain_=0.42, trim=(0.2, 2.4), pitch=0.9)
+            add(W_, s + 1.7, gain_=0.28, trim=WMY)
+            add(SU, s + 2.55, gain_=0.38, trim=SUC)
+            add(S, s + 2.6, gain_=0.30, trim=SPK, pitch=0.9)
         elif key == "house":
-            add(EN, s + 0.3, gain_=0.45, trim=(0.0, 3.6), **ENTER_TUNED)
-            add(UN, s + 1.7, gain_=0.26, pitch=0.9)
-            add(UN, s + 2.0, gain_=0.26)
-            add(UN, s + 2.3, gain_=0.26, pitch=1.1)
-            add(W_, s + 4.2, gain_=0.3, trim=(1.0, 3.0))
+            add(EN, s + 0.3, gain_=0.34, trim=ENT, **ENTER_TUNED)
+            add(UN, s + 1.7, gain_=0.20, pitch=0.9)
+            add(UN, s + 2.0, gain_=0.20)
+            add(UN, s + 2.3, gain_=0.20, pitch=1.1)
+            add(IG, s + 4.2, gain_=0.26, trim=IGN)
         elif key == "race":
-            add(G, s + 0.1, gain_=0.4, trim=(0.0, 3.0))
-            add(UN, s + 1.3, gain_=0.3)
-            add(UN, s + 1.7, gain_=0.3, pitch=1.12)
-            add(UN, s + 2.1, gain_=0.3, pitch=0.92)
-            add(SW, s + 3.6, gain_=0.4)
-            add(S, s + 4.3, gain_=0.3, trim=(0.2, 2.0))
+            add(UN, s + 1.3, gain_=0.24)
+            add(UN, s + 1.7, gain_=0.24, pitch=1.12)
+            add(UN, s + 2.1, gain_=0.24, pitch=0.92)
+            add(SW, s + 3.6, gain_=0.28, trim=SWO)
+            add(S, s + 4.3, gain_=0.26, trim=SPK)
         elif key == "feed":
-            add(G, s + 0.1, gain_=0.4, trim=(0.0, 3.4))
-            add(UN, s + 1.3, gain_=0.3)
-            add(UN, s + 2.5, gain_=0.3, pitch=1.12)
-            add(UN, s + 3.7, gain_=0.3, pitch=0.92)
-            add(S, s + 4.9, gain_=0.36, trim=(0.2, 2.4), pitch=1.15)
+            add(UN, s + 1.3, gain_=0.24)
+            add(UN, s + 2.5, gain_=0.24, pitch=1.12)
+            add(UN, s + 3.7, gain_=0.24, pitch=0.92)
+            add(S, s + 4.9, gain_=0.26, trim=SPK, pitch=1.15)
         elif key == "offline":
-            add(EN, s + 0.1, gain_=0.45, trim=(0.0, 3.6), **ENTER_TUNED)
-            add(UN, s + 5.5, gain_=0.3, pitch=1.1)
+            add(EN, s + 0.1, gain_=0.36, trim=ENT, **ENTER_TUNED)
+            add(UN, s + 5.5, gain_=0.26, pitch=1.1)
     return ev
 
 
@@ -249,22 +260,20 @@ def build(cut_id):
     gain *= fo
     music *= gain[:, None]
 
-    # ---- finale + per-cut events ----
-    G(49.70, gain_=0.30, trim=(2.0, 4.4))
-    AR(50.02, gain_=0.30, trim=(0.0, 3.2))
-    AC(57.45, gain_=0.72, trim=(0.0, 2.4))
-    BU(58.30, gain_=0.22, trim=(0.0, 1.5), **BUBBLES_TUNED)
-    ST(47.60, gain_=0.16, trim=(2.0, 6.2), fade_in=1.8)
+    # ---- finale + per-cut events (light) ----
+    AC(57.45, gain_=0.50, trim=ACV)
+    BU(58.30, gain_=0.18, trim=BUB, **BUBBLES_TUNED)
     for fn, tt0, k in scene_events(st):
         fn(tt0, **k)
-    # cut-transition soft whooshes at every scene boundary (except 50 and 41.4-adjacent)
+    # cut-transition ticks: short swoosh peak instead of a 1.6s gust tail
     bounds = sorted({s for k, s in st.items() if s not in (0.0, 50.0)})
     for b in bounds:
         if abs(b - 41.4) < 2.0:
             continue
-        G(b - 0.1, gain_=0.24, trim=(0.0, 1.6))
+        SW(b - 0.05, gain_=0.13, trim=SWO)
 
     # ---- master ----
+    sfx[:] *= SFX_MASTER
     mix = music + sfx
     mix = np.tanh(mix * 1.10) / 1.10
     fi2 = int(0.10 * SR)
