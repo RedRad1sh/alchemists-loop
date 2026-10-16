@@ -179,11 +179,11 @@ func _apply_demo_state() -> void:
 	g._engine.ether = 120
 	g._engine.attempts = 6
 	g._engine.successes = 5
-	g._engine.known_recipes[g._pair_key("earth", "water")] = true
-	g._engine.known_recipes[g._pair_key("clay", "fire")] = true
-	g._engine.known_recipes[g._pair_key("air", "stone")] = true
-	g._engine.known_recipes[g._pair_key("fire", "sand")] = true
-	g._engine.known_recipes[g._pair_key("clay", "water")] = true
+	g._engine.learn_recipe("earth", "water")
+	g._engine.learn_recipe("clay", "fire")
+	g._engine.learn_recipe("air", "stone")
+	g._engine.learn_recipe("fire", "sand")
+	g._engine.learn_recipe("clay", "water")
 	g._engine.selected = ["fire", "water"]
 	g._engine.status_text = "Перетащи ингредиенты в лунки или нажми «Варить»."
 

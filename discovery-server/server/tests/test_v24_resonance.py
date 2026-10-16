@@ -284,7 +284,19 @@ class TestEchoesHttp:
         with c:
             r1 = c.post("/api/discover", json={
                 "a": "stone", "b": "plant", "nick": "РезА", "device_id": "res-a"})
-            x_slug = r1.json()["discovery"]["slug"]
+            d1 = r1.json()["discovery"]
+            x_slug = d1["slug"]
+            # Task 5 гейт: res-b обязан ЛЕГИТИМНО владеть генеративным ингредиентом
+            # x_slug, прежде чем варить из него world-first. Санкционированный канал —
+            # sync/package: заявить корроборированный рецепт stone+plant→x_slug
+            # (пара уже материализована res-a) → element-грант x_slug на устройстве.
+            c.post("/api/sync/package", json={
+                "device_id": "res-b", "schema_version": 4, "client_rev": 1,
+                "anchor_accrual_ts": 0.0,
+                "part_b": {"recipes": [
+                    {"pair_key": d1["pair_key"], "a": d1["a"], "b": d1["b"], "out": x_slug},
+                ], "elements": []},
+            })
             r2 = c.post("/api/discover", json={
                 "a": x_slug, "b": "fire", "nick": "РезБ", "device_id": "res-b"})
             assert r2.json()["status"] == "created"
@@ -292,6 +304,18 @@ class TestEchoesHttp:
             assert g["descendants_total"] == 1
             assert g["descendants"][0]["name"] == "ДитяЭха"
             assert g["descendants"][0]["by"] == "РезБ"
+
+    def test_descendants_gate_blocks_unearned_ingredient(self, tmp_path, monkeypatch):
+        """Без element-гранта чужой генеративный вход → гейт до world-first (анти-чит §28)."""
+        c = _client_for(tmp_path, monkeypatch, _FakeSeq(["Резонит", "ДитяЭха"]))
+        with c:
+            r1 = c.post("/api/discover", json={
+                "a": "stone", "b": "plant", "nick": "РезА", "device_id": "res-a"})
+            x_slug = r1.json()["discovery"]["slug"]
+            r2 = c.post("/api/discover", json={
+                "a": x_slug, "b": "fire", "nick": "РезБ", "device_id": "res-b"})
+            assert r2.json().get("detail") == "ingredient_not_granted"
+            assert r2.json()["ok"] is False
 
     def test_unknown_device_is_empty(self, tmp_path, monkeypatch):
         c = _client_for(tmp_path, monkeypatch, _FakeSeq([]))

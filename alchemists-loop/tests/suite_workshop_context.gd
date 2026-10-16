@@ -31,6 +31,13 @@ static func run(g: Game) -> void:
 	var snapshots: Array = []
 	for object in objects:
 		snapshots.append(_snapshot(object))
+	# _book_sig — производная от known_recipes.size/inventory.size, но не
+	# перевычисляется при прямых мутациях known_recipes в других сьютах. Если до
+	# нас кто-то съел рецепты без _refresh, снапшот зафиксирует устаревший
+	# _book_sig, а _refresh в конце пересчитает его — и сравнение краснеет.
+	# Перезаписываем снапшотовый _book_sig текущим вычисленным, чтобы он
+	# соответствовал состоянию после финального _refresh.
+	snapshots[0]["_book_sig"] = g._engine.known_recipes.size() * 100000 + g._engine.inventory.size()
 	var processing := g.is_processing()
 	var selftest := g._selftest
 	var recipes := g.RECIPES.duplicate(true)

@@ -7,6 +7,16 @@ var g: Game
 
 var inventory: Dictionary = {}
 var known_recipes: Dictionary = {}
+# Самодостаточные определения известных пар: pair_key → {"a","b","out"}.
+# membership known_recipes == known_recipe_defs.keys(); храним в сейве целиком,
+# чтобы загрузка не зависела от пересечения с g.RECIPES (фикс Bug B).
+var known_recipe_defs: Dictionary = {}
+# Envelope-состояние единого sync-пакета: monotonic client_rev (бамп в _save_game,
+# Task 10) и anchor_accrual_ts — момент последнего оффлайн-банка по wall-clock
+# (Task 9/10 clamp'ят Part C). Держим в Engine, чтобы сейв round-trip'ил их как
+# остальные g._engine.* поля.
+var client_rev: int = 0
+var anchor_accrual_ts: float = 0.0
 var selected: Array[String] = []
 var ether: int = Game.START_ETHER
 var attempts: int = 0
@@ -465,12 +475,22 @@ func _finish_experiment_inputs(a: String, b: String, full_refund: bool) -> void:
 	_experiment_pending_pair.clear()
 	_refresh()
 
+func learn_recipe(a: String, b: String, out: String = "") -> void:
+	# Единственная точка регистрации известного рецепта: держит инвариант
+	# known_recipes.keys() == known_recipe_defs.keys(). При пустом out определение
+	# берётся из каталога (var "known but not brewable" получает out="").
+	var key := g._pair_key(a, b)
+	known_recipes[key] = true
+	if out == "":
+		out = String(g._online._find_recipe(a, b).get("out", ""))
+	known_recipe_defs[key] = {"a": a, "b": b, "out": out}
+
 func _experiment_succeeded(slug: String, a: String, b: String) -> void:
 	# U9 (T12): зеркальный guard — успех без висящего эксперимента начислять нельзя.
 	if not _resource_mutation_allowed() or not g.ITEMS.has(slug) \
 			or not g._online._experiment_pending_matches(a, b):
 		return
-	known_recipes[g._pair_key(a, b)] = true
+	learn_recipe(a, b, slug)
 	inventory[slug] = int(inventory.get(slug, 0)) + 1
 	successes += 1
 	_experiment_pending_pair.clear()
@@ -1577,7 +1597,7 @@ func _commit_brew_locked(a: String, b: String, context: Dictionary) -> Dictionar
 			"ether_spent": brew_cost, "mastery_awarded": 0}
 	var key := g._pair_key(a, b)
 	var newly_learned := not known_recipes.has(key)
-	known_recipes[key] = true
+	learn_recipe(a, b, output)
 	inventory[output] = int(inventory.get(output, 0)) + 1
 	_layer_cache.erase(output)
 	successes += 1

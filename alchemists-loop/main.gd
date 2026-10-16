@@ -8,7 +8,7 @@ class_name Game
 var SAVE_PATH := "user://alchemy_save.json"
 var TEMP_PATH := "user://alchemy_save.tmp"
 var BACKUP_PATH := "user://alchemy_save.bak"
-const SAVE_VERSION := 3
+const SAVE_VERSION := 4
 
 # ---------- индексы вкладок нижней навигации ----------
 # Дом — не вкладка, а полноэкранный экран (Home._build_house_screen), поэтому
@@ -405,6 +405,7 @@ var _resonance: Resonance  # отголоски + родословная (R5)
 # ночная реторта: 3 слота {sub, name, started, dur} + коллекция эссенций {slug: имя}
 var _retort: Retort  # ночная реторта (R6)
 var _riddles: Riddles  # письма Светика + Атлас (оп B2)
+var _sync: Sync  # единый sync-пакет: reconcile-хост (Task 9/10)
 var _retention: Retention  # дневной круг + недельный слой (R2)
 var _demo_harness: Demo  # флаги --action/--shot/--geom + тик съёмки (R14)
 var _demo_flip_timer: Dictionary = {}  # {card, at} — авто-флип для GIF
@@ -483,6 +484,9 @@ func _ready() -> void:
 	_shop = Shop.new(self)
 	_online = Online.new(self)
 	_spirit = Spirit.new(self)
+	_sync = Sync.new()
+	_sync.name = "Sync"
+	add_child(_sync)
 	if OS.has_feature("editor"):
 		_admin = AdminConsole.new(self)
 	_saves = Saves.new(self)
@@ -626,6 +630,12 @@ func _ready() -> void:
 		# вайп). В селфтесте блок не выполняется: _net_enabled = not _selftest.
 		Net.account_delete_result.connect(_online._on_account_delete_result)
 		_online._retry_pending_account_delete()
+		# Единый синк сейва (sync/package envelope). Хендлер гейтит ok, а
+		# request_sync сам fail-open при недоступности Net. Триггеры: ответ
+		# /discover (грязь → троттл-флэш), boot-пакет и возврат из фона.
+		_sync.g = self
+		Net.sync_package_result.connect(_sync._on_sync_result)
+		App.application_resumed.connect(_sync.request_sync.bind(self))
 	# План 2 (жила/круг): connects вне _net_enabled-блока — хендлеры сами
 	# гейтят offline/ok, а ST эмитит сигналы напрямую (suite_vein_circle).
 	Net.cycle_result.connect(_retention._on_net_cycle_result)
@@ -663,6 +673,8 @@ func _ready() -> void:
 		_retention._circle_track_visit()
 	if not _selftest and _online._net_enabled:
 		Net.me(_online._net_nick, _online._device_id)
+		# boot-пакет: первый sync после загрузки сейва (union-рековери грантов).
+		_sync.request_sync(self)
 	if not _selftest:
 		_spirit._companion_hello.call_deferred()
 	if _demo_harness._shot_tab >= 0:
@@ -841,7 +853,7 @@ func _ready() -> void:
 		_hub._log_event("Перегонка: +2 Золота мудрецов")
 		_hub._open_journal()
 	if _demo_harness._demo and _demo_harness._action_rarity:
-		_engine.known_recipes[_pair_key("glass", "glass")] = true
+		_engine.learn_recipe("glass", "glass", "crystal")
 		_engine._layer_cache.clear()
 		_show_discovery_popup("crystal", "glass", "glass")
 	if _demo_harness._demo and _demo_harness._action_profile:
@@ -1005,6 +1017,7 @@ func _init_new_game() -> bool:
 	_engine.brew_epoch += 1
 	_engine.inventory.clear()
 	_engine.known_recipes.clear()
+	_engine.known_recipe_defs.clear()
 	_engine.selected.clear()
 	_engine.upgrades.clear()
 	_engine.spring_on = false
@@ -1016,8 +1029,8 @@ func _init_new_game() -> bool:
 	_engine._source_taps = 0
 	for item_id in BASE_IDS:
 		_engine.inventory[item_id] = 5
-	_engine.known_recipes[_pair_key("fire", "water")] = true
-	_engine.known_recipes[_pair_key("earth", "fire")] = true
+	_engine.learn_recipe("fire", "water")
+	_engine.learn_recipe("earth", "fire")
 	_engine.ether = START_ETHER
 	_engine.ether_overflow = 0
 	_engine.mastery_rank = 0

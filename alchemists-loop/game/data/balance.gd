@@ -2,6 +2,15 @@ extends RefCounted
 class_name Balance
 # Баланс и тюнинг: цены, возвраты, сроки, награды, вехи (бывшие const из main.gd, оп D).
 
+# Единый протокол синхронизации сейва (sync/package envelope). Значение зеркалит
+# серверный SYNC_SCHEMA_VERSION; MAX_ACCRUAL_RATE_PER_SEC — потолок оффлайн-
+# аккумулятора, которым клиент проверяет собственное declared-окно (advisory).
+const SYNC_SCHEMA_VERSION := 4
+const MAX_ACCRUAL_RATE_PER_SEC := 1000.0
+# Троттл фоновой синхронизации:dirty-знание льётся на сервер не чаще этого шага
+# (сек). Boot/resume/after-discover синкаются явно; таймер — лишь backstop.
+const SYNC_THROTTLE_SEC := 60.0
+
 # Economy v2: эфир is a paced research resource, not an unlimited idle faucet.
 const BREW_COST := 12
 const FAILURE_REFUND := 2

@@ -705,8 +705,9 @@ func _do_prestige() -> void:
 	for b in Game.BASE_IDS:
 		g._engine.inventory[b] = 3
 	g._engine.known_recipes.clear()
-	g._engine.known_recipes[g._pair_key("fire", "water")] = true
-	g._engine.known_recipes[g._pair_key("earth", "fire")] = true
+	g._engine.known_recipe_defs.clear()
+	g._engine.learn_recipe("fire", "water")
+	g._engine.learn_recipe("earth", "fire")
 	g._engine.upgrades.clear()
 	g._engine._craft_job.clear()
 	g._engine._blueprints.clear()
