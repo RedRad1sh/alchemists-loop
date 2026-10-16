@@ -9,7 +9,7 @@ music-dip, плавные фейд-ин/фейд-аут по краям. + ро�
 (Первая версия саундтрека была полностью синтезирована из кода — скрипты
 `gen_music.py`/`build_mix.py` сохранены для откатa.)
 
-**Готовый файл:** `renders/alchemists-loop-teaser.mp4`
+**Готовый файл:** `renders/teaser-enchanced-alchemy.mp4` (имя v2 — музыка «Enchanced Alchemy»)
 **Постер для поста:** `renders/poster_1080.png` (квадрат 1080×1080)
 **Стоп-кадры сцен:** `renders/stills/01…07`
 
@@ -66,7 +66,7 @@ FF=$(python3 -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())")
 $FF -y -framerate 30 -i work/frames/f%05d.png -i audio/mix.wav \
     -c:v libx264 -preset slow -crf 19 -pix_fmt yuv420p \
     -c:a aac -b:a 192k -shortest -movflags +faststart \
-    renders/alchemists-loop-teaser.mp4
+    renders/teaser-enchanced-alchemy.mp4
 ```
 
 ## Decision log (по контракту OpenMontage)
