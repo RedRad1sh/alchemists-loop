@@ -562,14 +562,17 @@ function chip(ctx, text, x, y, o = {}) {
   const tw = ctx.measureText(text).width;
   const padX = o.padX ?? 30, h = o.h ?? 56;
   const w = tw + padX * 2;
+  const a = o.alpha ?? 1;
+  if (a <= 0.01) return w;
   ctx.save();
+  ctx.globalAlpha *= a;
   rrect(ctx, x - w / 2, y - h / 2, w, h, h / 2);
   ctx.fillStyle = o.bg ?? "rgba(53,208,186,0.10)";
   ctx.fill();
   ctx.strokeStyle = o.border ?? "rgba(53,208,186,0.55)";
   ctx.lineWidth = 2; ctx.stroke();
   ctx.restore();
-  T(ctx, text, x, y + 1, { size: o.size ?? 30, alias: o.alias ?? "ManropeB", color: o.color ?? C.teal, alpha: o.alpha ?? 1 });
+  T(ctx, text, x, y + 1, { size: o.size ?? 30, alias: o.alias ?? "ManropeB", color: o.color ?? C.teal, alpha: a });
   return w;
 }
 
@@ -1226,4 +1229,16 @@ async function main() {
   }
   console.log(`done ${start}..${end - 1}`);
 }
-main().catch(e => { console.error(e); process.exit(1); });
+if (require.main === module) {
+  main().catch(e => { console.error(e); process.exit(1); });
+}
+
+/* exports for cut variants (render_v2) */
+module.exports = {
+  C, W, H, FPS, DUR, createCanvas,
+  clamp, lerp, seg, eoc, eic, eio, eoe, eob, osc, rnd,
+  T, TR, rrect, glowDot, chip, svgImg, pngImg, glyphPath, ringWord,
+  initAssets, initStatics, preloadSvg, preloadPng, bgBase, mixHex, vignette, embers, glyphRain,
+  spirit, sparkleBurst, cauldron, orb,
+  statics: () => ({ RING_AMBER, RING_TEAL, STARS, WINDOW, REVEAL, SIGILS, APPICON }),
+};
