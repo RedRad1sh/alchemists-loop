@@ -21,8 +21,8 @@ async function init() {
   Object.assign(S, R.statics());
   // extra icon sizes used by v2 scenes (orb r 44/66/70/72/74 -> w*1.1)
   const jobs = [];
-  for (const ic of ["drop", "fire", "wind", "bolt", "gem", "flask", "trophy", "play"]) {
-    for (const w of [30, 34, 40, 48, 73, 77, 79, 81, 96]) jobs.push(R.preloadSvg(`icons/${ic}.svg`, w));
+  for (const ic of ["drop", "fire", "wind", "bolt", "gem", "flask", "trophy", "play", "star"]) {
+    for (const w of [30, 34, 40, 48, 64, 73, 77, 79, 81, 96]) jobs.push(R.preloadSvg(`icons/${ic}.svg`, w));
   }
   for (const st of ["sleep", "cheer", "wave", "mist", "star", "look", "hi", "think", "celebrate", "gift"]) {
     jobs.push(R.preloadPng(`stickers/${st}.png`));
@@ -971,3 +971,326 @@ function frameFor(cut, ev, idx) {
 }
 
 module.exports = { CUTS, makeEvents, frameFor, init };
+
+/* =====================================================================
+ * v6 additions — hybrid of v2 + v3 with corrected game facts
+ * ===================================================================== */
+
+/* Хук: Светик + мост «мир варит без тебя» (6.5s) */
+function hookSvetikBridge(ctx, t) {
+  bg(ctx, t, 0.2);
+  embers(ctx, t, { n: 18 });
+  ctx.save(); ctx.globalAlpha = 0.14;
+  ctx.translate(W / 2, 700); ctx.rotate(-t * 0.06);
+  ctx.drawImage(S.RING_TEAL, -520, -520, 1040, 1040); ctx.restore();
+  const pop = eob(seg(t, 0.15, 0.8));
+  if (pop > 0) spirit(ctx, "hi", W / 2, 660, 400 * clamp(pop, 0.001, 1.06), t, { bob: 12 });
+  sparkleBurst(ctx, t, 0.25, W / 2, 660, { n: 18, dur: 1.0 });
+  const a1 = seg(t, 0.85, 1.4), a2 = seg(t, 1.6, 2.15), fade1 = 1 - seg(t, 3.1, 3.6);
+  if (a1 > 0) {
+    T(ctx, "Варю тут.", W / 2, 1010, { size: 72, alias: "ManropeXB", color: "#fff", alpha: eoc(a1) * fade1, glow: "rgba(255,255,255,0.3)" });
+  }
+  if (a2 > 0) {
+    T(ctx, "Один. Скучно.", W / 2, 1110, { size: 56, alias: "ManropeSB", color: C.amber, alpha: eoc(a2) * fade1 });
+  }
+  // мост
+  const b1 = eoc(seg(t, 3.5, 4.05));
+  if (b1 > 0) {
+    spirit(ctx, "look", W / 2, 660, 400, t, { bob: 12 });
+    T(ctx, "Зато МИР — не скучает", W / 2, 1050, { size: 60, alias: "ManropeXB", color: C.teal, alpha: b1, glow: "rgba(53,208,186,0.6)" });
+  }
+  feedRow(ctx, W / 2, 1250, "@мира", "РТУТЬ", "255,179,71", "впервые в мире",
+    eoc(seg(t, 4.3, 4.85)) * (1 - seg(t, 6.0, 6.45)), eoc(seg(t, 4.3, 4.85)));
+  vignette(ctx, 0.4);
+}
+
+/* 500+ веществ и растёт (6s) */
+function worldCount(ctx, t) {
+  bg(ctx, t, 0.35);
+  glyphRain(ctx, t, 0.4);
+  embers(ctx, t, { n: 12, heat: 0.8 });
+  const tl = t;
+  const a1 = seg(tl, 0.25, 0.9);
+  if (a1 > 0) {
+    const pulse = 1 + 0.03 * Math.sin(t * 3);
+    ctx.save();
+    ctx.translate(W / 2, 720);
+    ctx.scale(pulse, pulse);
+    T(ctx, "500+", 0, 0, { size: 210, alias: "ManropeXB", color: C.amber, alpha: eoc(a1), glow: "rgba(255,170,60,0.8)", glowBlur: 46 });
+    ctx.restore();
+    T(ctx, "веществ уже создал мир", W / 2, 880, { size: 46, alias: "ManropeSB", color: C.dim, alpha: eoc(a1) });
+  }
+  feedRow(ctx, W / 2, 1080, "@kcir", "ЗВЁЗДНАЯ ПЫЛЬ", "176,108,255", "слой 6",
+    eoc(seg(tl, 1.8, 2.35)), eoc(seg(tl, 1.8, 2.35)));
+  feedRow(ctx, W / 2, 1220, "@лиса", "ЛУННЫЙ УКСУС", "53,208,186", "эпическое",
+    eoc(seg(tl, 2.6, 3.15)), eoc(seg(tl, 2.6, 3.15)));
+  const a2 = eoc(seg(tl, 3.7, 4.25));
+  if (a2 > 0) T(ctx, "следующее вещество ещё не существует", W / 2, 1400, { size: 46, alias: "ManropeSB", color: "#fff", alpha: a2 * (1 - seg(tl, 5.1, 5.5)) });
+  const a3 = eoc(seg(tl, 4.6, 5.15));
+  if (a3 > 0) T(ctx, "имя ему придумает ИИ", W / 2, 1500, { size: 56, alias: "ManropeXB", color: C.amber, alpha: a3, glow: "rgba(255,170,60,0.75)" });
+  vignette(ctx, 0.5);
+}
+
+/* Офлайн v2: эфир + вещества + мастерство, и всё прокачивается (6.5s) */
+function offline2(ctx, t) {
+  bg(ctx, t, 1);
+  embers(ctx, t, { n: 10, heat: 0.6 });
+  const tl = t;
+  ctx.save(); ctx.globalAlpha = 0.95; ctx.translate(830, 250); ctx.drawImage(S.WINDOW, -190, -235); ctx.restore();
+  ctx.fillStyle = "rgba(10,9,18,0.9)"; ctx.fillRect(0, 1430, W, H - 1430);
+  cauldron(ctx, t, W / 2 - 20, 1400, 330, { dark: true, boil: 0.25 });
+  ctx.save(); ctx.globalAlpha = 0.06; ctx.fillStyle = "#b8ccff";
+  ctx.beginPath(); ctx.moveTo(900, 380); ctx.lineTo(1010, 380); ctx.lineTo(620, 1430); ctx.lineTo(330, 1430);
+  ctx.closePath(); ctx.fill(); ctx.restore();
+  const h1 = eoc(seg(tl, 0.15, 0.7));
+  if (h1 > 0) {
+    T(ctx, "Закроешь игру — петля", W / 2, 420, { size: 56, alias: "ManropeSB", color: "#fff", alpha: h1 });
+    T(ctx, "НЕ остановится", W / 2, 504, { size: 64, alias: "ManropeXB", color: C.amber, alpha: h1, glow: "rgba(255,170,60,0.7)" });
+  }
+  // три счётчика: эфир / вещества / мастерство
+  const rows = [
+    { t0: 0.9, t1: 3.0, val: 342, label: "эфира", icon: "bolt.svg", col: C.gold, y: 720 },
+    { t0: 2.6, t1: 4.2, val: 12, label: "веществ варит мастерская", icon: "flask.svg", col: C.teal, y: 950 },
+    { t0: 3.7, t1: 5.0, val: 3, label: "мастерства", icon: "star.svg", col: C.violet, y: 1150 },
+  ];
+  rows.forEach((r) => {
+    const p = seg(tl, r.t0, r.t1);
+    if (p <= 0) return;
+    const out = 1 - seg(tl, 5.6, 6.1);
+    const val = Math.round(r.val * eoe(p));
+    const e = eob(seg(tl, r.t0, r.t0 + 0.4));
+    ctx.save();
+    ctx.globalAlpha = out;
+    ctx.translate(W / 2, r.y);
+    ctx.scale(clamp(e, 0.001, 1), clamp(e, 0.001, 1));
+    const ic = svgImg("icons/" + r.icon, 64);
+    ctx.drawImage(ic, -32, -160, 64, 64);
+    T(ctx, "+" + val, 0, 0, { size: 108, alias: "ManropeXB", color: r.col, glow: null });
+    T(ctx, r.label, 0, 84, { size: 36, alias: "ManropeSB", color: C.dim });
+    ctx.restore();
+  });
+  // прокачка
+  const u1 = eoc(seg(tl, 5.0, 5.5));
+  if (u1 > 0) {
+    T(ctx, "и всё это прокачивается", W / 2, 1330, { size: 46, alias: "ManropeXB", color: "#fff", alpha: u1 * (1 - seg(tl, 6.0, 6.4)), glow: "rgba(255,255,255,0.3)" });
+  }
+  vignette(ctx, 0.5);
+}
+
+/* Ритуал артефакта (6.5s) */
+function artifactRitual(ctx, t) {
+  bg(ctx, t, 0.25);
+  embers(ctx, t, { n: 16 });
+  const tl = t;
+  const cx = W / 2, cy = 930;
+  ctx.save(); ctx.globalAlpha = 0.14;
+  ctx.translate(cx, cy); ctx.rotate(t * 0.07);
+  ctx.drawImage(S.RING_AMBER, -540, -540, 1080, 1080); ctx.restore();
+  const h1 = eoc(seg(tl, 0.15, 0.65));
+  if (h1 > 0) T(ctx, "ТРАНСМУТАЦИОННЫЙ РИТУАЛ", cx, 320, { size: 50, alias: "ManropeXB", color: C.violet, alpha: h1, spacing: 2, glow: "rgba(176,108,255,0.6)" });
+  const h2 = eoc(seg(tl, 0.55, 1.05));
+  if (h2 > 0) T(ctx, "рецепт превращается в артефакт твоей лаборатории", cx, 402, { size: 36, alias: "ManropeM", color: C.dim, alpha: h2 });
+
+  const flip = seg(tl, 1.6, 2.4);
+  const backP = seg(tl, 0.4, 1.4);
+  const endOut = 1 - seg(tl, 5.9, 6.4);
+  const y = cy + Math.sin(t * 1.2) * 8;
+  if (endOut > 0) {
+    ctx.save();
+    ctx.globalAlpha = endOut;
+    ctx.translate(cx, y);
+    if (flip < 0.5) {
+      const sx = Math.max(0.02, Math.cos(flip * Math.PI));
+      ctx.scale(sx * lerp(0.92, 1, eob(backP)), 1);
+      ctx.fillStyle = "rgba(15,17,30,0.98)";
+      rrect(ctx, -180, -235, 360, 470, 28); ctx.fill();
+      ctx.strokeStyle = "rgba(150,110,220,0.8)"; ctx.lineWidth = 3;
+      rrect(ctx, -180, -235, 360, 470, 28); ctx.stroke();
+      ctx.save();
+      ctx.globalAlpha = 0.55 * endOut;
+      ctx.rotate(t * 0.1);
+      ctx.drawImage(S.RING_AMBER, -150, -150, 300, 300);
+      ctx.restore();
+      T(ctx, "?", 0, 10, { size: 130, alias: "ManropeXB", color: C.dim, alpha: 1 - flip * 1.2 });
+    } else {
+      const sx = Math.max(0.02, -Math.cos(flip * Math.PI));
+      const e = eob(seg(tl, 2.4, 3.0));
+      ctx.scale(sx * lerp(1, 1.07, e), 1);
+      const card = S.SIGILS[2];
+      ctx.drawImage(card, -card.width / 2, -card.height / 2);
+      rrect(ctx, -card.width / 2, -card.height / 2, card.width, card.height, 30); ctx.clip();
+      const fx = ((t * 0.5) % 1.4) * (card.width + 300) - card.width / 2 - 150;
+      const fg = ctx.createLinearGradient(fx - 80, -card.height / 2, fx + 80, card.height / 2);
+      fg.addColorStop(0, "rgba(255,255,255,0)");
+      fg.addColorStop(0.5, "rgba(216,180,255,0.38)");
+      fg.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = fg; ctx.fillRect(-card.width / 2, -card.height / 2, card.width, card.height);
+    }
+    ctx.restore();
+  }
+  sparkleBurst(ctx, tl, 2.42, cx, cy, { n: 18, dur: 1.0, dist: 260, ring: 260 });
+  // прокачка лаборатории
+  const c1 = eob(seg(tl, 3.0, 3.5)), cOut = 1 - seg(tl, 5.9, 6.35);
+  if (c1 > 0 && cOut > 0) {
+    ctx.save();
+    ctx.globalAlpha = cOut;
+    chip(ctx, "+40 к капу эфира за комплект", cx, 1330, { size: 34, color: C.gold, bg: "rgba(255,179,71,0.12)", border: "rgba(255,179,71,0.6)", alpha: clamp(c1, 0, 1) });
+    const c2 = eob(seg(tl, 3.6, 4.1));
+    if (c2 > 0) chip(ctx, "артефакты уникальны для тебя", cx, 1450, { size: 32, color: "#e6d6ff", bg: "rgba(176,108,255,0.12)", border: "rgba(176,108,255,0.6)", alpha: clamp(c2, 0, 1) });
+    ctx.restore();
+  }
+  vignette(ctx, 0.42);
+}
+
+/* Дом: игрок обставляет комнату (6.5s) */
+function houseDecor(ctx, t) {
+  bg(ctx, t, 0.45);
+  const tl = t;
+  // стены и пол
+  ctx.fillStyle = "#171326";
+  ctx.fillRect(0, 320, W, 1110);
+  ctx.fillStyle = "#241d33";
+  ctx.fillRect(0, 1430, W, 490);
+  const h1 = eoc(seg(tl, 0.15, 0.65));
+  if (h1 > 0) {
+    T(ctx, "ДОМ СВЕТИКА", W / 2, 250, { size: 56, alias: "ManropeXB", color: C.amber, alpha: h1, glow: "rgba(255,170,60,0.6)" });
+    T(ctx, "построй и обставь — вещь за вещью", W / 2, 328, { size: 34, alias: "ManropeM", color: C.dim, alpha: eoc(seg(tl, 0.5, 1.0)) });
+  }
+  //-flyIn helper: p=0..1
+  const fly = (p) => { const e = eob(clamp(p, 0, 1)); const y = (1 - e) * -260; const s = clamp(e, 0.001, 1); return { y, s }; };
+  const price = (x, y2, txt, p) => {
+    if (p <= 0 || p >= 1) return;
+    chip(ctx, txt, x, y2, { size: 24, color: C.gold, bg: "rgba(255,179,71,0.10)", border: "rgba(255,179,71,0.5)", alpha: clamp(p, 0, 1) * (1 - seg(tl, p * 0.999 + 0.6, p * 0.999 + 0.95)) });
+  };
+  // окно (влетает слева) 0.8
+  {
+    const p = seg(tl, 0.8, 1.3);
+    if (p > 0) {
+      const e = eoc(p);
+      ctx.save(); ctx.globalAlpha = e;
+      ctx.translate(lerp(-400, 185, e), 640); ctx.scale(0.72, 0.72);
+      ctx.drawImage(S.WINDOW, -190, -235); ctx.restore();
+      price(185, 850, "120 ⚡", p);
+    }
+  }
+  // ковёр (падает) 1.5
+  {
+    const p = seg(tl, 1.5, 2.0);
+    if (p > 0) {
+      const f = fly(p);
+      ctx.save(); ctx.globalAlpha = clamp(p * 2, 0, 1);
+      ctx.translate(W / 2, 1560 + f.y * 0.4); ctx.scale(f.s, f.s * 0.9);
+      ctx.fillStyle = "rgba(176,108,255,0.28)";
+      ctx.beginPath(); ctx.ellipse(0, 0, 300, 58, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = "rgba(255,179,71,0.45)"; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.ellipse(0, 0, 225, 40, 0, 0, 7); ctx.stroke();
+      ctx.restore();
+      price(W / 2, 1650, "80 ⚡", p);
+    }
+  }
+  // стол 2.2
+  {
+    const p = seg(tl, 2.2, 2.7);
+    if (p > 0) {
+      const f = fly(p);
+      ctx.save(); ctx.globalAlpha = clamp(p * 2, 0, 1);
+      ctx.translate(660, 1285 + f.y); ctx.scale(f.s, f.s);
+      ctx.fillStyle = "#3a3050";
+      rrect(ctx, -100, -8, 200, 16, 8); ctx.fill();
+      rrect(ctx, -80, 8, 14, 110, 6); ctx.fill();
+      rrect(ctx, 66, 8, 14, 110, 6); ctx.fill();
+      ctx.restore();
+      price(660, 1150, "60 ⚡", p);
+    }
+  }
+  // кровать 2.9
+  {
+    const p = seg(tl, 2.9, 3.4);
+    if (p > 0) {
+      const f = fly(p);
+      ctx.save(); ctx.globalAlpha = clamp(p * 2, 0, 1);
+      ctx.translate(200, 1300 + f.y); ctx.scale(f.s, f.s);
+      ctx.fillStyle = "#3a3050";
+      rrect(ctx, -130, -30, 260, 70, 16); ctx.fill();
+      ctx.fillStyle = "#4a3d66";
+      rrect(ctx, -130, -52, 70, 46, 12); ctx.fill();
+      ctx.fillStyle = "rgba(176,108,255,0.5)";
+      rrect(ctx, -118, -24, 236, 34, 10); ctx.fill();
+      ctx.restore();
+      price(200, 1190, "150 ⚡", p);
+    }
+  }
+  // камин 3.6 + огонь
+  {
+    const p = seg(tl, 3.6, 4.1);
+    if (p > 0) {
+      const f = fly(p);
+      ctx.save(); ctx.globalAlpha = clamp(p * 2, 0, 1);
+      ctx.translate(830, 1200 + f.y); ctx.scale(f.s, f.s);
+      ctx.fillStyle = "#2c2340";
+      ctx.beginPath();
+      ctx.moveTo(-170, 240); ctx.lineTo(-150, -90);
+      ctx.lineTo(150, -90); ctx.lineTo(170, 240);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#120e1e";
+      ctx.beginPath();
+      ctx.moveTo(-90, 240); ctx.lineTo(-78, 50);
+      ctx.quadraticCurveTo(0, 10, 78, 50);
+      ctx.lineTo(90, 240);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+      // огонь появляется после
+      const fp = seg(tl, 4.15, 4.55);
+      if (fp > 0) {
+        const fl = clamp(fp, 0, 1) * (0.75 + 0.25 * osc(t, 2.2));
+        const fy = 1395, fx2 = 830;
+        glowDot(ctx, fx2, fy - 40, 120, "255,150,50", 0.5 * fl);
+        ctx.fillStyle = "#ffb347";
+        ctx.beginPath();
+        ctx.moveTo(fx2 - 26, fy);
+        ctx.quadraticCurveTo(fx2 - 42, fy - 70 * fl, fx2, fy - 115 * fl);
+        ctx.quadraticCurveTo(fx2 + 42, fy - 70 * fl, fx2 + 26, fy);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#ffe9a8";
+        ctx.beginPath();
+        ctx.moveTo(fx2 - 12, fy - 2);
+        ctx.quadraticCurveTo(fx2 - 18, fy - 50 * fl, fx2, fy - 78 * fl);
+        ctx.quadraticCurveTo(fx2 + 18, fy - 50 * fl, fx2 + 12, fy - 2);
+        ctx.closePath(); ctx.fill();
+      }
+      price(830, 940, "200 ⚡", p);
+    }
+  }
+  // Светик появляется 4.5
+  {
+    const p = eob(seg(tl, 4.5, 5.1));
+    if (p > 0) {
+      spirit(ctx, "celebrate", 500, 1050, 230 * clamp(p, 0.001, 1.05), t, { bob: 12 });
+      sparkleBurst(ctx, tl, 4.6, 500, 1050, { n: 12, dur: 0.8, dist: 140, ring: 150 });
+    }
+  }
+  const a2 = eoc(seg(tl, 5.3, 5.85));
+  if (a2 > 0) T(ctx, "каждая вещь — своя. каждый дом — твой.", W / 2, 1720, { size: 40, alias: "ManropeXB", color: "#fff", alpha: a2 * (1 - seg(tl, 6.0, 6.4)) });
+  vignette(ctx, 0.45);
+}
+
+/* v6 — финальный гибрид: Светик-хук + 500+ + эксперимент мира */
+CUTS.v6 = {
+  name: "Гибрид",
+  out: "teaser-v6-hybrid.mp4",
+  accent: C.amber,
+  scenes: [
+    [0.0, 6.5, (c, t) => hookSvetikBridge(c, t)],
+    [6.5, 12.5, (c, t) => worldCount(c, t - 6.5)],
+    [12.5, 19.5, (c, t) => worldExperiment(c, t - 12.5)],
+    [19.5, 24.5, (c, t) => baseJoke(c, t - 19.5)],
+    [24.5, 30.5, (c, t) => svetikShow(c, t - 24.5)],
+    [30.5, 37.0, (c, t) => offline2(c, t - 30.5)],
+    [37.0, 43.5, (c, t) => artifactRitual(c, t - 37.0)],
+    [43.5, 50.0, (c, t) => houseDecor(c, t - 43.5)],
+    [50.0, 60.01, (c, t) => finale(c, t - 50.0, { cta: "Назови следующее вещество", tagline: "мир уже варит — не опоздай" })],
+  ],
+  flashes: [[15.9, "200,160,255", 0.55], [21.3, "255,190,120", 0.45], [32.5, "255,200,120", 0.3], [39.2, "216,180,255", 0.45], [47.3, "255,190,120", 0.3], [50.0, "255,235,200", 0.75], [57.6, "255,220,160", 0.3]],
+  shakes: [[14.5, 6], [50.0, 15], [57.6, 6]],
+  zooms: [[50.0, 0.05], [15.95, 0.035], [39.25, 0.03]],
+};

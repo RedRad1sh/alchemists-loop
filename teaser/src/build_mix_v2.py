@@ -26,6 +26,8 @@ CUT_STARTS = {
             "work": 29.7, "sigil": 35.9, "show": 41.9, "finale": 50.0},
     "v5": {"hookRace": 0.0, "feed": 4.5, "base": 11.0, "world": 16.6, "race": 24.6,
             "work": 30.3, "sigil": 36.5, "show": 42.5, "spring": 47.6, "finale": 50.0},
+    "v6": {"hookSvetikBridge": 0.0, "world": 6.5, "base": 19.5, "show": 24.5, "offline": 30.5,
+            "sigil": 37.0, "house": 43.5, "finale": 50.0},
 }
 # musical boundaries (mask crossfades of the music edit at 41.4 — cut boundaries near it vary)
 D_DROP = 177.82
@@ -126,7 +128,7 @@ def scene_events(st):
     for key, s in st.items():
         if key == "finale":
             continue
-        if key in ("hookWorld", "mystery", "hookRace", "hookSvetik", "hookCozy"):
+        if key in ("hookWorld", "mystery", "hookRace", "hookSvetik", "hookCozy", "hookSvetikBridge"):
             if key == "hookWorld":
                 add(UN, s + 2.2, gain_=0.30)
                 add(UN, s + 3.0, gain_=0.30, pitch=1.12)
@@ -143,6 +145,11 @@ def scene_events(st):
             elif key == "hookSvetik":
                 add(EN, s + 0.15, gain_=0.5, trim=(0.0, 3.6), **ENTER_TUNED)
                 add(S, s + 0.25, gain_=0.4, trim=(0.2, 2.2))
+            elif key == "hookSvetikBridge":
+                add(EN, s + 0.15, gain_=0.5, trim=(0.0, 3.6), **ENTER_TUNED)
+                add(S, s + 0.25, gain_=0.4, trim=(0.2, 2.2))
+                add(SW, s + 3.5, gain_=0.38)
+                add(SW, s + 4.3, gain_=0.42)
             else:  # hookCozy
                 add(S, s + 0.4, gain_=0.3, trim=(0.2, 2.2))
                 add(BU, s + 0.5, gain_=0.35, trim=(0.0, 1.67), **BUBBLES_TUNED)
@@ -274,5 +281,5 @@ def build(cut_id):
     print(out, "peak", float(peak))
 
 
-for v in ["v1", "v2", "v3", "v4", "v5"]:
+for v in ["v1", "v2", "v3", "v4", "v5", "v6"]:
     build(v)
