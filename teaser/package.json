@@ -1,0 +1,11 @@
+{
+  "name": "alchemists-loop-teaser",
+  "version": "1.0.0",
+  "private": true,
+  "description": "60s vertical teaser for Alchemist's Loop",
+  "type": "commonjs",
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.65",
+    "@resvg/resvg-js": "^2.6.2"
+  }
+}

@@ -1,0 +1,87 @@
+# Alchemist's Loop — тизер 60с для Shorts/Reels/TikTok
+
+Вертикальный анимационный тизер игры: **1080×1920, 30 fps, 60.00 с, звук**
+(музыка целиком синтезирована из кода + родные SFX игры).
+
+**Готовый файл:** `renders/alchemists-loop-teaser.mp4`
+**Постер для поста:** `renders/poster_1080.png` (квадрат 1080×1080)
+**Стоп-кадры сцен:** `renders/stills/01…07`
+
+Произведено по дисциплине [OpenMontage](https://github.com/calesthio/OpenMontage):
+pipeline `animation` → research → script/storyboard → asset pass → atelier-композиция
+→ render → compose. Рантайм рендера — **ffmpeg** (третий легальный рантайм
+OpenMontage наряду с Remotion/HyperFrames): в песочнице нет Chrome для Remotion,
+поэтому композиция написана как детерминированный покадровый рендерер
+(`src/render.js`, canvas 2D), а сборка — ffmpeg.
+
+---
+
+## Раскадровка (7 сцен, 6 глухих монтажных склеек)
+
+| # | Время | Бит | Приём |
+|---|---|---|---|
+| 1 | 0:00–0:05 | Хук: искра зажигается в рунном кольце → «Рецепты придумает ИСКУССТВЕННЫЙ ИНТЕЛЛЕКТ» | медленный zoom-in, кольцо из `tools/alchemist-glyphs.svg` |
+| 2 | 0:05–0:13 | Эксперимент: ВОДА + ОГОНЬ = ? → орбы летят в котёл → карточка «ПАР» (+6 ⚡, лор-строка) | ударная тряска, сплэш-ринги, Светик подглядывает из-за карточки |
+| 3 | 0:13–0:22 | Мир: лента чужих открытий («@мира — РТУТЬ · впервые в мире») → «57 веществ… 58-е может открыть ТЫ» | рунный дождь, выезжающие строки, счётчик |
+| 4 | 0:22–0:32 | Компаньон: «ЗНАКОМЬСЯ: СВЕТИК» + 3 чат-пузыря (подсказка/сплетни/дружба) | поп-ин стикера, кольцо рун, вспышки |
+| 5 | 0:32–0:41 | Офлайн-петля: ночь, окно с луной, «+342 эфира накопил котёл» | silhouettes, луч луны, milestone-ринги |
+| 6 | 0:41–0:50 | Глубина: свип карточек редкости ОБЫЧНОЕ→ЛЕГЕНДАРНОЕ (фольга + искры — по `docs/sigil-animation-spec.md`) | летящая фольга на легендарке, чипы прогрессии |
+| 7 | 0:50–1:00 | Финал: импакт, иконка игры, «ПЕТЛЯ АЛХИМИКА», Светик, CTA «Бесплатно · Android» | shock-ring, рунная строка Alchemist-Runic, фанфары |
+
+Саунд-драматургия (BPM 100, ре-минор): тёмный дрон → хартбит → грув → офлайн-колокольчика →
+райзер → полутактовый финал с фанфарами `achivement.wav`. Все SFX — из `assets/audio/` игры.
+
+## Что использовано из игры
+
+- **Стикеры Светика** `assets/spirits/stickers_512/` (hi/celebrate/think/look/star/idle)
+- **Иконки стихий/UI** `assets/ui/icons/*.svg` (Kenney, CC0, перекрашенные)
+- **Шрифты** Manrope (UI-шрифт редизайна) + Alchemist-Runic
+- **Рунное кольцо и глифы** — пути из `tools/alchemist-glyphs.svg` (алхимический шрифт проекта)
+- **SFX** `assets/audio/ritual|craft|achivement` (Mixkit)
+- Палитра UI — из игры (`#0d0b14/#141126/#35d0ba/#ffb347`)
+- Спецификация анимации редкости — `docs/sigil-animation-spec.md` (фольга/искры только на легендарке)
+
+Ничего внешнего не докачивалось: всё, что в кадре и в звуке, — ассеты репозитория
+или процедурный синтез.
+
+## Как пересобрать
+
+```bash
+cd teaser
+npm install                # @napi-rs/canvas + @resvg/resvg-js
+python3 src/gen_music.py   # 60с саундтрек -> audio/music.wav
+python3 src/build_mix.py   # музыка + SFX игры -> audio/mix.wav
+
+node src/render.js --still 10.5 probe.png        # пробный кадр
+node src/render.js 0 1800 work/frames            # все 1800 кадров (~2.5 мин в 6 потоков)
+
+FF=$(python3 -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())")
+$FF -y -framerate 30 -i work/frames/f%05d.png -i audio/mix.wav \
+    -c:v libx264 -preset slow -crf 19 -pix_fmt yuv420p \
+    -c:a aac -b:a 192k -shortest -movflags +faststart \
+    renders/alchemists-loop-teaser.mp4
+```
+
+## Decision log (по контракту OpenMontage)
+
+| Категория | Решение | Почему |
+|---|---|---|
+| `pipeline` | `animation` | моушн-графика/кинетическая типографика, не cinematic |
+| `render_runtime` | **ffmpeg** | Remotion требует Chrome headless (недоступен в песочнице — хост заблокирован); HyperFrames требует свой CLI. Рендер-модуль OpenMontage объявляет ffmpeg валидным рантаймом |
+| `composition_mode` | **atelier** | hero-работа: bespoke-сцены под арты игры, без stock-каталога |
+| `narration` | **без закадрового голоса** (по решению пользователя) | историю ведут типографика, Светик и саунд-дизайн |
+| `music` | процедурный синтез (numpy) | в репо нет полной музыки; 0 внешних ключей/закачек |
+| `sfx` | родные звуки игры | аутентичность: игрок узнаёт звуки варок и фанфар |
+| `language` | русский | аудит игры RU; вся типографика в Manrope |
+
+## Структура
+
+```
+teaser/
+  src/gen_music.py   # синтез 60с саундтрека (ре-минор, BPM 100)
+  src/build_mix.py   # микс: музыка + таймлайн SFX игры
+  src/render.js      # atelier-композиция: 7 сцен, 1080x1920@30, детерминированная
+  assets/            # копии ассетов игры (шрифты/стикеры/иконки/sfx/glyphs)
+  audio/             # music.wav, mix.wav
+  renders/           # ГОТОВЫЙ mp4 + постер + стоп-кадры
+```

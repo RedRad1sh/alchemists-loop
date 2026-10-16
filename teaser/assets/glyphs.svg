@@ -1,0 +1,207 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- ============================================================ -->
+  <!-- ALCHEMIST FONT — cosmic-runic-surreal-alchemy                -->
+  <!-- Supports: Latin A-Z, Cyrillic А-Я, а-я                       -->
+  <!-- All glyph IDs: glyph-X (latin) / glyph-cyr-{letter} (cyr)    -->
+  <!-- ============================================================ -->
+
+  <!-- ===== LATIN A-Z ===== -->
+  <symbol id="glyph-A" viewBox="0 0 100 100"><path d="M50 10 L30 50 L70 50 Z M20 55 L80 55 L75 90 L25 90 Z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="65" r="5" fill="currentColor"/></symbol>
+  <symbol id="glyph-B" viewBox="0 0 100 100"><path d="M30 20 Q30 10 50 10 Q70 10 70 30 Q70 50 50 50 Q70 50 70 70 Q70 90 50 90 Q30 90 30 80" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-C" viewBox="0 0 100 100"><path d="M80 25 Q60 10 40 20 Q20 35 25 60 Q30 85 55 85 Q70 85 80 75" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-D" viewBox="0 0 100 100"><path d="M25 15 L25 85 L55 85 Q80 85 80 50 Q80 15 55 15 Z" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-E" viewBox="0 0 100 100"><path d="M75 15 L25 15 L25 50 L65 50 M25 50 L25 85 L75 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-F" viewBox="0 0 100 100"><path d="M75 15 L25 15 L25 50 L65 50 M25 50 L25 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-G" viewBox="0 0 100 100"><path d="M80 25 Q60 10 40 20 Q20 35 25 60 Q30 90 60 85 L60 55 L40 55" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-H" viewBox="0 0 100 100"><path d="M25 15 L25 85 M75 15 L75 85 M25 50 L75 50" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-I" viewBox="0 0 100 100"><path d="M50 15 L50 85 M35 15 L65 15 M35 85 L65 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-J" viewBox="0 0 100 100"><path d="M65 15 L65 70 Q65 90 45 85 Q30 80 25 65" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-K" viewBox="0 0 100 100"><path d="M25 15 L25 85 M25 50 L70 15 M40 55 L75 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-L" viewBox="0 0 100 100"><path d="M25 15 L25 85 L75 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-M" viewBox="0 0 100 100"><path d="M20 85 L20 15 L50 50 L80 15 L80 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-N" viewBox="0 0 100 100"><path d="M25 85 L25 15 L75 85 L75 15" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-O" viewBox="0 0 100 100"><circle cx="50" cy="50" r="35" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="50" r="20" fill="none" stroke="currentColor" stroke-width="1"/></symbol>
+  <symbol id="glyph-P" viewBox="0 0 100 100"><path d="M25 15 L25 85 M25 15 L60 15 Q75 15 75 30 Q75 50 60 50 L25 50" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-Q" viewBox="0 0 100 100"><circle cx="50" cy="50" r="35" fill="none" stroke="currentColor" stroke-width="2"/><path d="M65 65 L100 95" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-R" viewBox="0 0 100 100"><path d="M25 85 L25 15 L60 15 Q75 15 75 32 Q75 50 60 50 L25 50 M50 50 L80 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-S" viewBox="0 0 100 100"><path d="M75 25 Q60 10 40 15 Q20 22 25 40 Q30 50 50 50 Q70 50 75 65 Q80 85 55 85 Q35 85 25 75" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-T" viewBox="0 0 100 100"><path d="M20 15 L80 15 M50 15 L50 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-U" viewBox="0 0 100 100"><path d="M25 15 L25 65 Q25 85 50 85 Q75 85 75 65 L75 15" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-V" viewBox="0 0 100 100"><path d="M20 15 L50 85 L80 15" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-W" viewBox="0 0 100 100"><path d="M15 15 L30 85 L50 35 L70 85 L85 15" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-X" viewBox="0 0 100 100"><path d="M20 15 L80 85 M80 15 L20 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-Y" viewBox="0 0 100 100"><path d="M20 15 L50 45 L80 15 M50 45 L50 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-Z" viewBox="0 0 100 100"><path d="M20 15 L80 15 L20 85 L80 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+
+  <!-- ===== CYRILLIC А-Я (uppercase) — id="glyph-cyr-{letter}" -->
+  <!-- А -->
+  <symbol id="glyph-cyr-А" viewBox="0 0 100 100"><path d="M50 15 L20 85 M50 15 L80 85 M31 60 L69 60 M38 42 L62 42 M20 85 L12 85 M80 85 L88 85" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="51" r="4" fill="currentColor"/></symbol>
+  <!-- Б -->
+  <symbol id="glyph-cyr-Б" viewBox="0 0 100 100"><path d="M72 15 L25 15 L25 85 M25 50 L52 50 Q72 50 72 67 Q72 85 52 85 L25 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- В -->
+  <symbol id="glyph-cyr-В" viewBox="0 0 100 100"><path d="M30 20 Q30 10 50 10 Q70 10 70 30 Q70 50 50 50 Q70 50 70 70 Q70 90 50 90 Q30 90 30 80 M25 15 L25 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Г -->
+  <symbol id="glyph-cyr-Г" viewBox="0 0 100 100"><path d="M75 15 L25 15 L25 85" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="65" cy="22" r="2" fill="currentColor"/></symbol>
+  <!-- Д -->
+  <symbol id="glyph-cyr-Д" viewBox="0 0 100 100"><path d="M20 15 L80 15 L80 85 L20 85 L20 15 Z M20 85 L12 95 L88 95 L80 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Е -->
+  <symbol id="glyph-cyr-Е" viewBox="0 0 100 100"><path d="M75 15 L25 15 L25 50 L65 50 M25 50 L25 85 L75 85" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="75" cy="50" r="2.5" fill="currentColor"/></symbol>
+  <!-- Ж -->
+  <symbol id="glyph-cyr-Ж" viewBox="0 0 100 100"><path d="M15 20 L85 80 M85 20 L15 80 M50 20 L50 80 M20 15 L30 25 M70 15 L60 25 M20 85 L30 75 M70 85 L60 75" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- З -->
+  <symbol id="glyph-cyr-З" viewBox="0 0 100 100"><path d="M30 25 Q45 10 65 15 Q85 25 75 45 Q70 55 50 50 Q70 55 75 65 Q85 85 65 85 Q45 90 30 75 M40 50 L60 50" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- И -->
+  <symbol id="glyph-cyr-И" viewBox="0 0 100 100"><path d="M25 15 L25 85 L75 15 L75 85 M35 15 L25 8 M85 15 L75 8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Й -->
+  <symbol id="glyph-cyr-Й" viewBox="0 0 100 100"><path d="M25 25 L25 85 L75 25 L75 85 M35 15 L25 8 M85 15 L75 8 M30 15 Q50 5 70 15" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- К -->
+  <symbol id="glyph-cyr-К" viewBox="0 0 100 100"><path d="M25 15 L25 85 M25 50 L70 15 M40 55 L75 85 M30 15 L40 8 M70 15 L60 8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Л -->
+  <symbol id="glyph-cyr-Л" viewBox="0 0 100 100"><path d="M26 15 L74 15 L74 85 M26 15 L12 85 M84 15 L74 8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- М -->
+  <symbol id="glyph-cyr-М" viewBox="0 0 100 100"><path d="M20 85 L20 15 L50 50 L80 15 L80 85" fill="none" stroke="currentColor" stroke-width="2"/><path d="M30 15 L20 8 M80 15 L70 8" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <!-- Н -->
+  <symbol id="glyph-cyr-Н" viewBox="0 0 100 100"><path d="M25 15 L25 85 M75 15 L75 85 M25 50 L75 50 M35 15 L25 8 M75 15 L65 8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- О -->
+  <symbol id="glyph-cyr-О" viewBox="0 0 100 100"><circle cx="50" cy="50" r="35" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="50" r="20" fill="none" stroke="currentColor" stroke-width="1"/></symbol>
+  <!-- П -->
+  <symbol id="glyph-cyr-П" viewBox="0 0 100 100"><path d="M25 85 L25 15 L75 15 L75 85 M35 15 L25 8 M75 15 L65 8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Р -->
+  <symbol id="glyph-cyr-Р" viewBox="0 0 100 100"><path d="M25 15 L25 85 M25 15 L60 15 Q75 15 75 30 Q75 50 60 50 L25 50 M35 15 L25 8 M65 15 L55 8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- С -->
+  <symbol id="glyph-cyr-С" viewBox="0 0 100 100"><path d="M80 25 Q60 10 40 20 Q20 35 25 60 Q30 85 55 85 Q70 85 80 75" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Т -->
+  <symbol id="glyph-cyr-Т" viewBox="0 0 100 100"><path d="M20 15 L80 15 M50 15 L50 85 M40 15 L50 8 M60 15 L50 8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- У -->
+  <symbol id="glyph-cyr-У" viewBox="0 0 100 100"><path d="M25 15 L50 55 L75 15 M50 55 L40 85 M30 95 L40 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Ф -->
+  <symbol id="glyph-cyr-Ф" viewBox="0 0 100 100"><circle cx="50" cy="50" r="22" fill="none" stroke="currentColor" stroke-width="2"/><path d="M50 10 L50 90 M30 15 L70 15 M30 90 L70 90" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Х -->
+  <symbol id="glyph-cyr-Х" viewBox="0 0 100 100"><path d="M20 15 L80 85 M80 15 L20 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Ц -->
+  <symbol id="glyph-cyr-Ц" viewBox="0 0 100 100"><path d="M25 15 L25 80 L75 80 L75 15 M75 80 L75 90 L85 90 M35 15 L25 8 M65 15 L55 8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Ч -->
+  <symbol id="glyph-cyr-Ч" viewBox="0 0 100 100"><path d="M26 15 L26 62 L74 62 M74 15 L74 85 M84 15 L74 8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Ш -->
+  <symbol id="glyph-cyr-Ш" viewBox="0 0 100 100"><path d="M15 15 L15 85 L85 85 L85 15 M40 15 L40 85 M65 15 L65 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Щ -->
+  <symbol id="glyph-cyr-Щ" viewBox="0 0 100 100"><path d="M15 15 L15 80 L85 80 L85 15 M40 15 L40 80 M65 15 L65 80 M85 80 L85 90 L95 90" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Ъ -->
+  <symbol id="glyph-cyr-Ъ" viewBox="0 0 100 100"><path d="M52 15 L25 15 L25 85 M25 50 L52 50 Q72 50 72 67 Q72 85 52 85 L25 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Ы -->
+  <symbol id="glyph-cyr-Ы" viewBox="0 0 100 100"><path d="M20 15 L20 85 M20 50 L48 50 Q68 50 68 67 Q68 85 48 85 L20 85 M82 15 L82 85 M30 15 L20 8 M92 15 L82 8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Ь -->
+  <symbol id="glyph-cyr-Ь" viewBox="0 0 100 100"><path d="M25 15 L25 85 M25 50 L55 50 Q75 50 75 67 Q75 85 55 85 L25 85 M35 15 L25 8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Э -->
+  <symbol id="glyph-cyr-Э" viewBox="0 0 100 100"><path d="M80 25 Q60 10 40 20 Q20 35 25 60 Q30 85 55 85 Q70 85 80 75 M35 50 L65 50" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Ю -->
+  <symbol id="glyph-cyr-Ю" viewBox="0 0 100 100"><path d="M20 15 L20 85 M20 50 L33 50" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="59" cy="50" r="26" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- Я -->
+  <symbol id="glyph-cyr-Я" viewBox="0 0 100 100"><path d="M75 15 L75 85 M75 50 Q42 50 42 32 Q42 15 75 15 M75 50 L25 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+
+  <!-- ===== CYRILLIC а-я (lowercase) ===== -->
+  <!-- а -->
+  <symbol id="glyph-cyr-а" viewBox="0 0 100 100"><path d="M50 38.2 L32.72 85 M50 38.2 L67.28 85 M39.92 65.56 L60.08 65.56 M44.24 54.04 L55.76 54.04 M32.72 85 L26.96 85 M67.28 85 L73.04 85" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="59.8" r="2.52" fill="currentColor"/></symbol>
+  <!-- б -->
+  <symbol id="glyph-cyr-б" viewBox="0 0 100 100"><path d="M62.96 38.2 L34.16 38.2 L34.16 85 M34.16 61.24 L50 61.24 Q62.96 61.24 62.96 72.76 Q62.96 85 50 85 L34.16 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- в -->
+  <symbol id="glyph-cyr-в" viewBox="0 0 100 100"><path d="M35.6 45.4 Q35.6 38.2 50 38.2 Q64.4 38.2 64.4 52.6 Q64.4 63.4 50 63.4 Q64.4 63.4 64.4 74.2 Q64.4 85 50 85 Q35.6 85 35.6 77.8 M32 41.8 L32 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- г -->
+  <symbol id="glyph-cyr-г" viewBox="0 0 100 100"><path d="M68 38.2 L32 38.2 L32 85" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="60.8" cy="43.96" r="1.44" fill="currentColor"/></symbol>
+  <!-- д -->
+  <symbol id="glyph-cyr-д" viewBox="0 0 100 100"><path d="M35.6 38.2 L64.4 38.2 L64.4 85 L35.6 85 L35.6 38.2 Z M35.6 85 L29.84 92.2 L70.16 92.2 L64.4 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- е -->
+  <symbol id="glyph-cyr-е" viewBox="0 0 100 100"><path d="M68 38.2 Q53.6 34.6 39.2 41.8 Q28.4 52.6 32 67 Q35.6 85 53.6 85 Q64.4 85 71.6 77.8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M35.6 59.8 L64.4 59.8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="68" cy="59.8" r="1.8" fill="currentColor"/></symbol>
+  <!-- ж -->
+  <symbol id="glyph-cyr-ж" viewBox="0 0 100 100"><path d="M24.8 41.8 L75.2 85 M75.2 41.8 L24.8 85 M50 41.8 L50 85 M28.4 38.2 L35.6 41.8 M64.4 38.2 L57.2 41.8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- з -->
+  <symbol id="glyph-cyr-з" viewBox="0 0 100 100"><path d="M35.6 45.4 Q46.4 34.6 60.8 38.2 Q75.2 45.4 68 56.2 Q64.4 59.8 50 59.8 Q64.4 59.8 68 67 Q75.2 85 60.8 85 Q46.4 85 35.6 81.4 M42.8 59.8 L57.2 59.8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- и -->
+  <symbol id="glyph-cyr-и" viewBox="0 0 100 100"><path d="M34.16 38.2 L34.16 85 L65.84 38.2 L65.84 85 M41.36 38.2 L34.16 33.16 M73.04 38.2 L65.84 33.16" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- й -->
+  <symbol id="glyph-cyr-й" viewBox="0 0 100 100"><path d="M34.16 45.4 L34.16 85 L65.84 45.4 L65.84 85 M41.36 38.2 L34.16 33.16 M73.04 38.2 L65.84 33.16 M37.76 38.2 Q50 31.72 62.24 38.2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- к -->
+  <symbol id="glyph-cyr-к" viewBox="0 0 100 100"><path d="M32 38.2 L32 85 M32 59.8 L64.4 38.2 M42.8 63.4 L68 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- л -->
+  <symbol id="glyph-cyr-л" viewBox="0 0 100 100"><path d="M34.16 38.2 L65.84 38.2 L65.84 85 M34.16 38.2 L24.08 85 M73.04 38.2 L65.84 33.16" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- м -->
+  <symbol id="glyph-cyr-м" viewBox="0 0 100 100"><path d="M28.4 85 L28.4 38.2 L50 63.4 L71.6 38.2 L71.6 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- н -->
+  <symbol id="glyph-cyr-н" viewBox="0 0 100 100"><path d="M32 38.2 L32 85 M68 38.2 L68 85 M32 59.8 L68 59.8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- о -->
+  <symbol id="glyph-cyr-о" viewBox="0 0 100 100"><circle cx="50" cy="65" r="30" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="65" r="16" fill="none" stroke="currentColor" stroke-width="1"/></symbol>
+  <!-- п -->
+  <symbol id="glyph-cyr-п" viewBox="0 0 100 100"><path d="M32 85 L32 38.2 L68 38.2 L68 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- р -->
+  <symbol id="glyph-cyr-р" viewBox="0 0 100 100"><path d="M32 38.2 L32 88.6 M32 38.2 L57.2 38.2 Q68 38.2 68 52.6 Q68 63.4 57.2 63.4 L32 63.4" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- с -->
+  <symbol id="glyph-cyr-с" viewBox="0 0 100 100"><path d="M71.6 45.4 Q57.2 34.6 42.8 41.8 Q28.4 52.6 32 70.6 Q35.6 85 53.6 85 Q64.4 85 71.6 77.8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- т -->
+  <symbol id="glyph-cyr-т" viewBox="0 0 100 100"><path d="M28.4 38.2 L71.6 38.2 M50 38.2 L50 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- у -->
+  <symbol id="glyph-cyr-у" viewBox="0 0 100 100"><path d="M32 38.2 L50 63.4 L68 38.2 M50 63.4 L42.8 85 M35.6 88.6 L42.8 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- ф -->
+  <symbol id="glyph-cyr-ф" viewBox="0 0 100 100"><circle cx="50" cy="60" r="22" fill="none" stroke="currentColor" stroke-width="2"/><path d="M50 27.4 L50 88.6 M35.6 34.6 L64.4 34.6 M35.6 88.6 L64.4 88.6" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- х -->
+  <symbol id="glyph-cyr-х" viewBox="0 0 100 100"><path d="M28.4 38.2 L71.6 85 M71.6 38.2 L28.4 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- ц -->
+  <symbol id="glyph-cyr-ц" viewBox="0 0 100 100"><path d="M32 38.2 L32 81.4 L68 81.4 L68 38.2 M68 81.4 L68 88.6 L75.2 88.6" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- ч -->
+  <symbol id="glyph-cyr-ч" viewBox="0 0 100 100"><path d="M34.16 38.2 L34.16 69.88 L65.84 69.88 M65.84 38.2 L65.84 85 M73.04 38.2 L65.84 33.16" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- ш -->
+  <symbol id="glyph-cyr-ш" viewBox="0 0 100 100"><path d="M24.8 38.2 L24.8 85 L75.2 85 L75.2 38.2 M42.8 38.2 L42.8 85 M60.8 38.2 L60.8 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- щ -->
+  <symbol id="glyph-cyr-щ" viewBox="0 0 100 100"><path d="M24.8 38.2 L24.8 81.4 L75.2 81.4 L75.2 38.2 M42.8 38.2 L42.8 81.4 M60.8 38.2 L60.8 81.4 M75.2 81.4 L75.2 88.6 L82.4 88.6" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- ъ -->
+  <symbol id="glyph-cyr-ъ" viewBox="0 0 100 100"><path d="M50 38.2 L34.16 38.2 L34.16 85 M34.16 61.24 L50 61.24 Q62.96 61.24 62.96 72.76 Q62.96 85 50 85 L34.16 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- ы -->
+  <symbol id="glyph-cyr-ы" viewBox="0 0 100 100"><path d="M32 38.2 L32 85 M32 61.24 L51.44 61.24 Q65.84 61.24 65.84 72.76 Q65.84 85 51.44 85 L32 85 M73.04 38.2 L73.04 85 M39.2 38.2 L32 33.16 M80.24 38.2 L73.04 33.16" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- ь -->
+  <symbol id="glyph-cyr-ь" viewBox="0 0 100 100"><path d="M35.6 38.2 L35.6 85 M35.6 61.24 L55.76 61.24 Q70.16 61.24 70.16 72.76 Q70.16 85 55.76 85 L35.6 85 M42.8 38.2 L35.6 33.16" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- э -->
+  <symbol id="glyph-cyr-э" viewBox="0 0 100 100"><path d="M71.6 45.4 Q57.2 34.6 42.8 41.8 Q28.4 52.6 32 70.6 Q35.6 85 53.6 85 Q64.4 85 71.6 77.8 M35.6 59.8 L64.4 59.8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- ю -->
+  <symbol id="glyph-cyr-ю" viewBox="0 0 100 100"><path d="M32.72 38.2 L32.72 85 M32.72 61.24 L40.64 61.24" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="60" cy="62" r="23" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <!-- я -->
+  <symbol id="glyph-cyr-я" viewBox="0 0 100 100"><path d="M65.84 38.2 L65.84 85 M65.84 61.24 Q47.84 61.24 47.84 49.72 Q47.84 38.2 65.84 38.2 M65.84 61.24 L34.16 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+
+  <!-- ===== ADDED: digits, punctuation, Ё/ё ===== -->
+  <symbol id="glyph-0" viewBox="0 0 100 100"><ellipse cx="50" cy="50" rx="24" ry="35" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="50" r="4" fill="currentColor"/></symbol>
+  <symbol id="glyph-1" viewBox="0 0 100 100"><path d="M38 26 L52 15 L52 85 M30 85 L74 85 M62 15 L52 8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-2" viewBox="0 0 100 100"><path d="M24 30 Q24 15 50 15 Q76 15 76 33 Q76 46 56 59 L24 85 L80 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-3" viewBox="0 0 100 100"><path d="M28 24 Q40 14 56 17 Q74 22 69 38 Q66 50 48 50 Q67 50 71 64 Q76 84 52 86 Q36 86 25 76" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-4" viewBox="0 0 100 100"><path d="M64 15 L24 62 L80 62 M64 15 L64 85 M74 15 L64 8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-5" viewBox="0 0 100 100"><path d="M70 15 L32 15 L28 45 Q42 37 56 42 Q76 49 72 67 Q67 86 47 86 Q33 86 25 76" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-6" viewBox="0 0 100 100"><path d="M68 22 Q55 11 41 20 Q25 33 25 58 Q27 85 50 85 Q70 85 70 66 Q70 48 50 48 Q32 48 27 62" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-7" viewBox="0 0 100 100"><path d="M24 15 L76 15 L46 85 M36 15 L26 8" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-8" viewBox="0 0 100 100"><circle cx="50" cy="32" r="17" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="66" r="20" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-9" viewBox="0 0 100 100"><path d="M32 78 Q45 89 59 80 Q75 67 75 42 Q73 15 50 15 Q30 15 30 34 Q30 52 50 52 Q69 52 74 38" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-period" viewBox="0 0 100 100"><circle cx="50" cy="80" r="5" fill="currentColor"/></symbol>
+  <symbol id="glyph-comma" viewBox="0 0 100 100"><path d="M50 82 L43 95" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="78" r="5" fill="currentColor"/></symbol>
+  <symbol id="glyph-colon" viewBox="0 0 100 100"><circle cx="50" cy="44" r="5" fill="currentColor"/><circle cx="50" cy="80" r="5" fill="currentColor"/></symbol>
+  <symbol id="glyph-semicolon" viewBox="0 0 100 100"><path d="M50 82 L43 95" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="44" r="5" fill="currentColor"/><circle cx="50" cy="78" r="5" fill="currentColor"/></symbol>
+  <symbol id="glyph-exclam" viewBox="0 0 100 100"><path d="M50 15 L50 62" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="80" r="5" fill="currentColor"/></symbol>
+  <symbol id="glyph-question" viewBox="0 0 100 100"><path d="M30 31 Q30 15 50 15 Q70 15 70 32 Q70 46 50 56 L50 62" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="80" r="5" fill="currentColor"/></symbol>
+  <symbol id="glyph-hyphen" viewBox="0 0 100 100"><path d="M30 55 L70 55" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-endash" viewBox="0 0 100 100"><path d="M24 55 L76 55" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-emdash" viewBox="0 0 100 100"><path d="M14 55 L86 55" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-plus" viewBox="0 0 100 100"><path d="M50 30 L50 76 M27 53 L73 53" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-equal" viewBox="0 0 100 100"><path d="M27 42 L73 42 M27 64 L73 64" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-slash" viewBox="0 0 100 100"><path d="M30 85 L70 15" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-backslash" viewBox="0 0 100 100"><path d="M30 15 L70 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-parenleft" viewBox="0 0 100 100"><path d="M62 15 Q38 50 62 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-parenright" viewBox="0 0 100 100"><path d="M38 15 Q62 50 38 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-bracketleft" viewBox="0 0 100 100"><path d="M63 15 L38 15 L38 85 L63 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-bracketright" viewBox="0 0 100 100"><path d="M37 15 L62 15 L62 85 L37 85" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-guillemotleft" viewBox="0 0 100 100"><path d="M50 30 L28 50 L50 70 M80 30 L58 50 L80 70" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-guillemotright" viewBox="0 0 100 100"><path d="M28 30 L50 50 L28 70 M58 30 L80 50 L58 70" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-quotedbl" viewBox="0 0 100 100"><path d="M40 15 L36 36 M60 15 L56 36" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-quoteleft" viewBox="0 0 100 100"><path d="M50 15 L48 36" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-multiply" viewBox="0 0 100 100"><path d="M32 35 L68 71 M68 35 L32 71" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-ellipsis" viewBox="0 0 100 100"><circle cx="28" cy="80" r="5" fill="currentColor"/><circle cx="50" cy="80" r="5" fill="currentColor"/><circle cx="72" cy="80" r="5" fill="currentColor"/></symbol>
+  <symbol id="glyph-percent" viewBox="0 0 100 100"><path d="M28 85 L72 15" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="33" cy="27" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="67" cy="73" r="9" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-numerosign" viewBox="0 0 100 100"><path d="M16 15 L16 85 M16 15 L38 85 L38 15 M52 32 L74 32" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="61" cy="68" r="11" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="glyph-cyr-Ё" viewBox="0 0 100 100"><path d="M75 15 L25 15 L25 50 L65 50 M25 50 L25 85 L75 85" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="75" cy="50" r="2.5" fill="currentColor"/><circle cx="38" cy="11" r="2.5" fill="currentColor"/><circle cx="62" cy="11" r="2.5" fill="currentColor"/></symbol>
+  <symbol id="glyph-cyr-ё" viewBox="0 0 100 100"><path d="M68 38.2 Q53.6 34.6 39.2 41.8 Q28.4 52.6 32 67 Q35.6 85 53.6 85 Q64.4 85 71.6 77.8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M35.6 59.8 L64.4 59.8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="68" cy="59.8" r="1.8" fill="currentColor"/><circle cx="41.36" cy="35.32" r="1.8" fill="currentColor"/><circle cx="58.64" cy="35.32" r="1.8" fill="currentColor"/></symbol>
+</svg>
