@@ -66,6 +66,7 @@ signal sigil_admin_reset_result(result: Dictionary)
 signal sigil_admin_rotate_result(result: Dictionary)
 signal sigil_admin_chromatic_result(result: Dictionary)
 signal sigil_admin_chroma_slot_result(result: Dictionary)
+signal sync_package_result(result: Dictionary)
 signal error(message: String)
 
 var base_url := DEFAULT_BASE
@@ -284,6 +285,12 @@ func sigil_milestone(device_id: String, set_id: String, tier: int) -> void:
 		"kind": "sigil_milestone", "path": "/sigil/milestone",
 		"body": {"device_id": device_id, "set": set_id, "tier": tier},
 	})
+
+# Единая точка синхронизации сейва: POST /api/sync/package, тело = весь пакет
+# (device_id уже в конверте, отдельный параметр не нужен в URL). Ответ → сигнал
+# sync_package_result, который Sync.apply_reconcile разбирает (A/B/C).
+func sync_package(pkg: Dictionary) -> void:
+	_enqueue({"kind": "sync_package", "path": "/sync/package", "body": pkg})
 
 # T22: серверная проверка платёжного чека (POST /api/receipt/verify). Ответ —
 # сигнал receipt_verify_result: {"ok", "verified", "status", "reason",
@@ -543,3 +550,5 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 			sigil_admin_chromatic_result.emit(parsed)
 		"sigil_admin_chroma_slot":
 			sigil_admin_chromatic_result.emit(parsed)
+		"sync_package":
+			sync_package_result.emit(parsed)

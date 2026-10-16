@@ -531,8 +531,8 @@ func _experiment_outcome(out: Dictionary, a: String, b: String, created: bool = 
 		_set_status("Мир вернул неполный результат — реагенты восстановлены.")
 		return
 	_register_server_recipe(a, b, slug)
-	var key := g._pair_key(a, b)
-	g._engine.known_recipes[key] = true
+	g._engine.learn_recipe(a, b, slug)
+	g._sync.mark_dirty()
 	# first_open — до инкремента; грант и круг — ПОСЛЕ _experiment_succeeded (она
 	# делает inventory[slug]+=1): иначе _check_milestones не учтёт это вещество и
 	# веха на N веществ сработает на одно открытие позже.
@@ -579,7 +579,8 @@ func _on_net_pair_result(pair_key: String, result: Dictionary) -> void:
 		var slug := _apply_server_element(result.get("out", {}))
 		if slug != "":
 			_register_server_recipe(a, b, slug)
-			g._engine.known_recipes[g._pair_key(a, b)] = true
+			g._engine.learn_recipe(a, b, slug)
+			g._sync.mark_dirty()
 			g._retention._fair_report_brew(a, b)
 			# U11 (T15): первое ЛОКАЛЬНОЕ получение мир-открытого вещества — через
 			# _grant_local_acquisition (+1 в инвентарь, circular-эффект Круга,
@@ -671,7 +672,10 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 		var slug := _apply_server_element(disc)
 		if slug != "":
 			_register_server_recipe(a, b, slug)
-			g._engine.known_recipes[g._pair_key(a, b)] = true
+			g._engine.learn_recipe(a, b, slug)
+			# Знание изменилось → пакет синка грязный; троттл-флэш отправит его
+			# на следующем тике (request_sync сам гейтит _net_enabled/Net).
+			g._sync.mark_dirty()
 			g._retention._fair_report_brew(a, b)
 			# first_open нужен ниже (статус/реакция спутника); хелпер считает его сам
 			# перед тем же инкрементом — значения совпадают.
@@ -1627,7 +1631,7 @@ func _on_event_tap() -> void:
 				var ra := String(recipe["a"])
 				var rb := String(recipe["b"])
 				var rout := String(recipe["out"])
-				g._engine.known_recipes[g._pair_key(ra, rb)] = true
+				g._engine.learn_recipe(ra, rb, rout)
 				_set_status("✧ Озарение: %s + %s → %s!" % [
 					_item_name(ra), _item_name(rb), _item_name(rout)])
 				_toast("Озарение открыло новый рецепт", NoticeKind.SUCCESS)

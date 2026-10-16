@@ -249,6 +249,26 @@ def _today_date() -> date:
 ECHO_ETHER = 5   # эфир за один забранный отголосок
 ECHO_CAP = 20    # максимум незабранных отголосков (вечный счётчик без капа)
 RES_MILESTONES = (10, 50, 100)  # вехи: +реген / +кап / золотая рамка
+# Жёсткий потолок «единиц ресурса в секунду» для advisory-капа оффлайн-
+# аккумулятор (Part C). Заведомо выше каталожного максимума родника/эфира,
+# поэтому честный игрок никогда не упирается, а накрученный rate — обрезается.
+MAX_ACCRUAL_RATE_PER_SEC: float = 1000.0
+# Базовый каталог, выдаваемый всем имплицитно (тот же статик, что.ship-ится в
+# клиент). slug вне этого набора = генеративный (создан /discover), и чтобы
+# служить ингредиентом он обязан лежать в device_grants игрока (гейт Task 5).
+BASE_SLUGS: set[str] = set(seed.ITEMS.keys())
+
+
+def _accrual_ceiling(elapsed: float, declared_rate: float) -> float:
+    """Advisory-потолок оффлайн-аккумуляции: elapsed × min(rate, жёсткий максимум).
+
+    Чистая функция, сервер ничего не перетирает (Part C opaque): результат только
+    возвращается клиенту как кап. Отрицательный/нулевой elapsed (часы вперёд,
+    clamp'енный сервером) → 0: накопить в будущее нельзя."""
+    if elapsed <= 0:
+        return 0.0
+    rate = declared_rate if declared_rate < MAX_ACCRUAL_RATE_PER_SEC else MAX_ACCRUAL_RATE_PER_SEC
+    return elapsed * rate
 # При недоступности LLM решение НЕ фиксируется: пара остаётся кандидатом,
 # её можно будет сгенерировать позже (никаких «пулов» произвольных имён).
 
@@ -339,6 +359,7 @@ class DiscoverResponse(BaseModel):
     message: str
     challenge: Optional[dict] = None  # состояние ежедневной цели: {won, first, target_name}
     vein: Optional[dict] = None  # бонус жилы: {points, streak_added, streak_count, cap_reached} | None
+    detail: Optional[str] = None  # route-level отказ (gate Task 5): "ingredient_not_granted"
 
 class EventData(BaseModel):
     pair_key: str
@@ -455,6 +476,47 @@ class HouseResponse(BaseModel):
     house: Optional[dict] = None
     found: bool = True
     visits_week: int = 0      # γ: уникальных гостей за 7 дней (0, а не null)
+
+
+class GrantRecipe(BaseModel):
+    pair_key: str
+    a: str
+    b: str
+    out: str
+
+
+class SyncPartB(BaseModel):
+    # Жёсткий кап списка (бюджет 2GB + SQLite variable limit): device не может
+    # знать больше рецептов, чем материализовано; завышено с запасом, легитимный
+    # синк не режет, раздутый payload → 422 вместо thousands of statements / 500.
+    recipes: list[GrantRecipe] = Field(default_factory=list, max_length=4096)
+    elements: list[str] = Field(default_factory=list, max_length=4096)
+
+
+class SyncPartC(BaseModel):
+    inventory_slugs: list[str] = Field(default_factory=list, max_length=4096)
+    accrual_declared: float = 0.0
+    accrual_rate_declared: float = 0.0
+
+
+class SyncPackageRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    schema_version: int
+    client_rev: int = 0
+    anchor_accrual_ts: float = 0.0
+    part_b: SyncPartB = SyncPartB()
+    part_c: SyncPartC = SyncPartC()
+
+
+class SyncPackageResponse(BaseModel):
+    ok: bool
+    grants: list[dict]
+    server_seen_ts: float
+    accepted: int
+    rejected: int
+    recovered: list[dict] = []
+    accrual_ceiling: float = 0.0
+    anchor_server_ts: float = 0.0
 
 
 class RatingRow(BaseModel):
@@ -1197,6 +1259,124 @@ def init_db():
         conn.commit()
     finally:
         conn.close()
+
+
+def _corroborated_pair(conn: sqlite3.Connection, pair_key: str) -> bool:
+    """Пара корроборирована, если она уже материализована кем-то (базовый сид ∪
+    таблицы recipes). Скрытая нераскрытая пара → False: заявить её в грант нельзя."""
+    return conn.execute(
+        "SELECT 1 FROM recipes WHERE pair_key = ?", (pair_key,)
+    ).fetchone() is not None
+
+
+def _corroborated_element(conn: sqlite3.Connection, slug: str) -> bool:
+    """Элемент легитимен, если он в базовом каталоге ИЛИ материализован в elements."""
+    if slug in BASE_SLUGS:
+        return True
+    return conn.execute(
+        "SELECT 1 FROM elements WHERE slug = ?", (slug,)
+    ).fetchone() is not None
+
+
+def _catalog_def(conn: sqlite3.Connection, pair_key: str):
+    """Авторитетное определение пары из таблицы recipes: (a, b, out_slug) | None.
+    Контент гранта берётся отсюда, а НЕ из заявления клиента (review #1): иначе
+    реальную пару заявляют с поддельным out = чужим secret → element-грант даром."""
+    row = conn.execute(
+        "SELECT r.a AS a, r.b AS b, o.slug AS out "
+        "FROM recipes r JOIN elements o ON o.id = r.out_id WHERE r.pair_key = ?",
+        (pair_key,),
+    ).fetchone()
+    if row is None:
+        return None
+    return (row["a"], row["b"], row["out"])
+
+
+def _grant_recipe(conn: sqlite3.Connection, device_id: str, pair_key: str,
+                  a: str, b: str, out: str, source: str) -> int:
+    """Записать per-device грант знания. Возвращает rowcount recipe-гранта
+    (1 вставил / 0 дубликат) или -1 на отказе корроборации.
+
+    Гейт: принимаем только корроборированную пару (базовый сид ∪ материализованные),
+    кроме source='world_first' — собственное первооткрытие device доверяется напрямую.
+    Контент (a/b/out) НЕ берётся из клиента: для корроборированных источников он
+    перезаписывается авторитетным определением из recipes (review #1). Успешный
+    recipe-грант пишет и kind='element' для `out`: сваренный/восстановленный рецепт
+    делает выходной элемент легитимным ингредиентом (петля гейта Task 5)."""
+    if source != "world_first":
+        cat = _catalog_def(conn, pair_key)
+        if cat is None:
+            return -1          # пары нет в recipes → не корроборирована
+        a, b, out = cat        # клиентский контент отброшен, берём каталог
+    now = _now_iso()
+    cur = conn.execute(
+        "INSERT OR IGNORE INTO device_grants (device_id, kind, ref, a, b, out, source, granted_at) "
+        "VALUES (?, 'recipe', ?, ?, ?, ?, ?, ?)",
+        (device_id, pair_key, a, b, out, source, now),
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO device_grants (device_id, kind, ref, source, granted_at) "
+        "VALUES (?, 'element', ?, ?, ?)",
+        (device_id, out, source, now),
+    )
+    return cur.rowcount
+
+
+def _element_granted(conn: sqlite3.Connection, device_id: str, slug: str) -> bool:
+    """Есть ли у device легитимный грант на элемент (используется гейтом Task 5)."""
+    return conn.execute(
+        "SELECT 1 FROM device_grants WHERE device_id = ? AND kind = 'element' AND ref = ?",
+        (device_id, slug),
+    ).fetchone() is not None
+
+
+def _element_authored_by(conn: sqlite3.Connection, device_id: str, slug: str) -> bool:
+    """Первооткрыт ли элемент ЭТИМ device (recipes.discoverer_device → out). Спека
+    §"Граница приёма гранта" включает «собственный /discover device» в легитимные
+    входы; автор обязан варить из своего world-first сразу, не дожидаясь sync-гранта
+    (review #4). read-only, транзакцию /discover не трогает."""
+    return conn.execute(
+        "SELECT 1 FROM recipes r JOIN elements o ON o.id = r.out_id "
+        "WHERE r.discoverer_device = ? AND o.slug = ?",
+        (device_id, slug),
+    ).fetchone() is not None
+
+
+def _grants_for(conn: sqlite3.Connection, device_id: str) -> list[dict]:
+    """Все гранты device (recipe + element) для отдачи клиенту при reconcile."""
+    rows = conn.execute(
+        "SELECT kind, ref, a, b, out, source FROM device_grants "
+        "WHERE device_id = ? ORDER BY granted_at",
+        (device_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _recovered_defs(conn: sqlite3.Connection, inventory_slugs: list[str]) -> list[dict]:
+    """Восстановить определения рецептов для элементов, лежащих в инвентаре.
+
+    Возвращает [{pair_key,a,b,out}] для каждой **материализованной** пары, чей
+    выходной slug есть в инвентаре. Источник истины — таблица `recipes` (базовый
+    сид ∪ world-first), поэтому скрытый нераскрытый каталог не просочивается:
+    элемент без recipe-определения (например базовый «Огонь») не возвращается.
+    Дедуп по pair_key."""
+    uniq = [s for s in dict.fromkeys(inventory_slugs) if s]
+    if not uniq:
+        return []
+    marks = ",".join("?" * len(uniq))
+    rows = conn.execute(
+        f"SELECT r.pair_key, r.a, r.b, o.slug AS out FROM recipes r "
+        f"JOIN elements o ON o.id = r.out_id WHERE o.slug IN ({marks}) "
+        f"ORDER BY r.pair_key",
+        uniq,
+    ).fetchall()
+    out, seen = [], set()
+    for r in rows:
+        if r["pair_key"] in seen:
+            continue
+        seen.add(r["pair_key"])
+        out.append({"pair_key": r["pair_key"], "a": r["a"], "b": r["b"], "out": r["out"]})
+    return out
 
 
 def _migrate_nick_identity(conn: sqlite3.Connection) -> None:
@@ -2968,6 +3148,22 @@ def discover(req: DiscoverRequest):
     """
     conn = get_db()
     try:
+        # Task 5 route-level gate (транзакция НЕ тронута, до захвата лока):
+        # world-first через подделанный генеративный ингредиент (спека §28). Гейт
+        # срабатывает только на РЕАЛЬНЫЙ materialized элемент (есть в elements),
+        # которого нет в device_grants. Выдуманный slug, которого нет в elements,
+        # уже мягко отсекается ниже как not_combinable (world-first из него не сделать).
+        for ing in (req.a, req.b):
+            if ing in BASE_SLUGS or _element_granted(conn, req.device_id, ing) \
+                    or _element_authored_by(conn, req.device_id, ing):
+                continue
+            if conn.execute("SELECT 1 FROM elements WHERE slug = ?", (ing,)).fetchone():
+                return DiscoverResponse(
+                    ok=False, already_known=False, status="ingredient_not_granted",
+                    message="Ингредиент ещё не открыт этим игроком",
+                    detail="ingredient_not_granted",
+                )
+
         pair_key = canonical_pair_key(req.a, req.b)
 
         # T02: nick — витрина; авторитетен device_id. Дальше используется
@@ -3790,6 +3986,60 @@ def save_house(req: HouseRequest):
         )
         conn.commit()
         return HouseResponse(ok=True, nick=nick, avatar=avatar_for(nick), house=req.house)
+    finally:
+        conn.close()
+
+
+@app.post("/api/sync/package", response_model=SyncPackageResponse)
+def sync_package(req: SyncPackageRequest):
+    """Единая точка приёма Part B-грантов знаний + отдача device_grants для reconcile.
+
+    Синк — не дверь регистрации: unknown device не порождает строку players, но
+    его гранты знаний всё равно пишутся (это журнал, не аккаунт). Пары гейтятся
+    корроборацией: выдуманная нераскрытая пара отбрасывается (rejected).
+    """
+    conn = get_db()
+    try:
+        accepted = 0
+        rejected = 0
+        for rec in req.part_b.recipes:
+            res = _grant_recipe(
+                conn, req.device_id, rec.pair_key, rec.a, rec.b, rec.out, "local_learn"
+            )
+            if res > 0:
+                accepted += 1        # новый грант
+            elif res < 0:
+                rejected += 1        # отказ корроборации
+            # res == 0 — дубликат: ни accepted, ни rejected (идемпотентность)
+        # Recovery (Part C): инвентарь → определения материализованных пар →
+        # грант account_export (пара точно в recipes, корроборация гарантирована).
+        recovered = _recovered_defs(conn, req.part_c.inventory_slugs)
+        for d in recovered:
+            _grant_recipe(
+                conn, req.device_id, d["pair_key"], d["a"], d["b"], d["out"], "account_export"
+            )
+        # last_seen — только для уже зарегистрированного устройства.
+        conn.execute(
+            "UPDATE players SET last_seen = ? WHERE device_id = ?",
+            (_today(), req.device_id),
+        )
+        conn.commit()
+        # Advisory wall-clock cap (Part C, server-wins НЕТ): elapsed = теперь_сервера
+        # − заякоренный клиентом момент последнего банкa, clamp'енный в ≥0
+        # (часы вперёд → 0; отсутствие якоря → 0). Потолок только возвращается
+        # клиенту; сервер ничего не перетирает — Layer C остаётся клиентской.
+        server_ts = time.time()
+        elapsed = max(0.0, server_ts - req.anchor_accrual_ts) if req.anchor_accrual_ts > 0 else 0.0
+        return SyncPackageResponse(
+            ok=True,
+            grants=_grants_for(conn, req.device_id),
+            server_seen_ts=server_ts,
+            accepted=accepted,
+            rejected=rejected,
+            recovered=recovered,
+            accrual_ceiling=_accrual_ceiling(elapsed, req.part_c.accrual_rate_declared),
+            anchor_server_ts=server_ts,
+        )
     finally:
         conn.close()
 

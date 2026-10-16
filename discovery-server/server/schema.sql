@@ -332,6 +332,24 @@ CREATE TABLE IF NOT EXISTS receipts (
 );
 CREATE INDEX IF NOT EXISTS idx_receipts_device ON receipts(device_id);
 
+-- device_grants: per-device знание (анти-чит-ядро + восстановление Bug B).
+-- Пишутся только корроборированные выдачие пары: базовый сид ∪ материализованные
+-- world-first ∪ собственный /discover device. Скрытые нераскрытые пары не принимаются.
+-- kind='recipe' (ref=pair_key, несёт a/b/out) и kind='element' (ref=slug — варка
+-- рецепта делает выходной элемент легитимным ингредиентом; закрывает гейт Task 5).
+-- kind='decor' — зарезервированная точка расширения, логики нет.
+-- Базовый каталог в журнал не пишется (выдан всем имплицитно) — размер мал на 2GB.
+CREATE TABLE IF NOT EXISTS device_grants (
+    device_id TEXT NOT NULL,
+    kind TEXT NOT NULL,          -- 'element' | 'recipe'
+    ref TEXT NOT NULL,           -- slug (element) | pair_key (recipe)
+    a TEXT, b TEXT, out TEXT,    -- самодостаточное определение для kind='recipe'
+    source TEXT NOT NULL,        -- 'world_first' | 'server_reward' | 'local_learn' | 'account_export'
+    granted_at TEXT NOT NULL,
+    PRIMARY KEY (device_id, kind, ref)
+);
+CREATE INDEX IF NOT EXISTS idx_device_grants_device ON device_grants(device_id);
+
 -- γ «Гостевая книга»: один визит (host, visitor) на день. Ключ дня — ISO-дата
 -- в ЕДИНОЙ серверной шкале (T06), поэтому «окно 7 дней» = day >= _date_minus(6),
 -- а NOT BETWEEN ничего не разворачивается.

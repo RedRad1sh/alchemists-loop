@@ -40,6 +40,10 @@ var _save_frozen := false
 func _save_game() -> bool:
 	if _save_frozen:
 		return false
+	# Ревизия клиента — монотонный счётчик сохранений этого девайса. Часть C
+	# (advisory-потолок оффлайн-эфира)clamp'ит только на client_rev==0, т.е. на
+	# миграционном первом заходе до любого сейва; bump здесь закрывает это окно.
+	g._engine.client_rev += 1
 	# This is the authoritative online boundary, not a timer/frame callback.
 	# Build the watermark with the resources; publish it in memory only after IO.
 	var workshop_state := g._workshop.export_state()
@@ -49,6 +53,9 @@ func _save_game() -> bool:
 		workshop_state["last_simulated_at"] = snapshot_ts
 	var data := {
 		"version": Game.SAVE_VERSION,
+		"device_id": g._online._device_id,
+		"client_rev": g._engine.client_rev,
+		"anchor_accrual_ts": g._engine.anchor_accrual_ts,
 		"ether": g._engine.ether,
 		"ether_overflow": g._engine.ether_overflow,
 		"mastery_rank": g._engine.mastery_rank,
@@ -63,6 +70,7 @@ func _save_game() -> bool:
 		"spring_clock": _clock(g._pages._spring_clock, Game.SPRING_INTERVAL),
 		"inventory": g._engine.inventory,
 		"known_recipes": g._engine.known_recipes.keys(),
+		"known_recipe_defs": g._engine.known_recipe_defs,
 		"attempts": g._engine.attempts,
 		"successes": g._engine.successes,
 		"upgrades": g._engine.upgrades,
@@ -517,6 +525,10 @@ func _load_game() -> void:
 	g._retention._fair_off_claim_week = String(data.get("fair_off_claim_week", ""))
 	g._spirit._companion_apply_level()
 	g._engine.ether_overflow = maxi(0, int(data.get("ether_overflow", 0)))
+	# Состояние конверта синхронизации: ревизия клиента и якорь оффлайн-накопления.
+	# client_rev==0 — миграционный первый заход, на котором разрешён advisory-clamp.
+	g._engine.client_rev = maxi(0, int(data.get("client_rev", 0)))
+	g._engine.anchor_accrual_ts = maxf(0.0, float(data.get("anchor_accrual_ts", 0.0)))
 	g._engine.mastery_rank = maxi(0, int(data.get("mastery_rank", 0)))
 	g._engine._experiment_day = String(data.get("experiment_day", ""))
 	g._engine._experiment_count = clampi(int(data.get("experiment_count", 0)), 0, Game.EXPERIMENT_DAILY_LIMIT)
@@ -552,14 +564,7 @@ func _load_game() -> void:
 	for item_id in Game.BASE_IDS:
 		if not g._engine.inventory.has(item_id):
 			g._engine.inventory[item_id] = 0
-	g._engine.known_recipes.clear()
-	var saved_known: Array = data["known_recipes"]
-	for recipe in g.RECIPES:
-		var key := g._pair_key(String(recipe["a"]), String(recipe["b"]))
-		if saved_known.has(key):
-			g._engine.known_recipes[key] = true
-	g._engine.known_recipes[g._pair_key("fire", "water")] = true
-	g._engine.known_recipes[g._pair_key("earth", "fire")] = true
+	_apply_recipe_knowledge(data)
 	g._workshop.import_state(data.get("workshop"), data)
 	if data.has("companion_unlocked"):
 		g._spirit._companion_unlocked = bool(data["companion_unlocked"])
@@ -736,6 +741,44 @@ func _project_workshop(result: Dictionary, before_queues: Dictionary) -> void:
 	if _return_bench_status == "" and _return_bench_steps > 0:
 		_return_bench_status = "complete" # empty queues, not merely processed time
 
+func _apply_recipe_knowledge(data: Dictionary) -> void:
+	# Union-загрузка знания без тихого drop (фикс Bug B). Источник истины —
+	# known_recipe_defs: его ключи всегда остаются в known_recipes, даже если
+	# определения пары нет в текущем каталоге (такое вещество «known but not
+	# currently brewable»: варится только при совпадении с каталогом в workshop). Старый
+	# массив known_recipes дотягивает пары, для которых def не сохранён.
+	var defs: Dictionary = {}
+	var raw_defs: Variant = data.get("known_recipe_defs", {})
+	if raw_defs is Dictionary:
+		for dkey in raw_defs:
+			defs[String(dkey)] = raw_defs[dkey]
+	var raw_keys: Variant = data.get("known_recipes", [])
+	if raw_keys is Array:
+		for rk in raw_keys:
+			var key := String(rk)
+			if not defs.has(key):
+				defs[key] = _def_from_catalog(key)
+	for starter in [["fire", "water"], ["earth", "fire"]]:
+		var skey := g._pair_key(starter[0], starter[1])
+		if not defs.has(skey):
+			defs[skey] = _def_from_catalog(skey)
+	var known: Dictionary = {}
+	for key in defs:
+		known[key] = true
+	g._engine.known_recipe_defs = defs
+	g._engine.known_recipes = known
+
+func _def_from_catalog(key: String) -> Dictionary:
+	var parts := key.split("|")
+	if parts.size() != 2:
+		return {"a": "", "b": "", "out": ""}
+	var out := ""
+	for r in g.RECIPES:
+		if g._pair_key(String(r["a"]), String(r["b"])) == key:
+			out = String(r.get("out", ""))
+			break
+	return {"a": String(parts[0]), "b": String(parts[1]), "out": out}
+
 func _read_save(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {}
@@ -750,12 +793,41 @@ func _read_save(path: String) -> Dictionary:
 	var version := int(data.get("version", 1))
 	if version < 1 or version > Game.SAVE_VERSION:
 		return {}
+	# Envelope fail-closed: чужой device_id → сейв не этого устройства, не читаем
+	# (перенос файла между девайсами не должен затирать local device_grants-знание).
+	# Пустой device_id (старый сейв / оффлайн-установка без id) совместим — чужого
+	# устройства не заявлено, отвергать не за что.
+	var device_v: Variant = data.get("device_id", "")
+	if device_v is String and String(device_v) != "" and String(device_v) != g._online._device_id:
+		return {}
+	# inventory — ядро загрузки (без словаря инвентаря игра не восстанавливается),
+	# потому он остаётся envelope-fail-closed.
 	if not (data.get("inventory") is Dictionary):
 		return {}
+	# Per-Part fail-open: битый Part B (знание) обязан деградировать, а не отменить
+	# весь сейв — Part C (эфир/инвентарь) применяется независимо. known_recipes не
+	# массив → пустое знание (дефолт ниже), а не отказ.
 	if not (data.get("known_recipes") is Array):
-		return {}
+		data["known_recipes"] = []
 	# v1/v2 → v3: добавлены pending Experiment, resumable craft_job и blueprints;
 	# формат игрового сейва совместим, а отсутствующие поля получают defaults.
+	# v3 → v4: раньше хранился только массив ключей пар (known_recipes) — загрузка
+	# резала знание пересечением с каталогом (Bug B). Собираем самодостаточные
+	# определения known_recipe_defs из keys∩каталог; пары вне каталога получают
+	# out="" (= known but not currently brewable), но остаются в знании.
+	if not (data.get("known_recipe_defs") is Dictionary):
+		var out_by_key := {}
+		for recipe in g.RECIPES:
+			out_by_key[g._pair_key(String(recipe["a"]), String(recipe["b"]))] = \
+				String(recipe.get("out", ""))
+		var defs := {}
+		for raw_key in (data["known_recipes"] as Array):
+			var key := String(raw_key)
+			var parts := key.split("|")
+			if parts.size() != 2:
+				continue
+			defs[key] = {"a": parts[0], "b": parts[1], "out": String(out_by_key.get(key, ""))}
+		data["known_recipe_defs"] = defs
 	# Версия фиксируется после успешной валидации, чтобы не отбрасывать прогресс.
 	data["version"] = Game.SAVE_VERSION
 	return data
