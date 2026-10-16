@@ -1,7 +1,13 @@
 # Alchemist's Loop — тизер 60с для Shorts/Reels/TikTok
 
-Вертикальный анимационный тизер игры: **1080×1920, 30 fps, 60.00 с, звук**
-(музыка целиком синтезирована из кода + родные SFX игры).
+Вертикальный анимационный тизер игры: **1080×1920, 30 fps, 60.00 с, звук**.
+
+Музыка — трек **«Enchanced Alchemy»** (3:14, добавлен автором), смонтированный
+до 60с из двух частей с кроссфейдом под склейкой 41.4с; дроп трека (177.8с)
+посажен ровно на финальный импакт тизера (0:50), фанфара игры (57.45с) поверх
+music-dip, плавные фейд-ин/фейд-аут по краям. + родные SFX игры.
+(Первая версия саундтрека была полностью синтезирована из кода — скрипты
+`gen_music.py`/`build_mix.py` сохранены для откатa.)
 
 **Готовый файл:** `renders/alchemists-loop-teaser.mp4`
 **Постер для поста:** `renders/poster_1080.png` (квадрат 1080×1080)
@@ -49,8 +55,9 @@ OpenMontage наряду с Remotion/HyperFrames): в песочнице нет 
 ```bash
 cd teaser
 npm install                # @napi-rs/canvas + @resvg/resvg-js
-python3 src/gen_music.py   # 60с саундтрек -> audio/music.wav
-python3 src/build_mix.py   # музыка + SFX игры -> audio/mix.wav
+# 60с эдит «Enchanced Alchemy» + SFX игры -> audio/mix2.wav
+# (нужен teaser/Enchanced Alchemy.mp3 в корне teaser)
+python3 src/build_mix2.py
 
 node src/render.js --still 10.5 probe.png        # пробный кадр
 node src/render.js 0 1800 work/frames            # все 1800 кадров (~2.5 мин в 6 потоков)
@@ -70,7 +77,7 @@ $FF -y -framerate 30 -i work/frames/f%05d.png -i audio/mix.wav \
 | `render_runtime` | **ffmpeg** | Remotion требует Chrome headless (недоступен в песочнице — хост заблокирован); HyperFrames требует свой CLI. Рендер-модуль OpenMontage объявляет ffmpeg валидным рантаймом |
 | `composition_mode` | **atelier** | hero-работа: bespoke-сцены под арты игры, без stock-каталога |
 | `narration` | **без закадрового голоса** (по решению пользователя) | историю ведут типографика, Светик и саунд-дизайн |
-| `music` | процедурный синтез (numpy) | в репо нет полной музыки; 0 внешних ключей/закачек |
+| `music` | трек «Enchanced Alchemy» (авторский), эдит 60с | заменил синтез по решению автора; дроп выровнен по импакту 0:50 |
 | `sfx` | родные звуки игры | аутентичность: игрок узнаёт звуки варок и фанфар |
 | `language` | русский | аудит игры RU; вся типографика в Manrope |
 
@@ -82,6 +89,6 @@ teaser/
   src/build_mix.py   # микс: музыка + таймлайн SFX игры
   src/render.js      # atelier-композиция: 7 сцен, 1080x1920@30, детерминированная
   assets/            # копии ассетов игры (шрифты/стикеры/иконки/sfx/glyphs)
-  audio/             # music.wav, mix.wav
+  audio/             # mix2.wav (финальная дорожка)
   renders/           # ГОТОВЫЙ mp4 + постер + стоп-кадры
 ```
