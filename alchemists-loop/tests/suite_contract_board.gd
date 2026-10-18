@@ -166,12 +166,14 @@ static func run(g: Game) -> void:
 		WorkshopBalance.RANKS.size() == ContractsBalance.RANK_MAX + 1)
 	Selftest.check("§3.1 autonomy max matches WorkshopBalance.AUTONOMY (3 entries, index 0..2)",
 		WorkshopBalance.AUTONOMY.size() == ContractsBalance.AUTONOMY_MAX + 1)
-	# Оси улучшения Родника (speed/volume/sources/offline) в этом дереве таблиц
-	# не имеют: SpringBalance с SPEED/VOLUME/SOURCES/OFFLINE живёт в неслитой
-	# ветке feature/spring-v2, а в HEAD здесь Родник — капля без прокачки.
-	# Поэтому 4 сверки SPRING_MAX по размерам таблиц не написаны: обращение к
-	# несуществующим константам — не красный тест, а compile-ошибка всего билда.
-	# Числа SPRING_MAX выше всё равно зафиксированы spec-значениями.
+	Selftest.check("§3.1 spring speed max matches SpringBalance.SPEED size",
+		SpringBalance.SPEED.size() == int(ContractsBalance.SPRING_MAX["speed"]))
+	Selftest.check("§3.1 spring volume max matches SpringBalance.VOLUME size",
+		SpringBalance.VOLUME.size() == int(ContractsBalance.SPRING_MAX["volume"]))
+	Selftest.check("§3.1 spring sources max matches SpringBalance.SOURCES size",
+		SpringBalance.SOURCES.size() == int(ContractsBalance.SPRING_MAX["sources"]))
+	Selftest.check("§3.1 spring offline max matches SpringBalance.OFFLINE size",
+		SpringBalance.OFFLINE.size() == int(ContractsBalance.SPRING_MAX["offline"]))
 
 	# ---------------- §3.4 косметика ----------------
 	Selftest.check("§3.4 there are exactly 3 decor reward ids",
