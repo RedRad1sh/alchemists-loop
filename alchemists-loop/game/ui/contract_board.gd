@@ -99,15 +99,15 @@ func _build_layers() -> void:
 
 	_rails = [_layer("frame_h.png", "RailTop"), _layer("frame_h.png", "RailBottom"),
 		_layer("frame_v.png", "RailLeft"), _layer("frame_v.png", "RailRight")]
-	(_rails[1] as TextureRect).flip_vertical = true
-	(_rails[3] as TextureRect).flip_horizontal = true
+	(_rails[1] as TextureRect).flip_v = true
+	(_rails[3] as TextureRect).flip_h = true
 
 	# Один кованый уголок, четыре раза зеркалом (§5.2.2).
 	_corners = []
 	for i in range(4):
 		var corner := _layer("corner_iron.png", "Corner%d" % i)
-		corner.flip_horizontal = (i & 1) == 1
-		corner.flip_vertical = (i & 2) == 2
+		corner.flip_h = (i & 1) == 1
+		corner.flip_v = (i & 2) == 2
 		_corners.append(corner)
 
 	_shelf_daily = _layer("shelf_bar.png", "ShelfDaily")

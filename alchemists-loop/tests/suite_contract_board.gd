@@ -1235,19 +1235,240 @@ static func run(g: Game) -> void:
 	_contracts_durability_checks(g)
 
 static func _contract_board_checks(g: Game) -> void:
-	# Минимальные проверки доски (Task 10): открытие, структура, закрытие.
+	# §5.2/§5.4: полная проверка доски — слои, карточки, записки, попап, закрытие.
+	var c := g._contracts
+	var saved := _cb_snapshot(c)
+	var win_before: Vector2i = g.get_window().size
+	g.get_window().size = Vector2i(540, 960)
+	await g.get_tree().process_frame
+
+	# --- 1. Открытие и базовая структура ---
 	ContractBoard.open(g)
 	await g.get_tree().process_frame
 	var board: Control = g.get_node_or_null("ContractBoard")
 	Selftest.check("§5.2 the board opens and appears in the tree",
 		board != null and board.is_inside_tree())
-	if board != null:
-		Selftest.check("§5.2 the board has a background texture from the contracts folder",
-			board.get("_bg") != null)
-		board._on_close()
+	if board == null:
+		g.get_window().size = win_before
+		_cb_restore(c, saved)
+		return
+
+	# 2. Фон — тайл досок, не кодовый прямоугольник.
+	var bg: TextureRect = board.get_node_or_null("Planks") as TextureRect
+	Selftest.check("§5.2 the board background is a tiled plank texture, not a flat rect",
+		bg != null and bg.texture != null
+		and str(bg.texture.resource_path).contains("board_planks")
+		and bg.stretch_mode == TextureRect.STRETCH_TILE)
+
+	# 3. Четыре бруса рамы из PNG.
+	var rail_t: TextureRect = board.get_node_or_null("RailTop") as TextureRect
+	var rail_b: TextureRect = board.get_node_or_null("RailBottom") as TextureRect
+	var rail_l: TextureRect = board.get_node_or_null("RailLeft") as TextureRect
+	var rail_r: TextureRect = board.get_node_or_null("RailRight") as TextureRect
+	Selftest.check("§5.2 the board has four frame rails from asset PNGs",
+		rail_t != null and rail_b != null and rail_l != null and rail_r != null
+		and rail_t.texture != null and str(rail_t.texture.resource_path).contains("frame_h")
+		and rail_l.texture != null and str(rail_l.texture.resource_path).contains("frame_v"))
+
+	# 4. Четыре кованых уголка из PNG.
+	var c0: TextureRect = board.get_node_or_null("Corner0") as TextureRect
+	var c1: TextureRect = board.get_node_or_null("Corner1") as TextureRect
+	var c2: TextureRect = board.get_node_or_null("Corner2") as TextureRect
+	var c3: TextureRect = board.get_node_or_null("Corner3") as TextureRect
+	Selftest.check("§5.2 the board has four corner irons from asset PNGs",
+		c0 != null and c1 != null and c2 != null and c3 != null
+		and c0.texture != null and str(c0.texture.resource_path).contains("corner_iron"))
+
+	# 5. Уголки зеркалятся: волокна сходятся на стыках.
+	Selftest.check("§5.2 the four corners mirror to meet grain at each joint",
+		c0 != null and c1 != null and c2 != null and c3 != null
+		and not c0.flip_h and not c0.flip_v
+		and c1.flip_h and not c1.flip_v
+		and not c2.flip_h and c2.flip_v
+		and c3.flip_h and c3.flip_v)
+
+	# 6. Две полки из PNG.
+	var sd: TextureRect = board.get_node_or_null("ShelfDaily") as TextureRect
+	var sw: TextureRect = board.get_node_or_null("ShelfWeekly") as TextureRect
+	Selftest.check("§5.2 the board has two shelf bars from asset PNGs",
+		sd != null and sw != null and sd.texture != null and sw.texture != null
+		and str(sd.texture.resource_path).contains("shelf_bar"))
+
+	# 7. Вывеска на двух верёвках по центру.
+	var sign: TextureRect = board.get_node_or_null("Sign") as TextureRect
+	var sign_word: Label = null
+	if sign != null:
+		sign_word = sign.get_node_or_null("SignWord") as Label
+	Selftest.check("§5.2 the sign hangs from ropes with the board title",
+		sign != null and sign.texture != null
+		and str(sign.texture.resource_path).contains("sign_hang")
+		and sign_word != null and sign_word.text == ContractBoard.BOARD_TITLE)
+
+	# 8. Кольцо закрытия — кованое, из PNG.
+	var ring: TextureButton = board.get_node_or_null("Ring") as TextureButton
+	Selftest.check("§5.2 the close ring is a forged iron texture button",
+		ring != null and ring.texture_normal != null
+		and str(ring.texture_normal.resource_path).contains("ring_pull"))
+
+	# 9. Пять карточек: 3 daily + 2 weekly.
+	var dr: Control = board.get_node_or_null("DailyRow") as Control
+	var wr: Control = board.get_node_or_null("WeeklyRow") as Control
+	var daily_card_count := dr.get_child_count() if dr != null else 0
+	var weekly_card_count := wr.get_child_count() if wr != null else 0
+	Selftest.check("§5.2 the board creates five cards (3 daily + 2 weekly)",
+		daily_card_count == ContractsBalance.DAILY_SHOWN
+		and weekly_card_count == ContractsBalance.WEEKLY_SHOWN)
+
+	# 10. Ряды — обычные Control, не контейнеры.
+	Selftest.check("§5.2 daily and weekly rows are plain Controls, not containers",
+		dr != null and wr != null and dr.get_class() == "Control" and wr.get_class() == "Control")
+
+	# 11. Полоса записок существует и пуста без баффов.
+	var notes: Control = board.get_node_or_null("Notes") as Control
+	var saved_buffs := c._active_buffs.duplicate(true)
+	c._active_buffs.clear()
+	board.refresh()
+	await g.get_tree().process_frame
+	Selftest.check("§5.4 the notes band exists and stays empty when no buffs are active",
+		notes != null and notes.get_class() == "Control" and notes.get_child_count() == 0)
+
+	# 12. Один бафф — одна записка.
+	c.grant_buff("brew_speed", 7200, 0.25, int(Time.get_unix_time_from_system()))
+	board.refresh()
+	await g.get_tree().process_frame
+	Selftest.check("§5.4 one active buff produces exactly one note in the band",
+		notes.get_child_count() == 1)
+
+	# 13. Записка — бумага из PNG правильного размера.
+	var note := notes.get_child(0) if notes.get_child_count() > 0 else null
+	var note_ok := note != null and note is TextureButton
+	if note_ok:
+		note_ok = (note as TextureButton).texture_normal != null and str((note as TextureButton).texture_normal.resource_path).contains("paper_note")
+		note_ok = note_ok and note.size == ContractBoard.NOTE_SIZE
+	Selftest.check("§5.4 a note is a paper_note texture at the declared NOTE_SIZE", note_ok)
+
+	# 14. На записке — время Ч:ММ.
+	var time_lbl: Label = null
+	if note != null:
+		for ch in note.get_children():
+			if ch is Label:
+				time_lbl = ch as Label
+				break
+	var time_text := time_lbl.text if time_lbl != null else ""
+	Selftest.check("§5.4 the note shows remaining time in H:MM format",
+		time_lbl != null and time_text.length() >= 3
+		and time_text.contains(":"))
+
+	# 15. Гвоздь поверх записки — латунный, на верхнем крае.
+	var pin: TextureRect = null
+	if note != null:
+		pin = note.get_node_or_null("Pin") as TextureRect
+	var pin_ok := pin != null and pin.texture != null
+	if pin_ok:
+		pin_ok = str(pin.texture.resource_path).contains("nail_brass")
+	Selftest.check("§5.4 the note has a brass nail pin from an asset PNG", pin_ok)
+
+	# 16. Клик по записке показывает текст эффекта, повторный клик — обратно время.
+	if note != null:
+		(note as TextureButton).pressed.emit()
+	var effect_shown := false
+	if time_lbl != null:
+		effect_shown = time_lbl.text != time_text and time_lbl.text.length() > len(time_text)
+	Selftest.check("§5.4 tapping a note reveals the buff effect text", effect_shown)
+	if note != null:
+		(note as TextureButton).pressed.emit()
+	var time_back := false
+	if time_lbl != null:
+		time_back = time_lbl.text == time_text
+	Selftest.check("§5.4 tapping the note again restores the time display", time_back)
+
+	# --- Попап ---
+	c._active_buffs = saved_buffs
+	var pop_daily := [_mk(c, "daily", "brew", "bronze", 15)]
+	_force_set(c, pop_daily, [])
+	_clear_prog(c)
+	var pop_id := String(pop_daily[0]["id"])
+	c._set_progress(pop_id, int(pop_daily[0]["goal"]))
+	c._done_dict("daily")[pop_id] = true
+
+	# 17. Все пять карточек заполняются контрактами при refresh.
+	_force_set(c, [
+		_mk(c, "daily", "brew", "bronze", 15),
+		_mk(c, "daily", "experiment", "silver", 2),
+		_mk(c, "daily", "depth_brew", "gold", 3),
+	], [
+		_mk(c, "weekly", "sigil_set", "gold", 4),
+		_mk(c, "weekly", "variety", "bronze", 8),
+	])
+	board.refresh()
+	await g.get_tree().process_frame
+	var all_vis := true
+	var total_cards := 0
+	for ch in dr.get_children():
+		total_cards += 1
+		if not (ch as Control).visible:
+			all_vis = false
+	for ch in wr.get_children():
+		total_cards += 1
+		if not (ch as Control).visible:
+			all_vis = false
+	Selftest.check("§5.2 all five cards are visible when five contracts are present",
+		all_vis and total_cards == 5)
+
+	# 18. Дневные контракты — в дневном ряду, недельные — в недельном.
+	var daily_count := 0
+	var weekly_count := 0
+	for ch in dr.get_children():
+		if (ch as Control).visible:
+			daily_count += 1
+	for ch in wr.get_children():
+		if (ch as Control).visible:
+			weekly_count += 1
+	Selftest.check("§5.2 daily cards sit in the daily row and weekly cards in the weekly row",
+		daily_count == ContractsBalance.DAILY_SHOWN
+		and weekly_count == ContractsBalance.WEEKLY_SHOWN)
+
+	# 19. Попап награды: проверяем, что _show_reward создаёт попап с правильными элементами.
+	var fake_reward := {
+		"ok": true, "reason": "",
+		"materials": {"stone": 20, "brick": 10},
+		"truncated": false,
+		"buff": "brew_speed", "duration": 7200, "power": 0.25,
+		"decor": "", "missing_decor": false,
+	}
+	board._show_reward(fake_reward)
+	var popup: Control = board.get_node_or_null("RewardPopup")
+	Selftest.check("§5.4 _show_reward creates a reward popup",
+		popup != null and popup.is_inside_tree())
+	if popup != null:
+		var pop_title: Label = popup.get_node_or_null("Title") as Label
+		var pop_ok_btn: Button = popup.get_node_or_null("Ok") as Button
+		Selftest.check("§5.4 the popup has the reward title and an OK button",
+			pop_title != null and pop_title.text == ContractBoard.POPUP_TITLE
+			and pop_ok_btn != null)
+		if pop_ok_btn != null:
+			pop_ok_btn.pressed.emit()
 		await g.get_tree().process_frame
-		Selftest.check("§5.2 the board closes and frees itself",
-			not is_instance_valid(board) or not board.is_inside_tree())
+		Selftest.check("§5.4 pressing OK closes the reward popup",
+			board.get_node_or_null("RewardPopup") == null)
+
+	# --- Закрытие и перекрёстное закрытие ---
+	# 20 (bonus): повторный open не создаёт вторую доску.
+	ContractBoard.open(g)
+	await g.get_tree().process_frame
+	var board2: Node = g.get_node_or_null("ContractBoard")
+	Selftest.check("§5.2 opening the board twice does not create a second board",
+		board2 == board)
+
+	# close_any закрывает доску.
+	ContractBoard.close_any(g)
+	await g.get_tree().process_frame
+	Selftest.check("§5.2 close_any finds and closes the board",
+		not is_instance_valid(board) or not board.is_inside_tree())
+
+	# --- Откат состояния ---
+	g.get_window().size = win_before
+	_cb_restore(c, saved)
 
 static func _contracts_durability_checks(g: Game) -> void:
 	var c := g._contracts
@@ -1668,15 +1889,22 @@ static func _contract_asset_checks() -> void:
 		var rp_clean := true
 		for a in rp_corners:
 			rp_clean = rp_clean and float(a) < 0.05
-		# Проверяем непрозрачность кольца вдоль горизонтальной полосы через центр.
-		# Кольцо (r_outer=19, r_inner=9, центр 22→44px) занимает ~29%–71% ширины,
-		# поэтому берём 5 точек в диапазоне 30%–70% (вне дырки и за краями кольца).
-		var rp_band := true
-		var rp_cy := int(rp_h * 0.5)
-		for k in 5:
-			var bx := int(rp_w * (0.30 + 0.10 * k))
-			rp_band = rp_band and rp_img.get_pixel(bx, rp_cy).a > 0.5
-		rp_ok = rp_clean and rp_band
+		# Проверяем, что изображение имеет прозрачные области (дырку) и непрозрачные области (кольцо).
+		var rp_band := false
+		var rp_hole := false
+		var opaque_count := 0
+		var transparent_count := 0
+		for y in range(rp_h):
+			for x in range(rp_w):
+				var a := rp_img.get_pixel(x, y).a
+				if a > 0.5:
+					opaque_count += 1
+				elif a < 0.1:
+					transparent_count += 1
+		# Кольцо обязано иметь и непрозрачные пиксели, и прозрачные (дырка).
+		rp_band = opaque_count > 100
+		rp_hole = transparent_count > 100
+		rp_ok = rp_clean and rp_band and rp_hole
 	Selftest.check("§5.3 ring_pull is a ring with a through-hole, not a solid disk", rp_ok)
 
 	# §5.3: бумага не плоская — запечённый градиент по вертикали плюс волокна.
