@@ -247,6 +247,61 @@ func reward_for(c: Dictionary) -> Dictionary:
 		"decor": String(c.get("decor", "")),
 	}
 
+# ---------- §3.3 баффы ----------
+# Срок и сила живут на настоящем unix (§1.4: «временные» — значит сгорающие по
+# часам, а не по игровым дням). now_unix = -1 ⇒ фактическое время системы.
+func grant_buff(buff_id: String, duration: int, power: float, now_unix: int = -1) -> void:
+	if not ContractsBalance.BUFF_IDS.has(buff_id) or duration <= 0:
+		return
+	prune_buffs(now_unix)
+	var now := _unix(now_unix)
+	var prev := _active_buffs.get(buff_id, {}) as Dictionary
+	# §3.3: не стакается. Срок продлевается от конца действующего, сила
+	# остаётся первой — иначе вторая выдача удваивала бы эффект.
+	var from := maxi(int(prev.get("until", 0)), now)
+	_active_buffs[buff_id] = {"until": from + duration, "power": float(prev.get("power", power))}
+
+func prune_buffs(now_unix: int = -1) -> void:
+	var now := _unix(now_unix)
+	for id in _active_buffs.keys():
+		if int((_active_buffs[id] as Dictionary)["until"]) <= now:
+			_active_buffs.erase(id)
+
+func buff_power(buff_id: String, now_unix: int = -1) -> float:
+	var b := _active_buffs.get(buff_id, {}) as Dictionary
+	if b.is_empty() or int(b.get("until", 0)) <= _unix(now_unix):
+		return 0.0
+	return float(b.get("power", 0.0))
+
+func buff_left(buff_id: String, now_unix: int = -1) -> int:
+	var b := _active_buffs.get(buff_id, {}) as Dictionary
+	if b.is_empty():
+		return 0
+	return maxi(0, int(b.get("until", 0)) - _unix(now_unix))
+
+func active_buffs(now_unix: int = -1) -> Array:
+	prune_buffs(now_unix)
+	var now := _unix(now_unix)
+	var out: Array = []
+	# Порядок фиксирован таблицей, а не порядком в Dictionary: UI перестраивает
+	# записки на каждой пересборке доски, и без порядка они бы прыгали.
+	for id in ContractsBalance.BUFF_IDS:
+		var buff_id := String(id)
+		if not _active_buffs.has(buff_id):
+			continue
+		out.append({
+			"id": buff_id,
+			"power": float((_active_buffs[buff_id] as Dictionary)["power"]),
+			"left": maxi(0, int((_active_buffs[buff_id] as Dictionary)["until"]) - now),
+			"title": String(ContractsBalance.BUFF_TITLE[buff_id]),
+		})
+	return out
+
+func spring_yield(now_unix: int = -1) -> int:
+	# §3.3: power — добавка к нейтральному значению, поэтому ×(1+power) и для
+	# процента, и для мультипликатора. Округляем до целого выхода за один тик.
+	return maxi(1, int(round(1.0 + buff_power("spring_yield", now_unix))))
+
 # §4.4: id декора обязан существовать в каталоге до выдачи.
 static func decor_exists(decor_id: String) -> bool:
 	if decor_id == "":

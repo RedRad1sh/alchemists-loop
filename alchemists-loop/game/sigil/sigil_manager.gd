@@ -417,11 +417,14 @@ func milestone_cap_bonus() -> int:
 
 ## Награда «6 карт комплекта»: −10% эфира крафтов этого комплекта.
 ## Хроматика (set == "") всегда платит полную цену.
-func craft_ether_cost(craft: Dictionary) -> int:
+## discount — скидка крафта от контрактной доски (§3.3); применяется поверх
+## награды комплекта и ограничен 90 %, чтобы цена не стала нулевой.
+func craft_ether_cost(craft: Dictionary, discount: float = 0.0) -> int:
 	var set_id := str(craft.get("set", ""))
+	var cost := float(int(craft.get("ether_cost", 0)))
 	if set_id != "" and claimed_tiers(set_id).has(6):
-		return int(round(int(craft.get("ether_cost", 0)) * 0.9))
-	return int(craft.get("ether_cost", 0))
+		cost *= 0.9
+	return int(round(cost * (1.0 - clampf(discount, 0.0, 0.9))))
 
 
 ## Награда «13 карт комплекта»: верстак варит элементы категории комплекта

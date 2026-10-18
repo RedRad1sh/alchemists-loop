@@ -156,6 +156,12 @@ func _spring_active() -> bool:
 		return false
 	return true
 
+func _line_speed() -> float:
+	# Одно место для множения: _next_event и _elapse обязаны давать одинаковую
+	# скорость, иначе интервал событий и накопление фазы разъедутся.
+	return (Game.BENCH_OFFLINE_FACTOR if _offline else 1.0) \
+		* (1.0 + g._contracts.buff_power("workshop_speed"))
+
 func _next_event(remaining: float) -> float:
 	var dt := remaining
 	var rate: float = g._engine._ether_rate()
@@ -163,7 +169,7 @@ func _next_event(remaining: float) -> float:
 		dt = minf(dt, maxf(EPS, (1.0 - g._engine.regen_clock) / rate))
 	if _spring_active():
 		dt = minf(dt, maxf(EPS, g._engine.spring_interval() - g._pages._spring_clock))
-	var speed := Game.BENCH_OFFLINE_FACTOR if _offline else 1.0
+	var speed: float = _line_speed()
 	for line in workshop.lines:
 		if _timer_active(line):
 			dt = minf(dt, maxf(EPS, (_interval(line) - float(line["phase_seconds"])) / speed))
@@ -186,26 +192,16 @@ func _elapse(dt: float) -> void:
 		var interval: float = g._engine.spring_interval()
 		if g._pages._spring_clock >= interval - EPS:
 			g._pages._spring_clock = maxf(0.0, g._pages._spring_clock - interval)
-			if _offline:
-				# Офлайн: не проверяем буфер, просто производим в инвентарь
-				for source in g._engine.spring_sources:
-					g._engine.inventory[source] = int(g._engine.inventory.get(source, 0)) + 1
-					_stats["spring_items"] += 1
+			var amount := g._contracts.spring_yield()
+			for source in g._engine.spring_sources:
+				var granted: int = g._engine._spring_gain(String(source), amount)
+				if granted > 0:
+					_stats["spring_items"] += granted
 					_mutation += 1
-			else:
-				# Онлайн: проверяем буфер
-				var volume_cap: int = SpringBalance.VOLUME_CAP[g._engine.spring_levels.get("volume", 0)]
-				for source in g._engine.spring_sources:
-					var current_buffer: int = g._engine.spring_buffer.get(source, 0)
-					if current_buffer < volume_cap:
-						g._engine.spring_buffer[source] = current_buffer + 1
-						g._engine.inventory[source] = int(g._engine.inventory.get(source, 0)) + 1
-						_stats["spring_items"] += 1
-						_mutation += 1
 	elif _offline and g._engine.spring_on and g._engine._mode_unlocked("spring"):
 		var interval: float = g._engine.spring_interval()
 		g._pages._spring_clock = fposmod(g._pages._spring_clock + dt, interval)
-	var speed := Game.BENCH_OFFLINE_FACTOR if _offline else 1.0
+	var speed: float = _line_speed()
 	for line in workshop.lines:
 		if _timer_active(line):
 			line["phase_seconds"] = float(line["phase_seconds"]) + dt * speed

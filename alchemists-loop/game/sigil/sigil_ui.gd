@@ -1203,11 +1203,18 @@ func _await_catalog(timeout: float) -> bool:
 	return main._sigil.catalog_size() > 0
 
 
+## Цена крафта с учётом скидок: награды комплекта — внутри SigilManager,
+## временная скидка контрактной доски (§3.3) — здесь, в единственном месте,
+## где UI Аркана знает про баффы.
+func _sigil_ether_cost(craft: Dictionary) -> int:
+	return main._sigil.craft_ether_cost(craft, main._contracts.buff_power("craft_discount"))
+
+
 ## Строка крафта: слева круг, справа всё, что нужно для решения.
 func _sigil_craft_row(craft: Dictionary) -> Control:
 	var rarity := str(craft.get("rarity", "common"))
 	var is_chromatic := bool(craft.get("is_chromatic", false))
-	var ether_cost: int = main._sigil.craft_ether_cost(craft)
+	var ether_cost: int = _sigil_ether_cost(craft)
 	var rc: Color = main._rarity_color(rarity)
 	var accent: Color = Color(1.0, 0.55, 0.12) if is_chromatic else rc
 	var shortages := _sigil_shortages(craft)
@@ -1612,7 +1619,7 @@ func _on_sigil_board_confirmed(craft: Dictionary) -> void:
 		main._engine._refresh()
 		Sfx.error()
 		return
-	var ether_cost: int = main._sigil.craft_ether_cost(craft)
+	var ether_cost: int = _sigil_ether_cost(craft)
 	if not main._engine._spend_ether(ether_cost):
 		main._engine.status_text = "Не хватает эфира: нужно %d." % ether_cost
 		main._engine._refresh()

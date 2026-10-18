@@ -346,10 +346,12 @@ func spring_purchase(axis: String) -> Dictionary:
 func _ether_rate() -> float:
 	return (Game.BASE_ETHER_REGEN + 0.35 * float(_up_lvl("ether_regen")) + _collection_regen_bonus() \
 		+ g._progress_ui._quest_regen_bonus() + g._progress_ui._ach_regen_bonus() + g._resonance._res_regen_bonus() \
-		+ g._retention._circle_regen_bonus() + g._retention._fair_regen_total) * _sage_multiplier()
+		+ g._retention._circle_regen_bonus() + g._retention._fair_regen_total) \
+		* _sage_multiplier() * (1.0 + g._contracts.buff_power("ether_regen"))
 
 func _brew_time() -> float:
-	return maxf(0.35, g.BREW_SECONDS * pow(0.90, _up_lvl("brew_speed")))
+	return maxf(0.35, g.BREW_SECONDS * pow(0.90, _up_lvl("brew_speed")) \
+		/ (1.0 + g._contracts.buff_power("brew_speed")))
 
 func _content_layer(item_id: String, trail: Array = []) -> int:
 	# Unlike _layer_of, this is independent of the player's known recipe book;
@@ -659,19 +661,36 @@ func _mode_unlocked(key: String) -> bool:
 		return inventory.size() >= int(m.get("min_items", 0))
 	return false
 
+func _spring_volume_cap() -> int:
+	return int(SpringBalance.VOLUME_CAP[spring_levels.get("volume", 0)])
+
+func _spring_gain(src: String, amount: int) -> int:
+	# Единая точка начисления родникового выхода: и живой тик, и офлайн-реплей
+	# Мастерской. Буфер никогда не превышает кап, избыток сгорает (как эфир
+	# сверх капа), поэтому возвращаем фактическое зачисленное число.
+	if amount <= 0:
+		return 0
+	var room := maxi(0, _spring_volume_cap() - int(spring_buffer.get(src, 0)))
+	var add := mini(amount, room)
+	if add <= 0:
+		return 0
+	spring_buffer[src] = int(spring_buffer.get(src, 0)) + add
+	inventory[src] = int(inventory.get(src, 0)) + add
+	return add
+
 func _spring_tick(delta: float) -> void:
 	if not _mode_unlocked("spring") or not spring_on:
 		return
 	g._pages._spring_clock += delta
 	if g._pages._spring_clock >= spring_interval():
 		g._pages._spring_clock -= spring_interval()
-		var volume_cap: int = SpringBalance.VOLUME_CAP[spring_levels.get("volume", 0)]
-		for source in spring_sources:
-			var current_buffer: int = spring_buffer.get(source, 0)
-			if current_buffer < volume_cap:
-				spring_buffer[source] = current_buffer + 1
-				inventory[source] = int(inventory.get(source, 0)) + 1
-		_refresh()
+		var produced := false
+		var amount := g._contracts.spring_yield()
+		for src in spring_sources:
+			if _spring_gain(String(src), amount) > 0:
+				produced = true
+		if produced:
+			_refresh()
 
 func _gift_tick(delta: float) -> void:
 	# улучшение «Дары»: +1 случайное открытое вещество каждые 2 минуты

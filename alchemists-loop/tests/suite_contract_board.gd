@@ -465,3 +465,162 @@ static func run(g: Game) -> void:
 	Selftest.check("§3.3 weekly gold reward carries its decor id and the ether_regen base scaled by one mult",
 		String(rw["decor"]) == "window_guild" and String(rw["buff"]) == "ether_regen"
 		and int(rw["materials"]["crystal"]) == int(round(18.0 * g._contracts.reward_mult())))
+
+	# ---------- Task 4: баффы (§3.3, §6.8, §6.9, §6.10) ----------
+	var c4 := g._contracts
+	var buffs4_snap := c4._active_buffs.duplicate(true)
+	var now := int(Time.get_unix_time_from_system())
+
+	c4.grant_buff("no_such_buff", 3600, 0.5, now)
+	Selftest.check("§3.3 grant_buff ignores an id outside BUFF_IDS", c4._active_buffs.is_empty())
+	c4.grant_buff("brew_speed", 0, 0.25, now)
+	Selftest.check("§3.3 grant_buff ignores a non-positive duration", c4._active_buffs.is_empty())
+
+	c4.grant_buff("brew_speed", 3600, 0.25, now)
+	var first_until := int((c4._active_buffs["brew_speed"] as Dictionary)["until"])
+	c4.grant_buff("brew_speed", 3600, 0.9, now)
+	var second := c4._active_buffs["brew_speed"] as Dictionary
+	# §3.3: не стакается — сила НЕ умножается и НЕ заменяется на бо́льшую; срок
+	# продлевается от текущего конца (max(until, now) + duration).
+	Selftest.check("§6.10 a second grant extends the deadline from the old one and keeps the first power",
+		int(second["until"]) == first_until + 3600 and absf(float(second["power"]) - 0.25) < 0.0001)
+	c4.grant_buff("brew_speed", 3600, 0.25, now + 10_000_000)
+	Selftest.check("§6.10 granting inside a live window still only extends the deadline",
+		int((c4._active_buffs["brew_speed"] as Dictionary)["until"]) == now + 10_000_000 + 3600)
+	c4._active_buffs.clear()
+
+	c4.grant_buff("ether_regen", 10, 1.0, 1_000_000)
+	Selftest.check("§6.8 a buff whose until lies in the past gives no power",
+		c4.buff_power("ether_regen", now) == 0.0)
+	Selftest.check("§6.8 buff_left never returns a negative number", c4.buff_left("ether_regen", now) == 0)
+	c4.grant_buff("brew_speed", 7200, 0.25, now)
+	c4.prune_buffs(now)
+	Selftest.check("§6.8 prune_buffs erases the expired buff and keeps the live one",
+		not c4._active_buffs.has("ether_regen") and c4._active_buffs.has("brew_speed"))
+	Selftest.check("§3.3 active_buffs lists live buffs in BUFF_IDS order with power, remaining seconds and title",
+		c4.active_buffs(now) == [{"id": "brew_speed", "power": 0.25, "left": 7200,
+			"title": String(ContractsBalance.BUFF_TITLE["brew_speed"])}])
+	c4._active_buffs.clear()
+
+	# §6.9 + §3.3: реальная формула в реальной точке потребления.
+	# g.BREW_SECONDS — живая переменная: suite_bench_gifts оставляет после себя
+	# 0.05, из-за чего maxf(0.35, …) в _brew_time климпит и базовое значение,
+	# и значение с баффом, и проверка формулы стала бы зависеть от чужого
+	# состояния. Ставим базовые 1.2 (main.gd:23) на время блока и возвращаем.
+	var brew_secs_snap := g.BREW_SECONDS
+	g.BREW_SECONDS = 1.2
+	var brew_base := g._engine._brew_time()
+	var ether_base := g._engine._ether_rate()
+	c4.grant_buff("brew_speed", 7200, 0.25, -1)
+	c4.grant_buff("ether_regen", 7200, 1.0, -1)
+	Selftest.check("§6.9 an active brew_speed buff makes _brew_time exactly 1+power times smaller",
+		absf(g._engine._brew_time() - brew_base / 1.25) < 0.000001)
+	c4.grant_buff("brew_speed", 3600, 0.25, -1)
+	Selftest.check("§6.10 two grants of brew_speed still divide _brew_time by exactly 1+power",
+		absf(g._engine._brew_time() - brew_base / 1.25) < 0.000001)
+	Selftest.check("§3.3 an active ether_regen buff multiplies _ether_rate by exactly 1+power",
+		absf(g._engine._ether_rate() - ether_base * 2.0) < 0.000001)
+	c4._active_buffs.clear()
+	Selftest.check("§6.8 with no live buff the formulas return to their base values",
+		absf(g._engine._brew_time() - brew_base) < 0.000001
+		and absf(g._engine._ether_rate() - ether_base) < 0.000001)
+	g.BREW_SECONDS = brew_secs_snap
+
+	# §3.3 скорость линий Мастерской. Два места (_next_event и _elapse) вызывают
+	# одну функцию, поэтому достаточно проверить её — несогласованность двух
+	# строк стала бы возможной только если кто-то удалит вызов (видно в диффе).
+	var sched: WorkshopScheduler = g._workshop_scheduler as WorkshopScheduler
+	var offline_snap := sched._offline
+	sched._offline = false
+	Selftest.check("§3.3 _line_speed is 1.0 online with no buff", absf(sched._line_speed() - 1.0) < 0.000001)
+	sched._offline = true
+	Selftest.check("§3.3 _line_speed keeps the bench offline factor with no buff",
+		absf(sched._line_speed() - Game.BENCH_OFFLINE_FACTOR) < 0.000001)
+	c4.grant_buff("workshop_speed", 3600, 0.30, -1)
+	Selftest.check("§3.3 an active workshop_speed buff multiplies the offline line speed by 1+power",
+		absf(sched._line_speed() - Game.BENCH_OFFLINE_FACTOR * 1.3) < 0.000001)
+	sched._offline = false
+	Selftest.check("§3.3 the same buff multiplies the online line speed by 1+power",
+		absf(sched._line_speed() - 1.3) < 0.000001)
+	c4._active_buffs.clear()
+	sched._offline = offline_snap
+
+	# §3.3 скидка крафта: сначала математика SigilManager, затем реальная
+	# проводка через g._sigil_ui (живой инстанс с main = g), а не текст файла.
+	var sm := g._sigil
+	var plain := {"set": "", "ether_cost": 400}
+	var set6 := {"set": "zz_test_set", "ether_cost": 400}
+	var claimed_snap := sm._milestones_claimed.duplicate(true)
+	sm._milestones_claimed["zz_test_set"] = [6]
+	Selftest.check("§3.3 the set-6 reward still costs 360 with no discount buff",
+		sm.craft_ether_cost(set6) == 360 and sm.craft_ether_cost(plain) == 400)
+	Selftest.check("§3.3 craft_discount reduces the cost by exactly its power and stacks with the set reward",
+		sm.craft_ether_cost(set6, 0.2) == 288 and sm.craft_ether_cost(plain, 0.2) == 320)
+	Selftest.check("§3.3 craft_discount is clamped at 90 percent", sm.craft_ether_cost(plain, 5.0) == 40)
+	sm._milestones_claimed = claimed_snap
+	c4.grant_buff("craft_discount", 10800, 0.20, -1)
+	Selftest.check("§3.3 the Arcana UI reads the discount through the single cost helper",
+		g._sigil_ui._sigil_ether_cost(plain) == 320)
+	c4._active_buffs.clear()
+	Selftest.check("§3.3 without the buff the Arcana UI helper returns the undiscounted cost",
+		g._sigil_ui._sigil_ether_cost(plain) == 400)
+
+	Selftest.check("§3.3 spring_yield is 1 with no live buff", c4.spring_yield(now) == 1)
+	c4.grant_buff("spring_yield", 1800, 1.0, now + 999_999_999)
+	Selftest.check("§3.3 an active power-1.0 spring_yield buff doubles the per-source yield",
+		c4.spring_yield(1_000_000) == 2)
+	c4._active_buffs.clear()
+	c4.grant_buff("spring_yield", 1800, 2.05, now + 999_999_999)
+	Selftest.check("§3.3 spring_yield rounds 1+2.05 to 3", c4.spring_yield(1_000_000) == 3)
+
+	# §3.3 + Review Focus 4: реальный тик Родника и потолок буфера. Инвентарь,
+	# буфер, список источников и режим живого Game трогаем только в пределах
+	# этого блока и возвращаем как было (Review Focus 7).
+	var e := g._engine
+	var plant_had := e.inventory.has("plant")
+	var src_snap := e.spring_sources.duplicate()
+	var levels_snap: Dictionary = e.spring_levels.duplicate(true)
+	var on_snap := e.spring_on
+	var buf_snap := e.spring_buffer.duplicate(true)
+	var clock_snap := g._pages._spring_clock
+	var water_snap := int(e.inventory.get("water", 0))
+	e.inventory["plant"] = 1          # core.gd:650: spring разблокирован iff есть "plant"
+	e.spring_sources = ["water"]
+	e.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	e.spring_buffer.clear()           # кап = SpringBalance.VOLUME_CAP[0] = 100
+	e.spring_on = true
+	var cap := e._spring_volume_cap()
+	g._pages._spring_clock = 0.0
+	c4._active_buffs.clear()
+	e._spring_tick(e.spring_interval() + 0.01)
+	Selftest.check("§3.3 one spring tick adds spring_yield units to every active source",
+		int(e.spring_buffer.get("water", 0)) == 1 and int(e.inventory.get("water", 0)) == water_snap + 1)
+	c4.grant_buff("spring_yield", 1800, 1.0, -1)
+	e.spring_buffer.clear()
+	g._pages._spring_clock = 0.0
+	var water_before := int(e.inventory.get("water", 0))
+	e._spring_tick(e.spring_interval() + 0.01)
+	Selftest.check("§3.3 a buffed tick adds the whole yield when the buffer has room",
+		int(e.spring_buffer.get("water", 0)) == 2 and int(e.inventory.get("water", 0)) == water_before + 2)
+	# Потолок: буфер никогда не превышает кап, избыток сгорает — как эфир сверх
+	# капа. Без этой отсечки бафф spring_yield пробивал бы объёмное ограничение.
+	e.spring_buffer["water"] = cap - 1
+	g._pages._spring_clock = 0.0
+	var capped_before := int(e.inventory.get("water", 0))
+	e._spring_tick(e.spring_interval() + 0.01)
+	Selftest.check("§3.3 a buffed tick never raises the source buffer above _spring_volume_cap",
+		int(e.spring_buffer.get("water", 0)) == cap
+		and int(e.inventory.get("water", 0)) == capped_before + 1)
+	e.spring_buffer.clear()
+	Selftest.check("§3.3 _spring_gain returns exactly what it added and 0 once the buffer is full",
+		e._spring_gain("water", 3) == 3 and e._spring_gain("water", 99_999) == cap - 3
+		and e._spring_gain("water", 5) == 0 and int(e.spring_buffer.get("water", 0)) == cap)
+	c4._active_buffs = buffs4_snap
+	e.spring_buffer = buf_snap
+	e.spring_sources = src_snap
+	e.spring_levels = levels_snap.duplicate(true)
+	e.spring_on = on_snap
+	g._pages._spring_clock = clock_snap
+	e.inventory["water"] = water_snap
+	if not plant_had:
+		e.inventory.erase("plant")
