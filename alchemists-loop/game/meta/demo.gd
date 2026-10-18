@@ -46,6 +46,8 @@ var _action_letter := false
 var _action_atlas := false
 var _action_experiment := false
 var _action_brewprofile := false
+var _action_contracts := false
+var _contract_state := ""
 var _experiment_input_done := false
 var _brew_profile_started := false
 var _brew_profile_frame := 0
@@ -368,6 +370,9 @@ func _tick_demo() -> bool:
 			g._engine._refresh()
 		if _shot_tab == 1 and not g._online._world_loaded and _shot_frame < 180:
 			return true
+		if _action_contracts and _shot_frame == 40:
+			# В прогоне согласия ещё не было: модалка легла бы поверх кадра приёмки.
+			g._shop._close_consent()
 		var shot_at := 120 if _action_experiment else (200 if _action_sigilcoll else 50)
 		if _shot_frame >= shot_at:
 			var img := g.get_viewport().get_texture().get_image()

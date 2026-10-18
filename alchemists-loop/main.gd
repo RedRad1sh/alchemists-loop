@@ -449,6 +449,7 @@ var _sigil: SigilManager  # Аркан Сигилов: карточки реце
 var _live_card_node: SigilCard = null
 var _sigil_ui: SigilUI = null  # вынесенный сигильный UI (game/sigil/sigil_ui.gd)
 var _sigil_header_btn: Button  ## кнопка Аркана Сигилов в шапке (иконка-таро)
+var _contracts_header_btn: Button  # контрактная доска (§8.3)
 var _inv_grid: GridContainer = null
 
 func _boot_snapshot_text(path: String) -> String:
@@ -584,6 +585,8 @@ func _ready() -> void:
 			_demo_harness._action_goal = true
 		elif a == "--action=goals":
 			_demo_harness._action_goals = true
+		elif a == "--action=contracts":
+			_demo_harness._action_contracts = true
 	for a in args:
 		if a.begins_with("--gif="):
 			_demo_harness._gif_dir = a.substr("--gif=".length())
@@ -601,6 +604,8 @@ func _ready() -> void:
 			_demo_harness._decor_demo_cat = a.substr("--decor=".length())
 		elif a.begins_with("--sigiltab="):
 			_demo_harness._sigil_tab = a.substr("--sigiltab=".length())
+		elif a.begins_with("--contractstate="):
+			_demo_harness._contract_state = a.substr("--contractstate=".length())
 	_online._net_enabled = not _selftest
 	if _online._net_enabled:
 		_online._device_id = _online._load_device_id()
@@ -849,6 +854,28 @@ func _ready() -> void:
 		_sigil_ui._on_brew_btn_pressed()
 	if _demo_harness._demo and _demo_harness._action_settings:
 		_hub._open_settings()
+	if _demo_harness._demo and _demo_harness._action_contracts:
+		# Кадр приёмки §7: три дневные бумаги (одна уже получена, одна готова),
+		# одна недельная готовая и две живые записки баффов.
+		var daily := _contracts.daily()
+		for raw in daily:
+			var contract := raw as Dictionary
+			_contracts._set_progress(String(contract["id"]),
+				int(float(contract["goal"]) * 0.6))
+		var weekly := _contracts.weekly()
+		if not weekly.is_empty():
+			var w0 := weekly[0] as Dictionary
+			_contracts._set_progress(String(w0["id"]), int(w0["goal"]))
+			if not daily.is_empty():
+				_contracts._done_dict("daily")[String((daily[0] as Dictionary)["id"])] = true
+		_contracts.grant_buff("brew_speed", 7200, 0.25, -1)
+		_contracts.grant_buff("spring_yield", 1800, 1.0, -1)
+		_open_contract_board()
+		if _demo_harness._contract_state == "pop":
+			# Второй кадр: попап награды поверх доски, с уже выданной недельной наградой.
+			var board := get_node_or_null("ContractBoard") as ContractBoard
+			if board != null and not weekly.is_empty():
+				board._on_claim(String((weekly[0] as Dictionary)["id"]))
 	if _demo_harness._demo and _demo_harness._action_journal:
 		_hub._log_event("Открыто вещество «Стекло»")
 		_hub._log_event("Достижение: Первооткрыватель")
@@ -1158,7 +1185,9 @@ func _build_ui() -> void:
 	# раздела. 19 px, а не 22-24: при ширине 540 px ряд из шести кнопок 46×46
 	# оставляет заголовку ~216 px, а рунический в 22 px требует 235 px и при
 	# AUTOWRAP_WORD_SMART уезжает на две строки; в 19 px это 203 px.
-	var title := _label("ПЕТЛЯ АЛХИМИКА", 19)
+	var title := _label("ПЕТЛЯ АЛХИМИКА", 15)
+	title.autowrap_mode = TextServer.AUTOWRAP_OFF
+	title.clip_text = true
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if _font_runic != null:
 		title.add_theme_font_override("font", _font_runic)
@@ -1183,6 +1212,13 @@ func _build_ui() -> void:
 	sigil_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	sigil_btn.pressed.connect(_sigil_ui._open_sigil_modal)
 	head.add_child(sigil_btn)
+	var contracts_btn := _header_button(0)
+	_contracts_header_btn = contracts_btn
+	UIIcon.into_button(contracts_btn, "check", 24)
+	contracts_btn.tooltip_text = "Контрактная доска: дневные и недельные задания"
+	contracts_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	contracts_btn.pressed.connect(_open_contract_board)
+	head.add_child(contracts_btn)
 	# «▲N» → родная иконка trend_up + счётчик текстом (core._refresh_header).
 	# Если SVG не импортирован (текстуры нет), _refresh_header оставит глиф «▲».
 	var up_icon := UIIcon.texture("trend_up")
@@ -2241,6 +2277,8 @@ func _close_sigil_craft_screen() -> void:
 	_sigil_ui._close_sigil_craft_screen()
 func _close_sigil_collection() -> void:
 	_sigil_ui._close_sigil_collection()
+func _open_contract_board() -> void:
+	ContractBoard.open(self)
 func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	_sigil_ui._open_sigil_fullscreen(entry)
 func _close_sigil_fullscreen() -> void:

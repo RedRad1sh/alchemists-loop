@@ -1258,6 +1258,7 @@ func _build_spring_page(container: VBoxContainer) -> void:
 	container.add_child(btn)
 
 func _open_spring_screen() -> void:
+	ContractBoard.close_any(g)
 	g._spring_screen = SpringScreen.new()
 	g._spring_screen._build(g)
 	g.add_child(g._spring_screen)

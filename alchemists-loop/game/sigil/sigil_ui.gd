@@ -31,6 +31,7 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 	if _sigil_coll != null or main._sigil == null:
 		return
 	Sfx.click()
+	ContractBoard.close_any(main)
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.84)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

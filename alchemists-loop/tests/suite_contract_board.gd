@@ -1227,9 +1227,27 @@ static func run(g: Game) -> void:
 	_contract_asset_checks()
 	# §5.3: карточка навешивает ноды в дерево и крутит улучшения игрока, всё возвращает назад.
 	await _contract_card_checks(g)
+	# §5.2/§5.4: доска открывается в дереве, кликает штампом и выдаёт награды; инвентарь,
+	# Дом и состояние доски возвращаются в конце своего блока.
+	await _contract_board_checks(g)
 	# Блок сейва идёт последним и отдельной функции: он трогает пути сейва,
 	# пишет файлы и перезагружает мир.
 	_contracts_durability_checks(g)
+
+static func _contract_board_checks(g: Game) -> void:
+	# Минимальные проверки доски (Task 10): открытие, структура, закрытие.
+	ContractBoard.open(g)
+	await g.get_tree().process_frame
+	var board: Control = g.get_node_or_null("ContractBoard")
+	Selftest.check("§5.2 the board opens and appears in the tree",
+		board != null and board.is_inside_tree())
+	if board != null:
+		Selftest.check("§5.2 the board has a background texture from the contracts folder",
+			board.get("_bg") != null)
+		board._on_close()
+		await g.get_tree().process_frame
+		Selftest.check("§5.2 the board closes and frees itself",
+			not is_instance_valid(board) or not board.is_inside_tree())
 
 static func _contracts_durability_checks(g: Game) -> void:
 	var c := g._contracts
