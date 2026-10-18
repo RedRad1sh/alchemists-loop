@@ -33,6 +33,10 @@ const DECOR := [
 		{"id": "window_7", "label": "Морозное", "tint": "#afd3f0", "cost": 175},
 		{"id": "window_8", "label": "Эркер", "tint": "#bcd9f2", "cost": 190},
 		{"id": "window_9", "label": "Витражное", "tint": "#c9e0f5", "cost": 205},
+		# §3.4 контрактной доски: reward-only, не продаются (по образцу decor.gd:131-133)
+		{"id": "window_contract", "label": "Контрактный витраж", "tint": "#c9a24d", "cost": 0, "reward": true},
+		{"id": "window_seal", "label": "Витраж с печатью", "tint": "#a34a3c", "cost": 0, "reward": true},
+		{"id": "window_guild", "label": "Витраж гильдии", "tint": "#4d7ab7", "cost": 0, "reward": true},
 	]},
 	{"id": "rug", "label": "Ковёр", "items": [
 		{"id": "rug", "label": "Классический", "tint": "#b06a78", "cost": 80},
