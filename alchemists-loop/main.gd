@@ -1029,6 +1029,7 @@ func _init_new_game() -> bool:
 	_engine.spring_buffer = {}
 	_engine.spring_sources = ["water"]
 	_pages._spring_clock = 0.0
+	_contracts.reset_new_game()
 	_pages._bench_target = ""
 	_pages._bench_on = false
 	_pages._bench_clock = 0.0

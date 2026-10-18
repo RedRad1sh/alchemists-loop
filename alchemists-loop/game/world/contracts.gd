@@ -502,3 +502,264 @@ func _sigil_connection_count() -> int:
 		if ((conn as Dictionary)["callable"] as Callable).get_method() == "on_sigil_craft":
 			n += 1
 	return n
+
+# ---------- §4.1/§4.2 сейв-блок ----------
+# Единственный шлюз чисел из файла. JSON в Godot 4.7 отдаёт ЛЮБОЕ число как
+# TYPE_FLOAT (проверено разбором записанного файла: 5, 1000000 и 2.5 — float),
+# поэтому границу «это целое число» считаем здесь и дальше работаем на float.
+# Образец — Workshop._integer (workshop.gd:489).
+static func _whole(raw: Variant) -> float:
+	if raw is int:
+		return float(raw)
+	if raw is float and is_finite(raw) and raw == floor(raw):
+		return float(raw)
+	return -1.0
+
+func save_block() -> Dictionary:
+	return {
+		"version": CONTRACTS_SAVE_VERSION,
+		"daily": _contracts_daily.duplicate(true),
+		"weekly": _contracts_weekly.duplicate(true),
+		"last_daily": _contracts_last_daily,
+		"last_weekly": _contracts_last_weekly,
+		"daily_done": _contracts_daily_done.duplicate(true),
+		"weekly_done": _contracts_weekly_done.duplicate(true),
+		"daily_prog": _contracts_daily_prog.duplicate(true),
+		"weekly_prog": _contracts_weekly_prog.duplicate(true),
+		"variety": _contracts_variety.duplicate(true),
+		"set_week": _contracts_set_week.duplicate(true),
+		"buffs": _active_buffs.duplicate(true),
+		"decor": _unlocked_decor.duplicate(true),
+		"last_output": _last_output,
+	}
+
+# Defaults-first, по образцу _load_spring_state (saves.gd:615): состояние уже
+# чистое, сейв только подтверждает его.
+func load_block(raw: Variant) -> void:
+	_clear_state()
+	if not (raw is Dictionary):
+		return
+	var d: Dictionary = raw
+	var v := _whole(d.get("version", null))
+	if v < 1.0 or v > float(CONTRACTS_SAVE_VERSION):
+		# §4.3: подозрительная версия всего блока = блок отбрасывается целиком,
+		# остальной сейв уже загружен. Задним числом награды не начисляются.
+		return
+	_load_axis(d, "daily")
+	_load_axis(d, "weekly")
+	# Недельные счётчики без пережившей недели бессмысленны: их всё равно
+	# обнулит первый же сброс периода.
+	if not _contracts_weekly.is_empty():
+		_contracts_variety = _clean_flags(d.get("variety", null))
+		_contracts_set_week = _clean_free_counts(d.get("set_week", null))
+	_active_buffs = _clean_buffs(d.get("buffs", null))
+	_unlocked_decor = _clean_decor(d.get("decor", null))
+	var anchor: Variant = d.get("last_output", "")
+	if anchor is String and g.ITEMS.has(String(anchor)):
+		_last_output = String(anchor)
+
+func _clear_state() -> void:
+	_contracts_daily = []
+	_contracts_weekly = []
+	_contracts_last_daily = ""
+	_contracts_last_weekly = ""
+	_contracts_daily_done = {}
+	_contracts_weekly_done = {}
+	_contracts_daily_prog = {}
+	_contracts_weekly_prog = {}
+	_contracts_variety = {}
+	_contracts_set_week = {}
+	_active_buffs = {}
+	_unlocked_decor = []
+	_last_output = ""
+
+func reset_new_game() -> void:
+	# §4.4: новая игра — полный сброс, недельное включительно (в отличие от
+	# on_prestige, который недельное бережёт).
+	_clear_state()
+
+func _load_axis(d: Dictionary, kind: String) -> void:
+	var daily := kind == "daily"
+	var key_v: Variant = d.get("last_daily" if daily else "last_weekly", "")
+	if not (key_v is String):
+		return
+	var list := _clean_list(d.get("daily" if daily else "weekly", null), kind, String(key_v))
+	if list.is_empty():
+		# Вместе со списком сбрасывается и ключ: иначе ensure_period() не увидит
+		# расхождения и оставит пустую доску до полуночи.
+		return
+	var ids := {}
+	for item in list:
+		ids[String((item as Dictionary)["id"])] = int((item as Dictionary)["goal"])
+	var done := _clean_log(d.get("daily_done" if daily else "weekly_done", null), ids)
+	var prog := _clean_counts(d.get("daily_prog" if daily else "weekly_prog", null), ids)
+	if daily:
+		_contracts_last_daily = String(key_v)
+		_contracts_daily = list
+		_contracts_daily_done = done
+		_contracts_daily_prog = prog
+	else:
+		_contracts_last_weekly = String(key_v)
+		_contracts_weekly = list
+		_contracts_weekly_done = done
+		_contracts_weekly_prog = prog
+
+# Структурная проверка одного контракта. Недостижимость gold-тира (тест №23) —
+# правило генератора, здесь её нет: иначе сейв, переживший день, отвергался бы
+# из-за порядка загрузки Аркана (решение 1).
+func _clean_contract(raw: Variant, kind: String, period_key: String) -> Dictionary:
+	if not (raw is Dictionary):
+		return {}
+	var d: Dictionary = raw
+	var type := String(d.get("type", ""))
+	var tier := String(d.get("tier", ""))
+	if String(d.get("kind", "")) != kind:
+		return {}
+	var goals: Dictionary = ContractsBalance.DAILY_GOALS if kind == "daily" else ContractsBalance.WEEKLY_GOALS
+	if not goals.has(type):
+		return {}
+	var tier_idx := ContractsBalance.TIERS.find(tier)
+	if tier_idx < 0:
+		return {}
+	# goal сверяется с таблицей ровно: чужое число означало бы контракт,
+	# написанный не этим клиентом.
+	var goal := _whole(d.get("goal", null))
+	if goal != float(int((goals[type] as Array)[tier_idx])):
+		return {}
+	var want_id := "%s:%s:%s:%s" % [kind, type, tier, period_key]
+	if String(d.get("id", "")) != want_id:
+		return {}
+	var buff := String(d.get("buff", ""))
+	if buff != "" and not ContractsBalance.BUFF_IDS.has(buff):
+		return {}
+	var decor := String(d.get("decor", ""))
+	if decor != "" and not decor_exists(decor):
+		return {}
+	# Пересборка dict, а не pass-through: лишние ключи из файла не должны
+	# переезжать в состояние.
+	return {"id": want_id, "kind": kind, "type": type, "tier": tier,
+		"goal": int(goal), "buff": buff, "decor": decor}
+
+func _clean_list(raw: Variant, kind: String, period_key: String) -> Array:
+	if not (raw is Array) or period_key == "":
+		return []
+	var want := ContractsBalance.DAILY_SHOWN if kind == "daily" else ContractsBalance.WEEKLY_SHOWN
+	if (raw as Array).size() != want:
+		return []
+	var out: Array = []
+	var seen := {}
+	for entry in (raw as Array):
+		var item := _clean_contract(entry, kind, period_key)
+		if item.is_empty() or seen.has(String(item["type"])):
+			# Один сомнительный элемент роняет весь список, а не выкидывается:
+			# иначе доска показала бы 2 бумажки из 3 и молча потеряла одну.
+			return []
+		seen[String(item["type"])] = true
+		out.append(item)
+	return out
+
+func _clean_log(raw: Variant, ids: Dictionary) -> Dictionary:
+	var out := {}
+	if not (raw is Dictionary):
+		return out
+	var src: Dictionary = raw
+	for entry in src:
+		var id := String(entry)
+		if not ids.has(id):
+			continue
+		# Залипшая отметка «выдано» по id вне списка позже заблокировала бы
+		# законную выдачу того же id после перегенерации — поэтому она не
+		# переезжает.
+		var v: Variant = src[entry]
+		if v is bool and bool(v):
+			out[id] = true
+	return out
+
+func _clean_counts(raw: Variant, ids: Dictionary) -> Dictionary:
+	var out := {}
+	if not (raw is Dictionary):
+		return out
+	var src: Dictionary = raw
+	for entry in src:
+		var id := String(entry)
+		if not ids.has(id):
+			continue
+		var v := _whole(src[entry])
+		if v <= 0.0:
+			continue
+		# Сжатие к goal, а не отказ: игрок, наваривший сверх цели, не должен
+		# потерять право на выдачу из-за целого числа больше нужного.
+		out[id] = clampi(int(v), 0, int(ids[id]))
+	return out
+
+func _clean_free_counts(raw: Variant) -> Dictionary:
+	var out := {}
+	if not (raw is Dictionary):
+		return out
+	var src: Dictionary = raw
+	for entry in src:
+		if not (entry is String) or String(entry) == "":
+			continue
+		var v := _whole(src[entry])
+		if v > 0.0:
+			out[String(entry)] = int(v)
+	return out
+
+func _clean_flags(raw: Variant) -> Dictionary:
+	var out := {}
+	if not (raw is Dictionary):
+		return out
+	var src: Dictionary = raw
+	for entry in src:
+		if not (entry is String) or String(entry) == "":
+			continue
+		# Ключи variety НЕ режутся по g.ITEMS: срез по каталогу повторил бы ровно
+		# дефект Bug B (каталог меняется быстрее, чем неделя), а здесь это просто
+		# флаг «варилось на этой неделе».
+		var v: Variant = src[entry]
+		if v is bool and bool(v):
+			out[String(entry)] = true
+	return out
+
+func _clean_buffs(raw: Variant) -> Dictionary:
+	var out := {}
+	if not (raw is Dictionary):
+		return out
+	var now := float(_unix(-1))
+	var src: Dictionary = raw
+	for entry in src:
+		var buff_id := String(entry)
+		if not ContractsBalance.BUFF_IDS.has(buff_id):
+			continue
+		if not (src[entry] is Dictionary):
+			continue
+		var b: Dictionary = src[entry]
+		var until := _whole(b.get("until", null))
+		if until <= now:
+			# §4.4: бафф, истёкший в оффлайне, не применяется и не грузится.
+			continue
+		var power: Variant = b.get("power", null)
+		if not (power is int or power is float) or not is_finite(float(power)) \
+				or float(power) < 0.0:
+			continue
+		# Верхняя граница силы намеренно не придумана: сила — табличное число,
+		# умноженное на reward_mult (§3.1), и любой потолок из головы молча
+		# съедал бы законную награду. Подмена сверяется сервером (§1.5).
+		out[buff_id] = {"until": int(until), "power": float(power)}
+	return out
+
+func _clean_decor(raw: Variant) -> Array:
+	var out: Array = []
+	if not (raw is Array):
+		return out
+	for entry in (raw as Array):
+		if not (entry is String):
+			continue
+		var id := String(entry)
+		if id == "" or not decor_exists(id) or out.has(id):
+			continue
+		# Если каталог когда-нибудь уберёт id, журнал доски потеряет его, а Дом —
+		# нет: _own_item уже сделал предмет владением навсегда, и повторная
+		# выдача дедуплицируется (home.gd:173).
+		out.append(id)
+	return out

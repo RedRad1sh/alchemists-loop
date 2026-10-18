@@ -164,7 +164,8 @@ func _save_game() -> bool:
 		"fair_regen_total": g._retention._fair_regen_total,
 		"fair_local_week": g._retention._fair_local_week,
 		"fair_local_brews": g._retention._fair_local_brews,
-		"fair_off_claim_week": g._retention._fair_off_claim_week
+		"fair_off_claim_week": g._retention._fair_off_claim_week,
+		"contracts": g._contracts.save_block()
 	}
 	var file := FileAccess.open(g.TEMP_PATH, FileAccess.WRITE)
 	if file == null:
@@ -234,6 +235,7 @@ func _load_game() -> void:
 			g._engine.spring_source = ss
 	g._engine.spring_on = bool(data.get("spring_on", false))
 	_restore_spring_state(data)
+	g._contracts.load_block(data.get("contracts", null))
 	if data.get("bench_target") is String:
 		var bt := String(data["bench_target"])
 		if g.ITEMS.has(bt):

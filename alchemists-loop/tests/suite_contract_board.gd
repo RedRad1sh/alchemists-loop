@@ -95,6 +95,104 @@ static func _clear_prog(c: Contracts) -> void:
 	c._contracts_set_week.clear()
 	c._last_output = ""
 
+# ---------- Task 7: хелперы сейв-блока ----------
+# Контракт, который генератор СЕГОДНЯ мог бы выдать, но не обязан. goal считается
+# из таблицы напрямую, а не через Contracts._make_contract: иначе валидатор и
+# фикстура сверяли бы друг с другом, а не с таблицей, и проверка «goal не совпал —
+# контракт отвергнут» была бы зелёной всегда.
+static func _mk_legal(c: Contracts, kind: String, type: String, tier: String) -> Dictionary:
+	var dt := c._dt({})
+	var key := Contracts.day_key_from(dt) if kind == "daily" else Contracts.week_key_from(dt)
+	var goals: Dictionary = ContractsBalance.DAILY_GOALS if kind == "daily" else ContractsBalance.WEEKLY_GOALS
+	return {
+		"id": "%s:%s:%s:%s" % [kind, type, tier, key],
+		"kind": kind, "type": type, "tier": tier,
+		"goal": int((goals[type] as Array)[ContractsBalance.TIERS.find(tier)]),
+		"buff": "brew_speed", "decor": "",
+	}
+
+static func _cb_snapshot(c: Contracts) -> Dictionary:
+	return {
+		"daily": c._contracts_daily.duplicate(true),
+		"weekly": c._contracts_weekly.duplicate(true),
+		"last_daily": c._contracts_last_daily,
+		"last_weekly": c._contracts_last_weekly,
+		"daily_done": c._contracts_daily_done.duplicate(true),
+		"weekly_done": c._contracts_weekly_done.duplicate(true),
+		"daily_prog": c._contracts_daily_prog.duplicate(true),
+		"weekly_prog": c._contracts_weekly_prog.duplicate(true),
+		"variety": c._contracts_variety.duplicate(true),
+		"set_week": c._contracts_set_week.duplicate(true),
+		"buffs": c._active_buffs.duplicate(true),
+		"decor": c._unlocked_decor.duplicate(true),
+		"last_output": c._last_output,
+	}
+
+static func _cb_restore(c: Contracts, s: Dictionary) -> void:
+	c._contracts_daily = s["daily"]
+	c._contracts_weekly = s["weekly"]
+	c._contracts_last_daily = String(s["last_daily"])
+	c._contracts_last_weekly = String(s["last_weekly"])
+	c._contracts_daily_done = s["daily_done"]
+	c._contracts_weekly_done = s["weekly_done"]
+	c._contracts_daily_prog = s["daily_prog"]
+	c._contracts_weekly_prog = s["weekly_prog"]
+	c._contracts_variety = s["variety"]
+	c._contracts_set_week = s["set_week"]
+	c._active_buffs = s["buffs"]
+	c._unlocked_decor = s["decor"]
+	c._last_output = String(s["last_output"])
+
+# Полный сброс состояния доски средствами сюиты — см. решение 5.
+static func _cb_wipe(c: Contracts) -> void:
+	_clear_prog(c)
+	c._contracts_daily = []
+	c._contracts_weekly = []
+	c._contracts_last_daily = ""
+	c._contracts_last_weekly = ""
+	c._active_buffs = {}
+	c._unlocked_decor = []
+
+# Одно и то же богатое состояние для всех групп блока. now_u — настоящий unix,
+# чтобы срок баффа после round-trip остался ровно тем же числом.
+static func _cb_fill(c: Contracts, daily: Array, weekly: Array, now_u: int) -> void:
+	_cb_wipe(c)
+	_force_set(c, daily, weekly)
+	c._contracts_daily_prog[String(daily[0]["id"])] = 4
+	c._contracts_daily_prog[String(daily[2]["id"])] = 2
+	c._contracts_weekly_done[String(weekly[0]["id"])] = true
+	c._contracts_weekly_prog[String(weekly[1]["id"])] = 1
+	c._contracts_variety = {"steam": true, "glass": true}
+	c._contracts_set_week = {"fire": 4}
+	c._active_buffs = {"spring_yield": {"until": now_u + 1800, "power": 2.0}}
+	c._unlocked_decor = ["window_seal"]
+	c._last_output = "steam"
+
+# Переписать блок contracts в только что записанном сейве, остальной мир не трогать.
+# raw == null — ключ стирается (сейв, написанный клиентом до доски).
+static func _cb_put_block(g: Game, raw: Variant) -> void:
+	var data := g._saves._read_save(g.SAVE_PATH)
+	if data.is_empty():
+		return
+	if raw == null:
+		data.erase("contracts")
+	else:
+		data["contracts"] = raw
+	var f := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(JSON.stringify(data, "\t", true, true))
+	f.close()
+
+# Записать сейв целиком (откат блока): остальной мир остаётся baseline-ным, а блок
+# contracts стёрт, чтобы load_block при откате начал с чистого листа.
+static func _cb_put_block_restore(g: Game, data: Dictionary) -> void:
+	var f := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(JSON.stringify(data, "\t", true, true))
+	f.close()
+
 static func run(g: Game) -> void:
 	# ---------------- §2 таблицы типов и порогов ----------------
 	Selftest.check("§2.1 daily pool has exactly 6 active types",
@@ -1121,3 +1219,249 @@ static func run(g: Game) -> void:
 	c6._contracts_last_daily = ""
 	c6._contracts_last_weekly = ""
 	_restore_progress(g, claim_snap["prog"])
+
+	# Блок сейва идёт последним и отдельной функцией: он трогает пути сейва,
+	# пишет файлы и перезагружает мир. Всё, что ему нужно, он возвращает сам.
+	_contracts_durability_checks(g)
+
+static func _contracts_durability_checks(g: Game) -> void:
+	var c := g._contracts
+	var saved_paths: Array = [g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH]
+	var saved_frozen := g._saves._save_frozen
+	var saved_last_ts := g._last_ts
+	var saved_state := _cb_snapshot(c)
+	var saved_crafts: Array = g._sigil._daily_crafts.duplicate(true)
+	var saved_spirit := g._spirit._spirit_name
+	var saved_mastery := g._engine.mastery_rank
+	var saved_status := g._engine.status_text
+	for path in saved_paths:
+		if FileAccess.file_exists(String(path)):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(String(path)))
+	g.SAVE_PATH = "user://alchemy_st_contracts_dur.json"
+	g.TEMP_PATH = "user://alchemy_st_contracts_dur.tmp"
+	g.BACKUP_PATH = "user://alchemy_st_contracts_dur.bak"
+	g._saves._save_frozen = false
+	# Два поля, по которым проверка №9 сверяет «остальной сейв прочитался». Оба
+	# несутся в файле: spirit_name — строка, mastery_rank — число через
+	# int(data.get(...)) (saves.gd:487), то есть float-безопасно.
+	g._spirit._spirit_name = "Проверка"
+	g._engine.mastery_rank = 2
+	var baseline_written := g._saves._save_game()
+	var baseline_data := g._saves._read_save(g.SAVE_PATH)
+	Selftest.check("contracts durability baseline save written",
+		baseline_written and not baseline_data.is_empty())
+
+	var now_u := int(Time.get_unix_time_from_system())
+	var day_key := Contracts.day_key_from(c._dt({}))
+	var week_key := Contracts.week_key_from(c._dt({}))
+	var d_brew := _mk_legal(c, "daily", "brew", "bronze")
+	var d_disc := _mk_legal(c, "daily", "discover", "silver")
+	var d_gold := _mk_legal(c, "daily", "sigil_craft", "gold")
+	var w_pre := _mk_legal(c, "weekly", "prestige", "gold")
+	var w_up := _mk_legal(c, "weekly", "upgrade", "bronze")
+	var daily_set: Array = [d_brew, d_disc, d_gold]
+	var weekly_set: Array = [w_pre, w_up]
+	var id_brew := String(d_brew["id"])
+	var id_disc := String(d_disc["id"])
+	var id_gold := String(d_gold["id"])
+	var id_pre := String(w_pre["id"])
+	var id_up := String(w_up["id"])
+	var gold_goal := int((ContractsBalance.DAILY_GOALS["sigil_craft"] as Array)[2])
+
+	# ---- 1. форма блока ----
+	var shape := c.save_block()
+	var names: Array = shape.keys()
+	names.sort()
+	var expect: Array = ["buffs", "daily", "daily_done", "daily_prog", "decor",
+		"last_daily", "last_output", "last_weekly", "set_week", "variety",
+		"version", "weekly", "weekly_done", "weekly_prog"]
+	expect.sort()
+	Selftest.check("§4.2 save_block carries exactly the fourteen §4.1 state keys",
+		names == expect)
+
+	# ---- 2. round-trip (§6.16): rich-состояние → файл → память начисто → загрузка ----
+	_cb_fill(c, daily_set, weekly_set, now_u)
+	g._home._own_item("window", "window_seal")
+	g._sigil._daily_crafts = []
+	g._saves._save_game()
+	# Память вычищена НАМЕРЕННО: без этого no-op-загрузка оставила бы фикстуру
+	# на месте и вся группа была бы зелёной без всякого load_block.
+	_cb_wipe(c)
+	g._home.house_owned["window"] = []
+	g._saves._load_game()
+	Selftest.check("§6.16 a restart keeps the period keys, the progress and the claim log",
+		c._contracts_last_daily == day_key and c._contracts_last_weekly == week_key
+		and int(c._contracts_daily_prog.get(id_brew, -1)) == 4 and c.progress(id_brew) == 4
+		and bool(c._contracts_weekly_done.get(id_pre, false)) and c.is_done(id_pre)
+		and int(c._contracts_weekly_prog.get(id_up, -1)) == 1)
+
+	# Именно эта проверка краснеет, если валидаторы потребуют TYPE_INT: до и после
+	# записи until — int, а после разбора файла — float того же значения.
+	var buff_back := c._active_buffs.get("spring_yield", {}) as Dictionary
+	Selftest.check("§6.16 a restart keeps the active buff with its exact expiry and power",
+		c._active_buffs.size() == 1 and int(buff_back.get("until", 0)) == now_u + 1800
+		and float(buff_back.get("power", 0.0)) == 2.0
+		and c.buff_power("spring_yield", now_u + 600) == 2.0)
+	Selftest.check("§6.16 a restart keeps the decor journal together with House ownership",
+		c._unlocked_decor == ["window_seal"] and g._home._decor_owned("window", "window_seal"))
+
+	# Разбор вместо == на всём массиве: goal после файла — float, и сверка
+	# контейнеров здесь зависела бы от типов, которых в сейве больше нет.
+	var ids: Array = []
+	for item in c._contracts_daily:
+		ids.append(String((item as Dictionary)["id"]))
+	Selftest.check("§6.16 the saved lists survive verbatim instead of a re-roll at boot",
+		ids == [id_brew, id_disc, id_gold]
+		and int(c._contracts_daily[2]["goal"]) == gold_goal
+		and String(c._contracts_daily[2]["buff"]) == "brew_speed"
+		and c.progress(id_gold) == 2 and c._contracts_weekly.size() == 2)
+	Selftest.check("§6.16 the weekly variety and set counters survive the restart",
+		c._contracts_variety == {"steam": true, "glass": true}
+		and c._contracts_set_week.size() == 1 and int(c._contracts_set_week.get("fire", -1)) == 4)
+	Selftest.check("§6.16 the chain_brew anchor survives the restart", c._last_output == "steam")
+
+	# ---- 3. fail-closed по версии (§4.3): очистку делает сам load_block ----
+	var blk99 := c.save_block()
+	blk99["version"] = 99
+	_cb_put_block(g, blk99)
+	g._saves._load_game()
+	Selftest.check("§4.3 a contracts version above CONTRACTS_SAVE_VERSION drops only the contracts block",
+		c._contracts_daily.is_empty() and c._contracts_last_daily == ""
+		and c._contracts_daily_prog.is_empty() and c._contracts_weekly_done.is_empty()
+		and c._contracts_variety.is_empty() and c._active_buffs.is_empty()
+		and c._unlocked_decor.is_empty() and c._last_output == ""
+		and g._spirit._spirit_name == "Проверка" and int(g._engine.mastery_rank) == 2)
+	var blk_str := c.save_block()
+	blk_str["version"] = "1"
+	_cb_fill(c, daily_set, weekly_set, now_u)
+	g._saves._save_game()
+	_cb_put_block(g, blk_str)
+	g._saves._load_game()
+	Selftest.check("§4.3 a contracts version that is not a number drops the block the same way",
+		c._contracts_last_daily == "" and c._contracts_daily.is_empty()
+		and c._active_buffs.is_empty() and c._unlocked_decor.is_empty())
+	_cb_fill(c, daily_set, weekly_set, now_u)
+	g._saves._save_game()
+	_cb_put_block(g, null)
+	g._saves._load_game()
+	Selftest.check("§4.3 a save without the contracts key boots today's fresh generation",
+		c._contracts_last_daily == "" and c._contracts_daily.is_empty()
+		and c._unlocked_decor.is_empty() and c._last_output == ""
+		and c.daily().size() == ContractsBalance.DAILY_SHOWN
+		and c.weekly().size() == ContractsBalance.WEEKLY_SHOWN
+		and c._contracts_last_daily == day_key)
+
+	# ---- 4. фильтрация по осям и по ключам (§4.4) ----
+	# Битый только goal у одного дневного контракта: роняет дневную ось целиком,
+	# недельная с её журналом обязана пережить загрузку.
+	var d_bad := _mk_legal(c, "daily", "brew", "silver")
+	d_bad["goal"] = int(d_bad["goal"]) + 1
+	var bad_id := String(d_bad["id"])
+	_cb_wipe(c)
+	_force_set(c, [d_bad, d_disc, d_gold], weekly_set)
+	c._contracts_daily_prog[bad_id] = 2
+	c._contracts_weekly_done[id_pre] = true
+	c._contracts_weekly_prog[id_up] = 1
+	g._saves._save_game()
+	_cb_wipe(c)
+	g._saves._load_game()
+	Selftest.check("§4.4 a structurally broken daily list resets only the daily axis",
+		c._contracts_daily.is_empty() and c._contracts_last_daily == ""
+		and c._contracts_daily_prog.is_empty()
+		and c._contracts_weekly.size() == 2 and c._contracts_weekly_done.has(id_pre)
+		and int(c._contracts_weekly_prog.get(id_up, -1)) == 1)
+	Selftest.check("§4.4 after the dropped axis the board regenerates today, not an empty slate",
+		c.daily().size() == ContractsBalance.DAILY_SHOWN
+		and c._contracts_last_daily == day_key and c._contracts_daily_prog.is_empty())
+
+	# Журнал и прогресс по id, которого нет в сохранённом списке: живой остаётся,
+	# фантомный выбрасывается.
+	var phantom := _mk_legal(c, "daily", "depth_brew", "gold")
+	var phantom_id := String(phantom["id"])
+	_cb_fill(c, daily_set, weekly_set, now_u)
+	c._contracts_daily_done[phantom_id] = true
+	c._contracts_daily_prog[phantom_id] = 8
+	g._saves._save_game()
+	_cb_wipe(c)
+	g._saves._load_game()
+	Selftest.check("§4.4 a log or progress entry for an id outside the saved lists is dropped",
+		c._contracts_daily_prog.size() == 2 and int(c._contracts_daily_prog.get(id_brew, -1)) == 4
+		and not c._contracts_daily_prog.has(phantom_id)
+		and c._contracts_daily_done.size() == 0 and not c._contracts_daily_done.has(phantom_id))
+
+	# Истекший в оффлайне бафф и id вне BUFF_IDS не грузятся (§4.4).
+	_cb_wipe(c)
+	_force_set(c, daily_set, weekly_set)
+	c._active_buffs = {
+		"brew_speed": {"until": now_u - 10, "power": 0.5},
+		"not_a_buff": {"until": now_u + 3600, "power": 1.0},
+		"spring_yield": {"until": now_u + 1800, "power": 2.0},
+	}
+	g._saves._save_game()
+	_cb_wipe(c)
+	g._saves._load_game()
+	var kept := c._active_buffs.get("spring_yield", {}) as Dictionary
+	Selftest.check("§4.4 an expired buff and a buff id outside BUFF_IDS are dropped at load",
+		c._active_buffs.size() == 1 and not c._active_buffs.has("brew_speed")
+		and not c._active_buffs.has("not_a_buff")
+		and int(kept.get("until", 0)) == now_u + 1800 and float(kept.get("power", 0.0)) == 2.0)
+
+	# Декор вне каталога и якорь, который не вещество, не доходят до состояния.
+	_cb_wipe(c)
+	_force_set(c, daily_set, weekly_set)
+	c._unlocked_decor = ["window_seal", "window_phantom"]
+	c._last_output = "not_a_substance"
+	g._saves._save_game()
+	_cb_wipe(c)
+	g._saves._load_game()
+	Selftest.check("§4.4 a decor id outside the catalog and a non-substance anchor are dropped at load",
+		c._unlocked_decor == ["window_seal"] and c._last_output == "")
+
+	# ---- 5. новая игра (§4.4, тест №19): полный сброс через настоящий вход ----
+	_cb_fill(c, daily_set, weekly_set, now_u)
+	var reset_ok := g._init_new_game()
+	Selftest.check("§6.19 a real new game clears every contracts field, weekly and decor included",
+		reset_ok and c._contracts_daily.is_empty() and c._contracts_weekly.is_empty()
+		and c._contracts_last_daily == "" and c._contracts_last_weekly == ""
+		and c._contracts_daily_prog.is_empty() and c._contracts_weekly_prog.is_empty()
+		and c._contracts_daily_done.is_empty() and c._contracts_weekly_done.is_empty()
+		and c._contracts_variety.is_empty() and c._contracts_set_week.is_empty()
+		and c._active_buffs.is_empty() and c._unlocked_decor.is_empty()
+		and c._last_output == "")
+
+	# ---- откат: мир возвращается настоящим _load_game() из baseline-сейва ----
+	var restore_world := baseline_data.duplicate(true)
+	restore_world.erase("contracts")
+	_cb_put_block_restore(g, restore_world)
+	g._saves._load_game()
+	_cb_restore(c, saved_state)
+	for p in [g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH]:
+		if FileAccess.file_exists(String(p)):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(String(p)))
+	for path in saved_paths:
+		var leftover := String(path)
+		if FileAccess.file_exists(leftover):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(leftover))
+	g.SAVE_PATH = String(saved_paths[0])
+	g.TEMP_PATH = String(saved_paths[1])
+	g.BACKUP_PATH = String(saved_paths[2])
+	g._saves._save_frozen = saved_frozen
+	g._last_ts = saved_last_ts
+	g._sigil._daily_crafts = saved_crafts
+	g._spirit._spirit_name = saved_spirit
+	g._engine.mastery_rank = saved_mastery
+	g._engine.status_text = saved_status
+	g._engine._refresh()
+	# Сверка с самим снимком сейва, а не с памятью блока.
+	var base_inventory: Dictionary = baseline_data.get("inventory", {})
+	var restored_inventory_ok := true
+	for raw_key in base_inventory:
+		if int(g._engine.inventory.get(String(raw_key), -1)) != int(base_inventory[raw_key]):
+			restored_inventory_ok = false
+	Selftest.check("contracts durability fixture restores world and files",
+		g._spirit._spirit_name == saved_spirit and int(g._engine.mastery_rank) == saved_mastery
+		and restored_inventory_ok and g.SAVE_PATH == String(saved_paths[0])
+		and not FileAccess.file_exists(g.SAVE_PATH)
+		and not FileAccess.file_exists("user://alchemy_st_contracts_dur.json")
+		and c._unlocked_decor == (saved_state["decor"] as Array)
+		and c._active_buffs == (saved_state["buffs"] as Dictionary))
