@@ -713,6 +713,7 @@ func _do_prestige() -> void:
 	g._engine._blueprints.clear()
 	g._reset_world_clock()
 	g._workshop.reset_prestige()
+	g._contracts.on_prestige()
 	g._engine.ether = Game.START_ETHER
 	g._engine.attempts = 0
 	g._engine.successes = 0

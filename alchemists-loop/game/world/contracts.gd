@@ -311,3 +311,131 @@ static func decor_exists(decor_id: String) -> bool:
 			if str((item as Dictionary).get("id", "")) == decor_id:
 				return true
 	return false
+
+# ---------- §1.2/§1.3 точки-хуки ----------
+# Абсолютная запись прогресса с отсечкой по цели контракта (§2): «N / goal» не
+# должно показывать 17/15.
+func _set_progress(id: String, value: int) -> void:
+	var c := contract_by_id(id)
+	if c.is_empty():
+		return
+	_prog_dict(String(c["kind"]))[id] = clampi(value, 0, int(c["goal"]))
+
+# Прогресс накопительный и всегда capped по цели контракта (§2). Сгоревшие
+# (done) контракты не двигаются.
+func _bump(type: String, amount: int) -> void:
+	if amount <= 0:
+		return
+	for c in all_contracts():
+		var contract := c as Dictionary
+		if String(contract["type"]) != type:
+			continue
+		var id := String(contract["id"])
+		if _done_dict(String(contract["kind"])).has(id):
+			continue
+		_set_progress(id, int(_prog_dict(String(contract["kind"])).get(id, 0)) + amount)
+
+# §1.3: глубину считаем здесь, а не в core.gd — офлайн-реплей делает тысячи
+# варок подряд, и `_content_depth` (рекурсивный обход без кэша) не должен
+# вызываться для тех из них, которые всё равно не засчитываются.
+func _depth(item_id: String) -> int:
+	var d := g._workshop._content_depth(item_id)
+	# workshop.gd:33 — каноническая отсечка: неизвестные и циклические id
+	# возвращают WorkshopBalance.INVALID_DEPTH, базовые — 0.
+	if d <= 0 or d >= WorkshopBalance.INVALID_DEPTH:
+		return 0
+	return d
+
+func on_brew(output: String, a: String, b: String, first_time: bool, source: String) -> void:
+	# §1.3 ДО любого изменения состояния, включая якорь цепочки.
+	if source == "offline_workshop":
+		return
+	ensure_period()
+	if a == _last_output or b == _last_output:
+		_bump("chain_brew", 1)
+	_last_output = output
+	if first_time and output != "":
+		_bump("discover", 1)
+		if not _contracts_variety.has(output):
+			_contracts_variety[output] = true
+			_bump("variety", 1)
+	if output != "":
+		_bump("brew", 1)
+	var d := _depth(output)
+	if d >= ContractsBalance.DEPTH_DAILY:
+		_bump("depth_brew", 1)
+	if d >= ContractsBalance.DEPTH_WEEKLY:
+		_bump("rare_brew", 1)
+
+# §1.2: вызывается из _experiment_succeeded и _experiment_failed, обе точки
+# защищены существующим гейтом _experiment_pending_pair, поэтому срабатывает
+# ровно один раз на подтверждённый эксперимент. _finish_experiment_inputs не
+# трогаем: он означает «вход возвращён», включая сетевой сбой (rule 14).
+func on_experiment(_a: String, _b: String, _success: bool) -> void:
+	ensure_period()
+	_bump("experiment", 1)
+
+func set_count(set_id: String) -> int:
+	return int(_contracts_set_week.get(set_id, 0))
+
+func _set_best() -> int:
+	var best := 0
+	for set_id in _contracts_set_week:
+		best = maxi(best, int(_contracts_set_week[set_id]))
+	return best
+
+# Сигнатура = SigilManager.craft_completed (sigil_manager.gd:14).
+func on_sigil_craft(craft_id: String, _rarity: String, _llm_name: String) -> void:
+	ensure_period()
+	_bump("sigil_craft", 1)
+	# §1.2: сет считается по крафтам НЕДЕЛИ, а не по коллекции. Иначе игрок, у
+	# которого сет уже собран, закрывал бы недельный gold в первую секунду недели.
+	var set_id := g._sigil.set_of_craft(craft_id)
+	if set_id == "":
+		return
+	_contracts_set_week[set_id] = int(_contracts_set_week.get(set_id, 0)) + 1
+	# sigil_set — максимум по сетам, поэтому абсолютная запись, а не _bump.
+	for c in all_contracts():
+		var contract := c as Dictionary
+		if String(contract["type"]) != "sigil_set":
+			continue
+		var id := String(contract["id"])
+		if _done_dict(String(contract["kind"])).has(id):
+			continue
+		_set_progress(id, _set_best())
+
+func on_upgrade(_system: String, _axis: String, _level: int) -> void:
+	ensure_period()
+	_bump("upgrade", 1)
+
+# §4.4: счётчик растёт ДО очистки, иначе недельный контракт `prestige`
+# обнулялся бы собственным событием. Недельное состояние переживает Перегонку,
+# дневное и баффы — нет. Полная очистка — только у reset_new_game (Task 7).
+func on_prestige() -> void:
+	ensure_period()
+	_bump("prestige", 1)
+	_active_buffs.clear()
+	_contracts_daily.clear()
+	_contracts_daily_prog.clear()
+	_contracts_daily_done.clear()
+	_last_output = ""
+	# Ключ дня обязан освободиться: ensure_period() выше уже проставил его равным
+	# сегодняшнему, поэтому без сброса следующее daily() увидит неизменный ключ,
+	# выйдет до регенерации и вернёт очищенный пустой список — доска останется
+	# пуста до полуночи. Сброс даёт детерминированный по-дате набор с нулевым
+	# прогрессом (тот же день → те же контракты). Недельный ключ не трогаем:
+	# недельные списки Перегонку переживают (§4.4).
+	_contracts_last_daily = ""
+
+# §1.1: единственный случай, где доска подписывается вместо прямого вызова —
+# издатель (Аркан) существует независимо и ничего не должен знать о доске.
+func connect_signals() -> void:
+	if not g._sigil.craft_completed.is_connected(on_sigil_craft):
+		g._sigil.craft_completed.connect(on_sigil_craft)
+
+func _sigil_connection_count() -> int:
+	var n := 0
+	for conn in g._sigil.craft_completed.get_connections():
+		if ((conn as Dictionary)["callable"] as Callable).get_method() == "on_sigil_craft":
+			n += 1
+	return n

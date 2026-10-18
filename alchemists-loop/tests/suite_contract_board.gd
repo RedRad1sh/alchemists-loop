@@ -60,6 +60,41 @@ static func _set_progress(g: Game, rank: int, autonomy: int,
 	g._workshop.autonomy_level = autonomy
 	g._engine.spring_levels = {"speed": speed, "volume": volume, "sources": sources, "offline": offline}
 
+# ---------- хелперы Task 5 ----------
+# Сюита подменяет списки контрактов живого объекта: набор дня детерминирован от
+# даты, и ждать «сегодня выпал brew» нельзя. Прогресс лежит в тех же словарях,
+# поэтому проверкам есть что краснить.
+static func _force_set(c: Contracts, daily: Array, weekly: Array) -> void:
+	# Ключи периода проставляем тем же «сегодня», что и id фикстур. Без этого
+	# первый вызов `all_contracts()` внутри `ensure_period()` не найдёт совпадения,
+	# выбросит набор фикстуры и сгенерирует настоящий — прогресс пойдёт мимо
+	# проверяемого id, а проверка покраснеет не по той причине, по которой задумана.
+	var dt := c._dt({})
+	c._contracts_last_daily = Contracts.day_key_from(dt)
+	c._contracts_last_weekly = Contracts.week_key_from(dt)
+	c._contracts_daily = daily
+	c._contracts_weekly = weekly
+
+static func _mk(c: Contracts, kind: String, type: String, tier: String, goal: int) -> Dictionary:
+	# Ключ берём из того же «сегодня», что и живой ensure_period(): иначе id
+	# фикстуры разойдётся с ключом периода, и прогресс пишется не туда.
+	var dt := c._dt({})
+	var key := Contracts.day_key_from(dt) if kind == "daily" else Contracts.week_key_from(dt)
+	return {
+		"id": "%s:%s:%s:%s" % [kind, type, tier, key],
+		"kind": kind, "type": type, "tier": tier, "goal": goal,
+		"buff": "brew_speed", "decor": "",
+	}
+
+static func _clear_prog(c: Contracts) -> void:
+	c._contracts_daily_prog.clear()
+	c._contracts_weekly_prog.clear()
+	c._contracts_daily_done.clear()
+	c._contracts_weekly_done.clear()
+	c._contracts_variety.clear()
+	c._contracts_set_week.clear()
+	c._last_output = ""
+
 static func run(g: Game) -> void:
 	# ---------------- §2 таблицы типов и порогов ----------------
 	Selftest.check("§2.1 daily pool has exactly 6 active types",
@@ -631,3 +666,248 @@ static func run(g: Game) -> void:
 		e.inventory.erase("water")
 	if not plant_had:
 		e.inventory.erase("plant")
+
+	# ---------- Task 5: хуки и правило активности ----------
+	var c5 := g._contracts
+	var brew_snap := {
+		"inv": g._engine.inventory.duplicate(true),
+		"known": g._engine.known_recipes.duplicate(true),
+		"ether": g._engine.ether,
+		"attempts": g._engine.attempts,
+		"successes": g._engine.successes,
+	}
+	var buffs5_snap := c5._active_buffs.duplicate(true)
+	var rejected_snap := g._engine._rejected_pairs.duplicate(true)
+	var coll_snap := g._sigil._collection.duplicate(true)
+	var cat_snap := g._sigil._catalog.duplicate(true)
+
+	var brew_daily := [_mk(c5, "daily", "brew", "bronze", 15), _mk(c5, "daily", "chain_brew", "bronze", 5),
+		_mk(c5, "daily", "depth_brew", "bronze", 3)]
+	var brew_weekly := [_mk(c5, "weekly", "variety", "bronze", 8), _mk(c5, "weekly", "rare_brew", "bronze", 3)]
+	var exp_daily := [_mk(c5, "daily", "experiment", "bronze", 6), _mk(c5, "daily", "discover", "bronze", 1)]
+	# Цели фикстур experiment/sigil_craft/upgrade намеренно выше bronze-значений
+	# таблицы: эти счётчики накопительные, и часть проверок считает больше
+	# событий, чем bronze-goal. Отсечку «прогресс не превышает цель» доказывает
+	# отдельная фикстура brew с целью 2 в §2-блоке ниже, поэтому здесь цель не
+	# должна мешать накоплению (иначе проверка покраснела бы по срабатыванию
+	# капа, а не по отсутствию хука).
+	_force_set(c5, brew_daily, brew_weekly)
+	_clear_prog(c5)
+
+	# §1.3: офлайн-реплей Мастерской не двигает НИЧЕГО, включая якорь цепочки.
+	var off_ctx := {"source": "offline_workshop", "production": true, "discount": 0.9}
+	g._engine.inventory["fire"] = 5
+	g._engine.inventory["water"] = 5
+	g._engine.ether = 9999
+	g._engine.learn_recipe("fire", "water", "steam")
+	c5._last_output = "anchor"
+	var off_brew := g._engine._commit_brew("fire", "water", off_ctx)
+	Selftest.check("§6.4 an offline_workshop brew moves no contract counter",
+		not bool(off_brew.get("failed", false)) and c5.progress(String(brew_daily[0]["id"])) == 0
+		and c5.progress(String(brew_daily[1]["id"])) == 0
+		and c5.progress(String(brew_weekly[1]["id"])) == 0)
+	Selftest.check("§1.3 an offline_workshop brew does not touch the chain anchor",
+		c5._last_output == "anchor")
+	Selftest.check("§1.3 the offline brew still produced its substance (only contracts ignore it)",
+		int(g._engine.inventory.get("steam", 0)) >= 1)
+
+	# §6.5: настоящая варка через настоящий путь.
+	c5._last_output = ""
+	var on_brew := g._engine._commit_brew("fire", "water",
+		{"source": "production", "production": true, "discount": 1.0})
+	Selftest.check("§6.5 a successful production brew moves the brew contract by exactly 1",
+		not bool(on_brew.get("failed", false)) and c5.progress(String(brew_daily[0]["id"])) == 1)
+	Selftest.check("§2.1 the same brew updates the chain anchor to its output", c5._last_output == "steam")
+
+	# §6.14: цепочка — накопительная, разрыв не откатывает.
+	_clear_prog(c5)
+	c5.on_brew("a_out", "fire", "steam", false, "manual")   # вход == _last_output? нет
+	c5._last_output = "x"
+	c5.on_brew("y", "x", "fire", false, "manual")           # да: a == _last_output
+	c5.on_brew("z", "air", "fire", false, "manual")         # нет: разрыв
+	c5.on_brew("w", "fire", "z", false, "manual")           # да: b == _last_output
+	Selftest.check("§6.14 chain_brew counts only brews whose input is the previous output",
+		c5.progress(String(brew_daily[1]["id"])) == 2)
+	Selftest.check("§6.14 a broken chain keeps the accumulated progress instead of rolling it back",
+		c5.progress(String(brew_daily[1]["id"])) >= 2)
+
+	# §2.1 depth: базовый элемент (0), глубина 1, глубина 2.
+	_clear_prog(c5)
+	c5.on_brew("fire", "earth", "air", false, "manual")     # depth 0
+	c5.on_brew("stone", "earth", "fire", false, "manual")   # depth 1
+	Selftest.check("§2.1 depth_brew ignores depth 0 and depth 1",
+		c5.progress(String(brew_daily[2]["id"])) == 0)
+	c5.on_brew("brick", "clay", "fire", false, "manual")    # clay=earth+water, brick depth 2
+	Selftest.check("§2.1 a substance with content depth 2 is counted by depth_brew",
+		c5.progress(String(brew_daily[2]["id"])) == 1)
+	# main.gd:255 каталог: stone=earth+fire (1), brick=clay+fire (2),
+	# clay=earth+water (1). Неизвестный id и циклический обход дают
+	# WorkshopBalance.INVALID_DEPTH, базовые — 0; обе ветки сводятся к 0.
+	Selftest.check("§1.3 _depth rejects unknown ids and clamps to the workshop's canonical range",
+		c5._depth("no_such_item") == 0 and c5._depth("fire") == 0
+		and c5._depth("stone") == 1 and c5._depth("brick") == 2)
+
+	# §6.13 variety: уникальные outputs.
+	_clear_prog(c5)
+	c5.on_brew("q1", "fire", "air", true, "manual")
+	c5.on_brew("q1", "fire", "air", true, "manual")
+	c5.on_brew("q2", "fire", "water", true, "manual")
+	Selftest.check("§6.13 variety counts distinct first-time outputs, not brews",
+		c5.progress(String(brew_weekly[0]["id"])) == 2 and c5._contracts_variety.has("q1"))
+
+	# §6.15 experiment: успех и отказ — оба решения; возврат входов — нет.
+	_force_set(c5, exp_daily, [])
+	_clear_prog(c5)
+	var exp_id := String(exp_daily[0]["id"])
+	g._engine._experiment_pending_pair = ["fire", "air"]
+	g._engine._experiment_failed("fire", "air", "не сочетаются")
+	Selftest.check("§6.26 _experiment_failed moves the experiment contract by 1 (a failure is still an experiment)",
+		c5.progress(exp_id) == 1)
+	g._engine._experiment_pending_pair = ["fire", "air"]
+	g._engine._experiment_succeeded("steam", "fire", "air")
+	Selftest.check("§6.26 _experiment_succeeded moves the experiment contract by 1",
+		c5.progress(exp_id) == 2)
+	g._engine._experiment_pending_pair = ["fire", "air"]
+	g._engine._finish_experiment_inputs("fire", "air", true)   # только возврат входов
+	Selftest.check("§6.26 returning the inputs does not move the experiment contract",
+		c5.progress(exp_id) == 2)
+	g._engine._experiment_pending_pair.clear()
+	c5.on_experiment("fire", "air", false)
+	c5.on_experiment("fire", "air", true)
+	Selftest.check("§2.1 experiment counts successes and failures alike", c5.progress(exp_id) == 4)
+	c5.on_brew("new_thing", "fire", "air", true, "manual")
+	Selftest.check("§2.1 a first-time brew moves discover", c5.progress(String(exp_daily[1]["id"])) == 1)
+	c5.on_brew("dup_thing", "fire", "air", false, "manual")
+	Selftest.check("§2.1 a repeated brew does not move discover",
+		c5.progress(String(exp_daily[1]["id"])) == 1)
+
+	# §6.24 sigil_set по крафтам недели + §1.2 set_of_craft.
+	var sigil_daily := [_mk(c5, "daily", "sigil_craft", "bronze", 6)]
+	var sigil_weekly := [_mk(c5, "weekly", "sigil_set", "bronze", 3)]
+	var sigil_craft_id := String(sigil_daily[0]["id"])
+	var sigil_set_id := String(sigil_weekly[0]["id"])
+	_force_set(c5, sigil_daily, sigil_weekly)
+	_clear_prog(c5)
+	g._sigil._catalog["card_set_x"] = {"set": "set_x", "card_id": "card_set_x"}
+	g._sigil._collection["craft_x1"] = {"card_id": "card_set_x"}
+	g._sigil._collection["craft_x2"] = {"card_id": "card_set_x"}
+	Selftest.check("§1.2 set_of_craft resolves the set through the saved card and the catalog",
+		g._sigil.set_of_craft("craft_x1") == "set_x")
+	# Карта уже собрана ДО недели: самого факта в коллекции прогрессу недостаточно.
+	Selftest.check("§6.24 cards already collected before the week give sigil_set no progress",
+		c5.progress(sigil_set_id) == 0)
+	c5.on_sigil_craft("craft_x1", "common", "Test One")
+	c5.on_sigil_craft("craft_x2", "common", "Test Two")
+	Selftest.check("§6.24 sigil_set counts only crafts made this week",
+		c5.progress(sigil_set_id) == 2)
+	Selftest.check("§2.1 the same craft also moves the daily sigil_craft counter",
+		c5.progress(sigil_craft_id) == 2)
+	# Лучший сет, а не сумма: крафт карты из неизвестного сета не складывается.
+	c5.on_sigil_craft("craft_y1", "common", "Test Three")   # неизвестный сет → ""
+	Selftest.check("§2.2 sigil_set is the best set, not the sum of sets",
+		c5.progress(sigil_set_id) == 2)
+
+	# Проводка сигнала (§1.1: доска подписывается, а не вставляется в Аркан).
+	Selftest.check("§1.2 the board subscribes to SigilManager.craft_completed exactly once",
+		c5._sigil_connection_count() == 1)
+	_clear_prog(c5)
+	g._sigil.craft_completed.emit("craft_x1", "common", "Test One")
+	Selftest.check("§1.2 emitting craft_completed really reaches the board (signal wiring)",
+		c5.progress(sigil_set_id) == 1)
+
+	# §1.2 upgrade: оси Родника и покупки Мастерской.
+	var up_weekly := [_mk(c5, "weekly", "upgrade", "bronze", 6)]
+	var upgrade_id := String(up_weekly[0]["id"])
+	_force_set(c5, [], up_weekly)
+	_clear_prog(c5)
+	c5.on_upgrade("spring", "speed", 1)
+	c5.on_upgrade("workshop", "rank", 1)
+	c5.on_upgrade("workshop", "autonomy", 1)
+	Selftest.check("§1.2 a Spring axis and each Workshop purchase all move the upgrade contract",
+		c5.progress(upgrade_id) == 3)
+	# Проводка: реальная покупка оси Родника. SpringBalance.SPEED[0] — первый
+	# уровень скорости стоит 30 эфира и 12 камня (game/data/spring_balance.gd:6),
+	# поэтому камень нужно положить в инвентарь заранее: иначе покупка вернёт
+	# {"ok": false, "error": "insufficient stone"} и проверка стала бы зелёной по
+	# неверной причине (ok==false и ноль прогресса совпадают).
+	var hook_lv_snap: Dictionary = g._engine.spring_levels.duplicate(true)
+	var spring_snap := {"levels": hook_lv_snap, "ether": g._engine.ether,
+		"inv": g._engine.inventory.duplicate(true),
+		"buf": g._engine.spring_buffer.duplicate(true), "xp": g._workshop.xp}
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	g._engine.ether = 99999
+	g._engine.inventory["stone"] = 20
+	var spring_buy: Dictionary = g._engine.spring_purchase("speed")
+	Selftest.check("§1.2 buying a Spring axis through the real purchase path moves the upgrade contract",
+		bool(spring_buy.get("ok", false)) and c5.progress(upgrade_id) == 4)
+	g._engine.spring_levels = (spring_snap["levels"] as Dictionary).duplicate(true)
+	g._engine.ether = int(spring_snap["ether"])
+	g._engine.inventory = spring_snap["inv"]
+	g._engine.spring_buffer = spring_snap["buf"]
+	g._workshop.xp = int(spring_snap["xp"])
+
+	# §2 прогресс никогда не превышает цель; §4.4 Перегонка.
+	var cap_daily := [_mk(c5, "daily", "brew", "bronze", 2)]
+	var cap_weekly := [_mk(c5, "weekly", "prestige", "bronze", 1)]
+	var brew_id := String(cap_daily[0]["id"])
+	var prestige_id := String(cap_weekly[0]["id"])
+	_force_set(c5, cap_daily, cap_weekly)
+	_clear_prog(c5)
+	c5.on_brew("o", "fire", "air", false, "manual")
+	c5.on_brew("o", "fire", "air", false, "manual")
+	c5.on_brew("o", "fire", "air", false, "manual")
+	Selftest.check("§2 contract progress never exceeds its goal",
+		c5.progress(brew_id) == 2)
+	c5.grant_buff("brew_speed", 7200, 0.25, -1)
+	c5._unlocked_decor = ["window_contract"]
+	c5._contracts_daily_prog[brew_id] = 2
+	c5._contracts_daily_done[brew_id] = true
+	var weekly_before := c5.progress(prestige_id)
+	c5.on_prestige()
+	# Очистку читаем сразу после on_prestige(): сброшенный ключ дня (см. on_prestige)
+	# даёт регенерацию полного набора на первом же accessor — progress() в
+	# соседней проверке ниже через ensure_period() восстановит _contracts_daily.
+	# Если читать поле после неё, увидим уже восстановленный набор, а не факт
+	# очистки, поэтому этой проверке быть первой. Текст проверки не меняется.
+	Selftest.check("§4.4 on_prestige clears buffs, daily lists and daily progress",
+		c5._active_buffs.is_empty() and c5._contracts_daily.is_empty()
+		and c5._contracts_daily_prog.is_empty() and c5._contracts_daily_done.is_empty()
+		and c5._last_output == "")
+	Selftest.check("§4.4 on_prestige moves the prestige counter before it clears anything",
+		c5.progress(prestige_id) == weekly_before + 1)
+	Selftest.check("§4.4 on_prestige keeps weekly progress and unlocked decor",
+		c5.progress(prestige_id) == 1 and c5._unlocked_decor == ["window_contract"])
+
+	# §4.4 + §1.4: после Перегонки доска обязана снова отдавать полный набор —
+	# 3 дневных и 2 недельных контракта на ближайшем обращении. Отдельный
+	# экземпляр: живой c5 в этом блоке держит фикстуры, а здесь проверка краснеет
+	# ровно одним условием — несброшенным ключом дня (_contracts_last_daily),
+	# из-за которого ensure_period() считает период неизменным и возвращает
+	# очищенный пустой дневной список вплоть до полуночи.
+	var regen_probe := Contracts.new(g)
+	regen_probe.daily()
+	regen_probe.weekly()
+	regen_probe.on_prestige()
+	Selftest.check("§4.4 after on_prestige the daily set regenerates on next access",
+		regen_probe.daily().size() == ContractsBalance.DAILY_SHOWN
+		and regen_probe.weekly().size() == ContractsBalance.WEEKLY_SHOWN)
+
+	# восстановление живого состояния (Review Focus 7). Списки оставляем пустыми,
+	# а ключи периода — сброшенными: первый же ensure_period() после сюиты
+	# восстановит настоящий набор дня из живого g._contracts.
+	c5._active_buffs = buffs5_snap
+	c5._contracts_daily = []
+	c5._contracts_weekly = []
+	c5._contracts_last_daily = ""
+	c5._contracts_last_weekly = ""
+	_clear_prog(c5)
+	c5._unlocked_decor = []
+	g._sigil._collection = coll_snap
+	g._sigil._catalog = cat_snap
+	g._engine._rejected_pairs = rejected_snap
+	g._engine.inventory = brew_snap["inv"]
+	g._engine.known_recipes = brew_snap["known"]
+	g._engine.ether = int(brew_snap["ether"])
+	g._engine.attempts = int(brew_snap["attempts"])
+	g._engine.successes = int(brew_snap["successes"])
+	g._engine._experiment_pending_pair.clear()

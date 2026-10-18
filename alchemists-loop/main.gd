@@ -496,6 +496,8 @@ func _ready() -> void:
 	_sigil.name = "SigilManager"
 	add_child(_sigil)
 	_sigil.set_player_salt(OS.get_unique_id())
+	# §1.1: доска подписывается на крафт Аркана (единственный подписочный шов).
+	_contracts.connect_signals()
 	_sigil_ui = SigilUI.new()
 	_sigil_ui.main = self
 	add_child(_sigil_ui)

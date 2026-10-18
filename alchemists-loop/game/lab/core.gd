@@ -341,6 +341,7 @@ func spring_purchase(axis: String) -> Dictionary:
 		inventory[mat] = int(inventory.get(mat, 0)) - materials[mat]
 	spring_levels[axis] = lvl + 1
 	_refresh()
+	g._contracts.on_upgrade("spring", axis, lvl + 1)
 	return {"ok": true, "error": ""}
 
 func _ether_rate() -> float:
@@ -537,6 +538,7 @@ func _experiment_succeeded(slug: String, a: String, b: String) -> void:
 	_award_synthesis(slug)
 	status_text = "Эксперимент удался: открыто новое вещество «%s»." % g._online._item_name(slug)
 	Analytics.track("experiment_result", {"left": a, "right": b, "result": "created", "output": slug})
+	g._contracts.on_experiment(a, b, true)
 	_refresh()
 	g._saves._save_game()
 
@@ -549,6 +551,7 @@ func _experiment_failed(a: String, b: String, reason: String = "") -> void:
 	_finish_experiment_inputs(a, b, false)
 	status_text = "Эксперимент не дал результата: %s" % (reason if reason != "" else "эти вещества не сочетаются")
 	Analytics.track("experiment_result", {"left": a, "right": b, "result": "rejected"})
+	g._contracts.on_experiment(a, b, false)
 	Sfx.error()
 	g._saves._save_game()
 
@@ -1683,6 +1686,7 @@ func _commit_brew_locked(a: String, b: String, context: Dictionary) -> Dictionar
 	# только здесь (отмена/провал не платят и не сгорают молча — она сбросится
 	# следующим успешным путём или новой модалкой).
 	g._retention._circle_on_goal_brew(output)
+	g._contracts.on_brew(output, a, b, newly_learned, source)
 	if source != "offline_workshop":
 		Analytics.track("combine_try", {"left": a, "right": b, "result": "new" if newly_learned else "known", "output": output, "source": source})
 	return {"failed": false, "output": output, "newly_learned": newly_learned,

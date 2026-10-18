@@ -780,6 +780,18 @@ func _daily_craft_by_id(craft_id: String) -> Dictionary:
 		"object_type": "object", "seed": 0, "fallback_name": ""}
 
 
+## Set-идентификатор карточки для крафта. Read-only: ничего не публикует
+## наружу, поэтому связности с контрактами не создаёт (в отличие от прямого
+## вызова из sigil_manager.gd).
+func set_of_craft(craft_id: String) -> String:
+	var card_id := ""
+	if _collection.has(craft_id):
+		card_id = str((_collection[craft_id] as Dictionary).get("card_id", ""))
+	if card_id != "" and _catalog.has(card_id):
+		return str((_catalog[card_id] as Dictionary).get("set", ""))
+	return str(_daily_craft_by_id(craft_id).get("set", ""))
+
+
 ## Кэш ежедневных крафтов на диске (для офлайн-режима).
 func _save_daily_cache() -> void:
 	var f := FileAccess.open(DAILY_CACHE_FILE, FileAccess.WRITE)
