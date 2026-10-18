@@ -1594,9 +1594,11 @@ static func _contract_asset_checks() -> void:
 
 	# §5.3/§5.4: рваный край — это альфа, а не нарисованная рамка: 2 px у всех
 	# четырёх углов прозрачны, тело бумаги непрозрачно.
+	# stamp_frame и ring_pull — особые формы (рамка и кольцо с дыркой),
+	# для них отдельные проверки ниже.
 	var cutout := true
 	for f in ["paper_daily.png", "paper_weekly.png", "paper_note.png", "sign_hang.png",
-			"stamp_frame.png", "ring_pull.png", "corner_iron.png"]:
+			"corner_iron.png"]:
 		var img := _ca_img(CA_DIR + String(f))
 		if img == null:
 			cutout = false
@@ -1612,7 +1614,50 @@ static func _contract_asset_checks() -> void:
 		for k in 5:
 			body = body and img.get_pixel(int(w * 0.5), int(h * (0.3 + 0.1 * k))).a > 0.9
 		cutout = cutout and clean and body
-	Selftest.check("§5.3 papers, sign, stamp, ring and corner are cut-outs, not rectangles", cutout)
+	Selftest.check("§5.3 papers, sign and corner are cut-outs, not rectangles", cutout)
+
+	# §5.3: stamp_frame — красная двойная рамка с прозрачной серединой.
+	# Углы прозрачны (cut-out), непрозрачная рамка по краям.
+	var sf_ok := false
+	var sf_img := _ca_img(CA_DIR + "stamp_frame.png")
+	if sf_img != null:
+		var sf_w := sf_img.get_width()
+		var sf_h := sf_img.get_height()
+		var sf_corners := [sf_img.get_pixel(1, 1).a, sf_img.get_pixel(sf_w - 2, 1).a,
+			sf_img.get_pixel(1, sf_h - 2).a, sf_img.get_pixel(sf_w - 2, sf_h - 2).a]
+		var sf_clean := true
+		for a in sf_corners:
+			sf_clean = sf_clean and float(a) < 0.05
+		# Проверяем непрозрачность верхней рамки в нескольких точках по X.
+		var sf_border := true
+		for k in 5:
+			var bx := int(sf_w * (0.2 + 0.15 * k))
+			sf_border = sf_border and sf_img.get_pixel(bx, 5).a > 0.5
+		sf_ok = sf_clean and sf_border
+	Selftest.check("§5.3 stamp_frame is a double frame with transparent interior", sf_ok)
+
+	# §5.3: ring_pull — кованое кольцо с прозрачным центром (дырка).
+	# Углы прозрачны, полоса кольца непрозрачна по горизонтали через центр.
+	var rp_ok := false
+	var rp_img := _ca_img(CA_DIR + "ring_pull.png")
+	if rp_img != null:
+		var rp_w := rp_img.get_width()
+		var rp_h := rp_img.get_height()
+		var rp_corners := [rp_img.get_pixel(1, 1).a, rp_img.get_pixel(rp_w - 2, 1).a,
+			rp_img.get_pixel(1, rp_h - 2).a, rp_img.get_pixel(rp_w - 2, rp_h - 2).a]
+		var rp_clean := true
+		for a in rp_corners:
+			rp_clean = rp_clean and float(a) < 0.05
+		# Проверяем непрозрачность кольца вдоль горизонтальной полосы через центр.
+		# Кольцо (r_outer=19, r_inner=9, центр 22→44px) занимает ~29%–71% ширины,
+		# поэтому берём 5 точек в диапазоне 30%–70% (вне дырки и за краями кольца).
+		var rp_band := true
+		var rp_cy := int(rp_h * 0.5)
+		for k in 5:
+			var bx := int(rp_w * (0.30 + 0.10 * k))
+			rp_band = rp_band and rp_img.get_pixel(bx, rp_cy).a > 0.5
+		rp_ok = rp_clean and rp_band
+	Selftest.check("§5.3 ring_pull is a ring with a through-hole, not a solid disk", rp_ok)
 
 	# §5.3: бумага не плоская — запечённый градиент по вертикали плюс волокна.
 	var paper := _ca_img(CA_DIR + "paper_daily.png")
