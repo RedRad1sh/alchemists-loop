@@ -672,6 +672,7 @@ static func run(g: Game) -> void:
 	var brew_snap := {
 		"inv": g._engine.inventory.duplicate(true),
 		"known": g._engine.known_recipes.duplicate(true),
+		"known_defs": g._engine.known_recipe_defs.duplicate(true),
 		"ether": g._engine.ether,
 		"attempts": g._engine.attempts,
 		"successes": g._engine.successes,
@@ -907,7 +908,16 @@ static func run(g: Game) -> void:
 	g._engine._rejected_pairs = rejected_snap
 	g._engine.inventory = brew_snap["inv"]
 	g._engine.known_recipes = brew_snap["known"]
+	g._engine.known_recipe_defs = brew_snap["known_defs"]
 	g._engine.ether = int(brew_snap["ether"])
 	g._engine.attempts = int(brew_snap["attempts"])
 	g._engine.successes = int(brew_snap["successes"])
 	g._engine._experiment_pending_pair.clear()
+	# Инвариант known_recipes.keys() == known_recipe_defs.keys() (core.gd:11,
+	# core.gd:520-527): хук _experiment_succeeded вызывает learn_recipe, который
+	# пишет пару «air|fire» и в known_recipes, и в known_recipe_defs. Снимок
+	# блока обязан возвращать оба словаря: иначе фантомное определение рецепта
+	# выживает за пределами блока и краснит эту проверку. Снятие строки
+	# восстановления known_recipe_defs ниже делает её красной ровно одним условием.
+	Selftest.check("§1.2 the experiment hook leaves no recipe def behind the snapshot",
+		g._engine.known_recipes.keys() == g._engine.known_recipe_defs.keys())
