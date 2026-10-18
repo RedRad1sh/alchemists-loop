@@ -4,6 +4,9 @@ class_name SuiteContractBoard
 # условие, которое может покраснеть: поведение или конкретное число из спеки,
 # а не «поле существует».
 
+# ---------- §5.5: ассеты доски ----------
+const CA_DIR := "res://assets/contracts/"
+
 # ---------- временные швы (§Global Constraints) ----------
 const DT_SUN := {"year": 2026, "month": 10, "day": 18, "hour": 12, "minute": 0, "second": 0, "weekday": 0}
 const DT_SUN_LATE := {"year": 2026, "month": 10, "day": 18, "hour": 23, "minute": 59, "second": 0, "weekday": 0}
@@ -1220,8 +1223,10 @@ static func run(g: Game) -> void:
 	c6._contracts_last_weekly = ""
 	_restore_progress(g, claim_snap["prog"])
 
-	# Блок сейва идёт последним и отдельной функцией: он трогает пути сейва,
-	# пишет файлы и перезагружает мир. Всё, что ему нужно, он возвращает сам.
+	# §5.2–5.5: ассеты доски стоят до блока сейва — читают только файлы.
+	_contract_asset_checks()
+	# Блок сейва идёт последним и отдельной функции: он трогает пути сейва,
+	# пишет файлы и перезагружает мир.
 	_contracts_durability_checks(g)
 
 static func _contracts_durability_checks(g: Game) -> void:
@@ -1465,3 +1470,248 @@ static func _contracts_durability_checks(g: Game) -> void:
 		and not FileAccess.file_exists("user://alchemy_st_contracts_dur.json")
 		and c._unlocked_decor == (saved_state["decor"] as Array)
 		and c._active_buffs == (saved_state["buffs"] as Dictionary))
+
+# ---------- §5.2–5.5: хелперы и проверки ассетов ----------
+
+static func _ca_img(path: String) -> Image:
+	if not ResourceLoader.exists(path):
+		return null
+	var t := load(path) as Texture2D
+	if t == null:
+		return null
+	return t.get_image()
+
+
+static func _ca_delta(a: Color, b: Color) -> float:
+	return absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b) + absf(a.a - b.a)
+
+
+static func _ca_luma(c: Color) -> float:
+	return c.r * 0.299 + c.g * 0.587 + c.b * 0.114
+
+
+# Внутренний «шум» тайла по оси axis: средняя дельта между соседними пикселями.
+static func _ca_inner(img: Image, axis: String) -> float:
+	var acc := 0.0
+	var n := 0
+	if axis == "x":
+		for y in range(2, img.get_height() - 2, 2):
+			for x in range(2, img.get_width() - 3, 3):
+				acc += _ca_delta(img.get_pixel(x, y), img.get_pixel(x + 1, y))
+				n += 1
+	else:
+		for x in range(2, img.get_width() - 2, 2):
+			for y in range(2, img.get_height() - 3, 3):
+				acc += _ca_delta(img.get_pixel(x, y), img.get_pixel(x, y + 1))
+				n += 1
+	return acc / float(maxi(n, 1))
+
+
+# Дельта между последним и первым рядом по оси axis — это шов тайла.
+static func _ca_seam(img: Image, axis: String) -> float:
+	var acc := 0.0
+	var n := 0
+	if axis == "x":
+		for y in range(0, img.get_height(), 2):
+			acc += _ca_delta(img.get_pixel(img.get_width() - 1, y), img.get_pixel(0, y))
+			n += 1
+	else:
+		for x in range(0, img.get_width(), 2):
+			acc += _ca_delta(img.get_pixel(x, img.get_height() - 1), img.get_pixel(x, 0))
+			n += 1
+	return acc / float(maxi(n, 1))
+
+
+# Средняя дельта двух картинок по непрозрачным пикселям.
+static func _ca_mean_diff(a: Image, b: Image) -> float:
+	if a == null or b == null or a.get_size() != b.get_size():
+		return 0.0
+	var acc := 0.0
+	var n := 0
+	for y in range(0, a.get_height(), 3):
+		for x in range(0, a.get_width(), 3):
+			var pa := a.get_pixel(x, y)
+			var pb := b.get_pixel(x, y)
+			if pa.a < 0.05 and pb.a < 0.05:
+				continue
+			acc += _ca_delta(pa, pb)
+			n += 1
+	return acc / float(maxi(n, 1))
+
+
+static func _contract_asset_checks() -> void:
+	# Контракт имён и размеров, который читают экраны Task 9 и Task 10.
+	var sizes := {
+		"board_planks.png": Vector2i(256, 256),
+		"frame_h.png": Vector2i(256, 40),
+		"frame_v.png": Vector2i(40, 256),
+		"corner_iron.png": Vector2i(96, 96),
+		"shelf_bar.png": Vector2i(256, 28),
+		"sign_hang.png": Vector2i(600, 168),
+		"paper_daily.png": Vector2i(280, 392),
+		"paper_weekly.png": Vector2i(368, 488),
+		"paper_note.png": Vector2i(264, 176),
+		"nail_brass.png": Vector2i(64, 64),
+		"seal_bronze.png": Vector2i(104, 104),
+		"seal_silver.png": Vector2i(104, 104),
+		"seal_gold.png": Vector2i(104, 104),
+		"stamp_frame.png": Vector2i(264, 112),
+		"ring_pull.png": Vector2i(88, 88),
+	}
+	var missing := []
+	var wrong := []
+	var sidecars := []
+	for f in sizes:
+		var img := _ca_img(CA_DIR + String(f))
+		if img == null:
+			missing.append(String(f))
+		elif img.get_size() != sizes[f]:
+			wrong.append("%s=%s" % [String(f), str(img.get_size())])
+		if not FileAccess.file_exists(CA_DIR + String(f) + ".import"):
+			sidecars.append(String(f))
+	Selftest.check("§5.5 every board asset is exported at its declared pixel size",
+		missing.is_empty() and wrong.is_empty())
+	# Без `.import` свежий worktree физически не видит текстуру: `--import` обязан
+	# быть прогнан, а его результат — закоммичен.
+	Selftest.check("§5.5 every board asset ships its .import sidecar", sidecars.is_empty())
+
+	# §5.2.1: тайл бесшовный по обеим осям, иначе на доске видна сетка 256.
+	var planks := _ca_img(CA_DIR + "board_planks.png")
+	var seam_ok := planks != null
+	if planks != null:
+		for ax in ["x", "y"]:
+			seam_ok = seam_ok and (
+				_ca_seam(planks, String(ax)) <= _ca_inner(planks, String(ax)) * 1.6 + 0.02)
+	Selftest.check("§5.2 the plank tile is seamless on both tiling axes", seam_ok)
+
+	# §5.2.2: каждая рейка тайлится только по своей оси.
+	var fh := _ca_img(CA_DIR + "frame_h.png")
+	var fv := _ca_img(CA_DIR + "frame_v.png")
+	Selftest.check("§5.2 each frame rail is seamless along its own tiling axis",
+		fh != null and fv != null
+		and _ca_seam(fh, "x") <= _ca_inner(fh, "x") * 1.6 + 0.02
+		and _ca_seam(fv, "y") <= _ca_inner(fv, "y") * 1.6 + 0.02)
+
+	# §5.3/§5.4: рваный край — это альфа, а не нарисованная рамка: 2 px у всех
+	# четырёх углов прозрачны, тело бумаги непрозрачно.
+	var cutout := true
+	for f in ["paper_daily.png", "paper_weekly.png", "paper_note.png", "sign_hang.png",
+			"stamp_frame.png", "ring_pull.png", "corner_iron.png"]:
+		var img := _ca_img(CA_DIR + String(f))
+		if img == null:
+			cutout = false
+			break
+		var w := img.get_width()
+		var h := img.get_height()
+		var corners := [img.get_pixel(1, 1).a, img.get_pixel(w - 2, 1).a,
+			img.get_pixel(1, h - 2).a, img.get_pixel(w - 2, h - 2).a]
+		var clean := true
+		for a in corners:
+			clean = clean and float(a) < 0.05
+		var body := true
+		for k in 5:
+			body = body and img.get_pixel(int(w * 0.5), int(h * (0.3 + 0.1 * k))).a > 0.9
+		cutout = cutout and clean and body
+	Selftest.check("§5.3 papers, sign, stamp, ring and corner are cut-outs, not rectangles", cutout)
+
+	# §5.3: бумага не плоская — запечённый градиент по вертикали плюс волокна.
+	var paper := _ca_img(CA_DIR + "paper_daily.png")
+	var varied := false
+	if paper != null:
+		var seen := {}
+		var top := 0.0
+		var bot := 0.0
+		var tn := 0
+		var bn := 0
+		var n := 0
+		var w := paper.get_width()
+		var h := paper.get_height()
+		for y in range(int(h * 0.2), int(h * 0.8), 3):
+			for x in range(int(w * 0.2), int(w * 0.8), 3):
+				var c := paper.get_pixel(x, y)
+				if c.a <= 0.9:
+					continue
+				seen[int(_ca_luma(c) * 90.0)] = true
+				n += 1
+				if y < int(h * 0.4):
+					top += _ca_luma(c)
+					tn += 1
+				else:
+					bot += _ca_luma(c)
+					bn += 1
+		varied = (n > 400 and seen.size() >= 18 and tn > 0 and bn > 0
+			and absf(top / float(tn) - bot / float(bn)) > 0.02)
+	Selftest.check("§5.3 the paper carries a baked gradient and fibers, not a flat fill", varied)
+
+	# §5.3: три печати — три разных картинки (эмблема тира не одна и та же).
+	var seals := [_ca_img(CA_DIR + "seal_bronze.png"), _ca_img(CA_DIR + "seal_silver.png"),
+		_ca_img(CA_DIR + "seal_gold.png")]
+	var differ := seals[0] != null and seals[1] != null and seals[2] != null
+	if differ:
+		differ = (_ca_mean_diff(seals[0], seals[1]) > 0.05
+			and _ca_mean_diff(seals[0], seals[2]) > 0.05
+			and _ca_mean_diff(seals[1], seals[2]) > 0.02)
+	Selftest.check("§5.3 the three tier seals are three different pictures", differ)
+
+	# §5.3: гвоздь отбрасывает МЯГКУЮ тень — под шляпкой есть пиксели с частичной
+	# альфой. Мутация: диск без градиента (тень = a 0 или 1) красит эту проверку.
+	var nail := _ca_img(CA_DIR + "nail_brass.png")
+	var soft := false
+	if nail != null:
+		var nw := nail.get_width()
+		var nh := nail.get_height()
+		var head := nail.get_pixel(int(nw * 0.5), int(nh * 0.4)).a > 0.9
+		var pen := 0
+		for y in range(int(nh * 0.55), int(nh * 0.95)):
+			for x in range(2, nw - 2, 2):
+				var a := nail.get_pixel(x, y).a
+				if a > 0.04 and a < 0.85:
+					pen += 1
+		soft = head and pen > 200
+	Selftest.check("§5.3 the brass nail sits on a soft cast shadow", soft)
+
+	# §3.4: награды-витражи обязаны иметь арт и калибровку стекла:
+	# house_view.gd:236-241 грузит res://assets/decor/<id>.png без guard'а.
+	var vitrajes := true
+	for id in ["window_contract", "window_seal", "window_guild"]:
+		var img := _ca_img("res://assets/decor/%s.png" % String(id))
+		var entry: Dictionary = DecorCalib.CALIB.get(String(id), {}) as Dictionary
+		vitrajes = (vitrajes and img != null and img.get_size() == Vector2i(253, 256)
+			and entry.has("glass") and FileAccess.file_exists(
+				"res://assets/decor/%s.png.import" % String(id)))
+	Selftest.check("§3.4 the three reward vitrajes ship art and a calibrated glass rect", vitrajes)
+
+	# §3.4: витраж — перекраска СТЕКЛА донора: внутри rect стекла пиксели обязаны
+	# отличаться, снаружи стекла — совпадать дословно, rect стекла — быть rect донора.
+	var donor := _ca_img("res://assets/decor/window_9.png")
+	var vc := _ca_img("res://assets/decor/window_contract.png")
+	var recolored := false
+	if donor != null and vc != null:
+		var d0: Array = (DecorCalib.CALIB["window_9"] as Dictionary)["glass"]
+		var d1: Array = (DecorCalib.CALIB["window_contract"] as Dictionary)["glass"]
+		var w := donor.get_width()
+		var h := donor.get_height()
+		var gx0 := int(w * float(d0[0]))
+		var gy0 := int(h * float(d0[1]))
+		var gx1 := int(w * float(d0[2]))
+		var gy1 := int(h * float(d0[3]))
+		var inside_n := 0
+		var inside_changed := 0
+		var outside_changed := 0
+		for y in range(0, h, 2):
+			for x in range(0, w, 2):
+				var pa := donor.get_pixel(x, y)
+				var pb := vc.get_pixel(x, y)
+				if pa.a < 0.05 and pb.a < 0.05:
+					continue
+				var inglass := x >= gx0 and x < gx1 and y >= gy0 and y < gy1
+				var changed := _ca_delta(pa, pb) > 0.02
+				if inglass:
+					inside_n += 1
+					if changed:
+						inside_changed += 1
+				elif changed:
+					outside_changed += 1
+		recolored = (d0 == d1 and inside_n > 200
+			and float(inside_changed) / float(inside_n) > 0.5 and outside_changed == 0)
+	Selftest.check("§3.4 the reward vitraj recolors only the donor's glass area", recolored)
