@@ -1225,6 +1225,8 @@ static func run(g: Game) -> void:
 
 	# §5.2–5.5: ассеты доски стоят до блока сейва — читают только файлы.
 	_contract_asset_checks()
+	# §5.3: карточка навешивает ноды в дерево и крутит улучшения игрока, всё возвращает назад.
+	await _contract_card_checks(g)
 	# Блок сейва идёт последним и отдельной функции: он трогает пути сейва,
 	# пишет файлы и перезагружает мир.
 	_contracts_durability_checks(g)
@@ -1760,3 +1762,274 @@ static func _contract_asset_checks() -> void:
 		recolored = (d0 == d1 and inside_n > 200
 			and float(inside_changed) / float(inside_n) > 0.5 and outside_changed == 0)
 	Selftest.check("§3.4 the reward vitraj recolors only the donor's glass area", recolored)
+
+# ---------- §5.3: хелперы карточки ----------
+
+static func _cc_desc(node: Node, acc: Array) -> void:
+	for ch in node.get_children():
+		acc.append(ch)
+		_cc_desc(ch, acc)
+
+
+# Счёт слоёв, у которых настоящий PNG из папки доски.
+static func _cc_assets(node: Node) -> int:
+	var acc: Array = []
+	_cc_desc(node, acc)
+	var n := 0
+	for d in acc:
+		var t: Texture2D = null
+		if d is TextureRect:
+			t = (d as TextureRect).texture
+		elif d is TextureButton:
+			t = (d as TextureButton).texture_normal
+		if t != null and str(t.resource_path).begins_with(CA_DIR):
+			n += 1
+	return n
+
+
+# Кодовые примитивы вместо графики и слои без текстуры — обе болезни по rule 27.
+static func _cc_bad(node: Node, acc: Array) -> void:
+	for ch in node.get_children():
+		var n := ch as Control
+		if n == null:
+			acc.append("not a control")
+		elif n is ColorRect or n is Panel or n is PanelContainer or n is ProgressBar \
+				or n is NinePatchRect or n is TextureProgressBar:
+			acc.append(str(n.get_class()))
+		elif n is TextureRect or n is TextureButton:
+			var t: Texture2D = null
+			if n is TextureRect:
+				t = (n as TextureRect).texture
+			else:
+				t = (n as TextureButton).texture_normal
+			if t == null or not str(t.resource_path).begins_with(CA_DIR):
+				acc.append("layer:%s" % str(n.name))
+		_cc_bad(n, acc)
+
+
+static func _contract_card_checks(g: Game) -> void:
+	var c := g._contracts
+	var saved := _cb_snapshot(c)
+	var saved_rank := g._workshop.rank
+	var saved_auto := g._workshop.autonomy_level
+	var e := g._engine
+	var saved_spring: Dictionary = e.spring_levels.duplicate(true)
+	var win_before: Vector2i = g.get_window().size
+	g.get_window().size = Vector2i(540, 960)
+	await g.get_tree().process_frame
+	# Награда обязана быть масштабированной (§3.1). При пустых улучшениях множитель = 1.0,
+	# и проверка «карточка печатает число из reward_for, а не из таблицы» была бы зелёной
+	# сама по себе. Максимум по всем осям даёт 1 + 1.05 = 2.05.
+	g._workshop.rank = ContractsBalance.RANK_MAX
+	g._workshop.autonomy_level = ContractsBalance.AUTONOMY_MAX
+	e.spring_levels = {"speed": int(ContractsBalance.SPRING_MAX["speed"]),
+		"volume": int(ContractsBalance.SPRING_MAX["volume"]),
+		"sources": int(ContractsBalance.SPRING_MAX["sources"]),
+		"offline": int(ContractsBalance.SPRING_MAX["offline"])}
+
+	var fixtures: Array = [
+		_mk(c, "daily", "brew", "bronze", 15),
+		_mk(c, "daily", "experiment", "silver", 2),
+		_mk(c, "daily", "depth_brew", "gold", 3),
+		_mk(c, "weekly", "sigil_set", "gold", 4),
+		_mk(c, "weekly", "variety", "bronze", 8),
+	]
+	(fixtures[3] as Dictionary)["decor"] = "window_guild"
+	(fixtures[3] as Dictionary)["buff"] = ""
+	_force_set(c, [fixtures[0], fixtures[1], fixtures[2]], [fixtures[3], fixtures[4]])
+	# Три состояния одной доски: не выполнено (6/15), готово к выдаче (2/2), получено (3/3).
+	c._set_progress(String((fixtures[0] as Dictionary)["id"]), 6)
+	c._set_progress(String((fixtures[1] as Dictionary)["id"]), 2)
+	c._set_progress(String((fixtures[2] as Dictionary)["id"]), 3)
+	c._done_dict("daily")[String((fixtures[2] as Dictionary)["id"])] = true
+
+	var cards: Array = []
+	var by_id := {}
+	for raw in fixtures:
+		var contract := raw as Dictionary
+		var card := ContractCard.new(g)
+		card.setup(contract)
+		g.add_child(card)
+		cards.append(card)
+		by_id[String(contract["id"])] = card
+	var unfinished: ContractCard = by_id[String((fixtures[0] as Dictionary)["id"])]
+	var ready: ContractCard = by_id[String((fixtures[1] as Dictionary)["id"])]
+	var claimed: ContractCard = by_id[String((fixtures[2] as Dictionary)["id"])]
+	var wgold: ContractCard = by_id[String((fixtures[3] as Dictionary)["id"])]
+	var states_ok := unfinished != null and ready != null and claimed != null and wgold != null
+
+	# 1. Никаких кодовых примитивов: допустимы только слои с PNG и текст.
+	var bad: Array = []
+	if states_ok:
+		_cc_bad(unfinished, bad)
+		_cc_bad(wgold, bad)
+	Selftest.check("§5.3 a note is paper, nail, seal and stamp — not one code-drawn box",
+		states_ok and bad.is_empty() and _cc_assets(unfinished) >= 4 and _cc_assets(wgold) >= 4)
+
+	# 2. Бумага рисуется в своём логическом размере: PNG @2x, rect @1x (§5.5).
+	var up: TextureRect = unfinished.get("_paper") if states_ok else null
+	var wp: TextureRect = wgold.get("_paper") if states_ok else null
+	var paper_ok := up != null and wp != null and up.texture != null and wp.texture != null
+	Selftest.check("§5.3 the weekly note hangs on bigger paper, both at the real PNG size",
+		paper_ok and Vector2(up.texture.get_size()) == Vector2(280, 392)
+		and Vector2(wp.texture.get_size()) == Vector2(368, 488)
+		and up.size == ContractCard.DAILY_SIZE and wp.size == ContractCard.WEEKLY_SIZE)
+
+	# 3. Наклон детерминирован по id и не больше ±4°.
+	var tilt_ok := states_ok
+	for i in range(cards.size()):
+		var hang: Control = (cards[i] as ContractCard).get("_hang")
+		if hang == null:
+			tilt_ok = false
+			continue
+		var want := ContractCard.rot_deg(String((fixtures[i] as Dictionary)["id"]))
+		if absf(want) > ContractCard.TILT_MAX + 0.001 \
+				or not is_equal_approx(hang.rotation_degrees, want):
+			tilt_ok = false
+	Selftest.check("§5.3 every note hangs at its own deterministic tilt inside 4 degrees", tilt_ok)
+
+	# 4. Хеш обязан рассеивать: 30 id дают минимум двенадцать углов и обе стороны.
+	var tiers := ["bronze", "silver", "gold"]
+	var angles := {}
+	var lean_left := 0
+	var lean_right := 0
+	for i in range(30):
+		var deg := ContractCard.rot_deg("daily:brew:%s:k%d" % [tiers[i % 3], i])
+		angles[str(snappedf(deg, 0.01))] = true
+		if deg < 0.0:
+			lean_left += 1
+		elif deg > 0.0:
+			lean_right += 1
+	Selftest.check("§5.3 thirty ids lean in both directions over at least twelve angles",
+		angles.size() >= 12 and lean_left > 0 and lean_right > 0)
+
+	# 5. Гвоздь — в середине верхнего края листа и торчит над ним (центр ровно на крае).
+	var nail: TextureRect = unfinished.get("_nail") if states_ok else null
+	var nail_ok := nail != null and nail.size == Vector2(ContractCard.NAIL_SIZE, ContractCard.NAIL_SIZE)
+	if nail_ok:
+		nail_ok = absf(nail.position.x + nail.size.x / 2.0 - ContractCard.DAILY_SIZE.x / 2.0) <= 0.5 \
+			and absf(nail.position.y + nail.size.y / 2.0) <= 0.5
+		# Гвоздь не висит на бумаге: он вбит в доску и не поворачивается вместе с листом.
+		nail_ok = nail_ok and nail.get_parent() == unfinished
+	Selftest.check("§5.3 the brass nail sits on the middle of the paper's top edge", nail_ok)
+
+	# 6. Сургуч соответствует тиру контракта.
+	var seal_ok := states_ok
+	for i in range(cards.size()):
+		var seal: TextureRect = (cards[i] as ContractCard).get("_seal")
+		if seal == null or seal.texture == null:
+			seal_ok = false
+			continue
+		var want_path := "%sseal_%s.png" % [CA_DIR, String((fixtures[i] as Dictionary)["tier"])]
+		if str(seal.texture.resource_path) != want_path \
+				or seal.size != Vector2(ContractCard.SEAL_SIZE, ContractCard.SEAL_SIZE):
+			seal_ok = false
+	Selftest.check("§5.3 the wax seal is the wax of the contract's own tier", seal_ok)
+
+	# 7. Незакрытый контракт штампа не показывает, а счётчик цели показывает.
+	var stamp_u: TextureButton = unfinished.get("_stamp") if states_ok else null
+	var count_u: Label = unfinished.get("_count") if states_ok else null
+	Selftest.check("§5.3 an unfinished note shows the counter, not a stamp",
+		stamp_u != null and count_u != null and not stamp_u.visible and count_u.text == "6 / 15")
+
+	# 8. Готовая к выдаче награда — штамп активен.
+	var stamp_r: TextureButton = ready.get("_stamp") if states_ok else null
+	var count_r: Label = ready.get("_count") if states_ok else null
+	Selftest.check("§5.3 a fulfilled note shows an enabled claim stamp",
+		stamp_r != null and count_r != null and stamp_r.visible and not stamp_r.disabled
+		and count_r.text == "2 / 2")
+
+	# 9. Полученный контракт: штамп виден и выключен, бумага обесцвечена; у остальных
+	# параметр шейдера ровно 0.0 (материал обязан быть своим у каждой карточки).
+	var stamp_c: TextureButton = claimed.get("_stamp") if states_ok else null
+	var fade_c: ShaderMaterial = claimed.get("_fade") if states_ok else null
+	var fade_r: ShaderMaterial = ready.get("_fade") if states_ok else null
+	var fade_u: ShaderMaterial = unfinished.get("_fade") if states_ok else null
+	var fade_ok := stamp_c != null and stamp_c.visible and stamp_c.disabled \
+		and fade_c != null and fade_r != null and fade_u != null
+	if fade_ok:
+		fade_ok = is_equal_approx(float(fade_c.get_shader_parameter("amount")), 1.0) \
+			and is_equal_approx(float(fade_r.get_shader_parameter("amount")), 0.0) \
+			and is_equal_approx(float(fade_u.get_shader_parameter("amount")), 0.0)
+	Selftest.check("§5.3 a claimed note fades and its stamp stops answering", fade_ok)
+
+	# 10. Шейдер — обычный canvas_item без читок экрана (прецедент: suite_spring_v2 проверяет
+	# исходник `spring_water.gdshader` текстом, потому что опечатка в headless молчит).
+	var src := FileAccess.get_file_as_string(ContractCard.FADE_SHADER)
+	Selftest.check("§5.3 the paper fade is plain canvas_item GLSL the card can drive",
+		src.contains("shader_type canvas_item;") and src.contains("uniform float amount")
+		and src.contains("texture(TEXTURE, UV)") and not src.contains(":=")
+		and not src.contains("screen_texture"))
+
+	# 11. Строка награды печатает число из reward_for (масштабированное), а не из таблицы,
+	# и перечисляет ровно то, что платит этот контракт.
+	var rew_u: Label = unfinished.get("_reward") if states_ok else null
+	var rew_w: Label = wgold.get("_reward") if states_ok else null
+	var paid := c.reward_for(fixtures[0] as Dictionary)
+	var paid_stone := int((paid["materials"] as Dictionary)["stone"])
+	var base_stone := int((ContractsBalance.DAILY_MATERIALS["bronze"] as Dictionary)["stone"])
+	var want_line := "%s ×%d" % [g._online._item_name("stone"), paid_stone]
+	var buff_title := String(ContractsBalance.BUFF_TITLE["brew_speed"])
+	Selftest.check("§5.3 the reward line lists exactly what the note pays, at the scaled number",
+		rew_u != null and rew_w != null and paid_stone != base_stone
+		and rew_u.text.contains(want_line) and rew_u.text.contains(buff_title)
+		and rew_w.text.contains(String(ContractsBalance.DECOR_LABEL["window_guild"]))
+		and not rew_w.text.contains(buff_title))
+
+	# 12. Ни один глиф не обязан быть в Manrope. Отрицательный контроль (✦ в шрифте нет) и
+	# положительный (кириллица «А» есть) стоят в одной проверке: без них проверка была бы
+	# зелёной при любой лжи has_char — в том числе при переставленных аргументах.
+	var fnt: Font = g._font_semi
+	var words := ""
+	for card in cards:
+		for key in ["_title", "_count", "_reward", "_stamp_word"]:
+			var lbl := (card as ContractCard).get(key) as Label
+			if lbl != null:
+				words += lbl.text + " "
+	var missing := ""
+	if fnt != null:
+		for i in range(words.length()):
+			var cp := words.unicode_at(i)
+			if cp > 32 and not fnt.has_char(cp):
+				missing += words[i]
+	Selftest.check("§5.3 every word on a note is a word the game font draws",
+		fnt != null and missing == "" and fnt.has_char(0x0410)
+		and not fnt.has_char(0x2726))
+
+	# 13. Ряд Task 10 пересобирается при смене периода: второй setup() не должен навеслить
+	# второй лист поверх первого.
+	var reuse := ContractCard.new(g)
+	reuse.setup(fixtures[0] as Dictionary)
+	g.add_child(reuse)
+	cards.append(reuse)
+	var roots_before := reuse.get_child_count()
+	var layers_before := _cc_assets(reuse)
+	reuse.setup(fixtures[0] as Dictionary)
+	reuse.setup(fixtures[3] as Dictionary)
+	Selftest.check("§5.3 re-hanging a note on a new contract does not stack a second paper",
+		roots_before >= 2 and layers_before >= 4 and reuse.get_child_count() == roots_before
+		and _cc_assets(reuse) == layers_before)
+
+	# 14. Штамп — кнопка получения: тап просит у доски ровно одну выдачу этого контракта.
+	# Порядок важен: карточка ничего не выдаёт сама, она только шлёт claimed (§1).
+	var ready_id := String((fixtures[1] as Dictionary)["id"])
+	var asked: Array = []
+	if stamp_r != null:
+		ready.claimed.connect(func(id: String) -> void: asked.append(id))
+		stamp_r.pressed.emit()
+	Selftest.check("§5.3 pressing the stamp asks the board for exactly one claim of this note",
+		asked.size() == 1 and String(asked[0]) == ready_id
+		and stamp_r != null and stamp_r.pressed.is_connected(ready._on_stamp_pressed))
+
+	# 15. Штамп приседает в момент нажатия (без кадра между emit и проверкой).
+	Selftest.check("§5.3 the stamp squashes the moment it is hit",
+		stamp_r != null and stamp_r.scale.x < 1.0 and stamp_r.scale.y < 1.0)
+
+	for card in cards:
+		(card as ContractCard).queue_free()
+	await g.get_tree().process_frame
+	g.get_window().size = win_before
+	g._workshop.rank = saved_rank
+	g._workshop.autonomy_level = saved_auto
+	e.spring_levels = saved_spring.duplicate(true)
+	_cb_restore(c, saved)
