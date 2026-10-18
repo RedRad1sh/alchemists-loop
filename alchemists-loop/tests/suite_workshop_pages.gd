@@ -167,8 +167,6 @@ static func _freed_controls(g: Game, w: Workshop) -> void:
 	var container := VBoxContainer.new()
 	g.add_child(container)
 	local._build_bench_page(container)
-	local._spring_info = Label.new()
-	container.add_child(local._spring_info)
 	var view: Node = container.find_child("WorkshopView", true, false)
 	Selftest.check("pages rebuilt screen binds same persistent model", is_instance_valid(view) and view.get("workshop") == w)
 	var before := w.export_state()

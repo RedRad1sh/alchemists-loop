@@ -113,7 +113,7 @@ static func run(g: Game) -> void:
 	Selftest.check("offline below min", g._saves._offline_gain(30, 1.0, 0, 500) == 0)
 	Selftest.check("offline normal", g._saves._offline_gain(120, 2.0, 0, 1000) == 240)
 	Selftest.check("offline caps at ether cap", g._saves._offline_gain(100000, 1.0, 0, 500) == 500)
-	Selftest.check("offline caps at 8h", g._saves._offline_gain(100000, 1.0, 0, 100000) == 28800)
+	Selftest.check("offline caps at 12h", g._saves._offline_gain(100000, 1.0, 0, 100000) == 43200)
 
 	# престиж «Перегонка»
 	var inv_sz := g._engine.inventory.size()

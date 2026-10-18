@@ -85,4 +85,9 @@ func _count_axis_rows(axis: String) -> int:
 	return 0
 
 func _close() -> void:
+	# queue_free() не освобождает узел в этом кадре, а main._spring_screen держит
+	# ссылку на него. Пока ссылка живёт, любой снимок свойств игры (WorkshopFixture)
+	# натыкается на «previously freed instance» и обрывает захват состояния.
+	if _game != null:
+		_game.set("_spring_screen", null)
 	queue_free()

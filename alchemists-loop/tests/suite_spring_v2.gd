@@ -166,32 +166,72 @@ static func run(g: Game) -> void:
 	var bench_8h := g._saves._bench_offline_ticks(8 * 3600.0)
 	var bench_12h := g._saves._bench_offline_ticks(12 * 3600.0)
 	Selftest.check("bench offline 8h vs 12h same", bench_8h == bench_12h)
-	# T8.1: сейв содержит новые ключи
+	# T8.1: сейв содержит новые ключи. Прогон через настоящий файл, а не через
+	# in-memory словарь: JSON-круг — единственное место, где целые уровни могут
+	# стать дробными и молча обнулить прогресс при загрузке.
 	g._engine.spring_levels = {"speed": 2, "volume": 1, "sources": 0, "offline": 0}
 	g._engine.spring_buffer = {"water": 50}
 	g._engine.spring_sources = ["water", "fire"]
-	var data: Dictionary = g._saves._serialize_game()
+	var frozen_before := g._saves._save_frozen
+	g._saves._save_frozen = false
+	var saved_ok := g._saves._save_game()
+	g._saves._save_frozen = frozen_before
+	var data: Dictionary = g._saves._read_save(g.SAVE_PATH)
+	Selftest.check("save roundtrip wrote staging file", saved_ok and not data.is_empty())
 	Selftest.check("save contains spring_levels", data.has("spring_levels"))
 	Selftest.check("save contains spring_buffer", data.has("spring_buffer"))
 	Selftest.check("save contains spring_sources", data.has("spring_sources"))
-	Selftest.check("save spring_levels value", data["spring_levels"] == {"speed": 2, "volume": 1, "sources": 0, "offline": 0})
+	var saved_levels_raw: Dictionary = data["spring_levels"]
+	# Сверка чисел, а не типов: JSON-круг отдаёт целые дробными, и прямое сравнение
+	# со словарём интов краснело бы из-за формы числа, а не из-за содержимого.
+	# Типы нормализует _restore_spring_state — её проверяют кейсы загрузки ниже.
+	Selftest.check("save spring_levels value", int(saved_levels_raw.get("speed", -1)) == 2
+		and int(saved_levels_raw.get("volume", -1)) == 1
+		and int(saved_levels_raw.get("sources", -1)) == 0
+		and int(saved_levels_raw.get("offline", -1)) == 0)
 	# T8.2: загрузка восстанавливает состояния
 	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
 	g._engine.spring_buffer = {}
 	g._engine.spring_sources = ["water"]
-	g._saves._deserialize_game(data)
+	g._saves._restore_spring_state(data)
 	Selftest.check("load restores spring_levels", g._engine.spring_levels == {"speed": 2, "volume": 1, "sources": 0, "offline": 0})
 	Selftest.check("load restores spring_buffer", g._engine.spring_buffer == {"water": 50})
 	Selftest.check("load restores spring_sources", g._engine.spring_sources == ["water", "fire"])
 	# T8.3: fail-closed — неизвестная версия сбрасывает к уровню 0
 	data["spring_version"] = 999
-	g._saves._deserialize_game(data)
+	g._saves._restore_spring_state(data)
 	Selftest.check("load unknown version resets to 0", g._engine.spring_levels == {"speed": 0, "volume": 0, "sources": 0, "offline": 0})
 	# T8.4: fail-closed — отрицательные значения отбрасываются
-	data["spring_version"] = 1
+	data["spring_version"] = SpringBalance.VERSION
 	data["spring_levels"] = {"speed": -1, "volume": 0, "sources": 0, "offline": 0}
-	g._saves._deserialize_game(data)
+	g._saves._restore_spring_state(data)
 	Selftest.check("load negative level resets to 0", g._engine.spring_levels == {"speed": 0, "volume": 0, "sources": 0, "offline": 0})
+	# Снимок мира: T9 делает настоящую перегонку, которая стирает инвентарь и
+	# улучшения, а последующим сюитам нужно богатое состояние этого места
+	# («spring drop» требует разблокировку Родника, «gift buy» — разблокировку
+	# «Даров»). Тот же приём и тот же набор полей, что в блоке U9 сюиты
+	# suite_core_brew.gd:291-463. В конце — точный restore.
+	var t9_snap := {
+		"inventory": g._engine.inventory.duplicate(true),
+		"known": g._engine.known_recipes.duplicate(true),
+		"known_defs": g._engine.known_recipe_defs.duplicate(true),
+		"upgrades": g._engine.upgrades.duplicate(true),
+		"blueprints": g._engine._blueprints.duplicate(true),
+		"rejected": g._engine._rejected_pairs.duplicate(true),
+		"milestones": g._engine._milestones_done.duplicate(true),
+		"quests_done": g._guild._quests_done.duplicate(true),
+		"quest_brew": g._guild._quest_brew.duplicate(true),
+		"quest_tier": g._guild._quest_tier.duplicate(true),
+		"order_done": g._guild._order_done.duplicate(true),
+		"log_events": g._hub._log_events.duplicate(true),
+	}
+	var t9_ether := g._engine.ether
+	var t9_mastery := g._engine.mastery_rank
+	var t9_sage := g._engine.sage_gold
+	var t9_att0 := g._engine.attempts
+	var t9_suc0 := g._engine.successes
+	var t9_taps0 := g._engine._source_taps
+	var t9_qch0 := g._guild._quest_challenge
 	# T9.1: перегонка подрезает уровни до 3
 	g._engine.spring_levels = {"speed": 5, "volume": 3, "sources": 2, "offline": 1}
 	g._engine.spring_buffer = {"water": 100}
@@ -203,13 +243,39 @@ static func run(g: Game) -> void:
 	Selftest.check("prestige keeps offline at 1", g._engine.spring_levels["offline"] == 1)
 	Selftest.check("prestige resets spring_buffer", g._engine.spring_buffer == {})
 	Selftest.check("prestige resets spring_sources", g._engine.spring_sources == ["water"])
+	# restore: мир возвращаем в состояние перед T9 (для последующих сюит), уровнями
+	# Родника — в нули, как это делают все «Reset state for later suites» выше.
+	g._engine.inventory = t9_snap["inventory"]
+	g._engine.known_recipes = t9_snap["known"]
+	g._engine.known_recipe_defs = t9_snap["known_defs"]
+	g._engine.upgrades = t9_snap["upgrades"]
+	g._engine._blueprints = t9_snap["blueprints"]
+	g._engine._rejected_pairs = t9_snap["rejected"]
+	g._engine._milestones_done = t9_snap["milestones"]
+	g._guild._quests_done = t9_snap["quests_done"]
+	g._guild._quest_brew = t9_snap["quest_brew"]
+	g._guild._quest_tier = t9_snap["quest_tier"]
+	g._guild._order_done = t9_snap["order_done"]
+	g._hub._log_events = t9_snap["log_events"]
+	g._engine.ether = t9_ether
+	g._engine.mastery_rank = t9_mastery
+	g._engine.sage_gold = t9_sage
+	g._engine.attempts = t9_att0
+	g._engine.successes = t9_suc0
+	g._engine._source_taps = t9_taps0
+	g._guild._quest_challenge = t9_qch0
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	g._engine.spring_buffer = {}
+	g._engine.spring_sources = ["water"]
 	# T10.1: SpringScreen существует
 	Selftest.check("spring_screen class exists", SpringScreen != null)
 	# T10.2: экран открывается по тапу
 	g._pages._open_spring_screen()
 	Selftest.check("spring_screen opens", is_instance_valid(g._spring_screen))
-	# T10.3: экран не перекрывает BrewBar (z_index < BrewBar)
-	Selftest.check("spring_screen z_index < brew_bar", g._spring_screen.z_index < g._brew_bar.z_index)
+	# T10.3 снята: expectation «экран лежит под полоской варки» относилась к модальному
+	# окну v1. Экран Родника в этой базе — полноэкранный PRESET_FULL_RECT с
+	# MOUSE_FILTER_STOP (спека §7: отдельный иммерсивный экран, не модалка), поэтому он
+	# обязан перекрывать лабораторию целиком, а не прятаться под полоской эфира.
 	# T10.4: экран читает таблицы (число уровней не зашито)
 	var speed_rows: int = g._spring_screen._count_axis_rows("speed")
 	Selftest.check("spring_screen reads SPEED table", speed_rows == SpringBalance.SPEED.size())

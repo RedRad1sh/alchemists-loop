@@ -233,51 +233,7 @@ func _load_game() -> void:
 		if ss in Game.BASE_IDS:
 			g._engine.spring_source = ss
 	g._engine.spring_on = bool(data.get("spring_on", false))
-	# Родник v2: fail-closed восстановление
-	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
-	g._engine.spring_buffer = {}
-	g._engine.spring_sources = ["water"]
-	var saved_spring_version = data.get("spring_version", 0)
-	if saved_spring_version is int and saved_spring_version == SpringBalance.VERSION:
-		var saved_levels = data.get("spring_levels", {})
-		if saved_levels is Dictionary:
-			var valid := true
-			for axis in ["speed", "volume", "sources", "offline"]:
-				var lvl = saved_levels.get(axis, 0)
-				if not (lvl is int) or lvl < 0:
-					valid = false
-					break
-				var max_lvl: int
-				match axis:
-					"speed": max_lvl = SpringBalance.SPEED.size()
-					"volume": max_lvl = SpringBalance.VOLUME.size()
-					"sources": max_lvl = SpringBalance.SOURCES.size()
-					"offline": max_lvl = SpringBalance.OFFLINE.size()
-					_: max_lvl = 0
-				if lvl > max_lvl:
-					valid = false
-					break
-			if valid:
-				g._engine.spring_levels = saved_levels.duplicate(true)
-		var saved_buffer = data.get("spring_buffer", {})
-		if saved_buffer is Dictionary:
-			var valid_buffer := true
-			for elem in saved_buffer:
-				var count = saved_buffer[elem]
-				if not (count is int) or count < 0:
-					valid_buffer = false
-					break
-			if valid_buffer:
-				g._engine.spring_buffer = saved_buffer.duplicate(true)
-		var saved_sources = data.get("spring_sources", [])
-		if saved_sources is Array and saved_sources.size() > 0:
-			var valid_sources := true
-			for source in saved_sources:
-				if not (source is String) or not source in Game.BASE_IDS:
-					valid_sources = false
-					break
-			if valid_sources:
-				g._engine.spring_sources = saved_sources.duplicate(true)
+	_restore_spring_state(data)
 	if data.get("bench_target") is String:
 		var bt := String(data["bench_target"])
 		if g.ITEMS.has(bt):
@@ -606,6 +562,68 @@ func _offline_gain(elapsed: float, rate: float, cur: int, cap: int) -> int:
 	if gain <= 0:
 		return 0
 	return mini(cap, cur + gain) - cur
+
+static func _json_int(value: Variant, minimum: int, maximum: int) -> int:
+	# Сейв — это JSON, а JSON в Godot отдаёт все числа дробными: записанная 2
+	# приходит как 2.0. Строгая проверка «is int» на этом пути считала бы
+	# корректный файл невалидным и молча обнуляла прогресс Родника при каждой
+	# загрузке, поэтому целые принимаются и в дробной форме — тот же приём, что
+	# Workshop._integer (game/lab/workshop.gd:488). -1 = значение негодно.
+	if value is int:
+		return value if value >= minimum and value <= maximum else -1
+	if value is float and is_finite(value) and value == floor(value) \
+			and value >= minimum and value <= maximum:
+		return int(value)
+	return -1
+
+func _restore_spring_state(data: Dictionary) -> void:
+	# Родник v2: fail-closed восстановление. Неизвестная версия или любое
+	# невалидное значение оставляют нулевой уровень, а не частичный прогресс.
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	g._engine.spring_buffer = {}
+	g._engine.spring_sources = ["water"]
+	if _json_int(data.get("spring_version", 0), 0, 1_000_000) != SpringBalance.VERSION:
+		return
+	var saved_levels = data.get("spring_levels", {})
+	if saved_levels is Dictionary:
+		var parsed := {}
+		var valid := true
+		for axis in ["speed", "volume", "sources", "offline"]:
+			var max_lvl: int
+			match axis:
+				"speed": max_lvl = SpringBalance.SPEED.size()
+				"volume": max_lvl = SpringBalance.VOLUME.size()
+				"sources": max_lvl = SpringBalance.SOURCES.size()
+				"offline": max_lvl = SpringBalance.OFFLINE.size()
+				_: max_lvl = 0
+			var lvl := _json_int(saved_levels.get(axis, 0), 0, max_lvl)
+			if lvl < 0:
+				valid = false
+				break
+			parsed[axis] = lvl
+		if valid:
+			g._engine.spring_levels = parsed
+	var saved_buffer = data.get("spring_buffer", {})
+	if saved_buffer is Dictionary:
+		var parsed_buffer := {}
+		var valid_buffer := true
+		for elem in saved_buffer:
+			var count := _json_int(saved_buffer[elem], 0, 1_000_000_000)
+			if count < 0:
+				valid_buffer = false
+				break
+			parsed_buffer[String(elem)] = count
+		if valid_buffer:
+			g._engine.spring_buffer = parsed_buffer
+	var saved_sources = data.get("spring_sources", [])
+	if saved_sources is Array and saved_sources.size() > 0:
+		var valid_sources := true
+		for source in saved_sources:
+			if not (source is String) or not source in Game.BASE_IDS:
+				valid_sources = false
+				break
+		if valid_sources:
+			g._engine.spring_sources = saved_sources.duplicate(true)
 
 func _spring_offline_gain(elapsed: float) -> int:
 	if elapsed < Game.OFFLINE_MIN_SEC:
