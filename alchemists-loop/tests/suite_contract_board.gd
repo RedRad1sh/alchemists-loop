@@ -921,3 +921,203 @@ static func run(g: Game) -> void:
 	# восстановления known_recipe_defs ниже делает её красной ровно одним условием.
 	Selftest.check("§1.2 the experiment hook leaves no recipe def behind the snapshot",
 		g._engine.known_recipes.keys() == g._engine.known_recipe_defs.keys())
+
+	# ---------------- Task 6: выдача награды ----------------
+	var c6 := g._contracts
+	var claim_snap := {
+		"inv": g._engine.inventory.duplicate(true),
+		"buffs": c6._active_buffs.duplicate(true),
+		"decor": c6._unlocked_decor.duplicate(true),
+		"owned": g._home.house_owned.duplicate(true),
+		"prog": _snap_progress(g),
+	}
+	# Каталог Дома, журнал доски и активные баффы чищим НАМЕРЕННО. Если
+	# «Витраж гильдии» уже принадлежит игроку, а brew_speed уже активен,
+	# проверки №6/№8 были бы зелёными без всякого claim.
+	c6._unlocked_decor = []
+	c6._active_buffs = {}
+	g._home.house_owned["window"] = []
+	_set_progress(g, 0, 0, 0, 0, 0, 0)  # множитель ровно 1.0 → числа равны таблице
+
+	# Тест №7: невыполненный контракт.
+	var miss_set := [_mk(c6, "daily", "brew", "bronze", 5)]
+	var miss_id := String(miss_set[0]["id"])
+	_force_set(c6, miss_set, [])
+	_clear_prog(c6)
+	g._engine.inventory["stone"] = 0
+	g._engine.inventory["brick"] = 0
+	var got_missing := c6.claim(miss_id)
+	Selftest.check("§6.7 an unfinished contract is refused and pays nothing",
+		not bool(got_missing["ok"]) and String(got_missing["reason"]) == "incomplete"
+		and int(g._engine.inventory.get("stone", 0)) == 0
+		and int(g._engine.inventory.get("brick", 0)) == 0
+		and c6._active_buffs.is_empty())
+
+	# Тест №6: выполнен → выдача → повторный тап.
+	var win_set := [_mk(c6, "daily", "brew", "bronze", 3)]
+	var win_id := String(win_set[0]["id"])
+	_force_set(c6, win_set, [])
+	_clear_prog(c6)
+	c6._contracts_daily_prog[win_id] = 3
+	g._engine.inventory["stone"] = 0
+	g._engine.inventory["brick"] = 0
+	var got := c6.claim(win_id)
+	Selftest.check("§6.6 a finished claim pays the bronze daily table and closes the contract",
+		bool(got["ok"]) and String(got["reason"]) == ""
+		and got["materials"] == {"stone": 20, "brick": 10}
+		and int(g._engine.inventory["stone"]) == 20
+		and int(g._engine.inventory["brick"]) == 10
+		and c6.is_done(win_id) and not c6.is_ready(win_id))
+	Selftest.check("§3.3 the same claim switches on the contract's buff at the scaled power",
+		c6._active_buffs.has("brew_speed") and absf(c6.buff_power("brew_speed") - 0.25) < 0.0001
+		and int(got["duration"]) == 7200)
+	var again := c6.claim(win_id)
+	Selftest.check("§6.6 a second claim of the same id reports claimed and pays nothing further",
+		not bool(again["ok"]) and String(again["reason"]) == "claimed"
+		and int(g._engine.inventory["stone"]) == 20 and c6._active_buffs.size() == 1)
+	c6._active_buffs = {}
+
+	# §3.2: недельная награда берёт недельную таблицу (у дневной bronze кристалла нет).
+	var week_set := [_mk(c6, "weekly", "variety", "bronze", 1)]
+	var week_id := String(week_set[0]["id"])
+	_force_set(c6, [], week_set)
+	_clear_prog(c6)
+	c6._contracts_weekly_prog[week_id] = 1
+	for week_item in ["stone", "brick", "metal", "glass"]:
+		g._engine.inventory[week_item] = 0
+	var got_week := c6.claim(week_id)
+	Selftest.check("§3.2 a weekly claim pays the weekly table, not the daily one",
+		bool(got_week["ok"]) and got_week["materials"] == {"stone": 80, "brick": 45, "metal": 20}
+		and int(g._engine.inventory["metal"]) == 20)
+
+	# §3.4 / тест №8-логика: недельный gold отдаёт витраж в Дом и в журнал доски.
+	var decor_set := [_mk(c6, "weekly", "prestige", "gold", 1)]
+	var guild_cid := String(decor_set[0]["id"])
+	decor_set[0]["decor"] = "window_guild"
+	decor_set[0]["buff"] = "spring_yield"
+	_force_set(c6, [], decor_set)
+	_clear_prog(c6)
+	c6._contracts_weekly_prog[guild_cid] = 1
+	var got_decor := c6.claim(guild_cid)
+	Selftest.check("§3.4 a weekly gold claim hands the vitrage to the House, not only to the board log",
+		bool(got_decor["ok"]) and String(got_decor["decor"]) == "window_guild"
+		and not bool(got_decor["missing_decor"])
+		and g._home._decor_owned("window", "window_guild")
+		and c6._unlocked_decor == ["window_guild"]
+		and int(got_decor["materials"]["crystal"]) == 18)
+	# Тот же id из второй бумажки не должен удваивать журнал.
+	var decor2_set := [_mk(c6, "weekly", "sigil_set", "gold", 1)]
+	var decor2_id := String(decor2_set[0]["id"])
+	decor2_set[0]["decor"] = "window_guild"
+	_force_set(c6, [], [decor2_set[0]])
+	_clear_prog(c6)
+	c6._contracts_weekly_prog[decor2_id] = 1
+	var got_decor2 := c6.claim(decor2_id)
+	Selftest.check("§3.4 a repeat decor id is logged once and stays owned in the House",
+		bool(got_decor2["ok"]) and c6._unlocked_decor == ["window_guild"]
+		and g._home._decor_owned("window", "window_guild"))
+
+	# Обратная сторона: у не-gold декора нет, и флаг missing не должен зажечься
+	# от пустой строки (decor_exists("") по Task 3 возвращает false).
+	var plain_set := [_mk(c6, "daily", "discover", "silver", 1)]
+	var plain_id := String(plain_set[0]["id"])
+	_force_set(c6, plain_set, [])
+	_clear_prog(c6)
+	c6._contracts_daily_prog[plain_id] = 1
+	var got_plain := c6.claim(plain_id)
+	Selftest.check("§3.4 a contract without a decor reward reports an empty decor and no missing flag",
+		bool(got_plain["ok"]) and String(got_plain["decor"]) == ""
+		and not bool(got_plain["missing_decor"]))
+
+	# Тест №22: id декора отсутствует в каталоге Дома.
+	var ghost_set := [_mk(c6, "weekly", "upgrade", "gold", 1)]
+	var ghost_id := String(ghost_set[0]["id"])
+	ghost_set[0]["decor"] = "window_does_not_exist"
+	ghost_set[0]["buff"] = "brew_speed"
+	_force_set(c6, [], ghost_set)
+	_clear_prog(c6)
+	c6._contracts_weekly_prog[ghost_id] = 1
+	for week_item in ["stone", "brick", "metal", "glass", "crystal"]:
+		g._engine.inventory[week_item] = 0
+	c6._active_buffs = {}
+	var got_ghost := c6.claim(ghost_id)
+	Selftest.check("§6.22 a decor id missing from the House catalog still pays materials and the buff",
+		bool(got_ghost["ok"]) and bool(got_ghost["missing_decor"]) and c6.is_done(ghost_id)
+		and int(got_ghost["materials"]["crystal"]) == 18
+		and int(g._engine.inventory["crystal"]) == 18
+		and c6._active_buffs.has("brew_speed"))
+	Selftest.check("§4.4 the missing decor id is not written into the House ownership list",
+		not g._home._decor_owned("window", "window_does_not_exist")
+		and not c6._unlocked_decor.has("window_does_not_exist"))
+
+	# Тест №21: потолок стека.
+	var cap_set := [_mk(c6, "daily", "brew", "bronze", 1)]
+	var cap_id := String(cap_set[0]["id"])
+	_force_set(c6, cap_set, [])
+	_clear_prog(c6)
+	c6._contracts_daily_prog[cap_id] = 1
+	g._engine.inventory["stone"] = Game.CRAFT_INVENTORY_STACK_CAP
+	g._engine.inventory["brick"] = Game.CRAFT_INVENTORY_STACK_CAP - 5
+	var got_cap := c6.claim(cap_id)
+	Selftest.check("§6.21 a reward against the stack cap is paid partially and reports the real delta",
+		bool(got_cap["ok"]) and bool(got_cap["truncated"])
+		and got_cap["materials"] == {"brick": 5}
+		and not (got_cap["materials"] as Dictionary).has("stone")
+		and int(g._engine.inventory["stone"]) == Game.CRAFT_INVENTORY_STACK_CAP
+		and int(g._engine.inventory["brick"]) == Game.CRAFT_INVENTORY_STACK_CAP)
+
+	# §3.1: выдача масштабируется множителем, а не берётся из таблицы сырой.
+	_set_progress(g, ContractsBalance.RANK_MAX, ContractsBalance.AUTONOMY_MAX,
+		int(ContractsBalance.SPRING_MAX["speed"]), int(ContractsBalance.SPRING_MAX["volume"]),
+		int(ContractsBalance.SPRING_MAX["sources"]), int(ContractsBalance.SPRING_MAX["offline"]))
+	var max_set := [_mk(c6, "daily", "brew", "bronze", 1)]
+	var max_id := String(max_set[0]["id"])
+	_force_set(c6, max_set, [])
+	_clear_prog(c6)
+	c6._contracts_daily_prog[max_id] = 1
+	g._engine.inventory["stone"] = 0
+	g._engine.inventory["brick"] = 0
+	var got_max := c6.claim(max_id)
+	Selftest.check("§3.1 the claim pays the multiplied amounts (bronze daily at x2.05 is 41 stone and 21 brick)",
+		got_max["materials"] == {"stone": 41, "brick": 21}
+		and int(g._engine.inventory["stone"]) == 41)
+
+	# Тест №20: вчерашний выполненный контракт сгорает вместе со списком.
+	# Отдельный экземпляр: живой g._contracts не должен терять ключи периода.
+	var burn := Contracts.new(g)
+	var past_dt := Time.get_datetime_dict_from_unix_time(
+		int(Time.get_unix_time_from_system()) - 2 * 86400)
+	var past_key := Contracts.day_key_from(past_dt)
+	var burn_c := _mk(burn, "daily", "brew", "bronze", 2)
+	burn_c["id"] = "daily:brew:bronze:" + past_key
+	var burn_id := String(burn_c["id"])
+	burn._contracts_daily = [burn_c]
+	burn._contracts_last_daily = past_key
+	burn._contracts_daily_prog[burn_id] = 2
+	g._engine.inventory["stone"] = 0
+	var stone_before := int(g._engine.inventory.get("stone", 0))
+	var got_burn := burn.claim(burn_id)
+	Selftest.check("§6.20 a contract finished yesterday pays nothing once the day rolled over",
+		past_key != Contracts.day_key_from(burn._dt({}))
+		and not bool(got_burn["ok"]) and String(got_burn["reason"]) == "unknown"
+		and int(g._engine.inventory.get("stone", 0)) == stone_before)
+
+	# Выдуманный id — тот же ответ, что у сгоревшего.
+	# stone == 0: тест §6.20 выше установил inventory["stone"] = 0, и burn.claim()
+	# вернул "unknown" без изменения инвентаря.
+	var got_junk := c6.claim("daily:brew:bronze:2020-01-01")
+	Selftest.check("§4.4 an id that was never generated reports unknown and pays nothing",
+		not bool(got_junk["ok"]) and String(got_junk["reason"]) == "unknown"
+		and int(g._engine.inventory.get("stone", 0)) == 0)
+
+	# восстановление живого состояния (Review Focus 7)
+	c6._active_buffs = claim_snap["buffs"]
+	c6._unlocked_decor = claim_snap["decor"]
+	g._home.house_owned = claim_snap["owned"]
+	g._engine.inventory = claim_snap["inv"]
+	_clear_prog(c6)
+	c6._contracts_daily = []
+	c6._contracts_weekly = []
+	c6._contracts_last_daily = ""
+	c6._contracts_last_weekly = ""
+	_restore_progress(g, claim_snap["prog"])

@@ -312,6 +312,69 @@ static func decor_exists(decor_id: String) -> bool:
 				return true
 	return false
 
+# ---------- §3.4/§4.4 выдача награды ----------
+# Отметку ставим ДО выдачи. Второй тап, пришедший во время первого, обязан
+# уйти в ветку "claimed", а не во вторую выдачу (тест №6).
+func claim(id: String, now: Dictionary = {}, now_unix: int = -1) -> Dictionary:
+	ensure_period(now)
+	var c := contract_by_id(id, now)
+	if c.is_empty():
+		# Один и тот же ответ для выдуманного id и для сгоревшего вчерашнего:
+		# контракт вне текущего списка не существует, и наград у него нет (§4.5).
+		return _claim_failure("unknown")
+	var kind := String(c["kind"])
+	if _done_dict(kind).has(id):
+		return _claim_failure("claimed")
+	if progress(id, now) < int(c["goal"]):
+		return _claim_failure("incomplete")
+	_done_dict(kind)[id] = true
+	var reward := reward_for(c)
+	var grant := _grant_materials(reward["materials"] as Dictionary)
+	var buff_id := String(reward["buff"])
+	if buff_id != "":
+		grant_buff(buff_id, int(reward["duration"]), float(reward["power"]), _unix(now_unix))
+	var decor_id := String(reward["decor"])
+	var missing := false
+	if decor_id != "":
+		if not decor_exists(decor_id):
+			# §4.4: в house_owned фантом не пишем — _decor_owned_count считает
+			# владение по этому же массиву и завысил бы счётчик коллекции.
+			missing = true
+			Analytics.track("contract_decor_missing",
+				{"contract_id": id, "decor_id": decor_id})
+		else:
+			g._home._own_item("window", decor_id)
+			if not _unlocked_decor.has(decor_id):
+				_unlocked_decor.append(decor_id)
+	g._saves._save_game()
+	return {"ok": true, "reason": "", "materials": grant["given"],
+		"truncated": bool(grant["truncated"]), "buff": buff_id,
+		"duration": int(reward["duration"]), "power": float(reward["power"]),
+		"decor": decor_id, "missing_decor": missing}
+
+# Возвращает ровно то, что физически легло в инвентарь: попап обязан показать
+# фактическое количество (§4.4, тест №21), а не задуманное.
+func _grant_materials(materials: Dictionary) -> Dictionary:
+	var given := {}
+	var truncated := false
+	for raw_id in materials:
+		var item_id := String(raw_id)
+		var want := int(materials[raw_id])
+		if want <= 0:
+			continue
+		var have := int(g._engine.inventory.get(item_id, 0))
+		var put := mini(want, maxi(0, Game.CRAFT_INVENTORY_STACK_CAP - have))
+		if put < want:
+			truncated = true
+		if put > 0:
+			g._engine.inventory[item_id] = have + put
+			given[item_id] = put
+	return {"given": given, "truncated": truncated}
+
+static func _claim_failure(reason: String) -> Dictionary:
+	return {"ok": false, "reason": reason, "materials": {}, "truncated": false,
+		"buff": "", "duration": 0, "power": 0.0, "decor": "", "missing_decor": false}
+
 # ---------- §1.2/§1.3 точки-хуки ----------
 # Абсолютная запись прогресса с отсечкой по цели контракта (§2): «N / goal» не
 # должно показывать 17/15.
