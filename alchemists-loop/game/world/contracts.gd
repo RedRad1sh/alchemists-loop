@@ -210,3 +210,49 @@ func is_ready(id: String, now: Dictionary = {}) -> bool:
 	if c.is_empty() or is_done(id, now):
 		return false
 	return progress(id, now) >= int(c["goal"])
+
+# ---------- §3.1 единый множитель прогресса ----------
+# Максимумы взяты из кода, а не назначены: сюита сверяет их с размерами
+# WorkshopBalance.RANKS/AUTONOMY и таблиц цен Родника.
+func reward_mult() -> float:
+	var workshop_progress := (float(g._workshop.rank) / float(ContractsBalance.RANK_MAX) \
+		+ float(g._workshop.autonomy_level) / float(ContractsBalance.AUTONOMY_MAX)) / 2.0
+	var spring_levels: Dictionary = g._engine.spring_levels
+	var spring_progress := (float(spring_levels.get("speed", 0)) / float(ContractsBalance.SPRING_MAX["speed"]) \
+		+ float(spring_levels.get("volume", 0)) / float(ContractsBalance.SPRING_MAX["volume"]) \
+		+ float(spring_levels.get("sources", 0)) / float(ContractsBalance.SPRING_MAX["sources"]) \
+		+ float(spring_levels.get("offline", 0)) / float(ContractsBalance.SPRING_MAX["offline"])) / 4.0
+	var progress := ContractsBalance.WORKSHOP_WEIGHT * clampf(workshop_progress, 0.0, 1.0) \
+		+ ContractsBalance.SPRING_WEIGHT * clampf(spring_progress, 0.0, 1.0)
+	return 1.0 + ContractsBalance.MULT_COEF * clampf(progress, 0.0, 1.0)
+
+# Один и тот же множитель на все три числовые величины награды (§3.1).
+# Косметика им не масштабируется — это фиксированная долгосрочная цель (§3.4).
+func reward_for(c: Dictionary) -> Dictionary:
+	var mult := reward_mult()
+	var kind := String(c.get("kind", "daily"))
+	var tier := String(c.get("tier", "bronze"))
+	var table: Dictionary = ContractsBalance.DAILY_MATERIALS if kind == "daily" else ContractsBalance.WEEKLY_MATERIALS
+	var base: Dictionary = table.get(tier, {})
+	var materials := {}
+	for m in base:
+		materials[String(m)] = int(round(float(int(base[m])) * mult))
+	var buff_id := String(c.get("buff", ""))
+	var bb: Dictionary = ContractsBalance.BUFF_BASE.get(buff_id, {})
+	return {
+		"materials": materials,
+		"buff": buff_id,
+		"duration": int(round(float(int(bb.get("duration", 0))) * mult)),
+		"power": float(bb.get("power", 0.0)) * mult,
+		"decor": String(c.get("decor", "")),
+	}
+
+# §4.4: id декора обязан существовать в каталоге до выдачи.
+static func decor_exists(decor_id: String) -> bool:
+	if decor_id == "":
+		return false
+	for cat in DecorData.DECOR:
+		for item in (cat as Dictionary).get("items", []):
+			if str((item as Dictionary).get("id", "")) == decor_id:
+				return true
+	return false

@@ -40,6 +40,26 @@ static func _decor_item(decor_id: String) -> Dictionary:
 				return (item as Dictionary)
 	return {}
 
+# Сюита меняет живое состояние игры, поэтому каждый блок обязан снимать снимок
+# и восстанавливать его: иначе краснеют сюиты дальше по await-списку, а не та,
+# что сломала (Review Focus №7).
+static func _snap_progress(g: Game) -> Dictionary:
+	return {
+		"rank": g._workshop.rank, "autonomy": g._workshop.autonomy_level,
+		"spring": g._engine.spring_levels.duplicate(true),
+	}
+
+static func _restore_progress(g: Game, s: Dictionary) -> void:
+	g._workshop.rank = int(s["rank"])
+	g._workshop.autonomy_level = int(s["autonomy"])
+	g._engine.spring_levels = (s["spring"] as Dictionary).duplicate(true)
+
+static func _set_progress(g: Game, rank: int, autonomy: int,
+		speed: int, volume: int, sources: int, offline: int) -> void:
+	g._workshop.rank = rank
+	g._workshop.autonomy_level = autonomy
+	g._engine.spring_levels = {"speed": speed, "volume": volume, "sources": sources, "offline": offline}
+
 static func run(g: Game) -> void:
 	# ---------------- §2 таблицы типов и порогов ----------------
 	Selftest.check("§2.1 daily pool has exactly 6 active types",
@@ -376,3 +396,72 @@ static func run(g: Game) -> void:
 	Selftest.check("§1.4 the live instance generates 3 daily and 2 weekly on first access",
 		g._contracts.daily().size() == ContractsBalance.DAILY_SHOWN
 		and g._contracts.weekly().size() == ContractsBalance.WEEKLY_SHOWN)
+
+	# ---------------- §3.1 единый множитель ----------------
+	var snap_prog := _snap_progress(g)
+	var c_daily_gold: Dictionary = {
+		"id": "daily:brew:gold:2026-10-19", "kind": "daily", "type": "brew",
+		"tier": "gold", "goal": 80, "buff": "brew_speed", "decor": "",
+	}
+	_set_progress(g, 0, 0, 0, 0, 0, 0)
+	Selftest.check("§6.11 reward_mult is exactly 1.0 with an empty Spring and an empty Workshop",
+		absf(g._contracts.reward_mult() - 1.0) < 0.0001)
+	_set_progress(g, ContractsBalance.RANK_MAX, ContractsBalance.AUTONOMY_MAX,
+		int(ContractsBalance.SPRING_MAX["speed"]), int(ContractsBalance.SPRING_MAX["volume"]),
+		int(ContractsBalance.SPRING_MAX["sources"]), int(ContractsBalance.SPRING_MAX["offline"]))
+	Selftest.check("§6.11 reward_mult is exactly 2.05 with a maxed Spring and a maxed Workshop",
+		absf(g._contracts.reward_mult() - 2.05) < 0.0001)
+
+	# Тест №12: вес Мастерской выше веса Родника.
+	_set_progress(g, ContractsBalance.RANK_MAX, ContractsBalance.AUTONOMY_MAX, 0, 0, 0, 0)
+	var from_workshop := g._contracts.reward_mult() - 1.0
+	_set_progress(g, 0, 0, int(ContractsBalance.SPRING_MAX["speed"]),
+		int(ContractsBalance.SPRING_MAX["volume"]), int(ContractsBalance.SPRING_MAX["sources"]),
+		int(ContractsBalance.SPRING_MAX["offline"]))
+	var from_spring := g._contracts.reward_mult() - 1.0
+	Selftest.check("§6.12 a maxed Workshop with an empty Spring outweighs a maxed Spring with an empty Workshop",
+		from_workshop > from_spring
+		and absf(from_workshop - ContractsBalance.WORKSHOP_WEIGHT * ContractsBalance.MULT_COEF) < 0.0001
+		and absf(from_spring - ContractsBalance.SPRING_WEIGHT * ContractsBalance.MULT_COEF) < 0.0001)
+
+	# Половинные значения: множитель линейный и нормированный на свой максимум.
+	_set_progress(g, 0, 1, 0, 0, 0, 0)
+	Selftest.check("§3.1 half of the Workshop autonomy branch alone gives 1 + 1.05 * 0.65 * 0.25",
+		absf(g._contracts.reward_mult() - (1.0 + ContractsBalance.MULT_COEF * ContractsBalance.WORKSHOP_WEIGHT * 0.25)) < 0.0001)
+	_set_progress(g, 0, 0, 0, 0, 3, 0)
+	Selftest.check("§3.1 a maxed sources axis alone contributes its own quarter of the Spring share",
+		absf(g._contracts.reward_mult() - (1.0 + ContractsBalance.MULT_COEF * ContractsBalance.SPRING_WEIGHT * 0.25)) < 0.0001)
+
+	# Тест №12b: один множитель на материалы, срок и силу. Отдельного скейла для
+	# баффов нет — мутация «умножить только power» красит ровно эту проверку.
+	_set_progress(g, ContractsBalance.RANK_MAX, ContractsBalance.AUTONOMY_MAX, 0, 0, 0, 0)
+	var mult := g._contracts.reward_mult()
+	var r := g._contracts.reward_for(c_daily_gold)
+	Selftest.check("§6.12b materials, buff duration and buff power of one reward all use the same reward_mult",
+		int(r["materials"]["stone"]) == int(round(55.0 * mult))
+		and int(r["materials"]["brick"]) == int(round(28.0 * mult))
+		and int(r["duration"]) == int(round(7200.0 * mult))
+		and absf(float(r["power"]) - 0.25 * mult) < 0.0001)
+	Selftest.check("§6.12b at a maxed Workshop the daily gold stone reward is exactly 93",
+		int(r["materials"]["stone"]) == 93)
+
+	# §3.1: множитель ограничен сверху — переполнение таблицы не даёт ×3.
+	_set_progress(g, 99, 99, 99, 99, 99, 99)
+	Selftest.check("§3.1 reward_mult is clamped to 2.05 even if levels exceed the tables",
+		absf(g._contracts.reward_mult() - 2.05) < 0.0001)
+	_restore_progress(g, snap_prog)
+
+	# ---------------- §3.4 декор ----------------
+	Selftest.check("§3.4 decor_exists is true for a real reward id and false for a made-up one",
+		Contracts.decor_exists("window_contract") and Contracts.decor_exists("fireplace_ember")
+		and not Contracts.decor_exists("window_does_not_exist"))
+
+	# Награда недельного gold несёт декор, дневная — нет.
+	var c_weekly_gold: Dictionary = {
+		"id": "weekly:variety:gold:2026-W43", "kind": "weekly", "type": "variety",
+		"tier": "gold", "goal": 25, "buff": "ether_regen", "decor": "window_guild",
+	}
+	var rw := g._contracts.reward_for(c_weekly_gold)
+	Selftest.check("§3.3 weekly gold reward carries its decor id and the ether_regen base scaled by one mult",
+		String(rw["decor"]) == "window_guild" and String(rw["buff"]) == "ether_regen"
+		and int(rw["materials"]["crystal"]) == int(round(18.0 * g._contracts.reward_mult())))
