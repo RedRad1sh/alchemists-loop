@@ -200,3 +200,179 @@ static func run(g: Game) -> void:
 		if str(ContractsBalance.KIND_TITLE.get(kind, "")) == "":
 			title_ok = false
 	Selftest.check("every type, tier and kind has a non-empty Russian label", title_ok)
+
+	# ---------------- §1.4 генерация ----------------
+	# Зонд — отдельный экземпляр: живой g._contracts эти проверки не трогают.
+	var probe := Contracts.new(g)
+	var day_key := Contracts.day_key_from(DT_SUN)
+	Selftest.check("§1.4 day key is the local YYYY-MM-DD of the given datetime",
+		day_key == "2026-10-18" and Contracts.day_key_from(DT_MON) == "2026-10-19")
+	# ISO-ключи сверены с эталонным расчётом на всём диапазоне 1970..2200.
+	Selftest.check("§1.4 ISO week keys: Sun 2026-10-18 is 2026-W42, Mon 2026-10-19 is 2026-W43",
+		Contracts.week_key_from(DT_SUN) == "2026-W42" and Contracts.week_key_from(DT_MON) == "2026-W43")
+	Selftest.check("§1.4 a Sunday and the following Monday fall into different ISO weeks",
+		Contracts.week_key_from(DT_SUN) != Contracts.week_key_from(DT_MON))
+	Selftest.check("§1.4 Monday and Tuesday of one week share the ISO week key",
+		Contracts.week_key_from(DT_MON) == Contracts.week_key_from(DT_TUE)
+		and Contracts.week_key_from(DT_MON) == "2026-W43")
+	Selftest.check("§1.4 a late-December Monday belongs to week 01 of the next ISO year",
+		Contracts.week_key_from({"year": 2024, "month": 12, "day": 30, "hour": 12,
+			"minute": 0, "second": 0, "weekday": 1}) == "2025-W01")
+
+	# Тест №1: детерминизм.
+	var gen_a := probe._generate_daily(day_key, 3)
+	var gen_b := probe._generate_daily(day_key, 3)
+	Selftest.check("§6.1 the same local date generates a byte-identical daily set on both calls",
+		gen_a == gen_b and gen_a.size() == ContractsBalance.DAILY_SHOWN)
+	var week_key := Contracts.week_key_from(DT_MON)
+	Selftest.check("§6.1 the same ISO week generates a byte-identical weekly set on both calls",
+		probe._generate_weekly(week_key) == probe._generate_weekly(week_key)
+		and probe._generate_weekly(week_key).size() == ContractsBalance.WEEKLY_SHOWN)
+
+	var types_seen := {}
+	var type_dup := false
+	for c in gen_a:
+		var t := String((c as Dictionary)["type"])
+		if types_seen.has(t):
+			type_dup = true
+		types_seen[t] = true
+	var types_in_pool := true
+	for t in types_seen.keys():
+		if not ContractsBalance.DAILY_TYPES.has(String(t)):
+			types_in_pool = false
+	Selftest.check("§1.4 the 3 daily contracts have 3 distinct types from the pool",
+		not type_dup and types_seen.size() == 3 and types_in_pool)
+
+	# Разные даты дают разные наборы. Точечное сравнение двух конкретных дней
+	# могло бы совпасть случайно, поэтому меряем разнообразие на 30 днях.
+	var base_unix := int(Time.get_unix_time_from_datetime_dict(
+		{"year": 2026, "month": 10, "day": 1, "hour": 12, "minute": 0, "second": 0}))
+	var distinct := {}
+	for offset in 30:
+		var dt := Time.get_datetime_dict_from_unix_time(base_unix + offset * 86400)
+		distinct[JSON.stringify(probe._generate_daily(Contracts.day_key_from(dt), 3))] = true
+	Selftest.check("§6.1 30 consecutive days produce at least 20 distinct daily sets",
+		distinct.size() >= 20)
+
+	# Тест №25: бафф из seed у каждого контракта, декор — только у недельного gold.
+	var seed_ok := true
+	for c in probe._generate_weekly(week_key):
+		var cc: Dictionary = c
+		var tier := String(cc["tier"])
+		var decor := String(cc["decor"])
+		if not ContractsBalance.BUFF_IDS.has(String(cc["buff"])):
+			seed_ok = false
+		if tier == "gold":
+			if not ContractsBalance.DECOR.has(decor):
+				seed_ok = false
+		elif decor != "":
+			seed_ok = false
+	for c in gen_a:
+		var cc: Dictionary = c
+		if not ContractsBalance.BUFF_IDS.has(String(cc["buff"])) or String(cc["decor"]) != "":
+			seed_ok = false
+	Selftest.check("§6.25 every contract carries a seed-chosen buff id and only weekly gold carries a decor id",
+		seed_ok)
+	# Обратная сторона детерминизма: за 60 недель встречается больше одного декора.
+	var decors_seen := {}
+	for offset in 60:
+		var wdt := Time.get_datetime_dict_from_unix_time(base_unix + offset * 7 * 86400)
+		for c in probe._generate_weekly(Contracts.week_key_from(wdt)):
+			var d := String((c as Dictionary)["decor"])
+			if d != "":
+				decors_seen[d] = true
+	Selftest.check("§3.4 60 consecutive weeks reach more than one distinct decor reward",
+		decors_seen.size() >= 2)
+
+	# Тест №23: недостижимый gold не генерируется — в обе стороны.
+	var gold_with_two := false
+	for c in probe._generate_daily(day_key, 2):
+		if String((c as Dictionary)["type"]) == "sigil_craft" and String((c as Dictionary)["tier"]) == "gold":
+			gold_with_two = true
+	Selftest.check("§6.23 sigil_craft gold is never generated when the daily Arcana offer has fewer than 3 crafts",
+		not gold_with_two)
+	var gold_with_five := false
+	for offset in 200:
+		var dt := Time.get_datetime_dict_from_unix_time(base_unix + offset * 86400)
+		for c in probe._generate_daily(Contracts.day_key_from(dt), 5):
+			if String((c as Dictionary)["type"]) == "sigil_craft" and String((c as Dictionary)["tier"]) == "gold":
+				gold_with_five = true
+	Selftest.check("§6.23 sigil_craft gold does appear when the daily Arcana offer has 3 or more crafts",
+		gold_with_five)
+
+	# Тест №2: граница дня.
+	var p2 := Contracts.new(g)
+	p2.ensure_period(DT_SUN)
+	var day1 := p2._contracts_daily.duplicate(true)
+	var first_id := String((day1[0] as Dictionary)["id"])
+	p2._contracts_daily_prog[first_id] = 5
+	p2._contracts_daily_done[first_id] = true
+	p2.ensure_period(DT_SUN_LATE)
+	Selftest.check("§6.2 later the same local day keeps the daily set, progress and done flags",
+		p2._contracts_daily == day1 and int(p2._contracts_daily_prog.get(first_id, 0)) == 5
+		and p2._contracts_daily_done.has(first_id))
+	p2.ensure_period(DT_MON)
+	var new_day_key := Contracts.day_key_from(DT_MON)
+	var ids_of_new_day := not p2._contracts_daily.is_empty()
+	for c in p2._contracts_daily:
+		if not String((c as Dictionary)["id"]).ends_with(":" + new_day_key):
+			ids_of_new_day = false
+	Selftest.check("§6.2 crossing local midnight regenerates dailies keyed by the new day and clears daily progress and done",
+		p2._contracts_last_daily == new_day_key and ids_of_new_day
+		and p2._contracts_daily_prog.is_empty() and p2._contracts_daily_done.is_empty())
+
+	# Тест №3: граница недели.
+	var p3 := Contracts.new(g)
+	p3.ensure_period(DT_MON)
+	var w3 := p3._contracts_weekly.duplicate(true)
+	p3._contracts_weekly_prog[String((w3[0] as Dictionary)["id"])] = 2
+	p3._contracts_variety["steam"] = true
+	p3._contracts_set_week["set_a"] = 3
+	p3.ensure_period(DT_MON_NEXT)
+	var next_week_key := Contracts.week_key_from(DT_MON_NEXT)
+	var ids_of_new_week := not p3._contracts_weekly.is_empty()
+	for c in p3._contracts_weekly:
+		if not String((c as Dictionary)["id"]).ends_with(":" + next_week_key):
+			ids_of_new_week = false
+	Selftest.check("§6.3 crossing Monday 00:00 regenerates weeklies and clears weekly progress, variety and set counters",
+		p3._contracts_last_weekly == next_week_key and ids_of_new_week
+		and p3._contracts_weekly_prog.is_empty() and p3._contracts_variety.is_empty()
+		and p3._contracts_set_week.is_empty())
+	# Внутри недели ничего не сбрасывается.
+	var p5 := Contracts.new(g)
+	p5.ensure_period(DT_MON)
+	var w5id := String((p5._contracts_weekly[0] as Dictionary)["id"])
+	p5._contracts_weekly_prog[w5id] = 4
+	p5.ensure_period(DT_TUE)
+	Selftest.check("§1.4 Tuesday of the same ISO week keeps weekly progress untouched",
+		p5._contracts_weekly_prog.size() == 1 and int(p5._contracts_weekly_prog[w5id]) == 4)
+
+	# §4.1: id контракта собирает период, поэтому списки выполненных не
+	# пересекаются между периодами.
+	var id_shape := true
+	for c in probe.all_contracts(DT_MON):
+		var cc: Dictionary = c
+		var want := "%s:%s:%s:%s" % [cc["kind"], cc["type"], cc["tier"],
+			Contracts.day_key_from(DT_MON) if cc["kind"] == "daily" else Contracts.week_key_from(DT_MON)]
+		if String(cc["id"]) != want:
+			id_shape = false
+		if ContractsBalance.TIERS.find(String(cc["tier"])) < 0:
+			id_shape = false
+		var goals: Dictionary = ContractsBalance.DAILY_GOALS if cc["kind"] == "daily" else ContractsBalance.WEEKLY_GOALS
+		if int(cc["goal"]) != int((goals[String(cc["type"])] as Array)[ContractsBalance.TIERS.find(String(cc["tier"]))]):
+			id_shape = false
+	Selftest.check("§4.1 every contract id is kind:type:tier:period_key and goal matches the balance table",
+		id_shape)
+	Selftest.check("§4.1 all_contracts returns 3 daily + 2 weekly = 5 contracts",
+		probe.all_contracts(DT_MON).size() == ContractsBalance.DAILY_SHOWN + ContractsBalance.WEEKLY_SHOWN)
+	Selftest.check("§4.1 contract_by_id returns an empty dictionary for an id from a burnt period",
+		probe.contract_by_id("daily:brew:gold:2020-01-01", DT_MON).is_empty())
+
+	# ---------------- проводка ----------------
+	Selftest.check("g._contracts exists and points back at the game",
+		g._contracts != null and g._contracts.g == g)
+	Selftest.check("§4.1 CONTRACTS_SAVE_VERSION is 1", Contracts.CONTRACTS_SAVE_VERSION == 1)
+	# Живой экземпляр генерирует сегодняшний набор при первом обращении.
+	Selftest.check("§1.4 the live instance generates 3 daily and 2 weekly on first access",
+		g._contracts.daily().size() == ContractsBalance.DAILY_SHOWN
+		and g._contracts.weekly().size() == ContractsBalance.WEEKLY_SHOWN)

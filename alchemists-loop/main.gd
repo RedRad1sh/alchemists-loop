@@ -407,6 +407,7 @@ var _retort: Retort  # ночная реторта (R6)
 var _riddles: Riddles  # письма Светика + Атлас (оп B2)
 var _sync: Sync  # единый sync-пакет: reconcile-хост (Task 9/10)
 var _retention: Retention  # дневной круг + недельный слой (R2)
+var _contracts: Contracts  # контрактная доска (§8.3): дневные/недельные цели
 var _demo_harness: Demo  # флаги --action/--shot/--geom + тик съёмки (R14)
 var _demo_flip_timer: Dictionary = {}  # {card, at} — авто-флип для GIF
 # сводка возврата: что случилось, пока игрока не было
@@ -476,6 +477,7 @@ func _ready() -> void:
 	_user_data_text_at_boot = _boot_snapshot_text(UserData.REAL_SAVE_PATH)
 	_riddles = Riddles.new(self)
 	_retention = Retention.new(self)
+	_contracts = Contracts.new(self)
 	_guild = Guild.new(self)
 	_progress_ui = Progress.new(self)
 	_resonance = Resonance.new(self)
