@@ -477,16 +477,16 @@ static func run(g: Game) -> void:
 	Selftest.check("§3.3 grant_buff ignores a non-positive duration", c4._active_buffs.is_empty())
 
 	c4.grant_buff("brew_speed", 3600, 0.25, now)
-	var first_until := int((c4._active_buffs["brew_speed"] as Dictionary)["until"])
+	var first_until := int((c4._active_buffs.get("brew_speed", {}) as Dictionary).get("until", -1))
 	c4.grant_buff("brew_speed", 3600, 0.9, now)
-	var second := c4._active_buffs["brew_speed"] as Dictionary
+	var second := c4._active_buffs.get("brew_speed", {}) as Dictionary
 	# §3.3: не стакается — сила НЕ умножается и НЕ заменяется на бо́льшую; срок
 	# продлевается от текущего конца (max(until, now) + duration).
 	Selftest.check("§6.10 a second grant extends the deadline from the old one and keeps the first power",
-		int(second["until"]) == first_until + 3600 and absf(float(second["power"]) - 0.25) < 0.0001)
+		int(second.get("until", -1)) == first_until + 3600 and absf(float(second.get("power", -1.0)) - 0.25) < 0.0001)
 	c4.grant_buff("brew_speed", 3600, 0.25, now + 10_000_000)
 	Selftest.check("§6.10 granting inside a live window still only extends the deadline",
-		int((c4._active_buffs["brew_speed"] as Dictionary)["until"]) == now + 10_000_000 + 3600)
+		int((c4._active_buffs.get("brew_speed", {}) as Dictionary).get("until", -1)) == now + 10_000_000 + 3600)
 	c4._active_buffs.clear()
 
 	c4.grant_buff("ether_regen", 10, 1.0, 1_000_000)
@@ -578,6 +578,7 @@ static func run(g: Game) -> void:
 	# этого блока и возвращаем как было (Review Focus 7).
 	var e := g._engine
 	var plant_had := e.inventory.has("plant")
+	var water_had := e.inventory.has("water")
 	var src_snap := e.spring_sources.duplicate()
 	var levels_snap: Dictionary = e.spring_levels.duplicate(true)
 	var on_snap := e.spring_on
@@ -621,6 +622,12 @@ static func run(g: Game) -> void:
 	e.spring_levels = levels_snap.duplicate(true)
 	e.spring_on = on_snap
 	g._pages._spring_clock = clock_snap
-	e.inventory["water"] = water_snap
+	# Воду возвращаем симметрично растению: если до блока ключа не было, он не
+	# должен появиться — `water: 0` увеличил бы inventory.size(), а на нём
+	# основан _mode_unlocked (core.gd:661) у последующих workshop-сюит.
+	if water_had:
+		e.inventory["water"] = water_snap
+	else:
+		e.inventory.erase("water")
 	if not plant_had:
 		e.inventory.erase("plant")
