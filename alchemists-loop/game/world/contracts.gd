@@ -1372,6 +1372,10 @@ func _fair_on_brew(output: String) -> void:
 			refresh_board()
 
 func _fair_offline_available() -> bool:
+	if _boardfull_frozen():
+		# boardfull: серверный котёл инъектирован демо — локальный счётчик
+		# реального сейва (26/3 на кадре приёмки) показывать нельзя.
+		return false
 	return not g._online._net_enabled or not Net.is_available() or g._online._device_id == ""
 
 func _fair_offline_claimable() -> bool:
