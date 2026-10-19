@@ -419,7 +419,15 @@ func claim(id: String, now: Dictionary = {}, now_unix: int = -1) -> Dictionary:
 	var kind := String(c["kind"])
 	if _done_dict(kind).has(id):
 		return _claim_failure("claimed")
-	if progress(id, now) < int(c["goal"]):
+	# §1 (доска v2, спека §4): у fair право забрать награду даёт гейт ЗАКРЫТОГО котла
+	# (_fair_gate — серверный «закрыт и вклад ≥3» или локальный котёл), а не прогресс:
+	# прогресс fair — это лишь число варок на экране, и по нему открытый котёл с
+	# вкладом ≥3 выглядел бы готовым. Доска не должна платить за незакрытый котёл,
+	# поэтому для fair проверяем именно гейт (ровно то же правило, что в is_ready()).
+	if String(c["type"]) == "fair":
+		if not _fair_gate():
+			return _claim_failure("incomplete")
+	elif progress(id, now) < int(c["goal"]):
 		return _claim_failure("incomplete")
 	_done_dict(kind)[id] = true
 	var reward := reward_for(c)
@@ -451,7 +459,8 @@ func claim(id: String, now: Dictionary = {}, now_unix: int = -1) -> Dictionary:
 	if String(c["type"]) == "fair":
 		if _fair_offline_available():
 			_fair_offline_grant()
-		else:
+		elif not g._selftest:
+			# в selftest сеть недоступна, вечный грант асинхронный — проверке не нужен
 			Net.fair_claim(g._online._device_id)
 	elif String(c["type"]) == "vein":
 		Analytics.track("vein_contract_claim", {"tier": String(c["tier"])})

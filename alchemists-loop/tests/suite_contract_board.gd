@@ -582,6 +582,24 @@ static func run(g: Game) -> void:
 	var claim_res := g._contracts.claim(String(wf["id"]))
 	Selftest.check("fair claim grants board reward once",
 		bool(claim_res["ok"]) and g._contracts.claim(String(wf["id"]))["reason"] == "claimed")
+	# Finding 1 (спека §4): право забрать награду fair даёт гейт ЗАКРЫТОГО котла, а
+	# не прогресс. Открытый котёл с вкладом ≥3 оставляет is_ready() ложным, но
+	# прогресс fair (=3) формально равен цели — доска не обязана за это платить.
+	# Строку fair вернули в открытое состояние (erase done), иначе done-skip оставил
+	# бы прогресс нулевым и claim отказал бы по чужой причине. Локальный котельный
+	# гейт (_fair_offline_claimable) глушим обнулением варок: иначе ambient-состояние
+	# сюиты делает _fair_gate() истинным и проверка краснела бы через is_ready, а не
+	# через баг claim() — тогда RED был бы вакуумным.
+	g._contracts._contracts_weekly_done.erase(String(wf["id"]))
+	g._contracts._contracts_weekly_prog.erase(String(wf["id"]))
+	g._contracts._fair_local_brews = []
+	g._contracts._week_cache = {"fair": {"closed": false, "my_contrib": 3, "claimed": false,
+		"progress": 3, "goal": 3, "tag": "Туман"}}
+	g._contracts._sync_fair()
+	var t3f1_ready := g._contracts.is_ready(String(wf["id"]))
+	var t3f1_claim := g._contracts.claim(String(wf["id"]))
+	Selftest.check("fair claim on an OPEN pot is refused, readiness stays by the closed-pot gate",
+		not t3f1_ready and not bool(t3f1_claim["ok"]))
 	g._contracts._week_cache = {}
 	g._contracts._cycle_cache = sv_cyc
 	g._contracts._vein_finds = sv_finds
@@ -593,6 +611,11 @@ static func run(g: Game) -> void:
 			"cycle_id": "vc:T3", "status": "registered", "server_response": {}},
 		{"id": "b", "tag": "Туман", "points": 1, "found_at": 1, "pair_key": "p2",
 			"cycle_id": "vc:T3", "status": "poured", "server_response": {}}]
+	# Изоляция проверки: предыдущий явный _sync_vein() уже оставил прогресс vein = 2,
+	# и новая фикстура T3 тоже даёт 2 — без стирания записи проверка осталась бы
+	# зелёной даже если weekly() перестать синкать жилу. Стираем запись, чтобы
+	# единственным источником значения стал sync внутри weekly().
+	g._contracts._contracts_weekly_prog.erase(String(wk["id"]))
 	g._contracts.weekly()
 	Selftest.check("weekly() syncs the pinned vein contract",
 		g._contracts.progress(String(wk["id"])) == mini(2, int(wk["goal"])))
