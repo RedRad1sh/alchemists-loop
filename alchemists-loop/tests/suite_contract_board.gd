@@ -433,19 +433,34 @@ static func run(g: Game) -> void:
 	Selftest.check("boardgen v2 pinned goals",
 		int((d_v2[0] as Dictionary)["goal"]) == 1 and int((d_v2[1] as Dictionary)["goal"]) == 3
 		and int((w_v2[1] as Dictionary)["goal"]) == 3)
-	Selftest.check("boardgen v2 pinned tier comes from seed",
-		ContractsBalance.TIERS.has(String((d_v2[0] as Dictionary)["tier"])))
+	# Старый вид TIERS.has(d_v2[0]["tier"]) был зелёным всегда: тир по построению
+	# из TIERS. Условие теперь проверяет зависимость от seed: на 30 ключах дня
+	# тир d[0] обязан встретиться больше одного раза (хардкод тира краснит его).
+	# probe — отдельный экземпляр, _generate_daily не меняет ни его, ни
+	# g._contracts — снимок не нужен (как в соседней проверке разнообразия).
+	var v2_tier_seen := {}
+	var v2_tier_unix := int(Time.get_unix_time_from_datetime_dict(dt_v2))
+	for v2_off in 30:
+		var v2_tier_row: Dictionary = probe._generate_daily(
+			Contracts.day_key_from(Time.get_datetime_dict_from_unix_time(
+				v2_tier_unix + v2_off * 86400)), 3)[0]
+		v2_tier_seen[String(v2_tier_row["tier"])] = true
+	Selftest.check("boardgen v2 pinned tier comes from seed (30 day keys, >1 distinct tier)",
+		v2_tier_seen.size() > 1)
 	# Сейв v1 (ряды 3/2) обязан деградировать регенерацией, а не откатом блока:
-	# фикстура — реальный save_block зонда, у которого списки обрезаны до
-	# старого размера, а ключи периода подменены на прошедшие. С иными (пустыми
-	# или свежими) списками проверка была бы зелёной всегда.
+	# фикстура — реальный save_block зонда, у которого списки обрезаны до старого
+	# размера, а ключи периода совпадают с текущим (dt_v2). Только так проверка
+	# чувствительна к механизму: ряд станет размера 4 исключительно по пути
+	# «отвергнутый список сбрасывает ключи» (ensure_period регенерирует по пустому
+	# ключу). С прошедшими ключами проверка была нечувствительна: ключи расходились
+	# бы с текущими и при сломанной rejects-обработке, регенерация случилась бы сама.
 	var lprobe := Contracts.new(g)
 	lprobe.ensure_period(dt_v2)
 	var legacy_blk: Dictionary = lprobe.save_block()
 	legacy_blk["daily"] = (legacy_blk["daily"] as Array).slice(0, 3)
 	legacy_blk["weekly"] = (legacy_blk["weekly"] as Array).slice(0, 2)
-	legacy_blk["last_daily"] = "2026-10-18"
-	legacy_blk["last_weekly"] = "2026-W42"
+	legacy_blk["last_daily"] = Contracts.day_key_from(dt_v2)
+	legacy_blk["last_weekly"] = Contracts.week_key_from(dt_v2)
 	var legacy_probe := Contracts.new(g)
 	legacy_probe.load_block(legacy_blk)
 	legacy_probe.ensure_period(dt_v2)
