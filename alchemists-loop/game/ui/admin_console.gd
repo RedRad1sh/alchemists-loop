@@ -2,7 +2,8 @@ extends RefCounted
 class_name AdminConsole
 # Админ-консоль: toggle по ~ (тильда), парсинг команд из текстового ввода.
 # Команды: add <element>, unlock <mode>, set ether <N>, reset day,
-# clear inventory, force circle open.
+# clear inventory, force circle open (имя команды — легаси-грамматика; по-настоящему
+# она сбрасывает дневные ключи контрактной доски: визит/очаг + эксперимент).
 
 var _g: Game
 var _dim: ColorRect
@@ -231,7 +232,7 @@ func _cmd_force(parts: Array) -> void:
 	_g._contracts._last_visit_day = ""
 	_g._engine._experiment_day = ""
 	_g._saves._save_game()
-	_log_text("Circle forced open (day keys cleared)")
+	_log_text("Daily board keys cleared (hearth/visit and experiment open again)")
 
 func _cmd_sigil(parts: Array) -> void:
 	if parts.size() < 2:

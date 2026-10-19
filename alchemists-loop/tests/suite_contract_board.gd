@@ -1851,10 +1851,14 @@ static func _contract_board_checks(g: Game) -> void:
 		t7_claimable)
 
 	# 10e. Полка очага после дневного забора: кнопка гаснет и называется «Забрано ✓».
+	# Task 9 (T7 minor 1): пин disabled==true — «Забрано ✓» без гашения кнопка
+	# обещала бы второй забор; краснеет на удалении _hearth_btn.disabled в
+	# contract_board.gd (_refresh_hearth), т.к. Button.disabled по умолчанию false.
 	c._hearth_claim = Time.get_date_string_from_system()
 	board.refresh()
 	await g.get_tree().process_frame
-	var t7_claimed_txt := t7_hearth_btn != null and t7_hearth_btn.text == "Забрано ✓"
+	var t7_claimed_txt := t7_hearth_btn != null and t7_hearth_btn.text == "Забрано ✓" \
+		and t7_hearth_btn.disabled
 	Selftest.check("board v2 hearth shelf shows «Забрано ✓» after today's log",
 		t7_claimed_txt)
 	c._hearth_claim = ""
@@ -1967,6 +1971,62 @@ static func _contract_board_checks(g: Game) -> void:
 	Selftest.check("fair card body shows the pot line from fair_pot_line()",
 		t7_fair_lbl != null and t7_fair_lbl.text == c.fair_pot_line()
 		and t7_fair_lbl.text == "Локальный котёл: 2/3")
+
+	# 10i. Task 9 (T7 minor 4): онлайн-формат fair_pot_line() «Котёл: prog/goal ·
+	# твоих: N» — не локальная строка. Сеть поднимается фикстурой (тот же приём,
+	# что в t3_env выше), серверный котёл — _week_cache, всё откатывается.
+	# Краснеет на удалении онлайн-ветки fair_pot_line (contracts.gd) или клампа
+	# mini(prog, goal), и на подмене строки карточки локальным форматом.
+	var t9_week_saved: Dictionary = c._week_cache.duplicate(true)
+	var t9_env := {
+		"net": g._online._net_enabled, "avail": Net.is_available(),
+		"dev": g._online._device_id,
+	}
+	g._online._net_enabled = true
+	Net._available = true
+	g._online._device_id = "t9-dev"
+	c._week_cache = {"fair": {"progress": 5, "apprentice": 2, "goal": 12, "my_contrib": 3}}
+	var t9_fair_line := c.fair_pot_line()
+	c._week_cache = {"fair": {"progress": 9, "apprentice": 4, "goal": 12, "my_contrib": 3}}
+	var t9_fair_clamped := c.fair_pot_line()
+	c._week_cache = {"fair": {"progress": 5, "apprentice": 2, "goal": 12, "my_contrib": 3}}
+	board.refresh()
+	await g.get_tree().process_frame
+	var t9_fair_lbl2: Label = null
+	var t9_fair_detail2 := (wr.get_child(1) as Control).get_node_or_null("Hang/Detail") as Control
+	if t9_fair_detail2 != null:
+		t9_fair_lbl2 = t9_fair_detail2.find_child("FairPot", true, false) as Label
+	Selftest.check("fair_pot_line() prints the server pot «Котёл: prog/goal · твоих: N» onto the fair card",
+		t9_fair_line == "Котёл: 7/12 · твоих: 3" and t9_fair_clamped == "Котёл: 12/12 · твоих: 3"
+		and t9_fair_lbl2 != null and t9_fair_lbl2.text == "Котёл: 7/12 · твоих: 3")
+	g._online._net_enabled = bool(t9_env["net"])
+	Net._available = bool(t9_env["avail"])
+	g._online._device_id = String(t9_env["dev"])
+	c._week_cache = t9_week_saved
+
+	# 10j. Task 9 (T7 minor 4): сверх трёх рядов капель текущего цикла карточка
+	# жилы сворачивает остаток в «…ещё N». Краснеет на удалении ветки
+	# `if rows.size() > shown` в contract_card.gd::_fill_vein.
+	var t9_more: Array = []
+	var t9_st: Array = ["registered", "registered", "poured", "pending_server", "auto_applied"]
+	for t9_i in range(5):
+		t9_more.append({"id": "t9-f%d" % t9_i, "tag": "Тег", "points": 1,
+			"pair_key": "t9a+t9b", "cycle_id": "t9-cyc", "status": String(t9_st[t9_i])})
+	c._cycle_cache = {"cycle_id": "t9-cyc"}
+	c._vein_finds = t9_more
+	board.refresh()
+	await g.get_tree().process_frame
+	var t9_vein_detail := (wr.get_child(0) as Control).get_node_or_null("Hang/Detail") as Control
+	var t9_rows := 0
+	var t9_more_lbl := ""
+	if t9_vein_detail != null:
+		for t9_ch in t9_vein_detail.get_children():
+			if String((t9_ch as Node).name).begins_with("VeinDropRow"):
+				t9_rows += 1
+			elif t9_ch is Label and String((t9_ch as Label).text).begins_with("…ещё"):
+				t9_more_lbl = String((t9_ch as Label).text)
+	Selftest.check("vein card folds the fourth and fifth current-cycle finds into «…ещё N»",
+		t9_rows == 3 and t9_more_lbl == "…ещё 2")
 	c._day_hint = t7_hint_saved
 	c._vein_finds = t7_finds_saved
 	c._cycle_cache = t7_cycle_saved
@@ -2204,6 +2264,28 @@ static func _contracts_durability_checks(g: Game) -> void:
 	var baseline_data := g._saves._read_save(g.SAVE_PATH)
 	Selftest.check("contracts durability baseline save written",
 		baseline_written and not baseline_data.is_empty())
+
+	# Task 9 (T8 minor A): boardfull-заморозка гейтит единственную точку записи —
+	# прогон boardfull-демо не должен писать инъектированное состояние в сейв.
+	# Фикстура флагов — сам demo-harness (в selftest он поднят, --demo=false);
+	# путь сейва здесь уже переведён на alchemy_st_contracts_dur.json, реальный
+	# пользовательский файл не трогается. Краснеет на удалении гейта
+	# _boardfull_frozen() в Saves._save_game.
+	var t9_h := g._demo_harness
+	var t9_demo_saved: bool = t9_h._demo
+	var t9_state_saved: String = t9_h._contract_state
+	var t9_rev := g._engine.client_rev
+	t9_h._demo = true
+	t9_h._contract_state = "boardfull"
+	var t9_blocked := g._saves._save_game()
+	var t9_rev_blocked := g._engine.client_rev
+	t9_h._contract_state = "pop"
+	var t9_allowed := g._saves._save_game()
+	t9_h._demo = t9_demo_saved
+	t9_h._contract_state = t9_state_saved
+	g._engine.client_rev = t9_rev
+	Selftest.check("boardfull freeze gate blocks Saves._save_game at the single write point",
+		not t9_blocked and t9_allowed and t9_rev_blocked == t9_rev)
 
 	var now_u := int(Time.get_unix_time_from_system())
 	var day_key := Contracts.day_key_from(c._dt({}))

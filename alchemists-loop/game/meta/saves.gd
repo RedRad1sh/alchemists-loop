@@ -40,6 +40,13 @@ var _save_frozen := false
 func _save_game() -> bool:
 	if _save_frozen:
 		return false
+	# Task 9 (T8 minor A): boardfull-демо не должно записывать инъектированное
+	# состояние в дев-сейв. Гейт — в единственной точке записи (тот же приём,
+	# что с _save_frozen выше), поэтому закрывает ВСЕ пути boardfull-прогона:
+	# Online._on_net_world_result (online.gd:950), автосейв и workshop-сейв
+	# таймера (main.gd:953/964), Contracts-сейвы. Вне boardfull флаг ложен.
+	if g._contracts != null and g._contracts._boardfull_frozen():
+		return false
 	# Ревизия клиента — монотонный счётчик сохранений этого девайса. Часть C
 	# (advisory-потолок оффлайн-эфира)clamp'ит только на client_rev==0, т.е. на
 	# миграционном первом заходе до любого сейва; bump здесь закрывает это окно.
