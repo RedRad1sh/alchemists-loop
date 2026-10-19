@@ -198,10 +198,12 @@ static func _cb_put_block_restore(g: Game, data: Dictionary) -> void:
 
 static func run(g: Game) -> void:
 	# ---------------- §2 таблицы типов и порогов ----------------
-	Selftest.check("§2.1 daily pool has exactly 6 active types",
-		ContractsBalance.DAILY_TYPES.size() == 6)
-	Selftest.check("§2.2 weekly pool has exactly 5 active types",
-		ContractsBalance.WEEKLY_TYPES.size() == 5)
+	# доска v2: пул дневных типов вырос 6→8 (pinned head goal_day/orders сверху)
+	Selftest.check("§2.1 daily pool has exactly 8 active types",
+		ContractsBalance.DAILY_TYPES.size() == 8)
+	# доска v2: пул недельных типов вырос 5→7 (pinned head vein/fair сверху)
+	Selftest.check("§2.2 weekly pool has exactly 7 active types",
+		ContractsBalance.WEEKLY_TYPES.size() == 7)
 	Selftest.check("§2.3 collect and masterwork are not contract types",
 		not ContractsBalance.DAILY_TYPES.has("collect")
 		and not ContractsBalance.WEEKLY_TYPES.has("collect")
@@ -214,8 +216,9 @@ static func run(g: Game) -> void:
 	Selftest.check("daily and weekly type pools do not overlap", not overlap)
 	Selftest.check("§2 tiers are bronze, silver, gold in that order",
 		ContractsBalance.TIERS == ["bronze", "silver", "gold"])
-	Selftest.check("§1.4 board shows 3 daily and 2 weekly",
-		ContractsBalance.DAILY_SHOWN == 3 and ContractsBalance.WEEKLY_SHOWN == 2)
+	# доска v2: размер ряда вырос 3/2→4/4
+	Selftest.check("§1.4 board shows 4 daily and 4 weekly",
+		ContractsBalance.DAILY_SHOWN == 4 and ContractsBalance.WEEKLY_SHOWN == 4)
 
 	var goals_ok := true
 	for type in ContractsBalance.DAILY_TYPES:
@@ -376,14 +379,16 @@ static func run(g: Game) -> void:
 			"minute": 0, "second": 0, "weekday": 1}) == "2025-W01")
 
 	# Тест №1: детерминизм.
+	# доска v2: размер ряда 3→4 и 2→4 — условие называем литералом, чтобы
+	# проверка краснела на старых рядах, а не следовала за константой.
 	var gen_a := probe._generate_daily(day_key, 3)
 	var gen_b := probe._generate_daily(day_key, 3)
 	Selftest.check("§6.1 the same local date generates a byte-identical daily set on both calls",
-		gen_a == gen_b and gen_a.size() == ContractsBalance.DAILY_SHOWN)
+		gen_a == gen_b and gen_a.size() == 4)
 	var week_key := Contracts.week_key_from(DT_MON)
 	Selftest.check("§6.1 the same ISO week generates a byte-identical weekly set on both calls",
 		probe._generate_weekly(week_key) == probe._generate_weekly(week_key)
-		and probe._generate_weekly(week_key).size() == ContractsBalance.WEEKLY_SHOWN)
+		and probe._generate_weekly(week_key).size() == 4)
 
 	var types_seen := {}
 	var type_dup := false
@@ -396,8 +401,57 @@ static func run(g: Game) -> void:
 	for t in types_seen.keys():
 		if not ContractsBalance.DAILY_TYPES.has(String(t)):
 			types_in_pool = false
-	Selftest.check("§1.4 the 3 daily contracts have 3 distinct types from the pool",
-		not type_dup and types_seen.size() == 3 and types_in_pool)
+	# доска v2: ряд 3→4, distinct типов 3→4
+	Selftest.check("§1.4 the 4 daily contracts have 4 distinct types from the pool",
+		not type_dup and types_seen.size() == 4 and types_in_pool)
+
+	# доска v2 (§2 спеки слияния): pinned head — первые ряды фиксированы по
+	# типу и порядку, случайный хвост выбирается из пула без pinned.
+	# Живой экземпляр трогаем через ensure_period — как в существующем образце;
+	# состояние возвращаем снимком, иначе следующие блоки краснеют не по своей
+	# причине (Review Focus №7). Имена dt_v2/d_v2/w_v2: в функции уже есть
+	# блочные var dt/var d ниже, на уровне функции GDScript не переобъявляет.
+	var cb_v2_snap := _cb_snapshot(g._contracts)
+	var dt_v2 := {"year": 2026, "month": 10, "day": 19, "weekday": 1, "hour": 12, "minute": 0, "second": 0}
+	g._contracts.ensure_period(dt_v2)
+	var d_v2 := g._contracts.daily(dt_v2)
+	var w_v2 := g._contracts.weekly(dt_v2)
+	Selftest.check("boardgen v2 daily shown 4 with pinned goal_day/orders",
+		d_v2.size() == 4 and String((d_v2[0] as Dictionary)["type"]) == "goal_day"
+		and String((d_v2[1] as Dictionary)["type"]) == "orders")
+	Selftest.check("boardgen v2 weekly shown 4 with pinned vein/fair",
+		w_v2.size() == 4 and String((w_v2[0] as Dictionary)["type"]) == "vein"
+		and String((w_v2[1] as Dictionary)["type"]) == "fair")
+	# Проверка начинается с guards d_v2.size()==4/w_v2.size()==4: на рядах старого
+	# размера индексы d_v2[3]/w_v2[2] были бы выходом за границу, а сюита обязана
+	# краснеть, а не ронять исполнителя (условие после guard — точное из спеки).
+	Selftest.check("boardgen v2 random part excludes pinned",
+		d_v2.size() == 4 and w_v2.size() == 4
+		and not (["goal_day", "orders"] as Array).has(String((d_v2[2] as Dictionary)["type"]))
+		and String((d_v2[2] as Dictionary)["type"]) != String((d_v2[3] as Dictionary)["type"])
+		and not (["vein", "fair"] as Array).has(String((w_v2[2] as Dictionary)["type"])))
+	Selftest.check("boardgen v2 pinned goals",
+		int((d_v2[0] as Dictionary)["goal"]) == 1 and int((d_v2[1] as Dictionary)["goal"]) == 3
+		and int((w_v2[1] as Dictionary)["goal"]) == 3)
+	Selftest.check("boardgen v2 pinned tier comes from seed",
+		ContractsBalance.TIERS.has(String((d_v2[0] as Dictionary)["tier"])))
+	# Сейв v1 (ряды 3/2) обязан деградировать регенерацией, а не откатом блока:
+	# фикстура — реальный save_block зонда, у которого списки обрезаны до
+	# старого размера, а ключи периода подменены на прошедшие. С иными (пустыми
+	# или свежими) списками проверка была бы зелёной всегда.
+	var lprobe := Contracts.new(g)
+	lprobe.ensure_period(dt_v2)
+	var legacy_blk: Dictionary = lprobe.save_block()
+	legacy_blk["daily"] = (legacy_blk["daily"] as Array).slice(0, 3)
+	legacy_blk["weekly"] = (legacy_blk["weekly"] as Array).slice(0, 2)
+	legacy_blk["last_daily"] = "2026-10-18"
+	legacy_blk["last_weekly"] = "2026-W42"
+	var legacy_probe := Contracts.new(g)
+	legacy_probe.load_block(legacy_blk)
+	legacy_probe.ensure_period(dt_v2)
+	Selftest.check("boardgen v2 legacy-size lists regenerate",
+		legacy_probe.daily(dt_v2).size() == 4)
+	_cb_restore(g._contracts, cb_v2_snap)
 
 	# Разные даты дают разные наборы. Точечное сравнение двух конкретных дней
 	# могло бы совпасть случайно, поэтому меряем разнообразие на 30 днях.
@@ -519,8 +573,9 @@ static func run(g: Game) -> void:
 			id_shape = false
 	Selftest.check("§4.1 every contract id is kind:type:tier:period_key and goal matches the balance table",
 		id_shape)
-	Selftest.check("§4.1 all_contracts returns 3 daily + 2 weekly = 5 contracts",
-		probe.all_contracts(DT_MON).size() == ContractsBalance.DAILY_SHOWN + ContractsBalance.WEEKLY_SHOWN)
+	# доска v2: ряд 3+2=5 → 4+4=8
+	Selftest.check("§4.1 all_contracts returns 4 daily + 4 weekly = 8 contracts",
+		probe.all_contracts(DT_MON).size() == 8)
 	Selftest.check("§4.1 contract_by_id returns an empty dictionary for an id from a burnt period",
 		probe.contract_by_id("daily:brew:gold:2020-01-01", DT_MON).is_empty())
 
@@ -529,9 +584,10 @@ static func run(g: Game) -> void:
 		g._contracts != null and g._contracts.g == g)
 	Selftest.check("§4.1 CONTRACTS_SAVE_VERSION is 1", Contracts.CONTRACTS_SAVE_VERSION == 1)
 	# Живой экземпляр генерирует сегодняшний набор при первом обращении.
-	Selftest.check("§1.4 the live instance generates 3 daily and 2 weekly on first access",
-		g._contracts.daily().size() == ContractsBalance.DAILY_SHOWN
-		and g._contracts.weekly().size() == ContractsBalance.WEEKLY_SHOWN)
+	# доска v2: размер ряда 3/2→4/4, условие названо литералом.
+	Selftest.check("§1.4 the live instance generates 4 daily and 4 weekly on first access",
+		g._contracts.daily().size() == 4
+		and g._contracts.weekly().size() == 4)
 
 	# ---------------- §3.1 единый множитель ----------------
 	var snap_prog := _snap_progress(g)
@@ -981,7 +1037,8 @@ static func run(g: Game) -> void:
 		c5.progress(prestige_id) == 1 and c5._unlocked_decor == ["window_contract"])
 
 	# §4.4 + §1.4: после Перегонки доска обязана снова отдавать полный набор —
-	# 3 дневных и 2 недельных контракта на ближайшем обращении. Отдельный
+	# 4 дневных и 4 недельных контракта на ближайшем обращении (доска v2, 3/2→4/4).
+	# Отдельный
 	# экземпляр: живой c5 в этом блоке держит фикстуры, а здесь проверка краснеет
 	# ровно одним условием — несброшенным ключом дня (_contracts_last_daily),
 	# из-за которого ensure_period() считает период неизменным и возвращает
@@ -991,8 +1048,8 @@ static func run(g: Game) -> void:
 	regen_probe.weekly()
 	regen_probe.on_prestige()
 	Selftest.check("§4.4 after on_prestige the daily set regenerates on next access",
-		regen_probe.daily().size() == ContractsBalance.DAILY_SHOWN
-		and regen_probe.weekly().size() == ContractsBalance.WEEKLY_SHOWN)
+		regen_probe.daily().size() == 4
+		and regen_probe.weekly().size() == 4)
 
 	# восстановление живого состояния (Review Focus 7). Списки оставляем пустыми,
 	# а ключи периода — сброшенными: первый же ensure_period() после сюиты
@@ -1310,14 +1367,13 @@ static func _contract_board_checks(g: Game) -> void:
 		ring != null and ring.texture_normal != null
 		and str(ring.texture_normal.resource_path).contains("ring_pull"))
 
-	# 9. Пять карточек: 3 daily + 2 weekly.
+	# 9. Доска v2: восемь карточек — 4 daily + 4 weekly (было 3+2).
 	var dr: Control = board.get_node_or_null("DailyRow") as Control
 	var wr: Control = board.get_node_or_null("WeeklyRow") as Control
 	var daily_card_count := dr.get_child_count() if dr != null else 0
 	var weekly_card_count := wr.get_child_count() if wr != null else 0
-	Selftest.check("§5.2 the board creates five cards (3 daily + 2 weekly)",
-		daily_card_count == ContractsBalance.DAILY_SHOWN
-		and weekly_card_count == ContractsBalance.WEEKLY_SHOWN)
+	Selftest.check("§5.2 the board creates eight cards (4 daily + 4 weekly)",
+		daily_card_count == 4 and weekly_card_count == 4)
 
 	# 10. Ряды — обычные Control, не контейнеры.
 	Selftest.check("§5.2 daily and weekly rows are plain Controls, not containers",
@@ -1391,14 +1447,18 @@ static func _contract_board_checks(g: Game) -> void:
 	c._set_progress(pop_id, int(pop_daily[0]["goal"]))
 	c._done_dict("daily")[pop_id] = true
 
-	# 17. Все пять карточек заполняются контрактами при refresh.
+	# 17. Доска v2: все восемь карточек заполняются контрактами при refresh
+	# (фикстура ряда 3/2→4/4).
 	_force_set(c, [
 		_mk(c, "daily", "brew", "bronze", 15),
 		_mk(c, "daily", "experiment", "silver", 2),
 		_mk(c, "daily", "depth_brew", "gold", 3),
+		_mk(c, "daily", "discover", "bronze", 1),
 	], [
 		_mk(c, "weekly", "sigil_set", "gold", 4),
 		_mk(c, "weekly", "variety", "bronze", 8),
+		_mk(c, "weekly", "upgrade", "silver", 4),
+		_mk(c, "weekly", "rare_brew", "bronze", 3),
 	])
 	board.refresh()
 	await g.get_tree().process_frame
@@ -1412,10 +1472,11 @@ static func _contract_board_checks(g: Game) -> void:
 		total_cards += 1
 		if not (ch as Control).visible:
 			all_vis = false
-	Selftest.check("§5.2 all five cards are visible when five contracts are present",
-		all_vis and total_cards == 5)
+	Selftest.check("§5.2 all eight cards are visible when eight contracts are present",
+		all_vis and total_cards == 8)
 
-	# 18. Дневные контракты — в дневном ряду, недельные — в недельном.
+	# 18. Дневные контракты — в дневном ряду, недельные — в недельном
+	# (доска v2: ряд 3/2→4/4, условие названо литералом).
 	var daily_count := 0
 	var weekly_count := 0
 	for ch in dr.get_children():
@@ -1425,8 +1486,8 @@ static func _contract_board_checks(g: Game) -> void:
 		if (ch as Control).visible:
 			weekly_count += 1
 	Selftest.check("§5.2 daily cards sit in the daily row and weekly cards in the weekly row",
-		daily_count == ContractsBalance.DAILY_SHOWN
-		and weekly_count == ContractsBalance.WEEKLY_SHOWN)
+		daily_count == 4
+		and weekly_count == 4)
 
 	# 19. Попап награды: проверяем, что _show_reward создаёт попап с правильными элементами.
 	var fake_reward := {
@@ -1555,16 +1616,22 @@ static func _contracts_durability_checks(g: Game) -> void:
 	var now_u := int(Time.get_unix_time_from_system())
 	var day_key := Contracts.day_key_from(c._dt({}))
 	var week_key := Contracts.week_key_from(c._dt({}))
+	# Доска v2: _clean_list требует размер ряда == SHOWN (4/4, было 3/2),
+	# поэтому фикстуры рядов — по четыре легальных контракта разных типов.
 	var d_brew := _mk_legal(c, "daily", "brew", "bronze")
 	var d_disc := _mk_legal(c, "daily", "discover", "silver")
 	var d_gold := _mk_legal(c, "daily", "sigil_craft", "gold")
+	var d_chain := _mk_legal(c, "daily", "chain_brew", "silver")
 	var w_pre := _mk_legal(c, "weekly", "prestige", "gold")
 	var w_up := _mk_legal(c, "weekly", "upgrade", "bronze")
-	var daily_set: Array = [d_brew, d_disc, d_gold]
-	var weekly_set: Array = [w_pre, w_up]
+	var w_var := _mk_legal(c, "weekly", "variety", "bronze")
+	var w_sig := _mk_legal(c, "weekly", "sigil_set", "silver")
+	var daily_set: Array = [d_brew, d_disc, d_gold, d_chain]
+	var weekly_set: Array = [w_pre, w_up, w_var, w_sig]
 	var id_brew := String(d_brew["id"])
 	var id_disc := String(d_disc["id"])
 	var id_gold := String(d_gold["id"])
+	var id_chain := String(d_chain["id"])
 	var id_pre := String(w_pre["id"])
 	var id_up := String(w_up["id"])
 	var gold_goal := int((ContractsBalance.DAILY_GOALS["sigil_craft"] as Array)[2])
@@ -1611,11 +1678,13 @@ static func _contracts_durability_checks(g: Game) -> void:
 	var ids: Array = []
 	for item in c._contracts_daily:
 		ids.append(String((item as Dictionary)["id"]))
+	# Доска v2: ряд 3/2→4/4 — список id фикстуры и размер недельного ряда
+	# названы литералами.
 	Selftest.check("§6.16 the saved lists survive verbatim instead of a re-roll at boot",
-		ids == [id_brew, id_disc, id_gold]
+		ids == [id_brew, id_disc, id_gold, id_chain]
 		and int(c._contracts_daily[2]["goal"]) == gold_goal
 		and String(c._contracts_daily[2]["buff"]) == "brew_speed"
-		and c.progress(id_gold) == 2 and c._contracts_weekly.size() == 2)
+		and c.progress(id_gold) == 2 and c._contracts_weekly.size() == 4)
 	Selftest.check("§6.16 the weekly variety and set counters survive the restart",
 		c._contracts_variety == {"steam": true, "glass": true}
 		and c._contracts_set_week.size() == 1 and int(c._contracts_set_week.get("fire", -1)) == 4)
@@ -1648,8 +1717,9 @@ static func _contracts_durability_checks(g: Game) -> void:
 	Selftest.check("§4.3 a save without the contracts key boots today's fresh generation",
 		c._contracts_last_daily == "" and c._contracts_daily.is_empty()
 		and c._unlocked_decor.is_empty() and c._last_output == ""
-		and c.daily().size() == ContractsBalance.DAILY_SHOWN
-		and c.weekly().size() == ContractsBalance.WEEKLY_SHOWN
+		# доска v2: размер regenerated-ряда 3/2→4/4, условие названо литералом.
+		and c.daily().size() == 4
+		and c.weekly().size() == 4
 		and c._contracts_last_daily == day_key)
 
 	# ---- 4. фильтрация по осям и по ключам (§4.4) ----
@@ -1659,7 +1729,9 @@ static func _contracts_durability_checks(g: Game) -> void:
 	d_bad["goal"] = int(d_bad["goal"]) + 1
 	var bad_id := String(d_bad["id"])
 	_cb_wipe(c)
-	_force_set(c, [d_bad, d_disc, d_gold], weekly_set)
+	# Доска v2: дневная фикстура — те же 4 ряда (было 3), чтобы список отвергался
+	# именно битым goal, а не размером; недельный ряд 2→4.
+	_force_set(c, [d_bad, d_disc, d_gold, d_chain], weekly_set)
 	c._contracts_daily_prog[bad_id] = 2
 	c._contracts_weekly_done[id_pre] = true
 	c._contracts_weekly_prog[id_up] = 1
@@ -1669,10 +1741,11 @@ static func _contracts_durability_checks(g: Game) -> void:
 	Selftest.check("§4.4 a structurally broken daily list resets only the daily axis",
 		c._contracts_daily.is_empty() and c._contracts_last_daily == ""
 		and c._contracts_daily_prog.is_empty()
-		and c._contracts_weekly.size() == 2 and c._contracts_weekly_done.has(id_pre)
+		and c._contracts_weekly.size() == 4 and c._contracts_weekly_done.has(id_pre)
 		and int(c._contracts_weekly_prog.get(id_up, -1)) == 1)
+	# доска v2: regenerated-ряд 3→4, условие названо литералом.
 	Selftest.check("§4.4 after the dropped axis the board regenerates today, not an empty slate",
-		c.daily().size() == ContractsBalance.DAILY_SHOWN
+		c.daily().size() == 4
 		and c._contracts_last_daily == day_key and c._contracts_daily_prog.is_empty())
 
 	# Журнал и прогресс по id, которого нет в сохранённом списке: живой остаётся,

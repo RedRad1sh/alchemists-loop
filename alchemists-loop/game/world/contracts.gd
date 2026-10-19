@@ -72,7 +72,8 @@ func _byte(h: String, cursor: int) -> int:
 
 # Курсор держим в словаре: Dictionary передаётся по ссылке, поэтому выборка
 # типов и последующие байты контракта идут по одному непрерывному курсору.
-# Максимум на набор — 9 байт (3 выбора + 3×2), то есть до 32 доступных байт
+# Доска v2: максимум на набор — daily 2+4·2=10 байт (2 выбора + 4×(тир+бафф)),
+# weekly 2+4·3=14 (2 выбора + 4×(тир+бафф+декор)), то есть до 32 доступных байт
 # sha256-строки дело не доходит и повторов курса нет.
 func _pick_types(pool: Array, count: int, h: String, cur: Dictionary) -> Array:
 	var left: Array = pool.duplicate()
@@ -110,12 +111,19 @@ func _make_contract(kind: String, type: String, tier: String, period_key: String
 # Параметр нужен тестам: в headless-прогоне _daily_crafts пуст, и без него
 # проверка «gold не генерируется» была бы зелёной всегда, а обратная — всегда
 # красной.
+# Доска v2 (спека слияния §2): первые PINNED_HEAD мест ряда — закрепление
+# goal_day/orders в этом порядке (следующие таски опираются на daily()[0] ==
+# goal_day), случайный остаток выбирается из пула без pinned. Полный список
+# обходится одним курсором байтов tier→buff, поэтому ряд по-прежнему
+# детерминирован от ключа дня.
 func _generate_daily(day_key: String, daily_crafts: int = -1) -> Array:
 	var crafts := daily_crafts if daily_crafts >= 0 else g._sigil._daily_crafts.size()
 	var h := _seed_for("daily", day_key)
 	var cur := {"i": 0}
+	var picked := _pick_types(ContractsBalance.DAILY_TYPES.slice(ContractsBalance.PINNED_HEAD),
+		ContractsBalance.DAILY_SHOWN - ContractsBalance.PINNED_HEAD, h, cur)
 	var out: Array = []
-	for t in _pick_types(ContractsBalance.DAILY_TYPES, ContractsBalance.DAILY_SHOWN, h, cur):
+	for t in ContractsBalance.DAILY_TYPES.slice(0, ContractsBalance.PINNED_HEAD) + picked:
 		var type := String(t)
 		var tiers := _tiers_for("daily", type, crafts)
 		var tier := String(tiers[_byte(h, int(cur["i"])) % tiers.size()])
@@ -126,11 +134,16 @@ func _generate_daily(day_key: String, daily_crafts: int = -1) -> Array:
 		out.append(_make_contract("daily", type, tier, day_key, buff, ""))
 	return out
 
+# Симметрично _generate_daily: закреплённая голова vein/fair, байт декора
+# тратится на каждую запись — правило «байт декора тратится всегда» сохраняет
+# независимость потребления курса от тира, то есть детерминизм ряда.
 func _generate_weekly(week_key: String) -> Array:
 	var h := _seed_for("weekly", week_key)
 	var cur := {"i": 0}
+	var picked := _pick_types(ContractsBalance.WEEKLY_TYPES.slice(ContractsBalance.PINNED_HEAD),
+		ContractsBalance.WEEKLY_SHOWN - ContractsBalance.PINNED_HEAD, h, cur)
 	var out: Array = []
-	for t in _pick_types(ContractsBalance.WEEKLY_TYPES, ContractsBalance.WEEKLY_SHOWN, h, cur):
+	for t in ContractsBalance.WEEKLY_TYPES.slice(0, ContractsBalance.PINNED_HEAD) + picked:
 		var type := String(t)
 		var tiers := _tiers_for("weekly", type, 0)
 		var tier := String(tiers[_byte(h, int(cur["i"])) % tiers.size()])
