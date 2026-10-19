@@ -51,8 +51,6 @@ const LETTER_PENDING_MAX := Balance.LETTER_PENDING_MAX
 const ATLAS_MILE_EVERY := Balance.ATLAS_MILE_EVERY
 const ATLAS_CAP_EACH := Balance.ATLAS_CAP_EACH
 const ATLAS_PENDING_MAX := Balance.ATLAS_PENDING_MAX
-const CIRCLE_DISC_GOAL := Balance.CIRCLE_DISC_GOAL
-const CIRCLE_REWARD := Balance.CIRCLE_REWARD
 const HEARTH_BASE := Balance.HEARTH_BASE
 const CIRCLE_DAY_MILES := Balance.CIRCLE_DAY_MILES
 const CIRCLE_DAY_CAP := Balance.CIRCLE_DAY_CAP
@@ -93,11 +91,9 @@ const CANDIDATE_CHANCE := Balance.CANDIDATE_CHANCE
 const CANDIDATE_COOLDOWN := Balance.CANDIDATE_COOLDOWN
 const NET_NICK := Balance.NET_NICK
 const CHALLENGE_REWARD := Balance.CHALLENGE_REWARD
-const CIRCLE_LOCAL_POINTS := Balance.CIRCLE_LOCAL_POINTS
 const VEIN_STREAK_CAP := Balance.VEIN_STREAK_CAP
 const VEIN_STREAK_REWARD := Balance.VEIN_STREAK_REWARD
 const VEIN_POINTS_WORLD := Balance.VEIN_POINTS_WORLD
-const CIRCLE_GOALS := Balance.CIRCLE_GOALS
 const CIRCLE_RANKS := Balance.CIRCLE_RANKS
 const CIRCLE_DECOR_REWARDS := Balance.CIRCLE_DECOR_REWARDS
 const WORLD_PAGE_SIZE := Balance.WORLD_PAGE_SIZE
@@ -406,7 +402,6 @@ var _resonance: Resonance  # отголоски + родословная (R5)
 var _retort: Retort  # ночная реторта (R6)
 var _riddles: Riddles  # письма Светика + Атлас (оп B2)
 var _sync: Sync  # единый sync-пакет: reconcile-хост (Task 9/10)
-var _retention: Retention  # дневной круг + недельный слой (R2)
 var _contracts: Contracts  # контрактная доска (§8.3): дневные/недельные цели
 var _demo_harness: Demo  # флаги --action/--shot/--geom + тик съёмки (R14)
 var _demo_flip_timer: Dictionary = {}  # {card, at} — авто-флип для GIF
@@ -477,7 +472,6 @@ func _ready() -> void:
 	_analytics_text_at_boot = _boot_snapshot_text(Analytics.REAL_QUEUE_PATH)
 	_user_data_text_at_boot = _boot_snapshot_text(UserData.REAL_SAVE_PATH)
 	_riddles = Riddles.new(self)
-	_retention = Retention.new(self)
 	_contracts = Contracts.new(self)
 	_guild = Guild.new(self)
 	_progress_ui = Progress.new(self)
@@ -576,11 +570,13 @@ func _ready() -> void:
 		elif a == "--action=brewprofile":
 			_demo_harness._action_brewprofile = true
 		elif a == "--action=circle":
-			_demo_harness._action_circle = true
+			# доска v2 Task 5: вкладка «Круг» снята — алас ведёт на доску контрактов
+			_demo_harness._action_contracts = true
 		elif a == "--action=sigilcoll":
 			_demo_harness._action_sigilcoll = true
 		elif a == "--action=week":
-			_demo_harness._action_week = true
+			# доска v2 Task 5: вкладка «Неделя» снята — алас ведёт на доску контрактов
+			_demo_harness._action_contracts = true
 		elif a == "--action=goal":
 			_demo_harness._action_goal = true
 		elif a == "--action=goals":
@@ -807,36 +803,8 @@ func _ready() -> void:
 		_pages._select_mode("atlas")
 		_riddles._refresh_atlas_page()
 		_engine._refresh()
-	if _demo_harness._demo and _demo_harness._action_circle:
-		_retention._inject_circle_demo()
-		# страница «Круг» открывается с 20 веществ — демо-доливка до гейта
-		for cid in ITEMS.keys():
-			if _engine.inventory.size() >= 22:
-				break
-			if not _engine.inventory.has(String(cid)):
-				_engine.inventory[String(cid)] = 1
-		if _tabs_ref != null:
-			_tabs_ref.current_tab = TAB_TOOLS
-		_pages._ensure_modes()
-		_pages._select_mode("circle")
-		_retention._refresh_circle_page()
-		_engine._refresh()
 	if _demo_harness._demo and _demo_harness._action_sigilcoll:
 		_demo_seed_sigil_coll()
-	if _demo_harness._demo and _demo_harness._action_week:
-		_retention._inject_week_demo()
-		# страница «Неделя» открывается с 30 веществ — демо-доливка до гейта
-		for wid in ITEMS.keys():
-			if _engine.inventory.size() >= 32:
-				break
-			if not _engine.inventory.has(String(wid)):
-				_engine.inventory[String(wid)] = 1
-		if _tabs_ref != null:
-			_tabs_ref.current_tab = TAB_TOOLS
-		_pages._ensure_modes()
-		_pages._select_mode("week")
-		_retention._refresh_week_page()
-		_engine._refresh()
 	if _demo_harness._demo and _demo_harness._action_goal:
 		# кадр модалки выбора цели: собираем пару и открываем режимный экран
 		if _tabs_ref != null:
@@ -2234,8 +2202,6 @@ func _clean_str(v) -> String:
 
 
 # ---------- письма Светика + Атлас — в game/riddles.gd (оп B2) ----------
-
-# ---------- дневной круг + недельный слой — в game/retention.gd (R2) ----------
 
 # ---------- R8: см. game/online.gd (4547-4794) ----------
 

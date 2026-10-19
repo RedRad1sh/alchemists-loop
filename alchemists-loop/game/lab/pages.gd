@@ -1066,10 +1066,6 @@ func _ensure_modes() -> void:
 				g._riddles._build_atlas_page(box)
 			"atlas":
 				g._riddles._build_atlas_page(box)
-			"circle":
-				g._retention._build_circle_page(box)
-			"week":
-				g._retention._build_week_page(box)
 		_tools_sub.add_child(box)
 		box.visible = false
 		_mode_pages[key] = box

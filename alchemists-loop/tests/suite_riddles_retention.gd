@@ -1,6 +1,8 @@
 extends RefCounted
 class_name SuiteRiddlesRetention
-# письма/атлас/панч-лист/круг/неделя (оп B1).
+# письма/атлас/панч-лист + бывшие круг/неделя (оп B1). Доска v2 Task 5:
+# вкладки «Круг»/«Неделя» удалены — проверки их страниц сняты, поведение
+# очага/жилы/ярмарки проверяется на поверхности Contracts.
 
 static func run(g: Game) -> void:
 	# письма Светика: паттерн, вехи, очередь, solve-хендлер, страница
@@ -257,7 +259,7 @@ static func run(g: Game) -> void:
 	var cb4_od_id := String(cb4_od["id"])
 	SuiteContractBoard._force_set(g._contracts, [cb4_gd, cb4_od], g._contracts._contracts_weekly)
 	SuiteContractBoard._clear_prog(g._contracts)
-	g._guild._order_day = g._retention._circle_today()
+	g._guild._order_day = g._contracts._visit_today()
 	g._guild._order_targets_cache = ["steam", "stone", "clay"]
 	g._guild._order_done = {"steam": true, "stone": true, "clay": true}
 	g._contracts._sync_orders()
@@ -273,11 +275,8 @@ static func run(g: Game) -> void:
 		and g._contracts.is_done(cb4_gd_id))
 	Selftest.check("goal contract reward once only",
 		String(g._contracts.claim(cb4_gd_id)["reason"]) == "claimed")
-	g._retention._refresh_circle_page()
-	Selftest.check("circle chip calm", String((g._pages._mode_chips["circle"] as Button).text) == "Круг")
-	g._contracts._hearth_claim = ""
-	g._retention._refresh_circle_page()
-	Selftest.check("circle chip dot", String((g._pages._mode_chips["circle"] as Button).text) == "Круг ●")
+	# доска v2 Task 5: чип-индикаторы вкладки «Круг» удалены вместе с вкладкой —
+	# claimable-очаг виден на доске (hearth_claimable уже проверен выше).
 	g._engine.ether = cb4_ether
 	SuiteContractBoard._cb_restore(g._contracts, cb4_snap)
 	# ============ U35 (A3): цель дня = закреплённый контракт goal_day ============
@@ -343,20 +342,16 @@ static func run(g: Game) -> void:
 	# строка orders зеркалит счётчик гильдии (было: «цель требует все заказы»)
 	SuiteContractBoard._force_set(g._contracts, [u35_od], g._contracts._contracts_weekly)
 	SuiteContractBoard._clear_prog(g._contracts)
-	g._guild._order_day = g._retention._circle_today()
+	g._guild._order_day = g._contracts._visit_today()
 	g._guild._order_targets_cache = ["steam", "stone", "clay"]
 	g._guild._order_done = {"steam": true, "stone": true, "clay": true}
 	g._contracts._sync_orders()
 	Selftest.check("u35 orders mirror guild done count", g._contracts.progress(u35_od_id) == 3
 		and g._contracts.is_ready(u35_od_id))
-	# серверная подсказка первична локальной цели (замена «локальная цель лишь
-	# когда нет серверного заказа»: страница строит строку цели по _day_hint)
-	g._retention._refresh_circle_page()
-	var u35_hint_row := false
-	for u35_ch in g._retention._circle_list.get_children():
-		if u35_ch is Label and String((u35_ch as Label).text).begins_with("Цель дня: Лодка"):
-			u35_hint_row = true
-	Selftest.check("u35 server hint overrides local goal", u35_hint_row)
+	# серверная подсказка первична локальной цели: страница «Круг» удалена вместе
+	# с вкладкой (доска v2 Task 5), канал данных доски — day_hint(); UI-строка
+	# цели подключится к нему в Task 7.
+	Selftest.check("u35 server hint overrides local goal", g._contracts.day_hint() == "Лодка")
 	# restore
 	g._guild._order_day = ""
 	g._guild._order_targets_cache = []
@@ -392,11 +387,10 @@ static func run(g: Game) -> void:
 	g._contracts._fair_regen_total = 0.0
 	g._contracts._on_net_fair_brew_result({"ok": true, "counted": true, "progress": 11, "contrib": 2, "closed": false})
 	Selftest.check("week brew cache", int(g._contracts._week_fair().get("progress", 0)) == 11 and int(g._contracts._week_fair().get("my_contrib", 0)) == 2)
-	g._retention._refresh_week_page()
-	Selftest.check("week chip dot", String((g._pages._mode_chips["week"] as Button).text) == "Неделя ●")
+	# доска v2 Task 5: чип-индикаторы вкладки «Неделя» удалены вместе с вкладкой;
+	# _week_claimable уже проверен выше, render-функции страницы больше нет.
+	# Чистим фикстурный кэш недели — как это делал прежний «week chip calm».
 	g._contracts._week_cache = {}
-	g._retention._refresh_week_page()
-	Selftest.check("week chip calm", String((g._pages._mode_chips["week"] as Button).text) == "Неделя")
 	var b_week := Net._build_request({"kind": "week", "path": "/week/status?device_id=d"})
 	Selftest.check("net week route", String(b_week["url"]).ends_with("/week/status?device_id=d") and int(b_week["method"]) == HTTPClient.METHOD_GET)
 	var b_fair := Net._build_request({"kind": "fair_brew", "path": "/fair/brew", "body": {"device_id": "d", "a": "x", "b": "y"}})
@@ -464,13 +458,8 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 			"_source_taps", "_collect_last_gain", "_gift_clock", "spring_on", "spring_source",
 			"_experiment_pending_pair", "_experiment_day", "_experiment_count", "_experiment_last_at",
 			"_rejected_pairs", "_first_open_calls"])],
-		# Доска v2 (Task 4): дневная половина переехала в Contracts — в Retention
-		# от круга остались только виджеты страницы; снимок очага/вех/ранга едет
-		# в записи Contracts ниже.
-		[g._retention, _circle_snapshot(g._retention, ["_circle_head", "_circle_list"])],
-		# Доска v2 (Task 3): недельный слой переехал в Contracts — снимок его полей
-		# едет отдельной записью (индексы snapshots[0]/[1] выше по коду не
-		# сдвигаются), иначе варка в этом тесте оставила бы чужой локальный котёл.
+		# Доска v2 (Task 5): Retention удалён — снимок очага/вех/ранга целиком
+		# едет в записи Contracts ниже (индекс snapshots[1]).
 		[g._contracts, _circle_snapshot(g._contracts, ["_week_cache", "_cycle_cache", "_vein_finds",
 			"_vein_cap_total", "_fair_regen_total", "_fair_local_week", "_fair_local_brews",
 			"_fair_off_claim_week", "_visit_days", "_streak_run", "_last_visit_day",
@@ -512,7 +501,7 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 	g._engine.inventory["steam"] = 0
 	var collection_size := g._engine.inventory.size()
 	var recipes_size := g._engine.known_recipes.size()
-	var today := g._retention._circle_today()
+	var today := g._contracts._visit_today()
 	# Доска v2 Task 4: счётчик «шагов диска» удалён — трекаем прогресс живого
 	# brew-контракта. Офлайн-реплей (craft/bench) контрактам не поставляет
 	# варок (on_brew, source == "offline_workshop" → early-return, спека §6.4),
@@ -591,23 +580,9 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 		and String(s4_again["reason"]) == "claimed"
 		and g._engine._available_ether() == s4_double_ether
 		and g._contracts._pts_total == s4_double_pts)
-	var host := VBoxContainer.new()
-	g._retention._build_circle_page(host)
-	var description_ok := false
-	var progress_ok := false
-	for label in host.find_children("*", "Label", true, false):
-		var text := (label as Label).text
-		description_ok = description_ok or (text.contains("доске контрактов") and text.contains("вечные очки вех"))
-		progress_ok = progress_ok or text.begins_with("Очаг ✦ · дней с закрытым контрактом: 1")
-	Selftest.check("circle page describes contracts board", description_ok)
-	Selftest.check("circle page displays hearth visit counter", progress_ok)
-	var circle_mode_hint := g._pages._mode_hint("circle")
-	Selftest.check("circle mode hint describes contract-driven hearth",
-		circle_mode_hint.contains("дневной контракт") and circle_mode_hint.contains("вечные очки"))
-	host.free()
-	# Отцепляем уничтоженную тестовую страницу до следующего refresh.
-	g._retention._circle_head = null
-	g._retention._circle_list = null
+	# доска v2 Task 5: страница «Круг» удалена вместе с вкладкой — её контент
+	# (описание доски, счётчик очага, подсказка режима) больше не что проверять;
+	# живой эквивалент счётчика — track_visit/claim выше.
 	# Отрицательные трассы: сорванный вход / ноль эфира / неизвестный рецепт /
 	# родник и подарок — варки нет, значит ни один счётчик доски не двигается.
 	# Свежий open-контракт: закрытые claim-ом выше сдвинуть нельзя по определению.
@@ -715,7 +690,7 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 	g._popup_dim.visible = popup_dim_visible
 	g.set_process(processing_before)
 	var engine_before: Dictionary = snapshots[0][1]
-	var contracts_before: Dictionary = snapshots[2][1]
+	var contracts_before: Dictionary = snapshots[1][1]
 	Selftest.check("circle synthesis fixture restores gameplay state", g._engine.inventory == engine_before["inventory"]
 		and g._engine.known_recipes == engine_before["known_recipes"]
 		and g._engine.ether == engine_before["ether"] and g._engine.ether_overflow == engine_before["ether_overflow"]
@@ -724,4 +699,3 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 		and g._contracts._contracts_daily == contracts_before["_contracts_daily"]
 		and g.is_processing() == processing_before)
 	g._engine._refresh()
-	g._retention._refresh_circle_page()

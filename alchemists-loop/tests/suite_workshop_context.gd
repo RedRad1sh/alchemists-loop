@@ -23,7 +23,9 @@ static func run(g: Game) -> void:
 	Selftest.check("context synchronous resource guard exists", g._engine.has_method("_resource_mutation_allowed"))
 	if not has_context:
 		return
-	var objects: Array = [g._engine, g._online, g._retention, g._riddles,
+	# доска v2 Task 5: Retention удалён — его запись в списке была no-op'ом
+	# (страница-виджеты без состояния); последующие индексы сдвигаются на 1.
+	var objects: Array = [g._engine, g._online, g._riddles,
 		g._guild, g._spirit, g._progress_ui, g._hub, g._saves, g._sigil_ui, Net]
 	var workshop = g.get("_workshop")
 	if workshop != null:
@@ -62,8 +64,8 @@ static func run(g: Game) -> void:
 	g.set_process(processing)
 	g._engine._refresh()
 	Selftest.check("context fixture restores resource and gameplay snapshots",
-		_snapshot(g._engine) == snapshots[0] and _snapshot(g._retention) == snapshots[2]
-		and _snapshot(g._saves) == snapshots[8] and _snapshot(Net) == snapshots[10])
+		_snapshot(g._engine) == snapshots[0] and _snapshot(g._saves) == snapshots[7]
+		and _snapshot(Net) == snapshots[9])
 
 static func _context(source := "workshop", discount: Variant = 1.0) -> Dictionary:
 	return {"source": source, "production": source != "manual", "discount": discount}

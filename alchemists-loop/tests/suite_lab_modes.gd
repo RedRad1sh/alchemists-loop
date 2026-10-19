@@ -138,8 +138,9 @@ static func run(g: Game) -> void:
 		g._engine.inventory[String(mode_id)] = maxi(int(g._engine.inventory.get(String(mode_id), 0)), 1)
 	g._engine._refresh()
 	Selftest.check("mode resonance unlocked by discovery", g._engine._mode_unlocked("resonance"))
-	Selftest.check("mode pages built", g._pages._mode_pages.size() == 9 and g._pages._mode_chips.size() == 9)
-	Selftest.check("mode tabs compat", g._pages._mode_tabs.size() == 9)
+	# доска v2 Task 5: вкладки «Круг»/«Неделя» сняты — MODES сократился с 9 до 7
+	Selftest.check("mode pages built", g._pages._mode_pages.size() == 7 and g._pages._mode_chips.size() == 7)
+	Selftest.check("mode tabs compat", g._pages._mode_tabs.size() == 7)
 	Selftest.check("compact tools omit experiment", not (g._pages._mode_chips["experiment"] as Button).visible
 		and (g._pages._mode_chips["letters"] as Button).visible
 		and not (g._pages._mode_chips["spring"] as Button).visible
@@ -162,3 +163,7 @@ static func run(g: Game) -> void:
 	Selftest.check("known frontier points to experiment", not frontier_plan.get("frontier", []).is_empty())
 	g._engine.known_recipes = recipes_saved
 	Selftest.check("mode retort staged", g._engine._mode_unlocked("retort"))
+	# доска v2 Task 5: вкладки «Круг»/«Неделя» сняты — механики живут на доске
+	# контрактов, в MODES их больше быть не должно.
+	Selftest.check("modes have no circle/week tabs",
+		not (Modes.MODES.filter(func(m): return ["circle", "week"].has(String(m["key"]))) as Array).size())

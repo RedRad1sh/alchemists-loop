@@ -1169,7 +1169,9 @@ func _on_net_challenge_result(result: Dictionary) -> void:
 	g._contracts._pts_total = maxi(g._contracts._pts_total, int(result.get("my_points_total", g._contracts._pts_total)))
 	g._contracts._check_pts_miles()
 	g._saves._save_game()
-	g._retention._refresh_circle_page()
+	# доска v2 Task 5 (закрытие замечания ревью T4): после mark_day_challenge
+	# доска обязана перерисоваться — закрытая цель дня видна на ней сразу.
+	g._contracts.refresh_board()
 
 func _ago_text(sec: int) -> String:
 	if sec < 60:
