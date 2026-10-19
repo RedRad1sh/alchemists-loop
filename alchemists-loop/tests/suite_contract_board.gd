@@ -468,6 +468,54 @@ static func run(g: Game) -> void:
 		legacy_probe.daily(dt_v2).size() == 4)
 	_cb_restore(g._contracts, cb_v2_snap)
 
+	# доска v2 Task 2 (§1 строки 1–2): поведение goal_day и orders. Живой
+	# экземпляр мутируем варками и полями гильдии, состояние возвращаем снимками
+	# (доска — _cb_snapshot, гильдия — три поля заказов, как suite_riddles_retention
+	# с circle-полями), иначе следующие блоки краснеют не по своей причине.
+	# Варка цели под дополнительным goal_t2.has("out"): без него на незакрытом
+	# поведении goal_t2["out"] дал бы рантайм-ошибку и оборвал весь прогон,
+	# а сюита обязана краснеть поведением, не падением.
+	var t2_snap := _cb_snapshot(g._contracts)
+	var today_t2 := Contracts.day_key_from(Time.get_datetime_dict_from_system())
+	var goal_t2: Dictionary = g._contracts._local_goal_for(today_t2)
+	Selftest.check("goal_day local pair is two-base deterministic",
+		goal_t2.has("out") and Game.BASE_IDS.has(String(goal_t2["a"]))
+		and Game.BASE_IDS.has(String(goal_t2["b"]))
+		and goal_t2 == g._contracts._local_goal_for(today_t2))
+	var gd_t2 := (g._contracts.daily() as Array)[0] as Dictionary
+	var before_t2 := g._contracts.progress(String(gd_t2["id"]))
+	if before_t2 == 0 and goal_t2.has("out"):
+		g._contracts.on_brew(String(goal_t2["out"]), String(goal_t2["a"]),
+			String(goal_t2["b"]), false, "manual")
+	Selftest.check("goal_day advances on brewing the local goal output",
+		g._contracts.progress(String(gd_t2["id"])) == 1)
+	var before2_t2 := g._contracts.progress(String(gd_t2["id"]))
+	g._contracts.on_brew("zz_not_goal_output", "water", "fire", false, "manual")
+	Selftest.check("goal_day ignores other outputs",
+		g._contracts.progress(String(gd_t2["id"])) == before2_t2)
+	# orders: два выполненных заказа гильдии зеркалятся на строку orders доски,
+	# третий закрывает цель (3) — ready. Проверяем внутри фикстуры, иначе
+	# «mirrors … size» на пустом _order_done была бы зелёной всегда.
+	var t2_ord_day: Variant = g._guild._order_day
+	var t2_ord_targets: Array = g._guild._order_targets_cache.duplicate(true)
+	var t2_ord_done: Dictionary = g._guild._order_done.duplicate(true)
+	g._guild._order_day = Time.get_date_string_from_system()
+	g._guild._order_targets_cache = ["steam", "stone", "clay"]
+	g._guild._order_done = {"steam": true, "stone": true}
+	var or_t2_id := String((g._contracts.daily() as Array)[1]["id"])
+	Selftest.check("orders progress mirrors guild order_done size",
+		g._guild._order_done.is_empty() or g._contracts.progress(String((g._contracts.daily() as Array)[1]["id"])) > 0)
+	Selftest.check("orders contract mirrors two done guild orders",
+		g._contracts.progress(or_t2_id) == 2)
+	g._guild._order_done["clay"] = true
+	g._contracts.daily()
+	Selftest.check("orders contract is ready when all three guild orders are done",
+		g._contracts.is_ready(or_t2_id))
+	g._guild._order_day = String(t2_ord_day)
+	g._guild._order_targets_cache = t2_ord_targets
+	g._guild._order_done = t2_ord_done
+	_cb_restore(g._contracts, t2_snap)
+
 	# Разные даты дают разные наборы. Точечное сравнение двух конкретных дней
 	# могло бы совпасть случайно, поэтому меряем разнообразие на 30 днях.
 	var base_unix := int(Time.get_unix_time_from_datetime_dict(

@@ -23,6 +23,11 @@ var _contracts_set_week: Dictionary = {}
 var _active_buffs: Dictionary = {}
 var _unlocked_decor: Array = []
 var _last_output := ""
+# доска v2 (§1 строки 1–2): кэш цели дня (по образцу _circle_local_goal_cache),
+# гейт повторного входа синка заказов, подсказка цели (заполняет Task 4).
+var _day_goal_cache := {}
+var _orders_syncing := false
+var _day_hint := ""
 
 func _init(game: Game) -> void:
 	g = game
@@ -180,9 +185,74 @@ func ensure_period(now: Dictionary = {}) -> void:
 		_contracts_weekly_done.clear()
 		_contracts_variety.clear()
 		_contracts_set_week.clear()
+	# §1 (доска v2): строка orders зеркалит счётчик гильдии на любой выход из
+	# точки периода, включая «ничего не сменилось».
+	_sync_orders()
+
+# ---------- §1 (доска v2): goal_day и orders ----------
+# Порт дневной цели из retention.gd:117-139 и зеркало заказов гильдии.
+func _local_goal_for(day: String) -> Dictionary:
+	# Копия алгоритма retention.gd:117-129 без изменения: seed ("local_goal_"+day),
+	# пул — рецепты из двух баз (заведомо достижимые), индекс — первые два
+	# hex-символа sha256.
+	var h: String = ("local_goal_" + day).sha256_text()
+	var pool: Array = []
+	for r in g.RECIPES:
+		if Game.BASE_IDS.has(String(r["a"])) and Game.BASE_IDS.has(String(r["b"])):
+			pool.append(r)
+	if pool.is_empty():
+		return {}
+	var idx := h.substr(0, 2).hex_to_int() % pool.size()
+	return pool[idx]
+
+# Кэш по ключу дня — как _circle_local_goal в retention: пересчёт один раз за
+# день, при смене дня (полночь локального времени) — новый выбор.
+func _local_goal() -> Dictionary:
+	var day := day_key_from(Time.get_datetime_dict_from_system())
+	if String(_day_goal_cache.get("day", "")) != day:
+		var pick := _local_goal_for(day)
+		_day_goal_cache = {"day": day}
+		_day_goal_cache.merge(pick)
+	return _day_goal_cache
+
+func day_hint() -> String:
+	return _day_hint
+
+# Абсолютное зеркало счётчика выполненных заказов гильдии (спека §1: «на момент
+# ensure_period()/daily()»). Done-контракты не трогаем, отметку о выдаче здесь
+# не ставим — это дело claim().
+func _sync_orders() -> void:
+	# Защита от повторного входа: _set_progress → contract_by_id → ensure_period →
+	# _sync_orders — без флага вызов уходил бы в бесконечную рекурсию.
+	if _orders_syncing:
+		return
+	_orders_syncing = true
+	g._guild._orders_refresh()
+	var n := g._guild._order_done.size()
+	# Нулевое зеркало — no-op: запись нуля через _set_progress материализовала бы
+	# пустые записи в прогрессе (сюита сверяет «после сброса словарь пуст») и
+	# втягивала бы вложенный ensure_period по настенным часам, ломая тесты с
+	# синтетическими периодами. Обнулять нечего: на полуночи дневной сброс уже
+	# очистил прогресс, а гильдия на смене дня чистит свой счётчик.
+	if n <= 0:
+		_orders_syncing = false
+		return
+	for c in _contracts_daily:
+		var contract := c as Dictionary
+		if String(contract["type"]) != "orders":
+			continue
+		var id := String(contract["id"])
+		if _contracts_daily_done.has(id):
+			continue
+		_set_progress(id, n)
+	_orders_syncing = false
 
 # ---------- чтение ----------
 func daily(now: Dictionary = {}) -> Array:
+	# §1 (доска v2): зеркало заказов обязано быть свежим на момент daily(),
+	# поэтому sync и здесь — до ensure_period (его собственный sync сработает
+	# уже по свежему ряду).
+	_sync_orders()
 	ensure_period(now)
 	return _contracts_daily
 
@@ -427,6 +497,11 @@ func on_brew(output: String, a: String, b: String, first_time: bool, source: Str
 	if source == "offline_workshop":
 		return
 	ensure_period()
+	# §1 (доска v2): локальная цель дня засчитывается до остальных счётчиков и
+	# только за ровно тот выход, что выбран датой (офлайн-реплей уже отсечён
+	# early-return выше).
+	if output != "" and output == String(_local_goal().get("out", "")):
+		_bump("goal_day", 1)
 	if a == _last_output or b == _last_output:
 		_bump("chain_brew", 1)
 	_last_output = output
