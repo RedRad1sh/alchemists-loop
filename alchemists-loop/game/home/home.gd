@@ -260,9 +260,9 @@ func _showcase_flame_color() -> Color:
 
 func _showcase_window_caption() -> String:
 	# Честность (спека §6): без связи окно показывает заглушку, а не вчерашнюю цель.
-	if g._online._net_nick == "" or g._retention._circle_hint == "":
+	if g._online._net_nick == "" or g._contracts._day_hint == "":
 		return "цель мира — после связи"
-	return "мир: " + g._retention._circle_hint
+	return "мир: " + g._contracts._day_hint
 
 
 func _sync_house_view(view) -> void:
@@ -530,7 +530,7 @@ func _refresh_house_page() -> void:
 			else:
 				b.text = "Палитра ✓" if _aura_custom_on else "Палитра"
 			continue
-		if sid == "hearth" and not g._retention._circle_hearth_aura():
+		if sid == "hearth" and not g._contracts.hearth_aura():
 			b.disabled = true
 			b.text = "Очаг · веха 365"
 			continue
@@ -602,7 +602,7 @@ func _buy_theme(id: String, cost: int) -> void:
 func _buy_aura(id: String, cost: int) -> void:
 	if id == _cosmetic_aura and not _aura_custom_on:
 		return
-	if id == "hearth" and not g._retention._circle_hearth_aura():
+	if id == "hearth" and not g._contracts.hearth_aura():
 		g._engine.status_text = "Аура «Очаг» — награда вехи: 365 дней у очага Дневного круга."
 		Sfx.error()
 		return

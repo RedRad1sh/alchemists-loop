@@ -28,6 +28,20 @@ var _last_output := ""
 var _day_goal_cache := {}
 var _orders_syncing := false
 var _day_hint := ""
+# доска v2 Task 4: очаг/вехи/ранг переехали из Retention. Визит-день теперь не
+# «открыли приложение», а «закрыли дневной контракт» — серия и дни копятся только
+# закрытиями. Поля вечные, поэтому НЕ входят в save_block (§4.2 проверяет ровно
+# четырнадцать ключей): их хранят верхнеуровневые ключи сейва под старыми именами,
+# миграция ключей — Task 6.
+var _visit_days: Array = []
+var _streak_run := 0
+var _last_visit_day := ""
+var _hearth_claim := ""
+var _pts_total := 0
+var _mdays := 0
+var _mpts := 0
+var _unlocked_titles: Array = []
+var _active_title := ""
 
 func _init(game: Game) -> void:
 	g = game
@@ -430,6 +444,14 @@ func claim(id: String, now: Dictionary = {}, now_unix: int = -1) -> Dictionary:
 	elif progress(id, now) < int(c["goal"]):
 		return _claim_failure("incomplete")
 	_done_dict(kind)[id] = true
+	# доска v2 Task 4 (§1/§3): закрытие контракта кормит вехи (очки = тир),
+	# а закрытие дневного ещё и открывает визит-день — «зашёл в игру» больше
+	# не считается, считается «закрыл дневной контракт».
+	_add_milestone_points(String(c["tier"]))
+	if kind == "daily":
+		track_visit()
+	Analytics.track("contract_closed", {"kind": kind, "type": String(c["type"]),
+		"tier": String(c["tier"])})
 	var reward := reward_for(c)
 	var grant := _grant_materials(reward["materials"] as Dictionary)
 	var buff_id := String(reward["buff"])
@@ -1195,8 +1217,9 @@ func _fair_claim() -> void:
 
 func _fair_on_brew(output: String) -> void:
 	# Локальный котёл (A3): считаем варки разных веществ, чтобы ярмарка жила и
-	# без сети — вдвое дешевле на выходе. Чистый счётчик: без гейта selftest,
-	# как _circle_on_discovery (suite_resonance_net: его мутации восстанавливаются).
+	# без сети — вдвое дешевле на выходе. Чистый счётчик: без гейта selftest
+	# (доска v2 Task 4: старый _circle_on_discovery удалён — suite_resonance_net
+	# теперь сверяет неподвижность очага/вех вместо мутаций диска).
 	if output == "":
 		return
 	var w := Home._iso_week_id()
@@ -1347,3 +1370,228 @@ func refresh_board() -> void:
 	var b := g.get_node_or_null("ContractBoard")
 	if b != null and b.has_method("refresh"):
 		b.refresh()
+
+# ---------- доска v2 Task 4: очаг / вечные вехи / ранг ----------
+# Порт из Retention (retention.gd:52-386) с переименованием по таблице брива.
+# Семантика новая: визит-день = день, в который закрыт дневной контракт
+# (track_visit зовётся из claim()), очки вех = тир закрытого контракта,
+# лестница CIRCLE_GOALS и 75⚡ «за круг» удалены (спека §1/§3). Страницы
+# Круг/Неделя до Task 5 живут в Retention и читают эти поля напрямую.
+const TIER_POINTS := {"bronze": 1, "silver": 2, "gold": 3}
+
+func _visit_today() -> String:
+	return Time.get_date_string_from_system()
+
+func _visit_yesterday() -> String:
+	return Time.get_date_string_from_unix_time(Time.get_unix_time_from_system() - 86400.0)
+
+func track_visit() -> void:
+	var today := _visit_today()
+	if _last_visit_day == today:
+		return
+	if not _visit_days.has(today):
+		_visit_days.append(today)
+		while _visit_days.size() > 400:
+			_visit_days.pop_front()
+	_streak_run = _streak_run + 1 if _last_visit_day == _visit_yesterday() else 1
+	_last_visit_day = today
+	_check_day_miles()
+	g._saves._save_game()
+	refresh_board()
+	g._engine._refresh()
+
+func hearth_reward() -> int:
+	return int(round(Game.HEARTH_BASE * (1.0 + minf(float(_streak_run), 10.0) * 0.1)))
+
+func hearth_claimable() -> bool:
+	return _hearth_claim != _visit_today()
+
+func claim_hearth() -> void:
+	if not hearth_claimable():
+		return
+	_hearth_claim = _visit_today()
+	var gain := hearth_reward()
+	g._engine._grant_ether(gain, "hearth")
+	g._engine.status_text = "Очаг вспыхнул! +%d ⚡ (серия %d). Заглядывай завтра — угли не гаснут." % [gain, _streak_run]
+	Sfx.stage_up()
+	Analytics.track("hearth_claim", {"streak": _streak_run})
+	g._saves._save_game()
+	refresh_board()
+	g._engine._refresh()
+
+# Очки вехи — из тира закрытого контракта (спека §3). Разброс 1..3, веха
+# считается по сумме, поэтому «серебро» и «золото» сами прыгают через пороги.
+func _add_milestone_points(tier: String) -> void:
+	_pts_total += int(TIER_POINTS.get(tier, 1))
+	_check_pts_miles()
+
+# Серверное испытание дня теперь просто закрывает цель дня: is_done = true,
+# без табличной награды доски, без визита и без очков вех — старые 75⚡ и
+# локальные очки удалены. Идемпотентно: повторная установка done-флага ничего
+# не меняет.
+func mark_day_challenge() -> void:
+	ensure_period()
+	for c in daily():
+		if String((c as Dictionary)["type"]) == "goal_day":
+			_done_dict("daily")[String((c as Dictionary)["id"])] = true
+			return
+
+func _day_miles_for(total: int) -> int:
+	var n := 0
+	for m in Game.CIRCLE_DAY_MILES:
+		if total >= int(m):
+			n += 1
+	return n
+
+func _pts_miles_for(total: int) -> int:
+	var n := 0
+	for m in Game.CIRCLE_PTS_MILES:
+		if total >= int(m):
+			n += 1
+	return n
+
+func _check_day_miles() -> void:
+	var miles := _day_miles_for(_visit_days.size())
+	if miles > _mdays:
+		_mdays = miles
+		_celebrate_mile("дней", int(Game.CIRCLE_DAY_MILES[miles - 1]))
+
+func _check_pts_miles() -> void:
+	var miles := _pts_miles_for(_pts_total)
+	if miles > _mpts:
+		_mpts = miles
+		_celebrate_mile("очков", int(Game.CIRCLE_PTS_MILES[miles - 1]))
+
+# Migration: grant titles and fireplace rewards for milestones already passed in old saves
+func _migrate_missed_milestones() -> void:
+	# Day milestones
+	for i in range(_mdays):
+		if i >= Game.CIRCLE_DAY_MILES.size():
+			break
+		var m := int(Game.CIRCLE_DAY_MILES[i])
+		var rank := {}
+		for rk in Game.CIRCLE_RANKS:
+			if String(rk["kind"]) == "дней" and int(rk["threshold"]) == m:
+				rank = rk
+				break
+		if not rank.is_empty():
+			var title := String(rank["title"])
+			if not _unlocked_titles.has(title):
+				_unlocked_titles.append(title)
+			if rank_level() >= int(rank["level"]):
+				_active_title = title
+			if Game.CIRCLE_DECOR_REWARDS.has(m):
+				g._home._own_item("fireplace", String(Game.CIRCLE_DECOR_REWARDS[m]))
+	# Points milestones
+	for i in range(_mpts):
+		if i >= Game.CIRCLE_PTS_MILES.size():
+			break
+		var m := int(Game.CIRCLE_PTS_MILES[i])
+		var rank := {}
+		for rk in Game.CIRCLE_RANKS:
+			if String(rk["kind"]) == "очков" and int(rk["threshold"]) == m:
+				rank = rk
+				break
+		if not rank.is_empty():
+			var title := String(rank["title"])
+			if not _unlocked_titles.has(title):
+				_unlocked_titles.append(title)
+			if rank_level() >= int(rank["level"]):
+				_active_title = title
+
+func _mile_bonus(kind: String, m: int) -> Array:
+	# [кап, реген, аура?]
+	if kind == "дней":
+		return [int(Game.CIRCLE_DAY_CAP.get(m, 0)), float(Game.CIRCLE_DAY_REGEN.get(m, 0.0)), m == 365]
+	return [int(Game.CIRCLE_PTS_CAP.get(m, 0)), float(Game.CIRCLE_PTS_REGEN.get(m, 0.0)), false]
+
+func _mile_bonus_text(kind: String, m: int) -> String:
+	var b := _mile_bonus(kind, m)
+	if bool(b[2]):
+		return "Аура «Очаг» для дома Светика разблокирована!"
+	var parts: Array = []
+	if int(b[0]) > 0:
+		parts.append("+%d к капу навсегда" % int(b[0]))
+	if float(b[1]) > 0.0:
+		parts.append("+%.2f к регену навсегда" % float(b[1]))
+	return " и ".join(parts) if not parts.is_empty() else "Светик в восторге!"
+
+func rank_level() -> int:
+	# §2.2: max из двух треков (дни И очки) — активный идёт вперёд по очкам
+	var lvl := 0
+	for rk in Game.CIRCLE_RANKS:
+		var have := _visit_days.size() if String(rk["kind"]) == "дней" else _pts_total
+		if have >= int(rk["threshold"]):
+			lvl = maxi(lvl, int(rk["level"]))
+	return lvl
+
+func _celebrate_mile(kind: String, m: int) -> void:
+	var bonus := _mile_bonus_text(kind, m)
+	g._engine.status_text = "Веха Дневного круга: %d %s! %s" % [m, kind, bonus]
+	g._hub._log_event("Веха круга: %d %s (%s)" % [m, kind, bonus])
+	g._spirit._companion_react("milestone", str(m))
+	Sfx.stage_up()
+	# план 2 §2.2: титул + эксклюзивный декор на том же переходе (идемпотентно)
+	var rank := {}
+	for rk in Game.CIRCLE_RANKS:
+		if String(rk["kind"]) == kind and int(rk["threshold"]) == m:
+			rank = rk
+	if not rank.is_empty():
+		var title := String(rank["title"])
+		if not _unlocked_titles.has(title):
+			_unlocked_titles.append(title)
+		if rank_level() >= int(rank["level"]):
+			_active_title = title
+		# Спецификация §7: ключ circle_rank_up сохранён намеренно — аналитика
+		# не переименовывается, даже когда «круг» как механика исчез.
+		Analytics.track("circle_rank_up", {"rank_name": title, "days": _visit_days.size(),
+			"points": _pts_total})
+		if kind == "дней" and Game.CIRCLE_DECOR_REWARDS.has(m):
+			g._home._own_item("fireplace", String(Game.CIRCLE_DECOR_REWARDS[m]))
+	g._saves._save_game()
+	refresh_board()
+	g._engine._refresh()
+
+func _mile_cap_bonus() -> int:
+	var total := 0
+	for i in mini(_mdays, Game.CIRCLE_DAY_MILES.size()):
+		total += int(Game.CIRCLE_DAY_CAP.get(int(Game.CIRCLE_DAY_MILES[i]), 0))
+	for i in mini(_mpts, Game.CIRCLE_PTS_MILES.size()):
+		total += int(Game.CIRCLE_PTS_CAP.get(int(Game.CIRCLE_PTS_MILES[i]), 0))
+	return total
+
+func _mile_regen_bonus() -> float:
+	var total := 0.0
+	for i in mini(_mdays, Game.CIRCLE_DAY_MILES.size()):
+		total += float(Game.CIRCLE_DAY_REGEN.get(int(Game.CIRCLE_DAY_MILES[i]), 0.0))
+	for i in mini(_mpts, Game.CIRCLE_PTS_MILES.size()):
+		total += float(Game.CIRCLE_PTS_REGEN.get(int(Game.CIRCLE_PTS_MILES[i]), 0.0))
+	return total
+
+func hearth_aura() -> bool:
+	return _mdays >= Game.CIRCLE_DAY_MILES.size()
+
+func flame() -> String:
+	# ✦ вместо эмодзи огня: шрифт проекта не содержит 🔥 (тофу на кадре)
+	if _streak_run >= 7:
+		return "✦✦✦"
+	if _streak_run >= 3:
+		return "✦✦"
+	if _streak_run >= 1:
+		return "✦"
+	return "·"
+
+func rank_title(lvl: int) -> String:
+	if lvl < 1:
+		return "Новичок"
+	for rk in Game.CIRCLE_RANKS:
+		if int(rk["level"]) == lvl:
+			return String(rk["title"])
+	return "Новичок"
+
+func mile_strip(_kind: String, miles: Array, have: int) -> String:
+	var parts: Array = []
+	for i in miles.size():
+		var m := int(miles[i])
+		parts.append("%d ✓" % m if i < have else str(m))
+	return " · ".join(parts)

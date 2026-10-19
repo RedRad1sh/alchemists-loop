@@ -47,33 +47,33 @@ static func run(g: Game) -> void:
 	Selftest.check("net vein calls drain offline", Net._queue.is_empty() and Net._inflight.is_empty())
 
 	# ---------- T2: сейв round-trip ----------
-	var sv_titles := g._retention._unlocked_titles.duplicate(true)
-	var sv_active := g._retention._active_title
+	var sv_titles := g._contracts._unlocked_titles.duplicate(true)
+	var sv_active := g._contracts._active_title
 	var sv_finds: Array = g._contracts._vein_finds.duplicate(true)
 	var sv_cycle: Dictionary = g._contracts._cycle_cache.duplicate(true)
-	g._retention._unlocked_titles.clear()
-	g._retention._unlocked_titles.append("Искра")
-	g._retention._active_title = "Искра"
+	g._contracts._unlocked_titles.clear()
+	g._contracts._unlocked_titles.append("Искра")
+	g._contracts._active_title = "Искра"
 	g._contracts._vein_finds.clear()
 	g._contracts._vein_finds.append({"id": "f1", "tag": "Туман", "points": 1, "found_at": 123,
 		"pair_key": "earth|fire", "cycle_id": "vc:1", "status": "pending_server", "server_response": {}})
 	g._contracts._cycle_cache = {"cycle_id": "vc:1", "tag1": "Туман", "state": "active", "world_finds": 0}
 	g._online._server_tag["fog"] = "Туман"
 	g._saves._save_game()
-	g._retention._unlocked_titles.clear()
-	g._retention._active_title = ""
+	g._contracts._unlocked_titles.clear()
+	g._contracts._active_title = ""
 	g._contracts._vein_finds.clear()
 	g._contracts._cycle_cache = {}
 	g._online._server_tag.clear()
 	g._saves._load_game()
 	Selftest.check("save roundtrip vein titles+finds+cycle+tags",
-		g._retention._unlocked_titles.has("Искра") and g._retention._active_title == "Искра"
+		g._contracts._unlocked_titles.has("Искра") and g._contracts._active_title == "Искра"
 		and g._contracts._vein_finds.size() == 1
 		and String((g._contracts._vein_finds[0] as Dictionary)["id"]) == "f1"
 		and String(g._contracts._cycle_cache.get("cycle_id", "")) == "vc:1"
 		and String(g._online._server_tag.get("fog", "")) == "Туман")
-	g._retention._unlocked_titles = sv_titles
-	g._retention._active_title = sv_active
+	g._contracts._unlocked_titles = sv_titles
+	g._contracts._active_title = sv_active
 	g._contracts._vein_finds = sv_finds
 	g._contracts._cycle_cache = sv_cycle
 
@@ -208,52 +208,62 @@ static func run(g: Game) -> void:
 
 	# ---------- T6: (удалён — GoalPicker удалён, модалка не нужна) ----------
 
-	# ---------- T7: пассивные очки Круга по слою ----------
-	var sv_pts := g._retention._circle_pts_total
-	var sv_mpts := g._retention._circle_mpts
-	var sv_titles7 := g._retention._unlocked_titles.duplicate(true)
-	var sv_act7 := g._retention._active_title
-	# steam (слой 1) → fast (1-2) = +1 очко
-	var pts := g._retention._circle_on_goal_brew("steam")
-	var fast_ok := pts == 1
-	# пустой output — 0
-	pts = g._retention._circle_on_goal_brew("")
-	var empty_zero := pts == 0
-	# Проверим, что функция возвращает очки по слою (не по заявке)
-	# Для этого нужно, чтобы рецепты были в known_recipes — в selftest это не всегда так,
-	# поэтому проверяем только базовые случаи
-	g._retention._circle_pts_total = sv_pts
-	g._retention._circle_mpts = sv_mpts
-	g._retention._unlocked_titles = sv_titles7
-	g._retention._active_title = sv_act7
-	Selftest.check("circle passive points by layer",
-		fast_ok and empty_zero)
+	# ---------- T7: вехи-очки = тир закрытого контракта (спека §1/§3) ----------
+	# Доска v2 Task 4: лестница CIRCLE_GOALS («пассивные очки по слою варки»)
+	# удалена — проверка заменена эквивалентом новых семантик: очки начисляет
+	# claim() по таблице TIER_POINTS, веха считается по сумме, а не по очку.
+	var sv_pts := g._contracts._pts_total
+	var sv_mpts := g._contracts._mpts
+	var sv_titles7 := g._contracts._unlocked_titles.duplicate(true)
+	var sv_act7 := g._contracts._active_title
+	g._contracts._pts_total = 0
+	g._contracts._mpts = 0
+	g._contracts._add_milestone_points("bronze")
+	var bronze_one := g._contracts._pts_total == 1
+	g._contracts._add_milestone_points("silver")
+	g._contracts._add_milestone_points("gold")
+	var tiers_sum_six := g._contracts._pts_total == 6
+	# тир вне таблицы не молчит — дефолт 1 очко (fail-soft, как TIER_POINTS.get)
+	g._contracts._add_milestone_points("bogus")
+	var unknown_defaults_one := g._contracts._pts_total == 7
+	# порог вехи очков срабатывает ровно один раз на пересечении суммы
+	g._contracts._pts_total = 60
+	g._contracts._check_pts_miles()
+	var mile_once := g._contracts._mpts == 1
+	g._contracts._check_pts_miles()
+	var mile_stays := g._contracts._mpts == 1
+	g._contracts._pts_total = sv_pts
+	g._contracts._mpts = sv_mpts
+	g._contracts._unlocked_titles = sv_titles7
+	g._contracts._active_title = sv_act7
+	Selftest.check("tier points replace the goal-layer ladder",
+		bronze_one and tiers_sum_six and unknown_defaults_one and mile_once and mile_stays)
 
 	# ---------- T8: ранг ----------
-	var sv_days := g._retention._circle_days.duplicate(true)
-	var sv_pts2 := g._retention._circle_pts_total
-	var sv_titles8 := g._retention._unlocked_titles.duplicate(true)
-	var sv_act2 := g._retention._active_title
-	g._retention._circle_days = []
-	g._retention._circle_pts_total = 0
-	var l0 := g._retention._circle_rank_level() == 0
-	g._retention._circle_pts_total = 60
+	var sv_days := g._contracts._visit_days.duplicate(true)
+	var sv_pts2 := g._contracts._pts_total
+	var sv_titles8 := g._contracts._unlocked_titles.duplicate(true)
+	var sv_act2 := g._contracts._active_title
+	g._contracts._visit_days = []
+	g._contracts._pts_total = 0
+	var l0 := g._contracts.rank_level() == 0
+	g._contracts._pts_total = 60
 	# 60 очков → уровень 3 («Тлеющий», порог 50), даже если дней 0
-	var l3 := g._retention._circle_rank_level() == 3
-	g._retention._circle_days.resize(30)
+	var l3 := g._contracts.rank_level() == 3
+	g._contracts._visit_days.resize(30)
 	# 30 дней → уровень 2; очки выше → ранг не падает
-	var mono := g._retention._circle_rank_level() == 3
-	g._retention._circle_days.resize(365)
-	g._retention._circle_pts_total = 500
-	var l7 := g._retention._circle_rank_level() == 7
+	var mono := g._contracts.rank_level() == 3
+	g._contracts._visit_days.resize(365)
+	g._contracts._pts_total = 500
+	var l7 := g._contracts.rank_level() == 7
 	# выдача титулов идемпотентна: повторный celebrate не дублирует
-	g._retention._unlocked_titles.clear()
-	g._retention._circle_celebrate_mile("очков", 50)
-	var t1 := g._retention._unlocked_titles.has("Тлеющий")
-	g._retention._circle_celebrate_mile("очков", 50)
-	var idem := g._retention._unlocked_titles.count("Тлеющий") == 1
+	g._contracts._unlocked_titles.clear()
+	g._contracts._celebrate_mile("очков", 50)
+	var t1 := g._contracts._unlocked_titles.has("Тлеющий")
+	g._contracts._celebrate_mile("очков", 50)
+	var idem := g._contracts._unlocked_titles.count("Тлеющий") == 1
 	# декор за 30 дней выдаётся через β-путь и не продаётся
-	g._retention._circle_celebrate_mile("дней", 30)
+	g._contracts._celebrate_mile("дней", 30)
 	var own := (g._home.house_owned.get("fireplace", []) as Array).has("fireplace_ember")
 	var shop_ok := true
 	for c in Game.DECOR:
@@ -263,10 +273,10 @@ static func run(g: Game) -> void:
 					shop_ok = false
 	Selftest.check("rank formula + titles idempotent + decor reward",
 		l0 and l3 and mono and l7 and t1 and idem and own and shop_ok)
-	g._retention._circle_days = sv_days
-	g._retention._circle_pts_total = sv_pts2
-	g._retention._unlocked_titles = sv_titles8
-	g._retention._active_title = sv_act2
+	g._contracts._visit_days = sv_days
+	g._contracts._pts_total = sv_pts2
+	g._contracts._unlocked_titles = sv_titles8
+	g._contracts._active_title = sv_act2
 
 	# ---------- T9: swipe-предикат ----------
 	Selftest.check("swipe closes only strong downward drag",

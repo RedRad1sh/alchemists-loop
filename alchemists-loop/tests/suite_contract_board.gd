@@ -129,6 +129,18 @@ static func _cb_snapshot(c: Contracts) -> Dictionary:
 		"buffs": c._active_buffs.duplicate(true),
 		"decor": c._unlocked_decor.duplicate(true),
 		"last_output": c._last_output,
+		# Task 4: claim() теперь трогает очаг/вехи/ранг — каждый блок обязан это
+		# откатывать, иначе краснеют следующие блоки по await-списку.
+		"visit_days": c._visit_days.duplicate(true),
+		"streak_run": c._streak_run,
+		"last_visit_day": c._last_visit_day,
+		"hearth_claim": c._hearth_claim,
+		"pts_total": c._pts_total,
+		"mdays": c._mdays,
+		"mpts": c._mpts,
+		"unlocked_titles": c._unlocked_titles.duplicate(true),
+		"active_title": c._active_title,
+		"day_hint": c._day_hint,
 	}
 
 static func _cb_restore(c: Contracts, s: Dictionary) -> void:
@@ -145,6 +157,16 @@ static func _cb_restore(c: Contracts, s: Dictionary) -> void:
 	c._active_buffs = s["buffs"]
 	c._unlocked_decor = s["decor"]
 	c._last_output = String(s["last_output"])
+	c._visit_days = s["visit_days"]
+	c._streak_run = int(s["streak_run"])
+	c._last_visit_day = String(s["last_visit_day"])
+	c._hearth_claim = String(s["hearth_claim"])
+	c._pts_total = int(s["pts_total"])
+	c._mdays = int(s["mdays"])
+	c._mpts = int(s["mpts"])
+	c._unlocked_titles = s["unlocked_titles"]
+	c._active_title = String(s["active_title"])
+	c._day_hint = String(s["day_hint"])
 
 # Полный сброс состояния доски средствами сюиты — см. решение 5.
 static func _cb_wipe(c: Contracts) -> void:
@@ -668,6 +690,113 @@ static func run(g: Game) -> void:
 	g._contracts._week_offline = bool(t3_week["offline"])
 	g._contracts._cycle_prev_state = String(t3_week["prev_state"])
 	_cb_restore(g._contracts, t3_snap)
+
+	# доска v2 Task 4 (§1 строки 5–6, §3): визит-день = день, в который закрыт
+	# дневной контракт; очки вех = тир закрытого контракта (bronze+1/silver+2/
+	# gold+3). Лестница CIRCLE_GOALS и 75⚡ за «закрытый круг» удалены — эти
+	# проверки их замещают. Фикстуры (_mk) вместо живого набора: тир bronze/
+	# silver известен заранее, и «delta == 1» не должен зависеть от того, какой
+	# тир сегодня выбросил генератор.
+	var t4_snap := _cb_snapshot(g._contracts)
+	var t4_inv := g._engine.inventory.duplicate(true)
+	var t4_ether := g._engine.ether
+	var t4_status := g._engine.status_text
+	# Обнуляем очаг детерминированно: проверки сверяют точные числа, а не
+	# ambient-значения из подгруженного сейва.
+	g._contracts._visit_days = []
+	g._contracts._streak_run = 0
+	g._contracts._last_visit_day = ""
+	g._contracts._hearth_claim = ""
+	g._contracts._pts_total = 0
+	var t4_d1 := _mk(g._contracts, "daily", "brew", "bronze", 1)
+	var t4_d2 := _mk(g._contracts, "daily", "brew", "silver", 1)
+	_force_set(g._contracts, [t4_d1, t4_d2], g._contracts._contracts_weekly)
+	_clear_prog(g._contracts)
+	var t4_id1 := String(t4_d1["id"])
+	var t4_pts_before := g._contracts._pts_total
+	g._contracts._set_progress(t4_id1, 1)
+	var t4_res := g._contracts.claim(t4_id1)
+	var t4_today := Contracts.day_key_from(Time.get_datetime_dict_from_system())
+	var t4_delta := g._contracts._pts_total - t4_pts_before
+	Selftest.check("first daily claim of the day opens a visit day and streak",
+		bool(t4_res["ok"]) and g._contracts._visit_days.has(t4_today)
+		and g._contracts._streak_run >= 1)
+	Selftest.check("milestone points equal closed-contract tier value", t4_delta == 1)
+	var t4_days_after := g._contracts._visit_days.size()
+	var t4_id2 := String(t4_d2["id"])
+	var t4_pts2_before := g._contracts._pts_total
+	g._contracts._set_progress(t4_id2, 1)
+	var t4_res2 := g._contracts.claim(t4_id2)
+	Selftest.check("second claim of the day does not add a second visit day",
+		g._contracts._visit_days.size() == t4_days_after)
+	Selftest.check("silver claim adds exactly two milestone points",
+		bool(t4_res2["ok"]) and g._contracts._pts_total - t4_pts2_before == 2)
+	# mark_day_challenge(): серверное испытание теперь просто закрывает цель
+	# дня без всякой выдачи (старые 75⚡ и локальные очки CIRCLE_LOCAL_POINTS
+	# удалены). Инвентарь, эфир, визит-дни и очки вех меняться не обязаны.
+	var t4_gd := _mk(g._contracts, "daily", "goal_day", "gold", 5)
+	_force_set(g._contracts, [t4_gd], g._contracts._contracts_weekly)
+	_clear_prog(g._contracts)
+	var t4_gd_id := String(t4_gd["id"])
+	var t4_inv_before := g._engine.inventory.duplicate(true)
+	var t4_pts3 := g._contracts._pts_total
+	var t4_days3 := g._contracts._visit_days.size()
+	var t4_ether3 := g._engine.ether
+	g._contracts.mark_day_challenge()
+	Selftest.check("mark_day_challenge closes goal_day without any payout",
+		g._contracts.is_done(t4_gd_id) and g._contracts._pts_total == t4_pts3
+		and g._contracts._visit_days.size() == t4_days3
+		and g._engine.ether == t4_ether3
+		and g._engine.inventory == t4_inv_before)
+	var t4_run3 := g._contracts._streak_run
+	g._contracts.mark_day_challenge()
+	Selftest.check("mark_day_challenge is idempotent",
+		g._contracts.is_done(t4_gd_id) and g._contracts._pts_total == t4_pts3
+		and g._contracts._streak_run == t4_run3)
+	# Эквивалентность формул: кап/реген движка обязан оставаться суммой базы
+	# и бонусов Contracts — считаем против живой формулы дифференциально
+	# (обнуление → известное состояние). На заглушках движок ещё читает
+	# Retention, поэтому дельта по полям Contracts нулевая и проверки красные.
+	var t4_miles := {"mdays": g._contracts._mdays, "mpts": g._contracts._mpts,
+		"vein": g._contracts._vein_cap_total, "fair": g._contracts._fair_regen_total}
+	g._contracts._mdays = 0
+	g._contracts._mpts = 0
+	g._contracts._vein_cap_total = 0
+	g._contracts._fair_regen_total = 0.0
+	var t4_cap0 := g._engine._max_ether()
+	g._contracts._vein_cap_total = 10
+	var t4_cap1 := g._engine._max_ether()
+	Selftest.check("engine cap sums the vein bonus living in Contracts",
+		t4_cap1 - t4_cap0 == 10)
+	g._contracts._mdays = 2
+	g._contracts._mpts = 2
+	var t4_cap2 := g._engine._max_ether()
+	# _mdays=2 → вехи 7 и 30: кап 5+0; _mpts=2 → 50 и 150: кап 3+0.
+	Selftest.check("engine cap counts Contracts milestone bonus by the mile tables",
+		t4_cap2 - t4_cap1 == 8)
+	g._contracts._mdays = 0
+	g._contracts._mpts = 0
+	g._contracts._fair_regen_total = 0.0
+	var t4_rate0 := g._engine._ether_rate()
+	g._contracts._fair_regen_total = 0.5
+	var t4_rate1 := g._engine._ether_rate()
+	var t4_mult := g._engine._sage_multiplier() * (1.0 + g._contracts.buff_power("ether_regen"))
+	Selftest.check("engine regen sums the fair bonus living in Contracts",
+		is_equal_approx(t4_rate1 - t4_rate0, 0.5 * t4_mult))
+	# _mdays=2 → реген 0+0.05; _mpts=2 → 0.03+0.
+	g._contracts._mdays = 2
+	g._contracts._mpts = 2
+	var t4_rate2 := g._engine._ether_rate()
+	Selftest.check("engine regen counts Contracts milestone bonus by the mile tables",
+		is_equal_approx(t4_rate2 - t4_rate1, 0.08 * t4_mult))
+	g._contracts._mdays = int(t4_miles["mdays"])
+	g._contracts._mpts = int(t4_miles["mpts"])
+	g._contracts._vein_cap_total = int(t4_miles["vein"])
+	g._contracts._fair_regen_total = float(t4_miles["fair"])
+	g._engine.inventory = t4_inv
+	g._engine.ether = t4_ether
+	g._engine.status_text = t4_status
+	_cb_restore(g._contracts, t4_snap)
 
 	# Разные даты дают разные наборы. Точечное сравнение двух конкретных дней
 	# могло бы совпасть случайно, поэтому меряем разнообразие на 30 днях.
@@ -1304,6 +1433,18 @@ static func run(g: Game) -> void:
 		"decor": c6._unlocked_decor.duplicate(true),
 		"owned": g._home.house_owned.duplicate(true),
 		"prog": _snap_progress(g),
+		# Task 4: успешный claim больше не нейтрален — очаг/вехи/ранг мутируются
+		# каждым claim() → блок обязан вернуть и их, иначе следующие блоки
+		# видят чужие визит-дни и очки.
+		"visit_days": c6._visit_days.duplicate(true),
+		"streak_run": c6._streak_run,
+		"last_visit_day": c6._last_visit_day,
+		"hearth_claim": c6._hearth_claim,
+		"pts_total": c6._pts_total,
+		"mdays": c6._mdays,
+		"mpts": c6._mpts,
+		"unlocked_titles": c6._unlocked_titles.duplicate(true),
+		"active_title": c6._active_title,
 	}
 	# Каталог Дома, журнал доски и активные баффы чищим НАМЕРЕННО. Если
 	# «Витраж гильдии» уже принадлежит игроку, а brew_speed уже активен,
@@ -1487,6 +1628,17 @@ static func run(g: Game) -> void:
 	# восстановление живого состояния (Review Focus 7)
 	c6._active_buffs = claim_snap["buffs"]
 	c6._unlocked_decor = claim_snap["decor"]
+	# доска v2 Task 4: claim() цепляет очаг/вехи — возвращаем и их, иначе
+	# фантомные визит-дни утекли бы в сейв-блок и в чужие проверки.
+	c6._visit_days = claim_snap["visit_days"]
+	c6._streak_run = int(claim_snap["streak_run"])
+	c6._last_visit_day = String(claim_snap["last_visit_day"])
+	c6._hearth_claim = String(claim_snap["hearth_claim"])
+	c6._pts_total = int(claim_snap["pts_total"])
+	c6._mdays = int(claim_snap["mdays"])
+	c6._mpts = int(claim_snap["mpts"])
+	c6._unlocked_titles = claim_snap["unlocked_titles"]
+	c6._active_title = String(claim_snap["active_title"])
 	g._home.house_owned = claim_snap["owned"]
 	g._engine.inventory = claim_snap["inv"]
 	_clear_prog(c6)

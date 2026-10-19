@@ -385,14 +385,14 @@ func _experiment_pending_matches(a: String, b: String) -> bool:
 		and g._pair_key(String(pending[0]), String(pending[1])) == g._pair_key(a, b)
 
 func _grant_local_acquisition(slug: String) -> Array:
-	# единая точка «первое локальное получение вещества из мира»: +1 в инвентарь,
-	# circular-эффект Круга и грант первооткрытия; возвращает новые вехи
+	# единая точка «первое локальное получение вещества из мира»: +1 в инвентарь
+	# и грант первооткрытия; возвращает новые вехи. (Эффект «Круга» удалён:
+	# доска v2 Task 4 — визит-дни и очки вех кормятся закрытыми контрактами.)
 	if not g._engine._resource_mutation_allowed() or not g.ITEMS.has(slug):
 		return []
 	var first_open := not g._engine.inventory.has(slug)
 	g._engine.inventory[slug] = int(g._engine.inventory.get(slug, 0)) + 1
 	g._engine._award_synthesis(slug)
-	g._retention._circle_on_discovery(first_open)
 	if first_open:
 		return g._engine._grant_first_open(slug)
 	return []
@@ -533,12 +533,11 @@ func _experiment_outcome(out: Dictionary, a: String, b: String, created: bool = 
 	_register_server_recipe(a, b, slug)
 	g._engine.learn_recipe(a, b, slug)
 	g._sync.mark_dirty()
-	# first_open — до инкремента; грант и круг — ПОСЛЕ _experiment_succeeded (она
-	# делает inventory[slug]+=1): иначе _check_milestones не учтёт это вещество и
-	# веха на N веществ сработает на одно открытие позже.
+	# first_open — до инкремента; грант первооткрытия — ПОСЛЕ _experiment_succeeded
+	# (она делает inventory[slug]+=1): иначе _check_milestones не учтёт это вещество
+	# и веха на N веществ сработает на одно открытие позже. (Круг удалён: Task 4.)
 	var first_open := not g._engine.inventory.has(slug)
 	g._engine._experiment_succeeded(slug, a, b)
-	g._retention._circle_on_discovery(first_open)
 	var first_milestones: Array = []
 	if first_open:
 		first_milestones = g._engine._grant_first_open(slug)
@@ -1161,10 +1160,14 @@ func _on_net_challenge_result(result: Dictionary) -> void:
 	else:
 		_challenge_avatar.visible = false
 		_challenge_label.text = "Цель дня: %s · выполнено: %d · твои очки: %d" % [hint, completions, my_points]
-	g._retention._circle_hint = hint
-	g._retention._circle_mine = my_points
-	g._retention._circle_pts_total = maxi(g._retention._circle_pts_total, int(result.get("my_points_total", g._retention._circle_pts_total)))
-	g._retention._circle_check_pts_miles()
+	g._contracts._day_hint = hint
+	# доска v2 Task 4: серверное выполнение цели дня больше не платит особыми
+	# очками — оно закрывает контракт goal_day (mark_day_challenge), а серверный
+	# счёт total перекладывается в вечные очки вех (maxi — только рост).
+	if my_points > 0:
+		g._contracts.mark_day_challenge()
+	g._contracts._pts_total = maxi(g._contracts._pts_total, int(result.get("my_points_total", g._contracts._pts_total)))
+	g._contracts._check_pts_miles()
 	g._saves._save_game()
 	g._retention._refresh_circle_page()
 

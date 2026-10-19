@@ -208,7 +208,7 @@ func _cmd_reset(parts: Array) -> void:
 	if parts.size() < 2 or parts[1] != "day":
 		_log_text("[color=red]Usage: reset day[/color]")
 		return
-	_g._retention._circle_last = ""
+	_g._contracts._last_visit_day = ""
 	_g._engine._experiment_day = ""
 	_g._saves._save_game()
 	_log_text("Day key reset")
@@ -228,7 +228,7 @@ func _cmd_force(parts: Array) -> void:
 	if parts[2] != "open":
 		_log_text("[color=red]Usage: force circle open[/color]")
 		return
-	_g._retention._circle_last = ""
+	_g._contracts._last_visit_day = ""
 	_g._engine._experiment_day = ""
 	_g._saves._save_game()
 	_log_text("Circle forced open (day keys cleared)")

@@ -106,7 +106,7 @@ func _open_profile() -> void:
 		g._engine.inventory.size(), g.ITEMS.size(), g._engine.known_recipes.size(), g.RECIPES.size(),
 		g._progress_ui._ach_done.size(), Game.ACHIEVEMENTS.size(), g._progress_ui._set_done.size(),
 		g._engine.sage_gold, g._spirit._companion_level_for(g._spirit._companion_affinity), g._progress_ui._ach_world_first,
-		g._retention._circle_rank_title(g._retention._circle_rank_level())]
+		g._contracts.rank_title(g._contracts.rank_level())]
 	_profile_stats.add_theme_color_override("font_color", Color(0.85, 0.9, 0.95))
 	_profile_dim.visible = true
 	_profile_popup.visible = true

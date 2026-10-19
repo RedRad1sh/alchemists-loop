@@ -140,19 +140,18 @@ func _save_game() -> bool:
 		"wall_hex": "#" + g._home._cosmetic_wall.to_html(false),
 		"floor_hex": "#" + g._home._cosmetic_floor.to_html(false),
 		"custom_unlocked": g._home._custom_unlocked,
-		"circle_days": g._retention._circle_days,
-		"circle_run": g._retention._circle_run,
-		"circle_last": g._retention._circle_last,
-		"hearth_claim": g._retention._hearth_claim,
-		"circle_disc_day": g._retention._circle_disc_day,
-		"circle_disc": g._retention._circle_disc,
-		"circle_reward_day": g._retention._circle_reward_day,
-		"circle_pts_total": g._retention._circle_pts_total,
-		"circle_mdays": g._retention._circle_mdays,
-		"circle_mpts": g._retention._circle_mpts,
-		"circle_hint": g._retention._circle_hint,
-		"circle_mine": g._retention._circle_mine,
-		"circle_local_done_day": g._retention._circle_local_done_day,
+		# Доска v2 (Task 4): дневная половина (очаг/вехи/ранг) принадлежит
+		# Contracts — меняется только объект-владелец, ИМЕНА КЛЮЧЕЙ сейва
+		# остаются старыми (миграция ключей — Task 6). Поля удалённой механики
+		# (disc/reward_day/mine/local_done_day/intro_shown) больше не пишутся.
+		"circle_days": g._contracts._visit_days,
+		"circle_run": g._contracts._streak_run,
+		"circle_last": g._contracts._last_visit_day,
+		"hearth_claim": g._contracts._hearth_claim,
+		"circle_pts_total": g._contracts._pts_total,
+		"circle_mdays": g._contracts._mdays,
+		"circle_mpts": g._contracts._mpts,
+		"circle_hint": g._contracts._day_hint,
 		# Доска v2 (Task 3): недельный слой принадлежит Contracts — меняется
 		# только объект-владелец, ИМЕНА КЛЮЧЕЙ сейва остаются старыми (миграция
 		# ключей — Task 6, иначе старые файлы перестали бы читаться).
@@ -160,9 +159,8 @@ func _save_game() -> bool:
 		"vein_cap_total": g._contracts._vein_cap_total,
 		"cycle_cache": g._contracts._cycle_cache,
 		"vein_pending_finds": g._contracts._vein_finds,
-		"unlocked_titles": g._retention._unlocked_titles,
-		"active_title": g._retention._active_title,
-		"circle_intro_shown": g._retention._circle_intro_shown,
+		"unlocked_titles": g._contracts._unlocked_titles,
+		"active_title": g._contracts._active_title,
 		"server_tags": g._online._server_tag,
 		"fair_regen_total": g._contracts._fair_regen_total,
 		"fair_local_week": g._contracts._fair_local_week,
@@ -441,22 +439,20 @@ func _load_game() -> void:
 			g._home._custom_unlocked["wall"] = true
 		if String(data.get("floor_hex", "")) != "":
 			g._home._custom_unlocked["floor"] = true
-	g._retention._circle_days.clear()
+	# Доска v2 (Task 4): те же ключи, что в writer, но владелец — Contracts;
+	# удалённая механика (disc/reward_day/mine/local_done_day/intro_shown) больше
+	# не читается — ключи из старых сейвов просто игнорируются до Task 6.
+	g._contracts._visit_days.clear()
 	if data.get("circle_days") is Array:
 		for d in data["circle_days"]:
-			g._retention._circle_days.append(String(d))
-	g._retention._circle_run = maxi(0, int(data.get("circle_run", 0)))
-	g._retention._circle_last = String(data.get("circle_last", ""))
-	g._retention._hearth_claim = String(data.get("hearth_claim", ""))
-	g._retention._circle_disc_day = String(data.get("circle_disc_day", ""))
-	g._retention._circle_disc = maxi(0, int(data.get("circle_disc", 0)))
-	g._retention._circle_reward_day = String(data.get("circle_reward_day", ""))
-	g._retention._circle_pts_total = maxi(0, int(data.get("circle_pts_total", 0)))
-	g._retention._circle_mdays = clampi(int(data.get("circle_mdays", 0)), 0, Game.CIRCLE_DAY_MILES.size())
-	g._retention._circle_mpts = clampi(int(data.get("circle_mpts", 0)), 0, Game.CIRCLE_PTS_MILES.size())
-	g._retention._circle_hint = String(data.get("circle_hint", ""))
-	g._retention._circle_mine = maxi(0, int(data.get("circle_mine", 0)))
-	g._retention._circle_local_done_day = String(data.get("circle_local_done_day", ""))
+			g._contracts._visit_days.append(String(d))
+	g._contracts._streak_run = maxi(0, int(data.get("circle_run", 0)))
+	g._contracts._last_visit_day = String(data.get("circle_last", ""))
+	g._contracts._hearth_claim = String(data.get("hearth_claim", ""))
+	g._contracts._pts_total = maxi(0, int(data.get("circle_pts_total", 0)))
+	g._contracts._mdays = clampi(int(data.get("circle_mdays", 0)), 0, Game.CIRCLE_DAY_MILES.size())
+	g._contracts._mpts = clampi(int(data.get("circle_mpts", 0)), 0, Game.CIRCLE_PTS_MILES.size())
+	g._contracts._day_hint = String(data.get("circle_hint", ""))
 	g._contracts._week_cache = data.get("week_cache", {}) if data.get("week_cache", {}) is Dictionary else {}
 	g._contracts._vein_cap_total = maxi(0, int(data.get("vein_cap_total", 0)))
 	g._contracts._cycle_cache = data.get("cycle_cache", {}) if data.get("cycle_cache", {}) is Dictionary else {}
@@ -465,14 +461,13 @@ func _load_game() -> void:
 		for f in data["vein_pending_finds"]:
 			if typeof(f) == TYPE_DICTIONARY and f.has("id"):
 				g._contracts._vein_finds.append(f)
-	g._retention._unlocked_titles.clear()
+	g._contracts._unlocked_titles.clear()
 	if data.get("unlocked_titles") is Array:
 		for t in data["unlocked_titles"]:
-			g._retention._unlocked_titles.append(String(t))
-	g._retention._active_title = String(data.get("active_title", ""))
-	g._retention._circle_intro_shown = bool(data.get("circle_intro_shown", false))
+			g._contracts._unlocked_titles.append(String(t))
+	g._contracts._active_title = String(data.get("active_title", ""))
 	# Migration: grant titles and fireplace rewards for milestones already passed
-	g._retention._circle_migrate_missed_milestones()
+	g._contracts._migrate_missed_milestones()
 	g._online._server_tag.clear()
 	if data.get("server_tags") is Dictionary:
 		for k in data["server_tags"]:

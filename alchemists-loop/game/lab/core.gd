@@ -305,7 +305,7 @@ func _sage_multiplier() -> float:
 func _max_ether() -> int:
 	return Game.MAX_ETHER + 50 * _up_lvl("ether_cap") + _collection_cap_bonus() \
 		+ 40 * sage_gold + g._progress_ui._quest_cap_bonus() + g._progress_ui._ach_cap_bonus() + g._resonance._res_cap_bonus() \
-		+ g._retort._essence_cap_bonus() + g._riddles._letter_cap_bonus() + g._riddles._atlas_cap_bonus() + g._retention._circle_cap_bonus() \
+		+ g._retort._essence_cap_bonus() + g._riddles._letter_cap_bonus() + g._riddles._atlas_cap_bonus() + g._contracts._mile_cap_bonus() \
 		+ g._contracts._vein_cap_total + g._sigil.milestone_cap_bonus()
 
 func spring_interval() -> float:
@@ -347,7 +347,7 @@ func spring_purchase(axis: String) -> Dictionary:
 func _ether_rate() -> float:
 	return (Game.BASE_ETHER_REGEN + 0.35 * float(_up_lvl("ether_regen")) + _collection_regen_bonus() \
 		+ g._progress_ui._quest_regen_bonus() + g._progress_ui._ach_regen_bonus() + g._resonance._res_regen_bonus() \
-		+ g._retention._circle_regen_bonus() + g._contracts._fair_regen_total) \
+		+ g._contracts._mile_regen_bonus() + g._contracts._fair_regen_total) \
 		* _sage_multiplier() * (1.0 + g._contracts.buff_power("ether_regen"))
 
 func _brew_time() -> float:
@@ -1667,8 +1667,6 @@ func _commit_brew_locked(a: String, b: String, context: Dictionary) -> Dictionar
 	_layer_cache.erase(output)
 	successes += 1
 	var mastery_awarded := _award_synthesis(output)
-	g._retention._circle_on_discovery(first_time)
-	g._retention._circle_on_local_brew(output)
 	var milestones: Array = []
 	if first_time:
 		milestones = _grant_first_open(output)
@@ -1682,10 +1680,8 @@ func _commit_brew_locked(a: String, b: String, context: Dictionary) -> Dictionar
 	# план 2 §3.3.1: варка серверно-известной пары = личное открытие (офлайн —
 	# уйдёт в pending_server, онлайн — зарегистрируется сразу).
 	g._contracts._vein_report_pair(a, b, output)
-	# §2.4: очки цели — по факту успеха и фактического слоя; заявка снимается
-	# только здесь (отмена/провал не платят и не сгорают молча — она сбросится
-	# следующим успешным путём или новой модалкой).
-	g._retention._circle_on_goal_brew(output)
+	# доска v2 Task 4: очки цели по слою выхода (старая §2.4 лестница CIRCLE_GOALS)
+	# удалены — вехи кормятся тирами закрытых контрактов в Contracts.claim().
 	g._contracts.on_brew(output, a, b, newly_learned, source)
 	if source != "offline_workshop":
 		Analytics.track("combine_try", {"left": a, "right": b, "result": "new" if newly_learned else "known", "output": output, "source": source})

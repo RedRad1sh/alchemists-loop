@@ -230,8 +230,10 @@ static func _test_offline(g: Game) -> void:
 	g._riddles._atlas_today = {"solved_by_me": false}
 	g._riddles._letter_pending.clear()
 	g._riddles._atlas_pending.clear()
-	g._retention._circle_disc_day = g._retention._circle_today()
-	g._retention._circle_disc = 0
+	# Доска v2 Task 4: счётчик «Круга» (disc) удалён — офлайн-варки цеха и так
+	# не двигают счётчики доски (спека §6.4). Замена проверки на disc: живой
+	# снимок прогресса дневных контрактов должен остаться нетронутым.
+	var board_prog_before := g._contracts._contracts_daily_prog.duplicate(true)
 	var quest_before := int(g._guild._quest_brew.get("steam", 0))
 	g._selftest = false
 	var first := _commit(g, "fire", "water", _context("offline_workshop"))
@@ -240,8 +242,9 @@ static func _test_offline(g: Game) -> void:
 	Selftest.check("context offline suppresses per-operation HTTP without changing network state",
 		not bool(first.get("failed", true)) and not bool(second.get("failed", true))
 		and Net._queue.is_empty() and g._online._net_enabled)
-	Selftest.check("context offline retains local quests and Circle per real output",
-		int(g._guild._quest_brew.get("steam", 0)) == quest_before + 2 and g._retention._circle_disc == 2)
+	Selftest.check("context offline retains local quests and leaves board counters untouched",
+		int(g._guild._quest_brew.get("steam", 0)) == quest_before + 2
+		and g._contracts._contracts_daily_prog == board_prog_before)
 	Selftest.check("context offline retains deduplicated deferred riddle work",
 		g._riddles._letter_pending == [g._pair_key("fire", "water")]
 		and g._riddles._atlas_pending == [g._pair_key("fire", "water")])

@@ -679,8 +679,9 @@ func _ready() -> void:
 	_engine._refresh()
 	if not _selftest and _engine._experiment_pending_pair.size() == 2:
 		_online._resume_pending_experiment.call_deferred()
-	if not _selftest and not _demo_harness._demo:
-		_retention._circle_track_visit()
+	# доска v2 Task 4: запусковый «визит при открытии приложения» удалён —
+	# визит-днём теперь считается день, в который закрыт дневной контракт
+	# (Contracts.claim → track_visit).
 	if not _selftest and _online._net_enabled:
 		Net.me(_online._net_nick, _online._device_id)
 		# boot-пакет: первый sync после загрузки сейва (union-рековери грантов).

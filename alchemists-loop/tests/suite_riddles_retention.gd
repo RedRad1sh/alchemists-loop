@@ -185,140 +185,183 @@ static func run(g: Game) -> void:
 		"len_a": 4, "len_b": 4, "solved": false})
 	Selftest.check("letter card", lc is PanelContainer)
 	lc.queue_free()
-	# --- v29: дневной круг ---
-	g._retention._circle_days = ["2026-01-01", "2026-01-02"]
-	g._retention._circle_last = g._retention._circle_yesterday()
-	g._retention._circle_run = 4
-	g._retention._circle_track_visit()
-	Selftest.check("circle visit run+", g._retention._circle_run == 5 and g._retention._circle_last == g._retention._circle_today() and g._retention._circle_days.has(g._retention._circle_today()))
-	g._retention._circle_track_visit()
-	Selftest.check("circle visit idem", g._retention._circle_run == 5)
-	g._retention._circle_last = "2020-01-01"
-	g._retention._circle_track_visit()
-	Selftest.check("circle visit gap", g._retention._circle_run == 1)
-	g._retention._circle_run = 3
-	g._retention._hearth_claim = ""
-	Selftest.check("circle hearth math", g._retention._circle_hearth_reward() == 13 and g._retention._circle_hearth_claimable())
+	# --- v29: дневной круг → доска v2 Task 4: очаг/вехи/ранг переехали в Contracts.
+	# Старые «шаги диска» и награда 75⚡ за закрытый круг удалены (спека §1/§3);
+	# ниже — замены 1:1: очки = тир закрытого контракта, цель дня = контракт
+	# goal_day, «круг закрыт» = зеркало заказов гильдии на строке orders.
+	var cb4_snap := SuiteContractBoard._cb_snapshot(g._contracts)
+	var cb4_ether := g._engine.ether
+	g._contracts._visit_days = ["2026-01-01", "2026-01-02"]
+	g._contracts._last_visit_day = g._contracts._visit_yesterday()
+	g._contracts._streak_run = 4
+	g._contracts.track_visit()
+	Selftest.check("circle visit run+", g._contracts._streak_run == 5 and g._contracts._last_visit_day == g._contracts._visit_today() and g._contracts._visit_days.has(g._contracts._visit_today()))
+	g._contracts.track_visit()
+	Selftest.check("circle visit idem", g._contracts._streak_run == 5)
+	g._contracts._last_visit_day = "2020-01-01"
+	g._contracts.track_visit()
+	Selftest.check("circle visit gap", g._contracts._streak_run == 1)
+	g._contracts._streak_run = 3
+	g._contracts._hearth_claim = ""
+	Selftest.check("circle hearth math", g._contracts.hearth_reward() == 13 and g._contracts.hearth_claimable())
 	g._engine.ether = 0
-	g._retention._circle_claim_hearth()
-	Selftest.check("circle hearth claim", g._engine.ether == 13 and not g._retention._circle_hearth_claimable())
-	g._retention._circle_claim_hearth()
+	g._contracts.claim_hearth()
+	Selftest.check("circle hearth claim", g._engine.ether == 13 and not g._contracts.hearth_claimable())
+	g._contracts.claim_hearth()
 	Selftest.check("circle hearth once", g._engine.ether == 13)
-	g._retention._circle_disc_day = ""
-	g._retention._circle_disc = 0
-	g._retention._circle_on_discovery(false)
-	Selftest.check("circle synthesis repeat counts", g._retention._circle_disc == 1)
-	g._retention._circle_on_discovery(true)
-	g._retention._circle_on_discovery(true)
-	Selftest.check("circle synthesis new and repeated count", g._retention._circle_disc == 3 and g._retention._circle_disc_day == g._retention._circle_today() and not g._retention._circle_disc_done())
-	# Старые circle_disc-поля остаются: уже заработанный прогресс дня не теряется.
+	# Очки вех = тир закрытого контракта (было: шаги диска по числу синтезов).
+	g._contracts._pts_total = 0
+	g._contracts._mpts = 0
+	g._contracts._mdays = 0
+	g._contracts._add_milestone_points("bronze")
+	Selftest.check("circle point bronze counts one", g._contracts._pts_total == 1)
+	g._contracts._add_milestone_points("silver")
+	g._contracts._add_milestone_points("gold")
+	Selftest.check("circle points sum by tier values", g._contracts._pts_total == 6 and g._contracts._mpts == 0)
+	# Сейв-ключ circle_pts_total переехал на Contracts — прогресс не теряется.
 	g._saves._save_game()
-	g._retention._circle_disc_day = ""
-	g._retention._circle_disc = 0
+	g._contracts._pts_total = 0
 	g._saves._load_game()
-	Selftest.check("circle synthesis same-day save preserved", g._retention._circle_disc == 3
-		and g._retention._circle_disc_day == g._retention._circle_today())
-	g._retention._circle_on_discovery(false)
-	Selftest.check("circle synthesis repeat extends saved progress", g._retention._circle_disc == 4)
-	g._retention._circle_disc_day = g._retention._circle_yesterday()
-	g._retention._circle_disc = Game.CIRCLE_DISC_GOAL
-	Selftest.check("circle synthesis previous day is not done", not g._retention._circle_disc_done())
-	g._retention._circle_on_discovery(false)
-	Selftest.check("circle synthesis new day resets on repeat", g._retention._circle_disc == 1
-		and g._retention._circle_disc_day == g._retention._circle_today())
-	for i in Game.CIRCLE_DISC_GOAL:
-		g._retention._circle_on_discovery(true)
-	Selftest.check("circle disc goal", g._retention._circle_disc_done())
-	Selftest.check("circle day miles", g._retention._circle_day_miles_for(6) == 0 and g._retention._circle_day_miles_for(7) == 1 and g._retention._circle_day_miles_for(365) == 4)
-	Selftest.check("circle pts miles", g._retention._circle_pts_miles_for(49) == 0 and g._retention._circle_pts_miles_for(50) == 1 and g._retention._circle_pts_miles_for(500) == 3)
-	g._retention._circle_mdays = 2
-	g._retention._circle_mpts = 1
-	Selftest.check("circle cap bonus", g._retention._circle_cap_bonus() == 8)
-	Selftest.check("circle regen bonus", is_equal_approx(g._retention._circle_regen_bonus(), 0.05))
-	g._retention._circle_mdays = 0
-	g._retention._circle_mpts = 0
-	Selftest.check("circle aura gate", not g._retention._circle_hearth_aura())
-	g._retention._circle_mdays = 4
-	Selftest.check("circle aura open", g._retention._circle_hearth_aura() and g._home._aura_color("hearth") == Color("#ff7a2e"))
-	g._retention._circle_mdays = 0
-	g._retention._circle_mine = 2
-	g._guild._orders_refresh()
-	for t in g._guild._order_targets_cache:
-		g._guild._order_done[String(t)] = true
-	Selftest.check("circle closed", g._retention._circle_closed() and g._retention._circle_reward_claimable())
-	g._engine.ether = 0
-	g._retention._circle_claim_reward()
-	Selftest.check("circle reward", g._engine.ether == Game.CIRCLE_REWARD and not g._retention._circle_reward_claimable())
-	var circle_reward_ether := g._engine._available_ether()
-	g._retention._circle_claim_reward()
-	Selftest.check("circle reward exactly once", g._engine._available_ether() == circle_reward_ether)
-	g._retention._refresh_circle_page()
-	Selftest.check("circle chip calm", String((g._pages._mode_chips["circle"] as Button).text) == "Круг")
-	g._retention._hearth_claim = ""
-	g._retention._refresh_circle_page()
-	Selftest.check("circle chip dot", String((g._pages._mode_chips["circle"] as Button).text) == "Круг ●")
-	# ============ U35 (A3): локальная цель дня ============
-	var u35_pts := g._retention._circle_pts_total
-	var u35_done_day := g._retention._circle_local_done_day
-	var u35_mine := g._retention._circle_mine
-	var u35_hint := g._retention._circle_hint
-	var u35_reward_day := g._retention._circle_reward_day
-	var u35_mpts := g._retention._circle_mpts
-	g._retention._circle_mine = 0
-	g._retention._circle_hint = ""
-	g._retention._circle_local_done_day = ""
-	g._retention._circle_reward_day = ""
-	Selftest.check("u35 offline challenge dead before", not g._retention._circle_challenge_done())
-	# детерминизм: один и тот же день — одна и та же цель
-	var u35_g1 := g._retention._circle_local_goal_for("2026-09-25")
-	var u35_g2 := g._retention._circle_local_goal_for("2026-09-25")
-	Selftest.check("u35 deterministic", String(u35_g1.get("out", "")) == String(u35_g2.get("out", ""))
-		and String(u35_g1.get("a", "")) == String(u35_g2.get("a", "")))
-	# достижима из баз: оба реагента — базовые стихии; цель никогда не пуста
-	Selftest.check("u35 base-only and nonempty", not u35_g1.is_empty()
-		and Game.BASE_IDS.has(String(u35_g1["a"])) and Game.BASE_IDS.has(String(u35_g1["b"])))
-	# дата действительно участвует: на 12 датах подряд встречается ≥ 2 разных выхода
-	var u35_variants := {}
-	for u35_i in range(12):
-		var u35_gd := g._retention._circle_local_goal_for("2026-10-%02d" % (u35_i + 1))
-		u35_variants[String(u35_gd.get("out", ""))] = true
-	Selftest.check("u35 date matters", u35_variants.size() >= 2)
-	# варка цели закрывает «цель дня» офлайн и даёт очки ровно один раз
-	g._retention._circle_on_local_brew(String(g._retention._circle_local_goal()["out"]))
-	Selftest.check("u35 local done", g._retention._circle_challenge_done())
-	Selftest.check("u35 points once", g._retention._circle_pts_total == u35_pts + Game.CIRCLE_LOCAL_POINTS)
-	g._retention._circle_on_local_brew(String(g._retention._circle_local_goal()["out"]))
-	Selftest.check("u35 no double points", g._retention._circle_pts_total == u35_pts + Game.CIRCLE_LOCAL_POINTS)
-	# чужая варка не засчитывается
-	g._retention._circle_local_done_day = ""
-	g._retention._circle_on_local_brew("dragon")
-	Selftest.check("u35 wrong output ignored", not g._retention._circle_challenge_done())
-	# серверная цель перебивает локальную по факту: my_points > 0 → done и без локали
-	g._retention._circle_mine = 3
-	Selftest.check("u35 server overrides", g._retention._circle_challenge_done())
-	# закрытый круг офлайн отдаёт награду один раз в день
-	g._retention._circle_local_done_day = g._retention._circle_today()
+	Selftest.check("circle points same-day save preserved", g._contracts._pts_total == 6)
+	g._contracts._add_milestone_points("bronze")
+	Selftest.check("circle points extend after load", g._contracts._pts_total == 7)
+	# Дни визита считаются суммарно: семь дней — первая веха дней (было: сброс
+	# диска на новый день — теперь сброса нет, в вечные вехи идёт сумма).
+	while g._contracts._visit_days.size() < 7:
+		g._contracts._visit_days.append("2026-01-%02d" % (g._contracts._visit_days.size() + 3))
+	g._contracts._check_day_miles()
+	Selftest.check("circle day miles fire on visit days", g._contracts._mdays == 1)
+	# Порог очков срабатывает ровно один раз (было: «диск закрыт» за 5 синтезов).
+	g._contracts._pts_total = 60
+	g._contracts._check_pts_miles()
+	Selftest.check("circle points miles fire", g._contracts._mpts == 1)
+	g._contracts._check_pts_miles()
+	Selftest.check("circle points miles stay at one", g._contracts._mpts == 1)
+	Selftest.check("circle day miles", g._contracts._day_miles_for(6) == 0 and g._contracts._day_miles_for(7) == 1 and g._contracts._day_miles_for(365) == 4)
+	Selftest.check("circle pts miles", g._contracts._pts_miles_for(49) == 0 and g._contracts._pts_miles_for(50) == 1 and g._contracts._pts_miles_for(500) == 3)
+	g._contracts._mdays = 2
+	g._contracts._mpts = 1
+	Selftest.check("circle cap bonus", g._contracts._mile_cap_bonus() == 8)
+	Selftest.check("circle regen bonus", is_equal_approx(g._contracts._mile_regen_bonus(), 0.05))
+	g._contracts._mdays = 0
+	g._contracts._mpts = 0
+	Selftest.check("circle aura gate", not g._contracts.hearth_aura())
+	g._contracts._mdays = 4
+	Selftest.check("circle aura open", g._contracts.hearth_aura() and g._home._aura_color("hearth") == Color("#ff7a2e"))
+	g._contracts._mdays = 0
+	# «Круг закрыт» теперь = зеркало заказов на строке orders + открытая цель дня;
+	# награду дня отдаёт claim по таблице gold (старые 75⚡ за круг удалены).
+	var cb4_gd := SuiteContractBoard._mk(g._contracts, "daily", "goal_day", "gold", 1)
+	var cb4_od := SuiteContractBoard._mk(g._contracts, "daily", "orders", "gold", 3)
+	var cb4_gd_id := String(cb4_gd["id"])
+	var cb4_od_id := String(cb4_od["id"])
+	SuiteContractBoard._force_set(g._contracts, [cb4_gd, cb4_od], g._contracts._contracts_weekly)
+	SuiteContractBoard._clear_prog(g._contracts)
 	g._guild._order_day = g._retention._circle_today()
 	g._guild._order_targets_cache = ["steam", "stone", "clay"]
 	g._guild._order_done = {"steam": true, "stone": true, "clay": true}
-	g._retention._circle_disc_day = g._retention._circle_today()
-	g._retention._circle_disc = Game.CIRCLE_DISC_GOAL
-	Selftest.check("u35 circle closed offline", g._retention._circle_reward_claimable())
-	g._retention._circle_claim_reward()
-	Selftest.check("u35 reward once", g._retention._circle_reward_day == g._retention._circle_today()
-		and not g._retention._circle_reward_claimable())
+	g._contracts._sync_orders()
+	Selftest.check("circle orders mirror closed guild", g._contracts.progress(cb4_od_id) == 3
+		and g._contracts.is_ready(cb4_od_id))
+	var cb4_lo := g._contracts._local_goal()
+	g._contracts.on_brew(String(cb4_lo.get("out", "")), String(cb4_lo.get("a", "")),
+		String(cb4_lo.get("b", "")), false, "manual")
+	Selftest.check("circle goal ready on local brew", g._contracts.is_ready(cb4_gd_id))
+	g._engine.ether = 0
+	var cb4_reward := g._contracts.claim(cb4_gd_id)
+	Selftest.check("goal contract pays day reward", bool(cb4_reward["ok"])
+		and g._contracts.is_done(cb4_gd_id))
+	Selftest.check("goal contract reward once only",
+		String(g._contracts.claim(cb4_gd_id)["reason"]) == "claimed")
+	g._retention._refresh_circle_page()
+	Selftest.check("circle chip calm", String((g._pages._mode_chips["circle"] as Button).text) == "Круг")
+	g._contracts._hearth_claim = ""
+	g._retention._refresh_circle_page()
+	Selftest.check("circle chip dot", String((g._pages._mode_chips["circle"] as Button).text) == "Круг ●")
+	g._engine.ether = cb4_ether
+	SuiteContractBoard._cb_restore(g._contracts, cb4_snap)
+	# ============ U35 (A3): цель дня = закреплённый контракт goal_day ============
+	# Доска v2 Task 4: локальная цель никуда не делась — она кормит прогресс
+	# goal_day (on_brew по совпадению с _local_goal), а серверное испытание
+	# закрывает цель mark_day_challenge() без всякой выдачи. Старые флаги
+	# _circle_local_done_day/_circle_mine и локальные очки удалены — замены 1:1.
+	var u35_snap := SuiteContractBoard._cb_snapshot(g._contracts)
+	var u35_g0 := g._contracts._local_goal()
+	var u35_gd := SuiteContractBoard._mk(g._contracts, "daily", "goal_day", "gold", 2)
+	var u35_gd_id := String(u35_gd["id"])
+	var u35_od := SuiteContractBoard._mk(g._contracts, "daily", "orders", "silver", 3)
+	var u35_od_id := String(u35_od["id"])
+	SuiteContractBoard._force_set(g._contracts, [u35_gd, u35_od], g._contracts._contracts_weekly)
+	SuiteContractBoard._clear_prog(g._contracts)
+	Selftest.check("u35 goal contract open before", not g._contracts.is_done(u35_gd_id))
+	# детерминизм: один и тот же день — одна и та же цель
+	var u35_g1 := g._contracts._local_goal_for("2026-09-25")
+	var u35_g2 := g._contracts._local_goal_for("2026-09-25")
+	Selftest.check("u35 deterministic", String(u35_g1.get("out", "")) == String(u35_g2.get("out", ""))
+		and String(u35_g1.get("a", "")) == String(u35_g2.get("a", "")))
+	# достижима из баз: оба реагента — базовые стихии; цель никогда не пуста
+	Selftest.check("u35 base-only and nonempty", not u35_g0.is_empty()
+		and Game.BASE_IDS.has(String(u35_g0["a"])) and Game.BASE_IDS.has(String(u35_g0["b"])))
+	# дата действительно участвует: на 12 датах подряд встречается ≥ 2 разных выхода
+	var u35_variants := {}
+	for u35_i in range(12):
+		var u35_gx := g._contracts._local_goal_for("2026-10-%02d" % (u35_i + 1))
+		u35_variants[String(u35_gx.get("out", ""))] = true
+	Selftest.check("u35 date matters", u35_variants.size() >= 2)
+	# чужая варка цель не двигает (было: «u35 wrong output ignored»)
+	g._contracts.on_brew("dragon", "", "", false, "manual")
+	Selftest.check("u35 foreign brew ignored", g._contracts.progress(u35_gd_id) == 0)
+	# варка локальной цели двигает прогресс goal_day (было: «u35 local done»)
+	var u35_out := String(u35_g0.get("out", ""))
+	g._contracts.on_brew(u35_out, String(u35_g0.get("a", "")), String(u35_g0.get("b", "")), false, "manual")
+	Selftest.check("u35 goal brew bumps progress", g._contracts.progress(u35_gd_id) == 1)
+	g._contracts.on_brew(u35_out, "", "", false, "manual")
+	# награда дня платит ровно один раз (было: «u35 points once» / «no double»):
+	# claim платит по таблице gold + 3 очка вех, повторный тап — "claimed".
+	var u35_pts0 := g._contracts._pts_total
+	var u35_eth0 := g._engine._available_ether()
+	var u35_got := g._contracts.claim(u35_gd_id)
+	Selftest.check("u35 goal pays table on claim", bool(u35_got["ok"])
+		and g._contracts.is_done(u35_gd_id) and g._contracts._pts_total == u35_pts0 + 3)
+	var u35_again := g._contracts.claim(u35_gd_id)
+	Selftest.check("u35 no double reward", not bool(u35_again["ok"])
+		and String(u35_again["reason"]) == "claimed"
+		and g._engine._available_ether() == u35_eth0
+		and g._contracts._pts_total == u35_pts0 + 3)
+	# серверное испытание закрывает цель без варки и без выдачи (было: «u35
+	# server overrides» через _circle_mine — теперь через done-флаг goal_day)
+	SuiteContractBoard._force_set(g._contracts, [u35_gd], g._contracts._contracts_weekly)
+	SuiteContractBoard._clear_prog(g._contracts)
+	var u35_ether1 := g._engine.ether
+	var u35_pts1 := g._contracts._pts_total
+	var u35_days1 := g._contracts._visit_days.size()
+	g._contracts._day_hint = "Лодка"
+	g._contracts.mark_day_challenge()
+	Selftest.check("u35 server closes goal without payout", g._contracts.is_done(u35_gd_id)
+		and g._contracts._pts_total == u35_pts1 and g._engine.ether == u35_ether1
+		and g._contracts._visit_days.size() == u35_days1)
+	# строка orders зеркалит счётчик гильдии (было: «цель требует все заказы»)
+	SuiteContractBoard._force_set(g._contracts, [u35_od], g._contracts._contracts_weekly)
+	SuiteContractBoard._clear_prog(g._contracts)
+	g._guild._order_day = g._retention._circle_today()
+	g._guild._order_targets_cache = ["steam", "stone", "clay"]
+	g._guild._order_done = {"steam": true, "stone": true, "clay": true}
+	g._contracts._sync_orders()
+	Selftest.check("u35 orders mirror guild done count", g._contracts.progress(u35_od_id) == 3
+		and g._contracts.is_ready(u35_od_id))
+	# серверная подсказка первична локальной цели (замена «локальная цель лишь
+	# когда нет серверного заказа»: страница строит строку цели по _day_hint)
+	g._retention._refresh_circle_page()
+	var u35_hint_row := false
+	for u35_ch in g._retention._circle_list.get_children():
+		if u35_ch is Label and String((u35_ch as Label).text).begins_with("Цель дня: Лодка"):
+			u35_hint_row = true
+	Selftest.check("u35 server hint overrides local goal", u35_hint_row)
 	# restore
-	g._retention._circle_mine = u35_mine
-	g._retention._circle_hint = u35_hint
-	g._retention._circle_local_done_day = u35_done_day
-	g._retention._circle_pts_total = u35_pts
-	g._retention._circle_mpts = u35_mpts
-	g._retention._circle_reward_day = u35_reward_day
 	g._guild._order_day = ""
 	g._guild._order_targets_cache = []
 	g._guild._order_done = {}
-	g._retention._circle_disc_day = ""
-	g._retention._circle_disc = 0
+	SuiteContractBoard._cb_restore(g._contracts, u35_snap)
 	# --- v30: недельный слой ---
 	g._contracts._week_cache = {"week": "2026-W37",
 		"vein": {"tag1": "Свет", "tag2": "Тьма", "spread": false, "my_hits": 0, "my_streaks": 0, "streak_cap": 5},
@@ -421,15 +464,22 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 			"_source_taps", "_collect_last_gain", "_gift_clock", "spring_on", "spring_source",
 			"_experiment_pending_pair", "_experiment_day", "_experiment_count", "_experiment_last_at",
 			"_rejected_pairs", "_first_open_calls"])],
-		[g._retention, _circle_snapshot(g._retention, ["_circle_disc_day", "_circle_disc",
-			"_circle_local_done_day", "_circle_local_goal_cache", "_circle_mine", "_circle_reward_day",
-			"_circle_pts_total", "_circle_mpts", "_circle_head", "_circle_list"])],
+		# Доска v2 (Task 4): дневная половина переехала в Contracts — в Retention
+		# от круга остались только виджеты страницы; снимок очага/вех/ранга едет
+		# в записи Contracts ниже.
+		[g._retention, _circle_snapshot(g._retention, ["_circle_head", "_circle_list"])],
 		# Доска v2 (Task 3): недельный слой переехал в Contracts — снимок его полей
 		# едет отдельной записью (индексы snapshots[0]/[1] выше по коду не
 		# сдвигаются), иначе варка в этом тесте оставила бы чужой локальный котёл.
 		[g._contracts, _circle_snapshot(g._contracts, ["_week_cache", "_cycle_cache", "_vein_finds",
 			"_vein_cap_total", "_fair_regen_total", "_fair_local_week", "_fair_local_brews",
-			"_fair_off_claim_week"])],
+			"_fair_off_claim_week", "_visit_days", "_streak_run", "_last_visit_day",
+			"_hearth_claim", "_pts_total", "_mdays", "_mpts", "_unlocked_titles",
+			"_active_title", "_day_hint", "_day_goal_cache", "_contracts_daily",
+			"_contracts_daily_prog", "_contracts_daily_done", "_contracts_weekly",
+			"_contracts_weekly_prog", "_contracts_weekly_done", "_contracts_last_daily",
+			"_contracts_last_weekly", "_contracts_variety", "_contracts_set_week",
+			"_active_buffs", "_unlocked_decor", "_last_output"])],
 		[g._guild, _circle_snapshot(g._guild, ["_quest_brew", "_order_day", "_order_targets_cache", "_order_done"])],
 		[g._pages, _circle_snapshot(g._pages, ["_bench_on", "_bench_target", "_bench_busy", "_spring_clock"])],
 		[g._saves, _circle_snapshot(g._saves, ["_save_frozen", "_saves_bench_probe", "_return_craft_steps",
@@ -463,32 +513,51 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 	var collection_size := g._engine.inventory.size()
 	var recipes_size := g._engine.known_recipes.size()
 	var today := g._retention._circle_today()
-	g._retention._circle_disc_day = today
-	g._retention._circle_disc = 0
-	g._retention._circle_pts_total = 0
-	g._retention._circle_mpts = 0
-	g._retention._circle_local_goal_cache = {"day": today, "a": "fire", "b": "water", "out": "steam"}
-	g._retention._circle_local_done_day = ""
-	g._retention._circle_mine = 0
-	g._retention._circle_reward_day = ""
+	# Доска v2 Task 4: счётчик «шагов диска» удалён — трекаем прогресс живого
+	# brew-контракта. Офлайн-реплей (craft/bench) контрактам не поставляет
+	# варок (on_brew, source == "offline_workshop" → early-return, спека §6.4),
+	# поэтому эти две проверки инвертированы: шаги есть, счётчик стоит.
+	var s4_brew := SuiteContractBoard._mk(g._contracts, "daily", "brew", "silver", 3)
+	var s4_goal := SuiteContractBoard._mk(g._contracts, "daily", "goal_day", "gold", 5)
+	var s4_orders := SuiteContractBoard._mk(g._contracts, "daily", "orders", "gold", 3)
+	var s4_orders2 := SuiteContractBoard._mk(g._contracts, "daily", "orders", "silver", 3)
+	var s4_b_id := String(s4_brew["id"])
+	var s4_g_id := String(s4_goal["id"])
+	var s4_o_id := String(s4_orders["id"])
+	var s4_o2_id := String(s4_orders2["id"])
+	SuiteContractBoard._force_set(g._contracts, [s4_brew, s4_goal, s4_orders, s4_orders2], g._contracts._contracts_weekly)
+	SuiteContractBoard._clear_prog(g._contracts)
+	g._contracts._visit_days = []
+	g._contracts._streak_run = 0
+	g._contracts._last_visit_day = ""
+	g._contracts._hearth_claim = ""
+	g._contracts._pts_total = 0
+	g._contracts._mdays = 0
+	g._contracts._mpts = 0
+	g._contracts._day_hint = ""
+	g._contracts._day_goal_cache = {"day": today, "a": "fire", "b": "water", "out": "steam"}
 	g._guild._order_day = today
 	g._guild._order_targets_cache = ["steam", "stone", "clay"]
 	g._guild._order_done = {"steam": true, "stone": true, "clay": true}
-	g._retention._circle_claim_reward()
-	Selftest.check("circle status describes successful syntheses", g._engine.status_text.contains("успешных синтезов"))
+	g._contracts._sync_orders()
+	g._contracts._contracts_daily_prog[s4_o_id] = 3
+	var s4_orders_got := g._contracts.claim(s4_o_id)
+	Selftest.check("circle claim of closed orders records visit day",
+		bool(s4_orders_got["ok"]) and g._contracts._visit_days.has(today)
+		and g._contracts._streak_run == 1 and g._contracts._pts_total == 3)
 	g._engine.selected = ["fire", "water"]
 	var manual: Dictionary = await g._engine._brew()
-	Selftest.check("circle manual known brew counts once", not bool(manual.get("failed", true))
-		and not bool(manual.get("newly_learned", true)) and g._retention._circle_disc == 1)
+	Selftest.check("circle manual known brew bumps contract once", not bool(manual.get("failed", true))
+		and not bool(manual.get("newly_learned", true)) and g._contracts.progress(s4_b_id) == 1)
 	var plan := {"ok": true, "total": 1, "ops": [{"a": "fire", "b": "water", "out": "steam", "n": 1}]}
 	var bench: bool = await g._engine._run_bench_plan("steam", plan)
-	Selftest.check("circle workshop known brew counts once", bench and g._retention._circle_disc == 2)
+	Selftest.check("circle workshop known brew bumps contract once", bench and g._contracts.progress(s4_b_id) == 2)
 	var production: bool = await g._engine._run_auto_plan("steam", plan)
-	Selftest.check("circle production known brew counts once", production and g._retention._circle_disc == 3)
+	Selftest.check("circle production known brew bumps contract once", production and g._contracts.progress(s4_b_id) == 3)
 	g._engine._craft_job = {"item": "steam", "completed": 0, "total_estimate": 1, "plan": plan, "discount": 1.0}
 	var offline := g._saves._advance_craft_job_offline(Game.OFFLINE_MIN_SEC + 10.0)
-	Selftest.check("circle offline production counts committed steps", int(offline.get("steps", 0)) == 1
-		and g._retention._circle_disc == 4)
+	Selftest.check("circle offline craft commits step but moves no counter", int(offline.get("steps", 0)) == 1
+		and g._contracts.progress(s4_b_id) == 3)
 	g._engine.inventory["fire"] = 1
 	g._engine.inventory["water"] = 1
 	g._pages._bench_on = true
@@ -497,55 +566,70 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 	var bench_elapsed := maxf(Game.OFFLINE_MIN_SEC + 1.0,
 		g._sigil.bench_interval("steam") / Game.BENCH_OFFLINE_FACTOR + 1.0)
 	var offline_bench := g._saves._advance_bench_offline(bench_elapsed)
-	Selftest.check("circle offline workshop counts committed steps", int(offline_bench.get("steps", 0)) == 1
-		and g._retention._circle_disc == Game.CIRCLE_DISC_GOAL)
-	Selftest.check("circle full collection closes on five known repeats", g._retention._circle_closed()
+	Selftest.check("circle offline workshop commits step but moves no counter", int(offline_bench.get("steps", 0)) == 1
+		and g._contracts.progress(s4_b_id) == 3)
+	var s4_ready := g._contracts.is_ready(s4_b_id)
+	var s4_claim := g._contracts.claim(s4_b_id)
+	Selftest.check("circle counted repeats close the daily contract", s4_ready
+		and bool(s4_claim["ok"]) and g._contracts.is_done(s4_b_id)
 		and g._engine.inventory.size() == collection_size and collection_size >= g.ITEMS.size()
 		and g._engine.known_recipes.size() == recipes_size)
-	# Остальные два условия остаются обязательными даже после пяти синтезов.
-	g._retention._circle_local_done_day = ""
-	Selftest.check("circle syntheses still require daily goal", not g._retention._circle_closed())
-	g._retention._circle_local_done_day = today
+	# Цель дня — отдельная строка доски: варки она считает сама, а закрытие
+	# brew-контракта её не трогает.
+	Selftest.check("circle goal contract stays open after brew claim", not g._contracts.is_done(s4_g_id))
+	# Заказ гильдии: строка orders зеркалит счётчик гильдии, а не прогресс варок.
 	g._guild._order_done.erase("clay")
-	Selftest.check("circle syntheses still require all orders", not g._retention._circle_closed())
+	g._contracts._sync_orders()
+	Selftest.check("circle orders row unready when a guild order reopens",
+		not g._contracts.is_ready(s4_o2_id) and g._contracts.progress(s4_o2_id) == 2
+		and g._contracts.progress(s4_b_id) == int(s4_brew["goal"]))
 	g._guild._order_done["clay"] = true
-	var ether_before := g._engine._available_ether()
-	g._retention._circle_claim_reward()
-	g._retention._circle_claim_reward()
-	Selftest.check("circle five repeats reward exactly once", g._engine._available_ether() == ether_before + 75
-		and g._retention._circle_reward_day == today)
+	var s4_double_ether := g._engine._available_ether()
+	var s4_double_pts := g._contracts._pts_total
+	var s4_again := g._contracts.claim(s4_b_id)
+	Selftest.check("circle closed contract claim pays exactly once", not bool(s4_again["ok"])
+		and String(s4_again["reason"]) == "claimed"
+		and g._engine._available_ether() == s4_double_ether
+		and g._contracts._pts_total == s4_double_pts)
 	var host := VBoxContainer.new()
 	g._retention._build_circle_page(host)
 	var description_ok := false
 	var progress_ok := false
 	for label in host.find_children("*", "Label", true, false):
 		var text := (label as Label).text
-		description_ok = description_ok or (text.contains("успешные синтезы дня") and text.contains("повторные"))
-		progress_ok = progress_ok or text == "Успешные синтезы дня: %d/%d ✓" % [Game.CIRCLE_DISC_GOAL, Game.CIRCLE_DISC_GOAL]
-	Selftest.check("circle page describes new and repeated syntheses", description_ok)
-	Selftest.check("circle page displays successful synthesis progress", progress_ok)
+		description_ok = description_ok or (text.contains("доске контрактов") and text.contains("вечные очки вех"))
+		progress_ok = progress_ok or text.begins_with("Очаг ✦ · дней с закрытым контрактом: 1")
+	Selftest.check("circle page describes contracts board", description_ok)
+	Selftest.check("circle page displays hearth visit counter", progress_ok)
 	var circle_mode_hint := g._pages._mode_hint("circle")
-	Selftest.check("circle mode hint describes repeated successful syntheses",
-		circle_mode_hint.contains("успешные синтезы дня") and circle_mode_hint.contains("повторные"))
+	Selftest.check("circle mode hint describes contract-driven hearth",
+		circle_mode_hint.contains("дневной контракт") and circle_mode_hint.contains("вечные очки"))
 	host.free()
 	# Отцепляем уничтоженную тестовую страницу до следующего refresh.
 	g._retention._circle_head = null
 	g._retention._circle_list = null
-	var count_before := g._retention._circle_disc
+	# Отрицательные трассы: сорванный вход / ноль эфира / неизвестный рецепт /
+	# родник и подарок — варки нет, значит ни один счётчик доски не двигается.
+	# Свежий open-контракт: закрытые claim-ом выше сдвинуть нельзя по определению.
+	var s4_b2 := SuiteContractBoard._mk(g._contracts, "daily", "brew", "silver", 6)
+	var s4_b2_id := String(s4_b2["id"])
+	SuiteContractBoard._force_set(g._contracts, [s4_b2], g._contracts._contracts_weekly)
+	SuiteContractBoard._clear_prog(g._contracts)
+	var count_before := g._contracts.progress(s4_b2_id)
 	var no_inputs := g._engine._commit_brew("fire", "water")
 	Selftest.check("circle failed missing ingredients counts zero", bool(no_inputs.get("failed", false))
-		and g._retention._circle_disc == count_before)
+		and g._contracts.progress(s4_b2_id) == count_before)
 	g._engine.inventory["fire"] = 2
 	g._engine.inventory["water"] = 2
 	g._engine.ether = 0
 	g._engine.ether_overflow = 0
 	var no_ether := g._engine._commit_brew("fire", "water")
 	Selftest.check("circle failed insufficient ether counts zero", bool(no_ether.get("failed", false))
-		and g._retention._circle_disc == count_before)
+		and g._contracts.progress(s4_b2_id) == count_before)
 	g._engine.ether = 1000
 	var failed := g._engine._commit_brew("fire", "fire")
 	Selftest.check("circle failed unknown recipe counts zero", bool(failed.get("failed", false))
-		and g._retention._circle_disc == count_before)
+		and g._contracts.progress(s4_b2_id) == count_before)
 	g._engine._collect_gain("fire")
 	g._engine.spring_on = true
 	g._engine.spring_source = "water"
@@ -553,16 +637,18 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 	g._engine._spring_tick(Game.SPRING_INTERVAL + 0.01)
 	g._engine._gift_clock = 0.0
 	g._engine._gift_tick(Game.GIFT_INTERVAL + 0.01)
-	Selftest.check("circle sources spring and gifts count zero", g._retention._circle_disc == count_before)
+	Selftest.check("circle sources spring and gifts count zero", g._contracts.progress(s4_b2_id) == count_before)
 	g._engine.inventory.erase("steam")
 	g._engine.inventory["fire"] = 2
 	g._engine.inventory["water"] = 2
 	var first_brew := g._engine._commit_brew("fire", "water")
-	Selftest.check("circle first local acquisition counts once", not bool(first_brew.get("failed", true))
-		and g._retention._circle_disc == count_before + 1 and g._engine.inventory.has("steam"))
+	Selftest.check("circle first local acquisition bumps contract once", not bool(first_brew.get("failed", true))
+		and g._contracts.progress(s4_b2_id) == count_before + 1 and g._engine.inventory.has("steam"))
 
-	# Все success-ответы возвращают уже имеющийся steam: это именно повторные получения.
-	g._retention._circle_disc = 0
+	# Online-ветки больше не питают дневные счётчики: выдача вещества мира — не
+	# варка (on_brew зовётся только из _commit_brew), поэтому все ответы дают
+	# нулевое движение. Повторы прежних «counts once»-проверок инвертированы.
+	g._contracts._contracts_daily_prog[s4_b2_id] = 0
 	var pair := g._pair_key("fire", "water")
 	var element := {"slug": "steam", "name": g._online._item_name("steam"), "layer": 1,
 		"a": "fire", "b": "water", "reused": true}
@@ -570,17 +656,17 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 	var known := {"status": "known", "discovery": element}
 	g._online._register_pending_pair("fire", "water", false)
 	g._online._on_net_pair_result(pair, found)
-	Selftest.check("circle online found repeat counts once", g._retention._circle_disc == 1)
-	count_before = g._retention._circle_disc
+	Selftest.check("circle online found repeat moves no counter", g._contracts.progress(s4_b2_id) == 0)
+	count_before = g._contracts.progress(s4_b2_id)
 	g._online._on_net_pair_result(pair, found)
 	g._online._on_net_discover_result(pair, known)
-	Selftest.check("circle duplicate online answers count zero", g._retention._circle_disc == count_before)
+	Selftest.check("circle duplicate online answers count zero", g._contracts.progress(s4_b2_id) == count_before)
 	g._online._register_pending_pair("fire", "water", false)
 	g._online._on_net_discover_result(pair, known)
-	Selftest.check("circle online known discovery repeat counts once", g._retention._circle_disc == 2)
+	Selftest.check("circle online known discovery repeat moves no counter", g._contracts.progress(s4_b2_id) == 0)
 	g._online._register_pending_pair("fire", "water", false)
 	g._online._on_net_discover_result(pair, {"status": "created", "discovery": element})
-	Selftest.check("circle online created reused acquisition counts once", g._retention._circle_disc == 3)
+	Selftest.check("circle online created reused acquisition moves no counter", g._contracts.progress(s4_b2_id) == 0)
 	for outcome in [found, {"status": "created", "discovery": element}]:
 		g._engine.inventory["fire"] = 2
 		g._engine.inventory["water"] = 2
@@ -589,33 +675,33 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 		g._engine._experiment_count = 0
 		var started := g._engine._begin_experiment("fire", "water")
 		var registered := g._online._register_pending_pair("fire", "water", true)
-		count_before = g._retention._circle_disc
+		count_before = g._contracts.progress(s4_b2_id)
 		if outcome.has("out"):
 			g._online._on_net_pair_result(pair, outcome)
 		else:
 			g._online._on_net_discover_result(pair, outcome)
-		Selftest.check("circle experiment %s repeat counts once" % ("found" if outcome.has("out") else "created"),
-			started and registered and g._retention._circle_disc == count_before + 1
+		Selftest.check("circle experiment %s repeat moves no counter" % ("found" if outcome.has("out") else "created"),
+			started and registered and g._contracts.progress(s4_b2_id) == count_before
 			and g._engine._experiment_pending_pair.is_empty())
-		count_before = g._retention._circle_disc
+		count_before = g._contracts.progress(s4_b2_id)
 		g._online._on_net_pair_result(pair, found)
 		g._online._on_net_discover_result(pair, known)
-		Selftest.check("circle duplicate experiment answers count zero", g._retention._circle_disc == count_before)
-	count_before = g._retention._circle_disc
+		Selftest.check("circle duplicate experiment answers count zero", g._contracts.progress(s4_b2_id) == count_before)
+	count_before = g._contracts.progress(s4_b2_id)
 	g._online._register_pending_pair("fire", "water", false)
 	g._online._pending_requests[pair]["at"] = Time.get_ticks_msec() - Online.PENDING_TTL_MSEC - 1
 	g._online._on_net_pair_result(pair, found)
-	Selftest.check("circle stale online answer counts zero", g._retention._circle_disc == count_before)
+	Selftest.check("circle stale online answer counts zero", g._contracts.progress(s4_b2_id) == count_before)
 	g._online._register_pending_pair("fire", "water", false)
 	g._online._on_net_discover_result(pair, {"status": "known", "discovery": {
 		"slug": "steam", "name": "Пар", "a": "earth", "b": "air"}})
-	Selftest.check("circle mismatched online answer counts zero", g._retention._circle_disc == count_before)
+	Selftest.check("circle mismatched online answer counts zero", g._contracts.progress(s4_b2_id) == count_before)
 	g._online._register_pending_pair("fire", "water", false)
 	g._online._on_net_pair_result(pair, {"ok": true, "found": true, "out": {"slug": "steam", "name": ""}})
-	Selftest.check("circle invalid online element counts zero", g._retention._circle_disc == count_before)
+	Selftest.check("circle invalid online element counts zero", g._contracts.progress(s4_b2_id) == count_before)
 	g._online._register_pending_pair("fire", "water", false)
 	g._online._on_net_pair_result(pair, {"status": "not_combinable"})
-	Selftest.check("circle rejected online answer counts zero", g._retention._circle_disc == count_before)
+	Selftest.check("circle rejected online answer counts zero", g._contracts.progress(s4_b2_id) == count_before)
 	for floater in g.floaters:
 		if not floater_labels_before.has(floater["l"]):
 			(floater["l"] as Label).queue_free()
@@ -629,12 +715,13 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 	g._popup_dim.visible = popup_dim_visible
 	g.set_process(processing_before)
 	var engine_before: Dictionary = snapshots[0][1]
-	var circle_before: Dictionary = snapshots[1][1]
+	var contracts_before: Dictionary = snapshots[2][1]
 	Selftest.check("circle synthesis fixture restores gameplay state", g._engine.inventory == engine_before["inventory"]
 		and g._engine.known_recipes == engine_before["known_recipes"]
 		and g._engine.ether == engine_before["ether"] and g._engine.ether_overflow == engine_before["ether_overflow"]
-		and g._retention._circle_disc == circle_before["_circle_disc"]
-		and g._retention._circle_disc_day == circle_before["_circle_disc_day"]
+		and g._contracts._pts_total == contracts_before["_pts_total"]
+		and g._contracts._hearth_claim == contracts_before["_hearth_claim"]
+		and g._contracts._contracts_daily == contracts_before["_contracts_daily"]
 		and g.is_processing() == processing_before)
 	g._engine._refresh()
 	g._retention._refresh_circle_page()
