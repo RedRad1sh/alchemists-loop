@@ -141,6 +141,14 @@ static func _cb_snapshot(c: Contracts) -> Dictionary:
 		"unlocked_titles": c._unlocked_titles.duplicate(true),
 		"active_title": c._active_title,
 		"day_hint": c._day_hint,
+		# Task 7: ряды goal_day/vein/fair и строка ранга читают недельный слой —
+		# блок доски обязан его откатывать целиком.
+		"week_cache": c._week_cache.duplicate(true),
+		"cycle_cache": c._cycle_cache.duplicate(true),
+		"vein_finds": c._vein_finds.duplicate(true),
+		"fair_local_week": c._fair_local_week,
+		"fair_local_brews": c._fair_local_brews.duplicate(true),
+		"fair_off_claim_week": c._fair_off_claim_week,
 	}
 
 static func _cb_restore(c: Contracts, s: Dictionary) -> void:
@@ -167,6 +175,12 @@ static func _cb_restore(c: Contracts, s: Dictionary) -> void:
 	c._unlocked_titles = s["unlocked_titles"]
 	c._active_title = String(s["active_title"])
 	c._day_hint = String(s["day_hint"])
+	c._week_cache = s["week_cache"]
+	c._cycle_cache = s["cycle_cache"]
+	c._vein_finds = s["vein_finds"]
+	c._fair_local_week = String(s["fair_local_week"])
+	c._fair_local_brews = s["fair_local_brews"]
+	c._fair_off_claim_week = String(s["fair_off_claim_week"])
 
 # Полный сброс состояния доски средствами сюиты — см. решение 5.
 static func _cb_wipe(c: Contracts) -> void:
@@ -1753,6 +1767,170 @@ static func _contract_board_checks(g: Game) -> void:
 	# 10. Ряды — обычные Control, не контейнеры.
 	Selftest.check("§5.2 daily and weekly rows are plain Controls, not containers",
 		dr != null and wr != null and dr.get_class() == "Control" and wr.get_class() == "Control")
+
+	# 10b. Доска v2 (Task 7, спека §5): состав экрана — 4 карточки на полку,
+	# полка очага под дневным рядом, строка ранга внизу.
+	var t7_daily_cards := dr.get_child_count() if dr != null else 0
+	var t7_weekly_cards := wr.get_child_count() if wr != null else 0
+	Selftest.check("board v2 renders four cards per shelf with hearth shelf and rank strip",
+		t7_daily_cards == 4 and t7_weekly_cards == 4 and board != null
+		and board.get_node_or_null("ShelfHearth") != null
+		and board.get_node_or_null("RankStrip") != null)
+
+	# 10c. Task 7: _place — wrapping-сетка: при ширине ровно на 4 карточки
+	# пятая уходит на вторую линию, а высота ряда растёт. Проверка статической
+	# функции на фикстурном ряду: явные size/position, без зависимости от
+	# layout-проходов headless-прогона.
+	var t7_wrap_row := Control.new()
+	t7_wrap_row.size = Vector2(420, 50)
+	for i in range(5):
+		t7_wrap_row.add_child(Control.new())
+	ContractBoard._place(t7_wrap_row, Vector2(100, 50))
+	var t7_wrap_ok := absf(t7_wrap_row.size.y - 108.0) < 0.01 \
+		and (t7_wrap_row.get_child(0) as Control).position == Vector2(4, 0) \
+		and (t7_wrap_row.get_child(3) as Control).position == Vector2(316, 0) \
+		and (t7_wrap_row.get_child(4) as Control).position == Vector2(160, 58)
+	t7_wrap_row.free()
+	Selftest.check("board v2 wrapping _place puts the fifth card on a centered second row",
+		t7_wrap_ok)
+
+	# 10d. Полка очага: кнопка «Полешко: +N ⚡» и пламя серии (✦✦ при 3).
+	c._hearth_claim = ""
+	c._streak_run = 3
+	board.refresh()
+	await g.get_tree().process_frame
+	var t7_shelf := board.get_node_or_null("ShelfHearth")
+	var t7_hearth_btn: Button = null
+	var t7_flame_lbl: Label = null
+	if t7_shelf != null:
+		t7_hearth_btn = t7_shelf.find_child("HearthBtn", true, false) as Button
+		t7_flame_lbl = t7_shelf.find_child("HearthFlame", true, false) as Label
+	var t7_claimable := t7_hearth_btn != null and not t7_hearth_btn.disabled \
+		and t7_hearth_btn.text == "Полешко: +%d ⚡" % c.hearth_reward() \
+		and t7_flame_lbl != null and t7_flame_lbl.text == c.flame()
+	Selftest.check("board v2 hearth shelf offers the daily log with the streak flame",
+		t7_claimable)
+
+	# 10e. Полка очага после дневного забора: кнопка гаснет и называется «Забрано ✓».
+	c._hearth_claim = Time.get_date_string_from_system()
+	board.refresh()
+	await g.get_tree().process_frame
+	var t7_claimed_txt := t7_hearth_btn != null and t7_hearth_btn.text == "Забрано ✓"
+	Selftest.check("board v2 hearth shelf shows «Забрано ✓» after today's log",
+		t7_claimed_txt)
+	c._hearth_claim = ""
+	c._streak_run = 0
+
+	# 10f. Строка ранга: символ + титул + два бумажных свитка вех (спека §5 —
+	# иммерсивныеPaper-ленты, не Label-простыня).
+	c._visit_days = ["2026-09-10"]
+	c._mdays = 1
+	c._mpts = 1
+	c._pts_total = 50
+	board.refresh()
+	await g.get_tree().process_frame
+	var t7_strip := board.get_node_or_null("RankStrip")
+	var t7_sym: Node = null
+	var t7_title: Label = null
+	var t7_md: Node = null
+	var t7_mp: Node = null
+	if t7_strip != null:
+		t7_sym = t7_strip.find_child("RankSymbol", true, false)
+		t7_title = t7_strip.find_child("RankTitle", true, false) as Label
+		t7_md = t7_strip.find_child("MileDays", true, false)
+		t7_mp = t7_strip.find_child("MilePts", true, false)
+	var t7_mile_days := ""
+	var t7_mile_pts := ""
+	if t7_md != null:
+		var l1 := (t7_md as Node).find_child("Word", true, false) as Label
+		t7_mile_days = l1.text if l1 != null else ""
+	if t7_mp != null:
+		var l2 := (t7_mp as Node).find_child("Word", true, false) as Label
+		t7_mile_pts = l2.text if l2 != null else ""
+	var t7_rank_ok := t7_strip != null and t7_sym is CircleRankSymbol and t7_title != null \
+		and t7_title.text == c.rank_title(c.rank_level()) \
+		and t7_mile_days.contains(c.mile_strip("дней", Game.CIRCLE_DAY_MILES, 1)) \
+		and t7_mile_pts.contains(c.mile_strip("очков", Game.CIRCLE_PTS_MILES, 1))
+	Selftest.check("board v2 rank strip carries symbol, title and two mile scrolls",
+		t7_rank_ok)
+
+	# 10g. Тела карточек goal_day/vein/fair (спека §5): цель дня строкой
+	# «свари …» + хинт мира в tooltip, ряды капель текущего цикла с кнопкой
+	# «Влить», строка котла fair.
+	var t7_hint_saved := c.day_hint()
+	var t7_finds_saved: Array = c._vein_finds.duplicate(true)
+	var t7_cycle_saved: Dictionary = c._cycle_cache.duplicate(true)
+	c._day_hint = "из двух баз"
+	c._cycle_cache = {"cycle_id": "t7-cyc"}
+	c._vein_finds = [
+		{"id": "t7-f1", "tag": "Тег", "points": 1, "pair_key": "t7a+t7b",
+			"cycle_id": "t7-cyc", "status": "registered"},
+		{"id": "t7-f2", "tag": "Тег", "points": 1, "pair_key": "t7c+t7d",
+			"cycle_id": "t7-cyc", "status": "pending_server"},
+		{"id": "t7-old", "tag": "Тег", "points": 1, "pair_key": "t7e+t7f",
+			"cycle_id": "t7-other", "status": "registered"},
+	]
+	c._fair_local_week = Home._iso_week_id()
+	c._fair_local_brews = ["steam", "glass"]
+	var t7_lg := c._local_goal()
+	_force_set(c, [
+		_mk(c, "daily", "goal_day", "bronze", 1),
+		_mk(c, "daily", "brew", "bronze", 15),
+		_mk(c, "daily", "discover", "silver", 1),
+		_mk(c, "daily", "chain_brew", "silver", 2),
+	], [
+		_mk(c, "weekly", "vein", "bronze", 1),
+		_mk(c, "weekly", "fair", "bronze", 3),
+		_mk(c, "weekly", "upgrade", "silver", 4),
+		_mk(c, "weekly", "rare_brew", "bronze", 3),
+	])
+	board.refresh()
+	await g.get_tree().process_frame
+	var t7_goal_card: Control = dr.get_child(0) as Control
+	var t7_goal_detail := t7_goal_card.get_node_or_null("Hang/Detail") as Control
+	var t7_goal_line := ""
+	var t7_goal_tip := ""
+	if t7_goal_detail != null:
+		for ch in t7_goal_detail.get_children():
+			if ch is Label and String((ch as Label).text).begins_with("свари"):
+				t7_goal_line = String((ch as Label).text)
+				t7_goal_tip = String((ch as Label).tooltip_text)
+	var t7_goal_want := "свари «%s» из %s и %s" % [
+		g._online._item_name(String(t7_lg.get("out", ""))),
+		g._online._item_name(String(t7_lg.get("a", ""))),
+		g._online._item_name(String(t7_lg.get("b", "")))]
+	Selftest.check("goal_day card body states the local goal line and the world hint tooltip",
+		t7_goal_line == t7_goal_want and t7_goal_want != "свари «» из и " \
+		and t7_goal_tip.contains("мир: из двух баз"))
+
+	# Жила: ровно по ряду капель на находку ТЕКУЩЕГО цикла (старый цикл — мимо),
+	# у registered — кнопка «Влить».
+	var t7_vein_card: Control = wr.get_child(0) as Control
+	var t7_vein_detail := t7_vein_card.get_node_or_null("Hang/Detail") as Control
+	var t7_drop_rows := 0
+	var t7_pour_btns := 0
+	if t7_vein_detail != null:
+		for ch in t7_vein_detail.get_children():
+			if String((ch as Node).name).begins_with("VeinDropRow"):
+				t7_drop_rows += 1
+		for b in t7_vein_detail.find_children("*", "Button", true, false):
+			if String((b as Button).text) == "Влить":
+				t7_pour_btns += 1
+	Selftest.check("vein card exposes one VeinDropRow per current-cycle find plus a pour button",
+		t7_drop_rows == 2 and t7_pour_btns == 1)
+
+	# Ярмарка: строка котла — ровно fair_pot_line(), офлайн-вариант виден текстом.
+	var t7_fair_card: Control = wr.get_child(1) as Control
+	var t7_fair_lbl: Label = null
+	var t7_fair_detail := t7_fair_card.get_node_or_null("Hang/Detail") as Control
+	if t7_fair_detail != null:
+		t7_fair_lbl = t7_fair_detail.find_child("FairPot", true, false) as Label
+	Selftest.check("fair card body shows the pot line from fair_pot_line()",
+		t7_fair_lbl != null and t7_fair_lbl.text == c.fair_pot_line()
+		and t7_fair_lbl.text == "Локальный котёл: 2/3")
+	c._day_hint = t7_hint_saved
+	c._vein_finds = t7_finds_saved
+	c._cycle_cache = t7_cycle_saved
 
 	# 11. Полоса записок существует и пуста без баффов.
 	var notes: Control = board.get_node_or_null("Notes") as Control

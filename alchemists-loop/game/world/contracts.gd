@@ -1726,3 +1726,51 @@ func mile_strip(_kind: String, miles: Array, have: int) -> String:
 		var m := int(miles[i])
 		parts.append("%d ✓" % m if i < have else str(m))
 	return " · ".join(parts)
+
+# ---------- доска v2 (Task 7, спека §5): геттеры карточных строк ----------
+# UI доски ничего не считает: карточка goal_day/fair печатает строки отсюда,
+# карточка vein — ряды капель от vein_drop_rows().
+func card_detail_lines(id: String) -> Array:
+	var ct := contract_by_id(id)
+	if ct.is_empty():
+		return []
+	var type := String(ct["type"])
+	if type == "fair":
+		return [fair_pot_line()]
+	if type == "goal_day":
+		var lg := _local_goal()
+		if String(lg.get("out", "")) == "":
+			return []
+		return ["свари «%s» из %s и %s" % [g._online._item_name(String(lg["out"])),
+			g._online._item_name(String(lg["a"])), g._online._item_name(String(lg["b"]))]]
+	return []
+
+# Ряд капель карточки vein: находки текущего цикла (тот же фильтр, что у
+# _sync_vein: пустой cycle_id — считаем все). color — из палитры веществ по
+# слизу тега, цвет самого тега в g._item_colors ядра.
+func vein_drop_rows() -> Array:
+	var cyc := String(_cycle_cache.get("cycle_id", ""))
+	var out: Array = []
+	for f in _vein_finds:
+		if typeof(f) != TYPE_DICTIONARY:
+			continue
+		if cyc != "" and String(f.get("cycle_id", "")) != cyc:
+			continue
+		var st := String(f.get("status", ""))
+		if not ["pending_server", "registered", "poured", "auto_applied"].has(st):
+			continue
+		var slug := _vein_tag_slug(String(f.get("tag", "")))
+		out.append({"find_id": String(f.get("id", "")), "tag": String(f.get("tag", "")),
+			"status": st, "color": g._item_colors.get(slug, Color(0.6, 0.75, 0.9))})
+	return out
+
+# Строка котла карточки fair (спека §5): онлайн — серверный прогресс закрытого
+# котла с вкладом; без мира — локальный счётчик разных веществ за неделю.
+func fair_pot_line() -> String:
+	if _fair_offline_available():
+		return "Локальный котёл: %d/%d" % [_fair_local_brews.size(), Game.FAIR_OFFLINE_GOAL]
+	var f := _week_fair()
+	var goal := int(f.get("goal", 0))
+	var prog := int(f.get("progress", 0)) + int(f.get("apprentice", 0))
+	return "Котёл: %d/%d · твоих: %d" % [mini(prog, goal) if goal > 0 else prog,
+		goal, int(f.get("my_contrib", 0))]

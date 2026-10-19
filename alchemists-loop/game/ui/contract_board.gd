@@ -8,7 +8,6 @@ const RAIL := 40.0
 const CORNER := 48.0
 const SHELF_H := 28.0
 const ROW_DY := 8.0
-const WEEKLY_DY := 40.0
 const BAND_DX := 4.0
 const NOTE_GAP := 8.0
 const CARD_GAP := 4.0
@@ -17,6 +16,12 @@ const RING_SIZE := Vector2(44, 44)
 const NOTE_SIZE := Vector2(132, 88)
 const POPUP_SIZE := Vector2(276, 366)
 const NOTE_TICK := 1.0
+# доска v2 (Task 7, спека §5): полка очага под дневным рядом и строка ранга
+# над нижним рельсом.
+const HEARTH_H := 56.0
+const RANK_H := 56.0
+const RANK_NOTE := Vector2(150, 48)
+const FLAME_INK := Color(1.0, 0.72, 0.30)
 
 const BOARD_TITLE := "Контрактная доска"
 const POPUP_TITLE := "Получено"
@@ -33,6 +38,18 @@ var _rails: Array = []
 var _corners: Array = []
 var _shelf_daily: TextureRect
 var _shelf_weekly: TextureRect
+var _shelf_hearth: Control
+var _hearth_bar: TextureRect
+var _hearth_box: HBoxContainer
+var _hearth_btn: Button
+var _hearth_flame: Label
+var _rank_strip: Control
+var _rank_symbol: CircleRankSymbol
+var _rank_title: Label
+var _mile_days: TextureRect
+var _mile_pts: TextureRect
+var _mile_days_word: Label
+var _mile_pts_word: Label
 var _sign: TextureRect
 var _sign_word: Label
 var _ring: TextureButton
@@ -144,6 +161,61 @@ func _build_layers() -> void:
 	_notes.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_notes)
 
+	# Полка очага (доска v2, спека §5): та же доска-полка, на ней — полешко и
+	# пламя серии. Иммерсивность: реальная текстура shelf_bar, не Label-полоса.
+	_shelf_hearth = Control.new()
+	_shelf_hearth.name = "ShelfHearth"
+	_shelf_hearth.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_shelf_hearth)
+	_hearth_bar = TextureRect.new()
+	_hearth_bar.name = "HearthBar"
+	_hearth_bar.texture = ContractCard.tex("shelf_bar.png")
+	_hearth_bar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_hearth_bar.stretch_mode = TextureRect.STRETCH_SCALE
+	_hearth_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shelf_hearth.add_child(_hearth_bar)
+	_hearth_box = HBoxContainer.new()
+	_hearth_box.name = "HearthBox"
+	_hearth_box.add_theme_constant_override("separation", 8)
+	_hearth_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shelf_hearth.add_child(_hearth_box)
+	_hearth_btn = g._small_button("", Vector2(168, 40), 2)
+	_hearth_btn.name = "HearthBtn"
+	_hearth_btn.pressed.connect(_on_hearth_pressed)
+	_hearth_box.add_child(_hearth_btn)
+	_hearth_flame = g._label("", 16)
+	_hearth_flame.name = "HearthFlame"
+	_hearth_flame.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_hearth_flame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_hearth_flame.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_hearth_flame.add_theme_color_override("font_color", FLAME_INK)
+	_hearth_box.add_child(_hearth_flame)
+
+	# Строка ранга (спека §5): символ + титул + два бумажных свитка вех, над
+	# нижним рельсом.
+	_rank_strip = Control.new()
+	_rank_strip.name = "RankStrip"
+	_rank_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_rank_strip)
+	_rank_symbol = CircleRankSymbol.new()
+	_rank_symbol.name = "RankSymbol"
+	_rank_symbol.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rank_strip.add_child(_rank_symbol)
+	_rank_title = g._label("", 14)
+	_rank_title.name = "RankTitle"
+	_rank_title.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_rank_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	if g._font_semi != null:
+		_rank_title.add_theme_font_override("font", g._font_semi)
+	_rank_title.add_theme_color_override("font_color", SIGN_INK)
+	_rank_strip.add_child(_rank_title)
+	_mile_days = _rank_note("MileDays", "Вехи дней: закрывай дневные контракты — дни считаются в круг")
+	_mile_pts = _rank_note("MilePts", "Вехи очков: тир закрытого контракта приносит вечные очки")
+	_rank_strip.add_child(_mile_days)
+	_rank_strip.add_child(_mile_pts)
+	_mile_days_word = _mile_days.get_node("Word") as Label
+	_mile_pts_word = _mile_pts.get_node("Word") as Label
+
 	_ring = TextureButton.new()
 	_ring.name = "Ring"
 	_ring.texture_normal = ContractCard.tex("ring_pull.png")
@@ -159,6 +231,27 @@ func _add_card(row: Control) -> void:
 	card.claimed.connect(_on_claim)
 	row.add_child(card)
 	_cards.append(card)
+
+# Бумажный свиток вех в строке ранга: real paper_note.png +(child Label, как
+# записки баффов — правило immersive UI, не Label-простыня.
+func _rank_note(node_name: String, tip: String) -> TextureRect:
+	var r := TextureRect.new()
+	r.name = node_name
+	r.texture = ContractCard.tex("paper_note.png")
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_SCALE
+	r.mouse_filter = Control.MOUSE_FILTER_STOP
+	r.tooltip_text = tip
+	var w := g._label("", 10)
+	w.name = "Word"
+	w.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	w.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	w.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	w.add_theme_color_override("font_color", NOTE_INK)
+	w.position = Vector2(4.0, 4.0)
+	w.size = RANK_NOTE - Vector2(8.0, 8.0)
+	r.add_child(w)
+	return r
 
 func _relayout() -> void:
 	var vp: Vector2 = g.get_viewport_rect().size
@@ -190,27 +283,56 @@ func _relayout() -> void:
 	_notes.size = Vector2(inner - 2.0 * BAND_DX, 2.0 * (NOTE_SIZE.y + NOTE_GAP))
 	_shelf_daily.position = Vector2(RAIL, _notes.position.y + _notes.size.y + 4.0)
 	_shelf_daily.size = Vector2(inner, SHELF_H)
-	_shelf_weekly.position = Vector2(RAIL, _shelf_daily.position.y + SHELF_H + ROW_DY
-		+ ContractCard.DAILY_SIZE.y + WEEKLY_DY)
-	_shelf_weekly.size = Vector2(inner, SHELF_H)
 	_daily_row.position = Vector2(RAIL, _shelf_daily.position.y + SHELF_H)
 	_daily_row.size = Vector2(inner, ContractCard.DAILY_SIZE.y)
+	_place(_daily_row, ContractCard.DAILY_SIZE)
+	# Доска v2 (Task 7): полка очага — ПОСЛЕ дневного ряда, поэтому её точка
+	# привязки читается фактической высотой ряда, которую вернул wrapping-_place.
+	_shelf_hearth.position = Vector2(RAIL, _daily_row.position.y + _daily_row.size.y + ROW_DY)
+	_shelf_hearth.size = Vector2(inner, HEARTH_H)
+	_hearth_bar.position = Vector2(0.0, HEARTH_H - SHELF_H)
+	_hearth_bar.size = Vector2(inner, SHELF_H)
+	_hearth_box.position = Vector2(8.0, HEARTH_H - SHELF_H - 30.0)
+	_hearth_box.size = Vector2(inner - 16.0, 40.0)
+	_shelf_weekly.position = Vector2(RAIL, _shelf_hearth.position.y + HEARTH_H + ROW_DY)
+	_shelf_weekly.size = Vector2(inner, SHELF_H)
 	_weekly_row.position = Vector2(RAIL, _shelf_weekly.position.y + SHELF_H)
 	_weekly_row.size = Vector2(inner, ContractCard.WEEKLY_SIZE.y)
-	_place(_daily_row, ContractCard.DAILY_SIZE)
 	_place(_weekly_row, ContractCard.WEEKLY_SIZE)
+	# Строка ранга — над нижним рельсом (спека §5), ниже её только сам рельс.
+	_rank_strip.position = Vector2(RAIL, _h - RAIL - RANK_H)
+	_rank_strip.size = Vector2(inner, RANK_H)
+	_rank_symbol.position = Vector2(2.0, (RANK_H - 48.0) / 2.0)
+	_rank_symbol.size = Vector2(48.0, 48.0)
+	_mile_pts.position = Vector2(inner - RANK_NOTE.x, (RANK_H - RANK_NOTE.y) / 2.0)
+	_mile_pts.size = RANK_NOTE
+	_mile_days.position = Vector2(inner - 2.0 * RANK_NOTE.x - 4.0, _mile_pts.position.y)
+	_mile_days.size = RANK_NOTE
+	_rank_title.position = Vector2(56.0, 0.0)
+	_rank_title.size = Vector2(_mile_days.position.x - 62.0, RANK_H)
 	_ring.position = Vector2(_w - RAIL - RING_SIZE.x - 6.0, RAIL + 6.0)
 	_ring.size = RING_SIZE
 	_layout_notes()
 
+# Доска v2 (Task 7, спека §2): ряд — wrapping-сетка. Карточки фиксированного
+# размера, сколько влезает в ширину ряда — ровно столько в линии; остаток
+# уходит на вторую линию, а высота ряда пересчитывается и читается _relayout
+# ФАКТИЧЕСКИМ значением (полка очага и недельная полка привязаны от неё).
 static func _place(row: Control, sz: Vector2) -> void:
 	var n := row.get_child_count()
 	if n == 0:
 		return
-	var total := float(n) * sz.x + float(n - 1) * CARD_GAP
-	var x0 := (row.size.x - total) / 2.0
+	var per_row := maxi(1, int((row.size.x + CARD_GAP) / (sz.x + CARD_GAP)))
+	var rows := int(ceil(float(n) / float(per_row)))
+	row.size = Vector2(row.size.x, float(rows) * sz.y + float(rows - 1) * ROW_DY)
 	for i in range(n):
-		(row.get_child(i) as Control).position = Vector2(x0 + float(i) * (sz.x + CARD_GAP), 0.0)
+		@warning_ignore("integer_division")
+		var r := i / per_row
+		var cnt := mini(per_row, n - r * per_row)
+		var total := float(cnt) * sz.x + float(cnt - 1) * CARD_GAP
+		var x0 := (row.size.x - total) / 2.0
+		(row.get_child(i) as Control).position = Vector2(
+			x0 + float(i % per_row) * (sz.x + CARD_GAP), float(r) * (sz.y + ROW_DY))
 
 func refresh() -> void:
 	var all := g._contracts.daily() + g._contracts.weekly()
@@ -221,7 +343,29 @@ func refresh() -> void:
 			card.visible = true
 		else:
 			card.visible = false
+	_refresh_hearth()
+	_refresh_rank()
 	_relayout()
+
+# Очаг (спека §5): полешко раз в день, пламя — шкала серии.
+func _refresh_hearth() -> void:
+	var c := g._contracts
+	var claimable := c.hearth_claimable()
+	_hearth_btn.text = "Полешко: +%d ⚡" % c.hearth_reward() if claimable else "Забрано ✓"
+	_hearth_btn.disabled = not claimable
+	_hearth_flame.text = c.flame()
+
+func _refresh_rank() -> void:
+	var c := g._contracts
+	var lvl := c.rank_level()
+	_rank_symbol.setup(lvl)
+	_rank_title.text = c.rank_title(lvl)
+	_mile_days_word.text = "Вехи дней: %s" % c.mile_strip("дней", Game.CIRCLE_DAY_MILES, c._mdays)
+	_mile_pts_word.text = "Вехи очков: %s" % c.mile_strip("очков", Game.CIRCLE_PTS_MILES, c._mpts)
+
+func _on_hearth_pressed() -> void:
+	Sfx.click()
+	g._contracts.claim_hearth()
 
 func _layout_notes() -> void:
 	# remove_child + queue_free: освобождение отложено до конца кадра, и без remove_child

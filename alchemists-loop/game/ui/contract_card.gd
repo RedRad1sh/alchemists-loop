@@ -14,6 +14,9 @@ const SEAL_SIZE := 52.0
 const STAMP_SIZE := Vector2(132, 56)
 const STAMP_TILT := -6.0
 const PAD := 14.0
+# Полоса тела карточки (доска v2, Task 7): между счётчиком и наградой.
+const DETAIL_TOP := 70.0
+const DETAIL_GAP := 4.0
 
 const INK := Color(0.16, 0.11, 0.07)
 const STAMP_INK := Color(0.60, 0.24, 0.20)
@@ -32,6 +35,7 @@ var _fade: ShaderMaterial
 var _paper: TextureRect
 var _title: Label
 var _count: Label
+var _detail: VBoxContainer
 var _reward: Label
 var _seal: TextureRect
 var _stamp: TextureButton
@@ -76,6 +80,10 @@ func setup(c: Dictionary) -> void:
 		TIER_INK.get(String(c.get("tier", "bronze")), INK))
 	_count.position = Vector2(PAD, 44.0)
 	_count.size = Vector2(w - 2.0 * PAD, 26.0)
+	# Тело карточки — между счётчиком и наградой; размеры существующих полей не
+	# тронуты (бриф Task 7), полоса тела берёт оставшееся paper-окно.
+	_detail.position = Vector2(PAD, DETAIL_TOP)
+	_detail.size = Vector2(w - 2.0 * PAD, h - DETAIL_TOP - 78.0 - DETAIL_GAP)
 	_reward.position = Vector2(PAD, h - 78.0)
 	_reward.size = Vector2(w - 2.0 * PAD, 62.0)
 	_seal.position = Vector2(w - SEAL_SIZE + 4.0, h - SEAL_SIZE + 4.0)
@@ -99,6 +107,7 @@ func setup(c: Dictionary) -> void:
 	# Материал OWN: у каждой карточки свой экземпляр, иначе одна полученная записка
 	# обесцветила бы всю доску.
 	_fade.set_shader_parameter("amount", 1.0 if done else 0.0)
+	_fill_detail(id, String(c.get("type", "")))
 
 func _build() -> void:
 	_hang = Control.new()
@@ -131,6 +140,15 @@ func _build() -> void:
 	_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_count.add_theme_color_override("font_color", INK)
 	_hang.add_child(_count)
+
+	# Тело карточки (доска v2, Task 7, спека §5): goal_day — строка цели,
+	# vein — ряды капель, fair — строка котла. Обычный VBox: карточка сама
+	# задаёт ему position/size (контейнер в ряду доски не сидит).
+	_detail = VBoxContainer.new()
+	_detail.name = "Detail"
+	_detail.add_theme_constant_override("separation", 2)
+	_detail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hang.add_child(_detail)
 
 	_reward = g._label("", 11)
 	_reward.name = "Reward"
@@ -233,3 +251,73 @@ func _reward_tip(c: Dictionary) -> String:
 	if decor != "":
 		lines.append("%s — украсит Дом" % String(ContractsBalance.DECOR_LABEL.get(decor, "")))
 	return "\n".join(lines)
+
+# ---------- доска v2 (Task 7, спека §5): тела карточек goal_day/vein/fair ----------
+# Карточка ничего не считает: строки цели/котла приходят из Contracts
+# (card_detail_lines), ряды капель — из vein_drop_rows. Пересобирается на
+# каждом setup(): доска перевызывает setup() при каждом refresh().
+func _fill_detail(id: String, type: String) -> void:
+	for ch in _detail.get_children():
+		_detail.remove_child(ch)
+		ch.queue_free()
+	if type == "vein":
+		_fill_vein()
+		return
+	var lines: Array = g._contracts.card_detail_lines(id)
+	for raw in lines:
+		var l := g._label(String(raw), 10)
+		l.name = "FairPot" if type == "fair" else "GoalDay"
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.add_theme_color_override("font_color", INK)
+		# Строка тела ловит мышь: у goal_day в tooltip — подсказка мира.
+		l.mouse_filter = Control.MOUSE_FILTER_STOP
+		if type == "goal_day":
+			var hint := g._contracts.day_hint()
+			if hint != "":
+				l.tooltip_text = "мир: %s" % hint
+		_detail.add_child(l)
+
+# Жила: мини-капли VeinDrop текущего цикла; у registered — «Влить». Три ряда
+# влезают в weekly-полосу (184×244), остальные сворачиваются в «…ещё N».
+func _fill_vein() -> void:
+	var rows: Array = g._contracts.vein_drop_rows()
+	var shown := mini(rows.size(), 3)
+	for i in range(shown):
+		var row_data := rows[i] as Dictionary
+		var st := String(row_data["status"])
+		var hbox := HBoxContainer.new()
+		hbox.name = "VeinDropRow%d" % i
+		hbox.add_theme_constant_override("separation", 3)
+		hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_detail.add_child(hbox)
+		var drop := VeinDrop.new()
+		drop.setup(row_data["color"] as Color, st, Vector2(18, 22))
+		hbox.add_child(drop)
+		var word := "ждёт мира" if st == "pending_server" else ("влита ✓" \
+			if st == "poured" or st == "auto_applied" else "«%s»" % String(row_data["tag"]))
+		var fl := g._label(word, 9)
+		fl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		fl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		fl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		fl.add_theme_color_override("font_color", INK)
+		hbox.add_child(fl)
+		if st == "registered":
+			var pb := Button.new()
+			pb.name = "Pour"
+			pb.text = "Влить"
+			pb.custom_minimum_size = Vector2(44, 22)
+			pb.focus_mode = Control.FOCUS_NONE
+			pb.add_theme_font_size_override("font_size", 10)
+			UIStyle.style_button(pb, 2, 6)
+			pb.pressed.connect(_on_pour_pressed.bind(String(row_data["find_id"])))
+			hbox.add_child(pb)
+	if rows.size() > shown:
+		var more := g._label("…ещё %d" % (rows.size() - shown), 9)
+		more.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		more.add_theme_color_override("font_color", INK)
+		_detail.add_child(more)
+
+func _on_pour_pressed(find_id: String) -> void:
+	Sfx.click()
+	g._contracts._vein_pour(find_id)
