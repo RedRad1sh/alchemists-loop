@@ -1,7 +1,7 @@
 extends RefCounted
 class_name SuiteSaveSync
-# Task 6/7: самодостаточные определения рецептов (known_recipe_defs) + SAVE_VERSION=4
-# и миграция v3→v4. membership known_recipes == known_recipe_defs.keys(); сейв хранит
+# Task 6/7: самодостаточные определения рецептов (known_recipe_defs) + SAVE_VERSION=5
+# (доска v2 Task 6 поднял формат до 5) и миграция v3→v5. membership known_recipes == known_recipe_defs.keys(); сейв хранит
 # defs целиком, загрузка больше не режет знание пересечением с каталогом (фикс Bug B).
 
 const ST_PATH := "user://alchemy_st_save_sync.json"
@@ -29,8 +29,8 @@ static func _save_writes_self_contained_defs(g: Game) -> void:
 		and String((saved_defs as Dictionary)[key].get("out", "")) == "steam"
 	Selftest.check("save_sync: save writes self-contained defs", ok)
 
-# Шаг миграции v3→v4: старый сейв = только массив ключей. Чтение обязано собрать
-# определения из каталога (fire+water → steam) и поднять version до 4.
+# Шаг миграции старого сейва: до 4 — только массив ключей. Чтение обязано собрать
+# определения из каталога (fire+water → steam) и поднять version до SAVE_VERSION (5).
 static func _migration_v3_builds_defs(g: Game) -> void:
 	var key := g._pair_key("fire", "water")
 	var raw := {
@@ -43,9 +43,9 @@ static func _migration_v3_builds_defs(g: Game) -> void:
 	f.close()
 	var data := g._saves._read_save(g.SAVE_PATH)
 	var defs: Dictionary = data.get("known_recipe_defs", {})
-	var ok := int(data.get("version", 0)) == 4 and defs.has(key) \
+	var ok := int(data.get("version", 0)) == 5 and defs.has(key) \
 		and String(defs[key].get("out", "")) == "steam"
-	Selftest.check("save_sync: v3→v4 migration rebuilds defs from catalog", ok)
+	Selftest.check("save_sync: v3→v5 migration rebuilds defs from catalog", ok)
 
 static func _union_load_keeps_lost_recipe(g: Game) -> void:
 	# Bug B: пара, определения которой нет в текущем каталоге, раньше терялась при
@@ -53,7 +53,7 @@ static func _union_load_keeps_lost_recipe(g: Game) -> void:
 	# «known but not currently brewable» (var-выход shadow нереален → не варится).
 	var key := g._pair_key("ghostrock", "mist")
 	var raw := {
-		"version": 4,
+		"version": 5,
 		"inventory": {"ghostrock": 1, "mist": 1},
 		"known_recipes": [key],
 		"known_recipe_defs": {key: {"a": "ghostrock", "b": "mist", "out": "shadow"}},
@@ -104,13 +104,13 @@ static func _request_sync_offline_fail_open(g: Game) -> void:
 static func _envelope_fail_closed_device(g: Game) -> void:
 	var saved_device := g._online._device_id
 	g._online._device_id = "dev-mine"
-	var foreign := {"version": 4, "inventory": {"fire": 1}, "ether": 50,
+	var foreign := {"version": 5, "inventory": {"fire": 1}, "ether": 50,
 		"known_recipes": [], "device_id": "dev-other"}
 	var f := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
 	f.store_string(JSON.stringify(foreign))
 	f.close()
 	var rejected: Dictionary = g._saves._read_save(g.SAVE_PATH)
-	var own := {"version": 4, "inventory": {"fire": 1}, "ether": 50,
+	var own := {"version": 5, "inventory": {"fire": 1}, "ether": 50,
 		"known_recipes": [], "device_id": "dev-mine"}
 	f = FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
 	f.store_string(JSON.stringify(own))
@@ -123,7 +123,7 @@ static func _envelope_fail_closed_device(g: Game) -> void:
 # Task 11: per-Part fail-open — битый Part B (known_recipes не массив) обязан
 # деградировать знание, но Part C (эфир/инвентарь) применится, а не отменит сейв.
 static func _per_part_fail_open_knowledge(g: Game) -> void:
-	var raw := {"version": 4, "inventory": {"fire": 1, "water": 1}, "ether": 100,
+	var raw := {"version": 5, "inventory": {"fire": 1, "water": 1}, "ether": 100,
 		"known_recipes": 5}
 	var f := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
 	f.store_string(JSON.stringify(raw))

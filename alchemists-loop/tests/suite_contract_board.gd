@@ -927,7 +927,11 @@ static func run(g: Game) -> void:
 	# ---------------- проводка ----------------
 	Selftest.check("g._contracts exists and points back at the game",
 		g._contracts != null and g._contracts.g == g)
-	Selftest.check("§4.1 CONTRACTS_SAVE_VERSION is 1", Contracts.CONTRACTS_SAVE_VERSION == 1)
+	# доска v2 Task 6 (спека §6): блок переехал на v2 — чинит 17 новых ключей.
+	Selftest.check("§4.1 CONTRACTS_SAVE_VERSION is 2", Contracts.CONTRACTS_SAVE_VERSION == 2)
+	# доска v2 Task 6: формат сейва поднялся до 5; v4-файлы остаются читаемыми
+	# (гейт _read_save принимает 1..SAVE_VERSION) и мигрируют presence-based.
+	Selftest.check("§6 Game.SAVE_VERSION is 5", Game.SAVE_VERSION == 5)
 	# Живой экземпляр генерирует сегодняшний набор при первом обращении.
 	# доска v2: размер ряда 3/2→4/4, условие названо литералом.
 	Selftest.check("§1.4 the live instance generates 4 daily and 4 weekly on first access",
@@ -1658,6 +1662,9 @@ static func run(g: Game) -> void:
 	# Блок сейва идёт последним и отдельной функции: он трогает пути сейва,
 	# пишет файлы и перезагружает мир.
 	_contracts_durability_checks(g)
+	# доска v2 Task 6 (спека §6): сейв v5, блок contracts v2 и presence-миграция
+	# старых retention-ключей — свой блок со своими путями сейва и откатом.
+	_cb_save_v5_checks(g)
 
 static func _contract_board_checks(g: Game) -> void:
 	# §5.2/§5.4: полная проверка доски — слои, карточки, записки, попап, закрытие.
@@ -2008,11 +2015,16 @@ static func _contracts_durability_checks(g: Game) -> void:
 	var shape := c.save_block()
 	var names: Array = shape.keys()
 	names.sort()
-	var expect: Array = ["buffs", "daily", "daily_done", "daily_prog", "decor",
-		"last_daily", "last_output", "last_weekly", "set_week", "variety",
-		"version", "weekly", "weekly_done", "weekly_prog"]
+	# доска v2 Task 6 (спека §6): к четырёмнадцати ключам §4.1 добавлены семнадцать
+	# мигрированных полей (круг/ярмарка/жила) — circle_last в блоке нет.
+	var expect: Array = ["active_title", "buffs", "cycle_cache", "daily", "daily_done",
+		"daily_prog", "day_hint", "decor", "fair_local_brews", "fair_local_week",
+		"fair_off_claim_week", "fair_regen_total", "hearth_claim", "last_daily",
+		"last_output", "last_weekly", "mdays", "mpts", "pts_total", "set_week",
+		"streak_run", "unlocked_titles", "variety", "vein_cap_total", "vein_finds",
+		"version", "visit_days", "week_cache", "weekly", "weekly_done", "weekly_prog"]
 	expect.sort()
-	Selftest.check("§4.2 save_block carries exactly the fourteen §4.1 state keys",
+	Selftest.check("§4.2 save_block carries exactly the thirty-one state keys (§4.1 + §6)",
 		names == expect)
 
 	# ---- 2. round-trip (§6.16): rich-состояние → файл → память начисто → загрузка ----
@@ -2207,6 +2219,275 @@ static func _contracts_durability_checks(g: Game) -> void:
 		and not FileAccess.file_exists("user://alchemy_st_contracts_dur.json")
 		and c._unlocked_decor == (saved_state["decor"] as Array)
 		and c._active_buffs == (saved_state["buffs"] as Dictionary))
+
+# доска v2 Task 6 (спека §6): сейв v5, блок contracts v2 и однократная
+# presence-миграция старых retention-ключей. Сюита красная, пока миграция —
+# заглушка: поля после вызова остаются дефолтными, файл после пересохранения
+# несёт старые ключи, а блок — версию 1.
+static func _cb_clear_migrated(c: Contracts) -> void:
+	# Принудительные дефолты переехавших полей средствами сюиты: в RED-фазе
+	# _clear_state их не чистит, и проверки обязаны краснеть поведением миграции,
+	# а не случайным остатком живого состояния.
+	c._visit_days = []
+	c._streak_run = 0
+	c._last_visit_day = ""
+	c._hearth_claim = ""
+	c._pts_total = 0
+	c._mdays = 0
+	c._mpts = 0
+	c._unlocked_titles = []
+	c._active_title = ""
+	c._day_hint = ""
+	c._week_cache = {}
+	c._cycle_cache = {}
+	c._vein_finds = []
+	c._vein_cap_total = 0
+	c._fair_regen_total = 0.0
+	c._fair_local_week = ""
+	c._fair_local_brews = []
+	c._fair_off_claim_week = ""
+
+static func _cb_save_v5_checks(g: Game) -> void:
+	var c := g._contracts
+	var migrated_keys := ["streak_run", "visit_days", "hearth_claim", "pts_total",
+		"mdays", "mpts", "unlocked_titles", "active_title", "day_hint", "week_cache",
+		"cycle_cache", "vein_finds", "vein_cap_total", "fair_regen_total",
+		"fair_local_week", "fair_local_brews", "fair_off_claim_week"]
+	var legacy_keys := ["circle_days", "circle_run", "circle_last", "hearth_claim",
+		"circle_pts_total", "circle_mdays", "circle_mpts", "circle_hint",
+		"unlocked_titles", "active_title", "week_cache", "cycle_cache",
+		"vein_cap_total", "vein_pending_finds", "fair_regen_total", "fair_local_week",
+		"fair_local_brews", "fair_off_claim_week"]
+	# --- снимки живого мира; откат в конце — образец _contracts_durability_checks ---
+	var saved_paths: Array = [g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH]
+	var saved_frozen := g._saves._save_frozen
+	var saved_last_ts := g._last_ts
+	var saved_state := _cb_snapshot(c)
+	var saved_week := {
+		"week_cache": c._week_cache, "cycle_cache": c._cycle_cache,
+		"vein_finds": c._vein_finds, "vein_cap": c._vein_cap_total,
+		"regen": c._fair_regen_total, "local_week": c._fair_local_week,
+		"local_brews": c._fair_local_brews, "off_claim": c._fair_off_claim_week,
+		"last_visit_day": c._last_visit_day,
+	}
+	var saved_crafts: Array = g._sigil._daily_crafts.duplicate(true)
+	var saved_status := g._engine.status_text
+	for path in saved_paths:
+		if FileAccess.file_exists(String(path)):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(String(path)))
+	g.SAVE_PATH = "user://alchemy_st_cb_v5.json"
+	g.TEMP_PATH = "user://alchemy_st_cb_v5.tmp"
+	g.BACKUP_PATH = "user://alchemy_st_cb_v5.bak"
+	g._saves._save_frozen = false
+	var baseline_written := g._saves._save_game()
+	var baseline_data := g._saves._read_save(g.SAVE_PATH)
+	Selftest.check("save v5 fixture baseline save written",
+		baseline_written and not baseline_data.is_empty())
+
+	# ---- 1. миграция прямым вызовом: фикстура = полный валидный сейв ----
+	# (собирается из baseline_data, т.е. из вывода _save_game(): version 4 +
+	# сохранённые inventory/ether/unknown-гейты; без этого _read_save отбрасывает
+	# файл до миграции и проверка была бы зелёной на пустом месте).
+	var mig := baseline_data.duplicate(true)
+	mig["version"] = 4
+	mig["circle_days"] = ["2026-10-18"]
+	mig["circle_run"] = 3
+	mig["circle_last"] = "2026-10-18"
+	mig["hearth_claim"] = ""
+	mig["circle_pts_total"] = 61
+	mig["circle_mdays"] = 1
+	mig["circle_mpts"] = 1
+	mig["circle_hint"] = "Мох"
+	mig["unlocked_titles"] = ["Искра"]
+	mig["active_title"] = "Искра"
+	mig["week_cache"] = {"week": "2026-W42"}
+	mig["cycle_cache"] = {"cycle_id": "vc:m"}
+	mig["vein_cap_total"] = 2
+	mig["vein_pending_finds"] = []
+	mig["fair_regen_total"] = 0.05
+	mig["fair_local_week"] = "2026-W42"
+	mig["fair_local_brews"] = ["a"]
+	mig["fair_off_claim_week"] = ""
+	c._clear_state()
+	_cb_clear_migrated(c)
+	var cap_before := g._engine._max_ether()
+	g._saves._migrate_retention_into_contracts(mig)
+	Selftest.check("migration v4→v5 moves retention into contracts",
+		c._streak_run == 3 and c._visit_days == ["2026-10-18"]
+		and c._pts_total == 61 and c._vein_cap_total == 2
+		and absf(c._fair_regen_total - 0.05) < 0.0001
+		and c._day_hint == "Мох")
+	# Веха дней 7 даёт +5 капа, веха очков 50 — +3, vein_cap_total — +2: вместе +10.
+	# Заодно доказывает, что миграция присвоила mdays/mpts из файла.
+	Selftest.check("migration keeps cap/regen numbers",
+		g._engine._max_ether() == cap_before + 10)
+	# circle_last не персистится — миграция выводит день из visit_days;
+	# _migrate_missed_milestones обязана отработать на присвоенных числах.
+	Selftest.check("migration re-derives circle_last and grants missed milestones",
+		c._last_visit_day == "2026-10-18" and c._mdays == 1 and c._mpts == 1
+		and c._week_cache == {"week": "2026-W42"} and c._cycle_cache == {"cycle_id": "vc:m"}
+		and c._fair_local_week == "2026-W42" and c._fair_local_brews == ["a"]
+		and c._unlocked_titles.has("Искра") and c._unlocked_titles.has("Тлеющий"))
+	# presence-гейт (не version-гейт): после миграции ключи не пишутся — повторный
+	# прогон на свежем сейве обязан быть no-op.
+	c._clear_state()
+	_cb_clear_migrated(c)
+	c._streak_run = 9
+	g._saves._migrate_retention_into_contracts(baseline_data)
+	Selftest.check("migration without legacy keys is a presence-gated no-op",
+		c._streak_run == 9)
+	c._streak_run = 0
+
+	# ---- 2. интеграция: v4-файл целиком проходит через _load_game ----
+	c._clear_state()
+	_cb_clear_migrated(c)
+	var mf := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	mf.store_string(JSON.stringify(mig, "\t", true, true))
+	mf.close()
+	g._saves._load_game()
+	Selftest.check("save v4 file loads and migrates through _load_game",
+		c._streak_run == 3 and c._visit_days == ["2026-10-18"] and c._day_hint == "Мох"
+		and c._vein_cap_total == 2 and absf(c._fair_regen_total - 0.05) < 0.0001
+		and c._last_visit_day == "2026-10-18")
+	g._saves._save_game()
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(g.SAVE_PATH))
+	var raw: Dictionary = parsed if parsed is Dictionary else {}
+	var blk: Dictionary = raw.get("contracts", {}) if raw.get("contracts", {}) is Dictionary else {}
+	var legacy_gone := int(raw.get("version", 0)) == Game.SAVE_VERSION
+	for k in legacy_keys:
+		if raw.has(String(k)):
+			legacy_gone = false
+	# server_tags — ключ Online, не retention: обязан остаться на верхнем уровне.
+	Selftest.check("resave after migration writes v5 without legacy keys",
+		legacy_gone and raw.has("server_tags") and not raw.has("circle_last"))
+	Selftest.check("resave carries block v2 with the migrated keys",
+		int(blk.get("version", 0)) == 2 and int(blk.get("streak_run", -1)) == 3
+		and blk.get("visit_days") == ["2026-10-18"] and String(blk.get("day_hint", "")) == "Мох"
+		and int(blk.get("vein_cap_total", -1)) == 2
+		and not blk.has("circle_last") and not blk.has("last_visit_day"))
+	# Второй заход: ключей нет — состояние целиком из блока v2, миграция не нужна.
+	c._clear_state()
+	_cb_clear_migrated(c)
+	g._saves._load_game()
+	Selftest.check("second load restores migrated fields from block v2",
+		c._streak_run == 3 and c._visit_days == ["2026-10-18"] and c._pts_total == 61
+		and c._mdays == 1 and c._mpts == 1 and c._day_hint == "Мох"
+		and c._vein_cap_total == 2 and absf(c._fair_regen_total - 0.05) < 0.0001
+		and c._last_visit_day == "2026-10-18" and c._unlocked_titles.has("Искра"))
+
+	# ---- 3. форма блока v2: ключи, round-trip, дефолты версии 1 ----
+	var p1 := Contracts.new(g)
+	p1.ensure_period()
+	p1._visit_days = ["2026-10-18"]
+	p1._streak_run = 3
+	p1._last_visit_day = "2026-10-18"
+	p1._hearth_claim = "2026-10-17"
+	p1._pts_total = 61
+	p1._mdays = 1
+	p1._mpts = 1
+	p1._unlocked_titles = ["Искра"]
+	p1._active_title = "Искра"
+	p1._day_hint = "Мох"
+	p1._week_cache = {"week": "2026-W42"}
+	p1._cycle_cache = {"cycle_id": "vc:m"}
+	p1._vein_finds = [{"id": "f-1", "tag": "Мох"}]
+	p1._vein_cap_total = 2
+	p1._fair_regen_total = 0.05
+	p1._fair_local_week = "2026-W42"
+	p1._fair_local_brews = ["a"]
+	p1._fair_off_claim_week = ""
+	var v2blk := p1.save_block()
+	var has_all := int(v2blk.get("version", 0)) == 2 and not v2blk.has("last_visit_day")
+	for k in migrated_keys:
+		if not v2blk.has(String(k)):
+			has_all = false
+	Selftest.check("contracts block v2 carries the seventeen migrated keys and no circle_last",
+		has_all)
+	# duplicate(true): мутация источника не должна протекать в записанный блок.
+	p1._visit_days.append("2999-12-31")
+	(p1._week_cache as Dictionary)["week"] = "mut"
+	(p1._vein_finds[0] as Dictionary)["id"] = "mut"
+	p1._unlocked_titles.append("Мусор")
+	var p2 := Contracts.new(g)
+	p2.load_block(v2blk)
+	Selftest.check("v2 block round-trips every migrated field and re-derives last visit",
+		p2._streak_run == 3 and p2._visit_days == ["2026-10-18"]
+		and p2._hearth_claim == "2026-10-17" and p2._pts_total == 61
+		and p2._mdays == 1 and p2._mpts == 1 and p2._unlocked_titles == ["Искра"]
+		and p2._active_title == "Искра" and p2._day_hint == "Мох"
+		and p2._week_cache == {"week": "2026-W42"} and p2._cycle_cache == {"cycle_id": "vc:m"}
+		and p2._vein_finds.size() == 1
+		and String((p2._vein_finds[0] as Dictionary)["id"]) == "f-1"
+		and p2._vein_cap_total == 2 and absf(p2._fair_regen_total - 0.05) < 0.0001
+		and p2._fair_local_week == "2026-W42" and p2._fair_local_brews == ["a"]
+		and p2._last_visit_day == "2026-10-18")
+	# Версия 1 принимается (§4.3 1..CONTRACTS_SAVE_VERSION): оси читаются, новых
+	# полей в блоке нет → дефолты, а не падение и не дроп блока.
+	var v1blk := v2blk.duplicate(true)
+	v1blk["version"] = 1
+	for k in migrated_keys:
+		v1blk.erase(String(k))
+	var p3 := Contracts.new(g)
+	p3._streak_run = 9
+	p3._day_hint = "остаток"
+	p3.load_block(v1blk)
+	Selftest.check("a version-1 block still loads its axes and leaves migrated fields default",
+		p3._contracts_daily.size() == 4 and p3._contracts_weekly.size() == 4
+		and p3._streak_run == 0 and p3._visit_days.is_empty() and p3._day_hint == ""
+		and p3._week_cache.is_empty() and p3._vein_finds.is_empty()
+		and p3._fair_regen_total == 0.0 and p3._last_visit_day == "")
+
+	# ---- 4. новая игра (§6): reset_new_game чистит и переехавшие поля ----
+	c._streak_run = 3
+	c._day_hint = "Мох"
+	c._vein_cap_total = 2
+	c._week_cache = {"week": "w"}
+	c._fair_regen_total = 0.05
+	c._visit_days = ["2026-10-18"]
+	var reset_ok := g._init_new_game()
+	Selftest.check("§6.19 new game wipes every migrated retention field too",
+		reset_ok and c._streak_run == 0 and c._visit_days.is_empty()
+		and c._day_hint == "" and c._vein_cap_total == 0 and c._week_cache.is_empty()
+		and c._cycle_cache.is_empty() and c._vein_finds.is_empty()
+		and c._fair_regen_total == 0.0 and c._fair_local_week == ""
+		and c._fair_local_brews.is_empty() and c._fair_off_claim_week == ""
+		and c._hearth_claim == "" and c._pts_total == 0 and c._mdays == 0
+		and c._mpts == 0 and c._unlocked_titles.is_empty() and c._active_title == ""
+		and c._last_visit_day == "")
+
+	# ---- откат: мир возвращается настоящим _load_game() из baseline-сейва ----
+	var restore_world := baseline_data.duplicate(true)
+	restore_world.erase("contracts")
+	_cb_put_block_restore(g, restore_world)
+	g._saves._load_game()
+	_cb_restore(c, saved_state)
+	c._week_cache = saved_week["week_cache"]
+	c._cycle_cache = saved_week["cycle_cache"]
+	c._vein_finds = saved_week["vein_finds"]
+	c._vein_cap_total = int(saved_week["vein_cap"])
+	c._fair_regen_total = float(saved_week["regen"])
+	c._fair_local_week = String(saved_week["local_week"])
+	c._fair_local_brews = saved_week["local_brews"]
+	c._fair_off_claim_week = String(saved_week["off_claim"])
+	c._last_visit_day = String(saved_week["last_visit_day"])
+	for p in [g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH]:
+		if FileAccess.file_exists(String(p)):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(String(p)))
+	for path in saved_paths:
+		var leftover := String(path)
+		if FileAccess.file_exists(leftover):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(leftover))
+	g.SAVE_PATH = String(saved_paths[0])
+	g.TEMP_PATH = String(saved_paths[1])
+	g.BACKUP_PATH = String(saved_paths[2])
+	g._saves._save_frozen = saved_frozen
+	g._last_ts = saved_last_ts
+	g._sigil._daily_crafts = saved_crafts
+	g._engine.status_text = saved_status
+	g._engine._refresh()
+	Selftest.check("save v5 fixture restores world and files",
+		g.SAVE_PATH == String(saved_paths[0]) and not FileAccess.file_exists(g.SAVE_PATH)
+		and not FileAccess.file_exists("user://alchemy_st_cb_v5.json"))
 
 # ---------- §5.2–5.5: хелперы и проверки ассетов ----------
 

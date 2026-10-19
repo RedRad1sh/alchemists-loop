@@ -140,32 +140,10 @@ func _save_game() -> bool:
 		"wall_hex": "#" + g._home._cosmetic_wall.to_html(false),
 		"floor_hex": "#" + g._home._cosmetic_floor.to_html(false),
 		"custom_unlocked": g._home._custom_unlocked,
-		# Доска v2 (Task 4): дневная половина (очаг/вехи/ранг) принадлежит
-		# Contracts — меняется только объект-владелец, ИМЕНА КЛЮЧЕЙ сейва
-		# остаются старыми (миграция ключей — Task 6). Поля удалённой механики
-		# (disc/reward_day/mine/local_done_day/intro_shown) больше не пишутся.
-		"circle_days": g._contracts._visit_days,
-		"circle_run": g._contracts._streak_run,
-		"circle_last": g._contracts._last_visit_day,
-		"hearth_claim": g._contracts._hearth_claim,
-		"circle_pts_total": g._contracts._pts_total,
-		"circle_mdays": g._contracts._mdays,
-		"circle_mpts": g._contracts._mpts,
-		"circle_hint": g._contracts._day_hint,
-		# Доска v2 (Task 3): недельный слой принадлежит Contracts — меняется
-		# только объект-владелец, ИМЕНА КЛЮЧЕЙ сейва остаются старыми (миграция
-		# ключей — Task 6, иначе старые файлы перестали бы читаться).
-		"week_cache": g._contracts._week_cache,
-		"vein_cap_total": g._contracts._vein_cap_total,
-		"cycle_cache": g._contracts._cycle_cache,
-		"vein_pending_finds": g._contracts._vein_finds,
-		"unlocked_titles": g._contracts._unlocked_titles,
-		"active_title": g._contracts._active_title,
+		# Доска v2 (Task 6, спека §6): ключи очага/вех/круга/ярмарки переехали в
+		# блок contracts v2 (save_block) и здесь больше не пишутся. server_tags —
+		# знание Online, остаётся на верхнем уровне.
 		"server_tags": g._online._server_tag,
-		"fair_regen_total": g._contracts._fair_regen_total,
-		"fair_local_week": g._contracts._fair_local_week,
-		"fair_local_brews": g._contracts._fair_local_brews,
-		"fair_off_claim_week": g._contracts._fair_off_claim_week,
 		"contracts": g._contracts.save_block()
 	}
 	var file := FileAccess.open(g.TEMP_PATH, FileAccess.WRITE)
@@ -211,6 +189,42 @@ static func _timestamp(raw: Variant) -> float:
 	if (raw is int or raw is float) and is_finite(float(raw)) and float(raw) >= 0.0:
 		return float(raw)
 	return 0.0
+
+# Доска v2 (Task 6, спека §6): однократная presence-миграция старых retention-
+# ключей сейва в Contracts. Гейт — наличие ключей (не версия): после миграции
+# ключи больше не пишутся, повторный заход на таком файле — no-op. Чистки
+# значений общие с блоком v2 (fail-closed, float-безопасные).
+func _migrate_retention_into_contracts(data: Dictionary) -> void:
+	if not (data.has("circle_days") or data.has("circle_run") \
+			or data.has("vein_pending_finds") or data.has("fair_regen_total")):
+		return
+	var c := g._contracts
+	c._visit_days = Contracts._clean_day_keys(data.get("circle_days", null))
+	c._streak_run = Contracts._clean_whole_int(data.get("circle_run", null))
+	c._hearth_claim = Contracts._clean_plain_string(data.get("hearth_claim", null))
+	c._pts_total = Contracts._clean_whole_int(data.get("circle_pts_total", null))
+	c._mdays = Contracts._clean_milestone(data.get("circle_mdays", null), Game.CIRCLE_DAY_MILES.size())
+	c._mpts = Contracts._clean_milestone(data.get("circle_mpts", null), Game.CIRCLE_PTS_MILES.size())
+	c._day_hint = Contracts._clean_plain_string(data.get("circle_hint", null))
+	c._week_cache = Contracts._clean_plain_dict(data.get("week_cache", null))
+	c._cycle_cache = Contracts._clean_plain_dict(data.get("cycle_cache", null))
+	c._vein_finds = Contracts._clean_vein_finds(data.get("vein_pending_finds", null))
+	c._vein_cap_total = Contracts._clean_whole_int(data.get("vein_cap_total", null))
+	c._unlocked_titles = Contracts._clean_plain_strings(data.get("unlocked_titles", null))
+	c._active_title = Contracts._clean_plain_string(data.get("active_title", null))
+	c._fair_regen_total = Contracts._clean_regen(data.get("fair_regen_total", null))
+	c._fair_local_week = Contracts._clean_plain_string(data.get("fair_local_week", null))
+	c._fair_local_brews = Contracts._clean_plain_strings(data.get("fair_local_brews", null))
+	c._fair_off_claim_week = Contracts._clean_plain_string(data.get("fair_off_claim_week", null))
+	# circle_last не персистится (спека §6): день последнего визита выводится
+	# из visit_days тем же хелпером, что и загрузка блока v2.
+	c._derive_last_visit()
+	# Прежние побочные эффекты читалки: титулы/камины за уже пройденные вехи и
+	# пересчёт вех по свежим счётчикам (ничего не начисляются вторично —
+	# _check_*/migrate только догоняют до текущих чисел).
+	c._migrate_missed_milestones()
+	c._check_day_miles()
+	c._check_pts_miles()
 
 func _load_game() -> void:
 	var data := _read_save(g.SAVE_PATH)
@@ -439,46 +453,17 @@ func _load_game() -> void:
 			g._home._custom_unlocked["wall"] = true
 		if String(data.get("floor_hex", "")) != "":
 			g._home._custom_unlocked["floor"] = true
-	# Доска v2 (Task 4): те же ключи, что в writer, но владелец — Contracts;
-	# удалённая механика (disc/reward_day/mine/local_done_day/intro_shown) больше
-	# не читается — ключи из старых сейвов просто игнорируются до Task 6.
-	g._contracts._visit_days.clear()
-	if data.get("circle_days") is Array:
-		for d in data["circle_days"]:
-			g._contracts._visit_days.append(String(d))
-	g._contracts._streak_run = maxi(0, int(data.get("circle_run", 0)))
-	g._contracts._last_visit_day = String(data.get("circle_last", ""))
-	g._contracts._hearth_claim = String(data.get("hearth_claim", ""))
-	g._contracts._pts_total = maxi(0, int(data.get("circle_pts_total", 0)))
-	g._contracts._mdays = clampi(int(data.get("circle_mdays", 0)), 0, Game.CIRCLE_DAY_MILES.size())
-	g._contracts._mpts = clampi(int(data.get("circle_mpts", 0)), 0, Game.CIRCLE_PTS_MILES.size())
-	g._contracts._day_hint = String(data.get("circle_hint", ""))
-	g._contracts._week_cache = data.get("week_cache", {}) if data.get("week_cache", {}) is Dictionary else {}
-	g._contracts._vein_cap_total = maxi(0, int(data.get("vein_cap_total", 0)))
-	g._contracts._cycle_cache = data.get("cycle_cache", {}) if data.get("cycle_cache", {}) is Dictionary else {}
-	g._contracts._vein_finds.clear()
-	if data.get("vein_pending_finds") is Array:
-		for f in data["vein_pending_finds"]:
-			if typeof(f) == TYPE_DICTIONARY and f.has("id"):
-				g._contracts._vein_finds.append(f)
-	g._contracts._unlocked_titles.clear()
-	if data.get("unlocked_titles") is Array:
-		for t in data["unlocked_titles"]:
-			g._contracts._unlocked_titles.append(String(t))
-	g._contracts._active_title = String(data.get("active_title", ""))
-	# Migration: grant titles and fireplace rewards for milestones already passed
-	g._contracts._migrate_missed_milestones()
+	# Доска v2 (Task 6, спека §6): старые retention-ключи больше не читаются
+	# построчно — при наличии хотя бы одного из них запускается однократная
+	# presence-миграция в Contracts (порядок присваиваний и побочные вызовы —
+	# прежние: вехи, титулы, капы). В v5-сейвах ключей нет, всё несёт блок v2.
+	if data.has("circle_days") or data.has("circle_run") or data.has("vein_pending_finds") \
+			or data.has("fair_regen_total"):
+		_migrate_retention_into_contracts(data)
 	g._online._server_tag.clear()
 	if data.get("server_tags") is Dictionary:
 		for k in data["server_tags"]:
 			g._online._server_tag[String(k)] = String(data["server_tags"][k])
-	g._contracts._fair_regen_total = clampf(float(data.get("fair_regen_total", 0.0)), 0.0, Game.FAIR_REGEN_CAP)
-	g._contracts._fair_local_week = String(data.get("fair_local_week", ""))
-	g._contracts._fair_local_brews.clear()
-	if data.get("fair_local_brews") is Array:
-		for b in data["fair_local_brews"]:
-			g._contracts._fair_local_brews.append(String(b))
-	g._contracts._fair_off_claim_week = String(data.get("fair_off_claim_week", ""))
 	g._spirit._companion_apply_level()
 	g._engine.ether_overflow = maxi(0, int(data.get("ether_overflow", 0)))
 	# Состояние конверта синхронизации: ревизия клиента и якорь оффлайн-накопления.

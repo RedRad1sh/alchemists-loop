@@ -5,7 +5,7 @@ class_name Contracts
 # (§1.5: при переходе на сервер-авторитет набор начнёт приходить с сервера, и
 # этот файл останется единственным, кто знает разницу).
 
-const CONTRACTS_SAVE_VERSION := 1
+const CONTRACTS_SAVE_VERSION := 2
 
 var g: Game
 
@@ -28,11 +28,9 @@ var _last_output := ""
 var _day_goal_cache := {}
 var _orders_syncing := false
 var _day_hint := ""
-# доска v2 Task 4: очаг/вехи/ранг переехали из Retention. Визит-день теперь не
-# «открыли приложение», а «закрыли дневной контракт» — серия и дни копятся только
-# закрытиями. Поля вечные, поэтому НЕ входят в save_block (§4.2 проверяет ровно
-# четырнадцать ключей): их хранят верхнеуровневые ключи сейва под старыми именами,
-# миграция ключей — Task 6.
+# доска v2 Task 4/6: очаг/вехи/ранг переехали из Retention и с Task 6 (спека §6)
+# живут в блоке contracts v2 — круговые ключи верхнего уровня сейва больше не
+# пишутся. Визит-день = день закрытия дневного контракта.
 var _visit_days: Array = []
 var _streak_run := 0
 var _last_visit_day := ""
@@ -660,6 +658,78 @@ static func _whole(raw: Variant) -> float:
 		return float(raw)
 	return -1.0
 
+# ---------- доска v2 (Task 6, спека §6): cleaners переехавших полей блока ----------
+# Fail-closed политика та же, что у осей: сомнительное значение не переезжает и
+# остаётся дефолтом из _clear_state; целые числа сверяются через _whole, потому
+# что JSON в Godot 4 отдаёт ЛЮБОЕ число как float.
+static func _clean_whole_int(raw: Variant) -> int:
+	var v := _whole(raw)
+	return int(v) if v >= 0.0 else 0
+
+static func _clean_milestone(raw: Variant, limit: int) -> int:
+	var v := _whole(raw)
+	if v < 0.0:
+		return 0
+	return clampi(int(v), 0, limit)
+
+static func _clean_plain_string(raw: Variant) -> String:
+	return String(raw) if raw is String else ""
+
+static func _clean_plain_dict(raw: Variant) -> Dictionary:
+	return (raw as Dictionary).duplicate(true) if raw is Dictionary else {}
+
+static func _clean_plain_strings(raw: Variant) -> Array:
+	var out: Array = []
+	if not (raw is Array):
+		return out
+	for entry in (raw as Array):
+		if entry is String:
+			out.append(String(entry))
+	return out
+
+static func _is_day_key(s: String) -> bool:
+	if s.length() != 10 or s[4] != "-" or s[7] != "-":
+		return false
+	for i in [0, 1, 2, 3, 5, 6, 8, 9]:
+		var code := s.unicode_at(i)
+		if code < 48 or code > 57:
+			return false
+	return true
+
+static func _clean_day_keys(raw: Variant) -> Array:
+	var out: Array = []
+	if not (raw is Array):
+		return out
+	for entry in (raw as Array):
+		if entry is String and _is_day_key(String(entry)):
+			out.append(String(entry))
+	# тот же кап истории визитов, что держит track_visit.
+	while out.size() > 400:
+		out.pop_front()
+	return out
+
+static func _clean_vein_finds(raw: Variant) -> Array:
+	var out: Array = []
+	if not (raw is Array):
+		return out
+	for entry in (raw as Array):
+		# структурный минимум — id (образец старого читателя saves.gd): записи
+		# без него не на что сверять при registration-ответах.
+		if typeof(entry) == TYPE_DICTIONARY and (entry as Dictionary).has("id"):
+			out.append((entry as Dictionary).duplicate(true))
+	return out
+
+static func _clean_regen(raw: Variant) -> float:
+	if (raw is int or raw is float) and is_finite(float(raw)):
+		return clampf(float(raw), 0.0, Game.FAIR_REGEN_CAP)
+	return 0.0
+
+# circle_last из сейва убран (спека §6): день последнего визита выводится из
+# visit_days — track_visit дописывает дни строго по возрастанию даты, поэтому
+# последний элемент и есть последний визит (пустой список → пустая строка).
+func _derive_last_visit() -> void:
+	_last_visit_day = String(_visit_days[_visit_days.size() - 1]) if not _visit_days.is_empty() else ""
+
 func save_block() -> Dictionary:
 	return {
 		"version": CONTRACTS_SAVE_VERSION,
@@ -676,6 +746,25 @@ func save_block() -> Dictionary:
 		"buffs": _active_buffs.duplicate(true),
 		"decor": _unlocked_decor.duplicate(true),
 		"last_output": _last_output,
+		# доска v2 (Task 6, спека §6): очаг/вехи/ранг + недельный слой. Массивы и
+		# словари копируются deep, чтобы живые мутации не текли в записанный блок.
+		"streak_run": _streak_run,
+		"visit_days": _visit_days.duplicate(true),
+		"hearth_claim": _hearth_claim,
+		"pts_total": _pts_total,
+		"mdays": _mdays,
+		"mpts": _mpts,
+		"unlocked_titles": _unlocked_titles.duplicate(true),
+		"active_title": _active_title,
+		"day_hint": _day_hint,
+		"week_cache": _week_cache.duplicate(true),
+		"cycle_cache": _cycle_cache.duplicate(true),
+		"vein_finds": _vein_finds.duplicate(true),
+		"vein_cap_total": _vein_cap_total,
+		"fair_regen_total": _fair_regen_total,
+		"fair_local_week": _fair_local_week,
+		"fair_local_brews": _fair_local_brews.duplicate(true),
+		"fair_off_claim_week": _fair_off_claim_week,
 	}
 
 # Defaults-first, по образцу _load_spring_state (saves.gd:615): состояние уже
@@ -702,6 +791,26 @@ func load_block(raw: Variant) -> void:
 	var anchor: Variant = d.get("last_output", "")
 	if anchor is String and g.ITEMS.has(String(anchor)):
 		_last_output = String(anchor)
+	# доска v2 (Task 6, спека §6): переехавшие поля. Версия 1 принимает их
+	# отсутствие — cleaners возвращают дефолты, дропа блока нет.
+	_streak_run = _clean_whole_int(d.get("streak_run", null))
+	_visit_days = _clean_day_keys(d.get("visit_days", null))
+	_hearth_claim = _clean_plain_string(d.get("hearth_claim", null))
+	_pts_total = _clean_whole_int(d.get("pts_total", null))
+	_mdays = _clean_milestone(d.get("mdays", null), Game.CIRCLE_DAY_MILES.size())
+	_mpts = _clean_milestone(d.get("mpts", null), Game.CIRCLE_PTS_MILES.size())
+	_unlocked_titles = _clean_plain_strings(d.get("unlocked_titles", null))
+	_active_title = _clean_plain_string(d.get("active_title", null))
+	_day_hint = _clean_plain_string(d.get("day_hint", null))
+	_week_cache = _clean_plain_dict(d.get("week_cache", null))
+	_cycle_cache = _clean_plain_dict(d.get("cycle_cache", null))
+	_vein_finds = _clean_vein_finds(d.get("vein_finds", null))
+	_vein_cap_total = _clean_whole_int(d.get("vein_cap_total", null))
+	_fair_regen_total = _clean_regen(d.get("fair_regen_total", null))
+	_fair_local_week = _clean_plain_string(d.get("fair_local_week", null))
+	_fair_local_brews = _clean_plain_strings(d.get("fair_local_brews", null))
+	_fair_off_claim_week = _clean_plain_string(d.get("fair_off_claim_week", null))
+	_derive_last_visit()
 
 func _clear_state() -> void:
 	_contracts_daily = []
@@ -717,10 +826,32 @@ func _clear_state() -> void:
 	_active_buffs = {}
 	_unlocked_decor = []
 	_last_output = ""
+	# доска v2 (Task 6, спека §6): переехавшие в блок поля чистятся здесь же —
+	# load_block обязан начинать с чистого листа целиком, а presence-миграция
+	# перезаписывает их только при наличии старых ключей.
+	_visit_days = []
+	_streak_run = 0
+	_last_visit_day = ""
+	_hearth_claim = ""
+	_pts_total = 0
+	_mdays = 0
+	_mpts = 0
+	_unlocked_titles = []
+	_active_title = ""
+	_day_hint = ""
+	_week_cache = {}
+	_cycle_cache = {}
+	_vein_finds = []
+	_vein_cap_total = 0
+	_fair_regen_total = 0.0
+	_fair_local_week = ""
+	_fair_local_brews = []
+	_fair_off_claim_week = ""
 
 func reset_new_game() -> void:
 	# §4.4: новая игра — полный сброс, недельное включительно (в отличие от
-	# on_prestige, который недельное бережёт).
+	# on_prestige, который недельное бережёт). С Task 6 (спека §6) «всё» — это и
+	# переехавшие очаг/вехи/ранг/недельный слой: их чистит расширенный _clear_state.
 	_clear_state()
 
 func _load_axis(d: Dictionary, kind: String) -> void:
@@ -920,8 +1051,8 @@ func _clean_decor(raw: Variant) -> Array:
 # регена навсегда (кап +0.5 суммарно), иначе — утешение эфиром. Теги веществ живут
 # на сервере; клиент оперирует только строками недели.
 
-# кэш статуса недели + вечные бонусы (имена сохранены из Retention: по ним
-# читаются старые ключи сейва — переезд ключей это Task 6)
+# кэш статуса недели + вечные бонусы (доска v2 Task 6, спека §6: имена полей
+# сохранены из Retention, но в сейве они теперь живут ключами блока v2)
 var _week_cache: Dictionary = {}
 var _week_offline := false
 var _vein_cap_total := 0

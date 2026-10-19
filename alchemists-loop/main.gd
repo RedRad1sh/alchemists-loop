@@ -8,7 +8,7 @@ class_name Game
 var SAVE_PATH := "user://alchemy_save.json"
 var TEMP_PATH := "user://alchemy_save.tmp"
 var BACKUP_PATH := "user://alchemy_save.bak"
-const SAVE_VERSION := 4
+const SAVE_VERSION := 5
 
 # ---------- индексы вкладок нижней навигации ----------
 # Дом — не вкладка, а полноэкранный экран (Home._build_house_screen), поэтому
