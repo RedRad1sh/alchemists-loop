@@ -580,11 +580,17 @@ static func run(g: Game) -> void:
 	# причине. Локалы с суффиксом/именами блока: в run() уже есть блочные dt/d,
 	# переобъявление уровня функции GDScript карает Parse Error.
 	var t3_snap := _cb_snapshot(g._contracts)
+	# Финал-фикс M4: сетевые хендлеры (_on_net_vein_find_result, закрытие цикла)
+	# мутируют находки и кеш-словари in place, поэтому снимок обязан быть deep —
+	# иначе откат ниже был бы no-op и последующие блоки наследовали бы грязь.
 	var t3_week := {
-		"week_cache": g._contracts._week_cache, "cycle_cache": g._contracts._cycle_cache,
-		"vein_finds": g._contracts._vein_finds, "vein_cap": g._contracts._vein_cap_total,
+		"week_cache": g._contracts._week_cache.duplicate(true),
+		"cycle_cache": g._contracts._cycle_cache.duplicate(true),
+		"vein_finds": g._contracts._vein_finds.duplicate(true),
+		"vein_cap": g._contracts._vein_cap_total,
 		"regen": g._contracts._fair_regen_total, "local_week": g._contracts._fair_local_week,
-		"local_brews": g._contracts._fair_local_brews, "off_claim": g._contracts._fair_off_claim_week,
+		"local_brews": g._contracts._fair_local_brews.duplicate(true),
+		"off_claim": g._contracts._fair_off_claim_week,
 		"offline": g._contracts._week_offline, "prev_state": g._contracts._cycle_prev_state,
 	}
 	var t3_env := {
@@ -693,6 +699,57 @@ static func run(g: Game) -> void:
 	g._contracts._sync_fair()
 	Selftest.check("fair local pot below goal is not ready",
 		g._contracts.progress(wf_id) == int(wf["goal"]) - 1 and not g._contracts.is_ready(wf_id))
+	# ---------- Финал-фикс I-1/I-2 (final whole-branch review) ----------
+	# I-1: потерянный ответ /fair/claim. Контракт к тому моменту уже закрыт
+	# (карточка проштампована, is_ready мёртв), и единственный путь повторить
+	# вечный грант — молча переспросить сервер при ближайшем статусе недели.
+	# Сервер держит authority claimed-флагом, повтор безопасен. Предиката
+	# read-only (ищет fair по типу в _contracts_weekly, без сайд-эффектов
+	# weekly()); наблюдимость проводки — счётчик _fair_regrants, тот же
+	# прецедент Task 8, что _board_refreshes. В selftest _fair_claim() выходит
+	# до отправки — наблюдаем счётчик, а не send.
+	var fx1_done0: Variant = g._contracts._contracts_weekly_done.duplicate(true)
+	var fx1_week0: Variant = g._contracts._week_cache.duplicate(true)
+	var fx1_regrants0 := g._contracts._fair_regrants
+	g._contracts._contracts_weekly_done[wf_id] = true
+	g._contracts._week_cache = {"fair": {"closed": true, "my_contrib": 3, "claimed": false}}
+	Selftest.check("I-1 predicate: done fair contract + closed pot + contrib 3 + unclaimed grant retries",
+		g._contracts._fair_grant_unclaimed())
+	g._contracts._week_cache = {"fair": {"closed": true, "my_contrib": 3, "claimed": true}}
+	Selftest.check("I-1 predicate: claimed pot never retries",
+		not g._contracts._fair_grant_unclaimed())
+	g._contracts._week_cache = {"fair": {"closed": true, "my_contrib": 2, "claimed": false}}
+	Selftest.check("I-1 predicate: contrib below the gate never retries",
+		not g._contracts._fair_grant_unclaimed())
+	g._contracts._week_cache = {"fair": {"closed": false, "my_contrib": 3, "claimed": false}}
+	Selftest.check("I-1 predicate: open pot never retries",
+		not g._contracts._fair_grant_unclaimed())
+	g._contracts._week_cache = {"fair": {"closed": true, "my_contrib": 3, "claimed": false}}
+	g._contracts._contracts_weekly_done.erase(wf_id)
+	Selftest.check("I-1 predicate: fair contract not taken on the board never retries",
+		not g._contracts._fair_grant_unclaimed())
+	g._contracts._contracts_weekly_done[wf_id] = true
+	g._contracts._on_net_week_result({"ok": true,
+		"fair": {"closed": true, "my_contrib": 3, "claimed": false}})
+	Selftest.check("I-1 wiring: week status with an unclaimed grant calls _fair_claim exactly once",
+		g._contracts._fair_regrants - fx1_regrants0 == 1)
+	g._contracts._on_net_week_result({"ok": true,
+		"fair": {"closed": true, "my_contrib": 3, "claimed": true}})
+	Selftest.check("I-1 wiring: claimed week status does not move the retry counter",
+		g._contracts._fair_regrants - fx1_regrants0 == 1)
+	# I-2: pop-посев обязан переживать недельный синк: raw-прогресс затирается
+	# weekly()→_sync_vein по _vein_finds (в чистом демо-сейве они пусты — ровно
+	# причина сломанного попапа). Инъектор сеёт цикл + ≥3 registered-капель:
+	# цель vein ≤3 по любому тиру, поэтому готовность держится после любого sync.
+	g._contracts._cycle_cache = {}
+	g._contracts._vein_finds = []
+	g._contracts._inject_vein_ready()
+	g._contracts.weekly()
+	Selftest.check("I-2 pop seed: injected vein contract stays ready through the weekly() sync",
+		g._contracts.is_ready(wk_id))
+	g._contracts._contracts_weekly_done = fx1_done0
+	g._contracts._week_cache = fx1_week0
+	g._contracts._fair_regrants = fx1_regrants0
 	g._online._net_enabled = bool(t3_env["net"])
 	Net._available = bool(t3_env["avail"])
 	g._online._device_id = String(t3_env["dev"])

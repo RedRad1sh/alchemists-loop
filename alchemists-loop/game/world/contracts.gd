@@ -1087,6 +1087,13 @@ func _on_net_week_result(result: Dictionary) -> void:
 	g._saves._save_game()
 	# доска v2: вклад котла пришёл с сервера — строка fair пересчитывается сразу.
 	_sync_fair()
+	# Финал-фикс I-1: ответ /fair/claim мог потеряться, а контракт уже закрыт на
+	# доске. Сервер держит authority claimed-флагом: повторный запрос либо
+	# приносит грант, либо отдаёт пустой grants («Забирать пока нечего») —
+	# двойной выдачи нет, поэтому переспрашиваем молча при каждом статусе недели.
+	if _fair_grant_unclaimed():
+		_fair_regrants += 1
+		_fair_claim()
 	refresh_board()
 
 func _week_vein() -> Dictionary:
@@ -1503,9 +1510,33 @@ func _fair_gate() -> bool:
 		return true
 	return _fair_offline_claimable()
 
+# Финал-фикс I-1: вечный grant ярмарки закрыт на доске, но не забран сервером.
+# Потерянный ответ /fair/claim оставляет контракт проштампованным (is_ready
+# мёртв), поэтому единственный путь повтора — переспросить сервер в
+# _on_net_week_result. read-only: контракт ищется по типу в _contracts_weekly
+# (не через weekly(), чтобы не звать синки с сайд-эффектами), порог вклада —
+# тот же литерал гейта _fair_gate().
+func _fair_grant_unclaimed() -> bool:
+	var fair_id := ""
+	for c in _contracts_weekly:
+		var contract := c as Dictionary
+		if String(contract["type"]) == "fair":
+			fair_id = String(contract["id"])
+			break
+	if fair_id == "" or not _contracts_weekly_done.has(fair_id):
+		return false
+	var f := _week_fair()
+	return bool(f.get("closed", false)) and int(f.get("my_contrib", 0)) >= 3 \
+		and not bool(f.get("claimed", false))
+
 # Счётчик перерисовок доски: в headless-прогоне ноды доски нет, и «инъектор
 # позвал refresh» иначе как не наблюдаемо. Сюита Task 8 меряет этот счётчик.
 var _board_refreshes := 0
+
+# Финал-фикс I-1: счётчик повторных вечных грантов ярмарки (тот же
+# ненаблюдаемый-из-сейва прецедент, что _board_refreshes: демо-тестам виден, в
+# сейв-блок не входит — контракт из 17 ключей и его доки/тесты не меняются).
+var _fair_regrants := 0
 
 # Единственная точка «перерисовать доску» для переехавшего недельного слоя:
 # UI-страницы Круг/Неделя удалены в Task 5, доска — self.
@@ -1847,3 +1878,24 @@ func _inject_board_demo() -> void:
 	if not daily_arr.is_empty():
 		_set_progress(String((daily_arr[0] as Dictionary)["id"]), 0)
 	refresh_board()
+
+# Финал-фикс I-2: sync-stable посев «готовой жилы» для pop-кадра доски.
+# Raw-запись прогресса (старый путь main.gd) затирается weekly()→_sync_vein()
+# по _vein_finds: в чистом демо-сейве находок нет, прогресс становится 0, и
+# _on_claim получает «incomplete» без попапа. Здесь же сеётся само внешнее
+# состояние — цикл + 3 registered-капли (форма находок зеркалит
+# _inject_board_demo; цель vein ≤3 по любому тиру), поэтому готовность
+# переживает любой синк. _sync_vein() вызывается и здесь, чтобы карточка была
+# готова сразу, не полагаясь на порядок открытия доски.
+func _inject_vein_ready() -> void:
+	_cycle_cache = {"cycle_id": "vc:demo", "tag1": "Свет", "state": "active",
+		"world_finds": 3, "my_points": 3, "my_streak": 0, "spread_threshold": 12,
+		"started_at": "2026-09-20T00:00:00"}
+	_vein_finds = [
+		{"id": "wf-vc:demo-pop-a", "tag": "Свет", "points": 1, "found_at": 0, "pair_key": "a|b",
+			"cycle_id": "vc:demo", "status": "registered", "server_response": {}},
+		{"id": "wf-vc:demo-pop-b", "tag": "Свет", "points": 1, "found_at": 0, "pair_key": "c|d",
+			"cycle_id": "vc:demo", "status": "registered", "server_response": {}},
+		{"id": "wf-vc:demo-pop-c", "tag": "Свет", "points": 1, "found_at": 0, "pair_key": "e|f",
+			"cycle_id": "vc:demo", "status": "registered", "server_response": {}}]
+	_sync_vein()

@@ -838,8 +838,12 @@ func _ready() -> void:
 				int(float(contract["goal"]) * 0.6))
 		var weekly := _contracts.weekly()
 		if not weekly.is_empty():
-			var w0 := weekly[0] as Dictionary
-			_contracts._set_progress(String(w0["id"]), int(w0["goal"]))
+			# Финал-фикс I-2: недельная готовая бумага — vein, но raw-запись
+			# прогресса затирается синком weekly()→_sync_vein (в демо-сейве
+			# находок нет → «incomplete», и pop-кадр без попапа). Посев
+			# sync-stable: инъектор кладёт цикл + registered-капли, поверх
+			# которого любой синк даёт готовность.
+			_contracts._inject_vein_ready()
 			if not daily.is_empty():
 				_contracts._done_dict("daily")[String((daily[0] as Dictionary)["id"])] = true
 		_contracts.grant_buff("brew_speed", 7200, 0.25, -1)
