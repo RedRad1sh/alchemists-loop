@@ -592,6 +592,10 @@ func _ready() -> void:
 			_demo_harness._shot_tab = a.substr("--tab=".length()).to_int()
 		elif a.begins_with("--scroll="):
 			_demo_harness._shot_scroll = a.substr("--scroll=".length()).to_int()
+		elif a.begins_with("--shot-node="):
+			# Task 8: кроп кадра-приёмки по global-прямоугольникам нод
+			# ("A,B" — объединение), доска целиком при этом не скроллится.
+			_demo_harness._shot_node = a.substr("--shot-node=".length())
 		elif a.begins_with("--netbrew="):
 			_online._netbrew_pair = a.substr("--netbrew=".length())
 		elif a.begins_with("--netexperiment="):
@@ -840,6 +844,11 @@ func _ready() -> void:
 				_contracts._done_dict("daily")[String((daily[0] as Dictionary)["id"])] = true
 		_contracts.grant_buff("brew_speed", 7200, 0.25, -1)
 		_contracts.grant_buff("spring_yield", 1800, 1.0, -1)
+		if _demo_harness._contract_state == "boardfull":
+			# Task 8 (спека §8): полный борт — очаг/ранг/вехи и живые вена+котёл
+			# поверх базового состояния блока. Инъекция до открытия: доска
+			# строится уже в этом состоянии.
+			_contracts._inject_board_demo()
 		_open_contract_board()
 		if _demo_harness._contract_state == "pop":
 			# Второй кадр: попап награды поверх доски, с уже выданной недельной наградой.

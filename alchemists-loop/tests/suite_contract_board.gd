@@ -146,6 +146,9 @@ static func _cb_snapshot(c: Contracts) -> Dictionary:
 		"week_cache": c._week_cache.duplicate(true),
 		"cycle_cache": c._cycle_cache.duplicate(true),
 		"vein_finds": c._vein_finds.duplicate(true),
+		"vein_cap_total": c._vein_cap_total,
+		"fair_regen_total": c._fair_regen_total,
+		"week_offline": c._week_offline,
 		"fair_local_week": c._fair_local_week,
 		"fair_local_brews": c._fair_local_brews.duplicate(true),
 		"fair_off_claim_week": c._fair_off_claim_week,
@@ -178,6 +181,9 @@ static func _cb_restore(c: Contracts, s: Dictionary) -> void:
 	c._week_cache = s["week_cache"]
 	c._cycle_cache = s["cycle_cache"]
 	c._vein_finds = s["vein_finds"]
+	c._vein_cap_total = int(s["vein_cap_total"])
+	c._fair_regen_total = float(s["fair_regen_total"])
+	c._week_offline = bool(s["week_offline"])
 	c._fair_local_week = String(s["fair_local_week"])
 	c._fair_local_brews = s["fair_local_brews"]
 	c._fair_off_claim_week = String(s["fair_off_claim_week"])
@@ -811,6 +817,39 @@ static func run(g: Game) -> void:
 	g._engine.ether = t4_ether
 	g._engine.status_text = t4_status
 	_cb_restore(g._contracts, t4_snap)
+
+	# доска v2 Task 8 (спека §8): демо-состояние boardfull — слияние удалённых
+	# _inject_circle_demo/_inject_week_demo в один инъектор Contracts. Сюита не
+	# строит ноду доски, поэтому «доска обновилась» меряется счётчиком
+	# refresh_board: инъектор обязан двигать его сам. Снимок/откат — общий
+	# (_cb_snapshot) плюс три поля заказов гильдии, как в блоке Task 2.
+	var t8_snap := _cb_snapshot(g._contracts)
+	var t8_ord_day: Variant = g._guild._order_day
+	var t8_ord_targets: Array = g._guild._order_targets_cache.duplicate(true)
+	var t8_ord_done: Dictionary = g._guild._order_done.duplicate(true)
+	var t8_refresh_before := g._contracts._board_refreshes
+	g._contracts._inject_board_demo()
+	var t8_statuses: Array = []
+	var t8_cyc := String(g._contracts._cycle_cache.get("cycle_id", ""))
+	for t8_f in g._contracts._vein_finds:
+		if typeof(t8_f) == TYPE_DICTIONARY \
+				and String((t8_f as Dictionary).get("cycle_id", "")) == t8_cyc:
+			t8_statuses.append(String((t8_f as Dictionary)["status"]))
+	var t8_fair: Dictionary = g._contracts._week_fair()
+	var t8_orders_id := String((g._contracts.daily() as Array)[1]["id"])
+	Selftest.check("§8 boardfull demo: streak 3, rank 4, three current-cycle vein statuses, active fair pot, orders 3/3, board refreshed",
+		g._contracts._streak_run == 3 and g._contracts.rank_level() == 4
+		and t8_cyc != "" and t8_statuses.size() == 3
+		and t8_statuses.has("registered") and t8_statuses.has("pending_server")
+		and t8_statuses.has("poured")
+		and not t8_fair.is_empty() and int(t8_fair.get("progress", 0)) > 0
+		and not bool(t8_fair.get("closed", false))
+		and g._contracts.progress(t8_orders_id) == 3
+		and g._contracts._board_refreshes > t8_refresh_before)
+	g._guild._order_day = String(t8_ord_day)
+	g._guild._order_targets_cache = t8_ord_targets
+	g._guild._order_done = t8_ord_done
+	_cb_restore(g._contracts, t8_snap)
 
 	# Разные даты дают разные наборы. Точечное сравнение двух конкретных дней
 	# могло бы совпасть случайно, поэтому меряем разнообразие на 30 днях.

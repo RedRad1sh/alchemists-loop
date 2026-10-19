@@ -1495,9 +1495,14 @@ func _fair_gate() -> bool:
 		return true
 	return _fair_offline_claimable()
 
+# Счётчик перерисовок доски: в headless-прогоне ноды доски нет, и «инъектор
+# позвал refresh» иначе как не наблюдаемо. Сюита Task 8 меряет этот счётчик.
+var _board_refreshes := 0
+
 # Единственная точка «перерисовать доску» для переехавшего недельного слоя:
 # UI-страницы Круг/Неделя живут в Retention до Task 5, доска — self.
 func refresh_board() -> void:
+	_board_refreshes += 1
 	var b := g.get_node_or_null("ContractBoard")
 	if b != null and b.has_method("refresh"):
 		b.refresh()
@@ -1774,3 +1779,56 @@ func fair_pot_line() -> String:
 	var prog := int(f.get("progress", 0)) + int(f.get("apprentice", 0))
 	return "Котёл: %d/%d · твоих: %d" % [mini(prog, goal) if goal > 0 else prog,
 		goal, int(f.get("my_contrib", 0))]
+
+# ---------- Task 8 (спека §8): демо-состояние boardfull ----------
+# Слияние удалённых _inject_circle_demo (retention.gd:135) и _inject_week_demo
+# (retention.gd:334) в поля Contracts по именам после переезда, без страниц.
+# Очаг/вехи/ранг: 100 визит-дней, заканчивающихся сегодня (ранг-4 «Полено» —
+# порог 100 дней; в старом круговом демо было 3 дня и ранг-3), короткая серия
+# streak 3 (пламя ✦✦), полешко сегодня не брано, вечные очки 61 (одна веха
+# очков из трёх). Недельный слой — живые кеши: цикл «vc:demo» с тремя каплями
+# статусов registered/pending_server/poured и открытый котёл ярмарки 14/22.
+# Дневные бумаги: goal_day — чистая цель (progress=0), orders — три выполненных
+# заказа гильдии, зеркало 3/3 → карточка готова. В конце обязательный
+# refresh_board(): в окне доска перерисуется, в headless сюита сверит счётчик.
+func _inject_board_demo() -> void:
+	var now_d := _dt({})
+	var base_d := _civil_days(int(now_d["year"]), int(now_d["month"]), int(now_d["day"]))
+	var days: Array = []
+	for i in range(100):
+		days.append(day_key_from(_days_to_dt(base_d - (99 - i))))
+	_visit_days = days
+	_streak_run = 3
+	_last_visit_day = _visit_today()
+	_hearth_claim = ""
+	_pts_total = 61
+	_mdays = 3
+	_mpts = 1
+	_day_hint = "Свари что-нибудь из «Мха»"
+	_week_cache = {"week": "2026-W37",
+		"vein": {"tag1": "Свет", "tag2": "Тьма", "spread": true, "my_hits": 2, "my_streaks": 1, "streak_cap": 5},
+		"fair": {"tag": "Трава", "goal": 22, "progress": 14, "apprentice": 4, "closed": false,
+			"my_contrib": 3, "claimed": false,
+			"prev": {"week": "2026-W36", "kind": "ether", "amount": 90}}}
+	_vein_cap_total = 4
+	_fair_regen_total = 0.05
+	_week_offline = false
+	_cycle_cache = {"cycle_id": "vc:demo", "tag1": "Свет", "state": "spread", "world_finds": 9,
+		"my_points": 4, "my_streak": 2, "spread_threshold": 12, "started_at": "2026-09-20T00:00:00"}
+	_vein_finds = [
+		{"id": "wf-vc:demo", "tag": "Свет", "points": 2, "found_at": 0, "pair_key": "a|b",
+			"cycle_id": "vc:demo", "status": "registered", "server_response": {}},
+		{"id": "p-vc:demo", "tag": "Тьма", "points": 1, "found_at": 0, "pair_key": "c|d",
+			"cycle_id": "vc:demo", "status": "pending_server", "server_response": {}},
+		{"id": "wf-done", "tag": "Свет", "points": 2, "found_at": 0, "pair_key": "e|f",
+			"cycle_id": "vc:demo", "status": "poured", "server_response": {}}]
+	# Заказы гильдии: отметка всех трёх целей выполняется до ensure_period —
+	# _sync_orders зеркала гильдии в дневную строку orders (3/3) входит в него сам.
+	g._guild._orders_refresh()
+	for t in g._guild._order_targets_cache:
+		g._guild._order_done[String(t)] = true
+	ensure_period()
+	var daily_arr := daily()
+	if not daily_arr.is_empty():
+		_set_progress(String((daily_arr[0] as Dictionary)["id"]), 0)
+	refresh_board()

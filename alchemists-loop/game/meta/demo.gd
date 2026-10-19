@@ -18,6 +18,7 @@ var _geom := false
 var _geom_frame := 0
 var _probe := false
 var _shot_scroll := -1
+var _shot_node := ""
 var _action_upgrades := false
 var _action_hint := false
 var _action_event := false
@@ -378,6 +379,12 @@ func _tick_demo() -> bool:
 				print("SHOT FAIL: нет рендера (не запускай --shot вместе с --headless)")
 				g.get_tree().quit(1)
 				return true
+			if _shot_node != "":
+				var crop := _shot_region(img)
+				if crop.size.x >= 2 and crop.size.y >= 2:
+					img = img.get_region(crop)
+				else:
+					print("SHOT NODE: не нашёл прямоугольник для ", _shot_node, " — пишу кадр целиком")
 			var err := img.save_png(_shot_path)
 			if _action_experiment:
 				print("EXPERIMENT_INPUT tokens=", g._pages._experiment_tokens.size(), " cauldron=", g._pages._experiment_cauldron_items)
@@ -390,3 +397,28 @@ func _tick_demo() -> bool:
 			g.get_tree().quit(0)
 		return true
 	return false
+
+# Task 8: кроп acceptance-кадра по объединению global-прямоугольников нод из
+# --shot-node ("Card4", "ShelfHearth,RankStrip"). Координаты Control — в
+# размерах вьюпорта, картинка рендера — в пикселях окна: при hidpi-масштабе
+# множители fx/fy пересчитывают прямоугольник. Пустой Rect2 — нода не найдена.
+func _shot_region(img: Image) -> Rect2i:
+	var vp := g.get_viewport_rect().size
+	var fx := float(img.get_width()) / maxf(1.0, vp.x)
+	var fy := float(img.get_height()) / maxf(1.0, vp.y)
+	var uni := Rect2()
+	for raw in _shot_node.split(","):
+		var node := g.find_child(String(raw).strip_edges(), true, false) as Control
+		if node == null:
+			continue
+		var r: Rect2 = node.get_global_rect()
+		var scaled := Rect2(r.position.x * fx, r.position.y * fy, r.size.x * fx, r.size.y * fy)
+		uni = scaled if uni.size.x <= 0.0 else uni.merge(scaled)
+	if uni.size.x <= 1.0 or uni.size.y <= 1.0:
+		return Rect2i()
+	var pad := Vector2.ONE * 6.0
+	uni = Rect2(uni.position - pad, uni.size + pad * 2.0)
+	uni = uni.intersection(Rect2(0.0, 0.0, float(img.get_width()), float(img.get_height())))
+	var pos := Vector2i(int(floor(uni.position.x)), int(floor(uni.position.y)))
+	var end := Vector2i(int(ceil(uni.end.x)), int(ceil(uni.end.y)))
+	return Rect2i(pos, end - pos)
