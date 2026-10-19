@@ -258,6 +258,12 @@ func daily(now: Dictionary = {}) -> Array:
 
 func weekly(now: Dictionary = {}) -> Array:
 	ensure_period(now)
+	# §1 (доска v2): vein и fair считаются по внешнему состоянию (цикл жилы,
+	# вклад котла), поэтому прогресс догоняется на каждом входе — именно здесь,
+	# а не в ensure_period(): _set_progress → contract_by_id → all_contracts →
+	# ensure_period дал бы рекурсивную смену периода.
+	_sync_vein()
+	_sync_fair()
 	return _contracts_weekly
 
 func all_contracts(now: Dictionary = {}) -> Array:
@@ -292,6 +298,11 @@ func is_ready(id: String, now: Dictionary = {}) -> bool:
 	var c := contract_by_id(id, now)
 	if c.is_empty() or is_done(id, now):
 		return false
+	# §1 (доска v2): у ярмарки готовность — гейт закрытого котла (серверный или
+	# локальный), а не «прогресс ≥ цель»: число варок на экране есть, но само
+	# право забрать награду решает вклад ≥3 в ЗАКРЫТЫЙ котёл.
+	if String(c["type"]) == "fair":
+		return _fair_gate()
 	return progress(id, now) >= int(c["goal"])
 
 # ---------- §3.1 единый множитель прогресса ----------
@@ -429,6 +440,21 @@ func claim(id: String, now: Dictionary = {}, now_unix: int = -1) -> Dictionary:
 			g._home._own_item("window", decor_id)
 			if not _unlocked_decor.has(decor_id):
 				_unlocked_decor.append(decor_id)
+	# §1 (доска v2, строки 7–8): у pinned-строк недельного слоя у табличной
+	# награды доски есть второй, «вечный» слой.
+	# · fair: доска — только витрина, поэтому успешный claim обязан сверх того
+	#   совершить грант регена: офлайн — тело локального котла (гейт уже
+	#   выполнен в _fair_gate, повторная проверка отсекла бы законную выдачу),
+	#   онлайн — запрос /fair/claim, вечный реген придёт асинхронно в
+	#   _on_net_fair_claim_result.
+	# · vein: меряем, что недельная строка жилы реально забирают (ключ из спеки).
+	if String(c["type"]) == "fair":
+		if _fair_offline_available():
+			_fair_offline_grant()
+		else:
+			Net.fair_claim(g._online._device_id)
+	elif String(c["type"]) == "vein":
+		Analytics.track("vein_contract_claim", {"tier": String(c["tier"])})
 	g._saves._save_game()
 	return {"ok": true, "reason": "", "materials": grant["given"],
 		"truncated": bool(grant["truncated"]), "buff": buff_id,
@@ -851,3 +877,464 @@ func _clean_decor(raw: Variant) -> Array:
 		# выдача дедуплицируется (home.gd:173).
 		out.append(id)
 	return out
+
+# ---------- доска v2 (§1 строки 7–8): недельный слой — туманная жила + ярмарка ----------
+# Дословный переезд недельной половины retention.gd:523-1058. Дублирование
+# здесь переходное и запланировано планом слияния: страница «Неделя» и
+# демо-инъектор живут в Retention до Task 5 (файл удаляется там), но состояние и
+# логика теперь здесь — второй копии полей больше нет.
+# Жила: первооткрытие с тегом недели → +2 очк. дня и 10% прожилка (+1 кап,
+# кап 5/нед. — на сервере). Ярмарка: варки пар с выходом-тегом недели идут
+# в общий котёл (пара — раз в неделю); закрытый котёл + вклад ≥3 → +0.05/с
+# регена навсегда (кап +0.5 суммарно), иначе — утешение эфиром. Теги веществ живут
+# на сервере; клиент оперирует только строками недели.
+
+# кэш статуса недели + вечные бонусы (имена сохранены из Retention: по ним
+# читаются старые ключи сейва — переезд ключей это Task 6)
+var _week_cache: Dictionary = {}
+var _week_offline := false
+var _vein_cap_total := 0
+var _fair_regen_total := 0.0
+var _fair_local_week := ""
+var _fair_local_brews: Array = []
+var _fair_off_claim_week := ""
+# цикл жилы, pending finds, предыдущее состояние цикла
+var _cycle_cache: Dictionary = {}
+var _vein_finds: Array = []
+var _cycle_prev_state := ""
+
+func _fetch_week() -> void:
+	if not g._online._net_enabled or g._online._device_id == "":
+		return
+	if not Net.is_available():
+		_week_offline = true
+		refresh_board()
+		return
+	Net.week_status(g._online._device_id)
+	_fetch_cycle()
+
+func _on_net_week_result(result: Dictionary) -> void:
+	if result.get("offline", false) == true or result.get("ok", false) != true:
+		_week_offline = true
+		refresh_board()
+		return
+	_week_offline = false
+	_week_cache = result
+	g._saves._save_game()
+	# доска v2: вклад котла пришёл с сервера — строка fair пересчитывается сразу.
+	_sync_fair()
+	refresh_board()
+
+func _week_vein() -> Dictionary:
+	var v = _week_cache.get("vein", {})
+	return v if typeof(v) == TYPE_DICTIONARY else {}
+
+# ---------- план 2: цикл жилы ----------
+
+func _fetch_cycle() -> void:
+	if not g._online._net_enabled or g._online._device_id == "":
+		return
+	if not Net.is_available():
+		return
+	Net.cycle_status(g._online._device_id)
+
+func _on_net_cycle_result(result: Dictionary) -> void:
+	if result.get("offline", false) == true or result.get("ok", false) != true:
+		return
+	var prev_id := String(_cycle_cache.get("cycle_id", ""))
+	_cycle_cache = result
+	if String(result.get("state", "")) == "spread" and _cycle_prev_state != "spread":
+		# R5: reason — порог достигнут или max_days; duration — от started_at до сегодня
+		var wf := int(result.get("world_finds", 0))
+		var thr := int(result.get("spread_threshold", 0))
+		var dur := 0
+		var sa := String(result.get("started_at", ""))
+		if sa.length() >= 10:
+			dur = maxi(0, int((Time.get_unix_time_from_system() - float(
+				Time.get_unix_time_from_datetime_string(sa))) / 86400.0))
+		Analytics.track("vein_cycle_spread", {"reason": "threshold" if wf >= thr else "max_days",
+			"world_finds": wf, "duration_days": dur})
+	_cycle_prev_state = String(result.get("state", ""))
+	if prev_id != "" and String(result.get("cycle_id", "")) != prev_id:
+		# R1: закрытие старого цикла — невлитые капли его становятся auto_applied
+		var autoed := 0
+		for f in _vein_finds:
+			if typeof(f) == TYPE_DICTIONARY and String(f.get("cycle_id", "")) == prev_id \
+					and String(f.get("status", "")) == "registered":
+				f["status"] = "auto_applied"
+				autoed += 1
+				Analytics.track("vein_pour", {"tag": String(f.get("tag", "")), "manual": false})
+		Analytics.track("vein_cycle_closed", {"auto_applied_count": autoed,
+			"total_points": int(_cycle_cache.get("my_points", 0))})
+		_vein_sync_pending()
+	g._saves._save_game()
+	# доска v2: смена цикла меняет счётчик «только текущий цикл» — строку vein
+	# пересчитываем сразу, иначе доска показала бы прогресс закрытого цикла.
+	_sync_vein()
+	refresh_board()
+
+func _vein_sync_pending() -> void:
+	if not Net.is_available() or g._online._device_id == "":
+		return
+	var cyc := String(_cycle_cache.get("cycle_id", ""))
+	if cyc == "":
+		return
+	for f in _vein_finds:
+		if typeof(f) != TYPE_DICTIONARY:
+			continue
+		if String(f.get("status", "")) == "pending_server" and String(f.get("cycle_id", "")) == cyc:
+			Net.vein_find(g._online._device_id, String(f["pair_key"]), String(f["tag"]), cyc)
+
+func _vein_find_exists(cycle_id: String, pair_key: String) -> bool:
+	for f in _vein_finds:
+		if typeof(f) == TYPE_DICTIONARY and String(f.get("cycle_id", "")) == cycle_id \
+				and String(f.get("pair_key", "")) == pair_key:
+			return true
+	return false
+
+func _vein_find_entry(pair_key: String, cycle_id: String = "") -> Dictionary:
+	# Fix #6: та же пара может жить в _vein_finds дважды — заявка текущего цикла
+	# и уже зарегистрированная запись прошлого цикла. Ответ сервера (цикл здесь не
+	# known) относится к незакрытой заявке, поэтому pending_server приоритетен; без
+	# этого цикла find из прошлого цикла перехватил бы ответ (R2-пересоздание
+	# ушло бы в старый cycle_id). Если pending нет, берём первую запись той же
+	# пары — иначе запоздалый повторный ответ (ok после registered, cycle_mismatch
+	# после register) молча терялся и локальная запись оставалась inconsistent.
+	var fallback := {}
+	for f in _vein_finds:
+		if typeof(f) != TYPE_DICTIONARY:
+			continue
+		if String(f.get("pair_key", "")) != pair_key:
+			continue
+		if cycle_id != "":
+			if String(f.get("cycle_id", "")) == cycle_id:
+				return f
+			continue
+		if String(f.get("status", "")) == "pending_server":
+			return f
+		if fallback.is_empty():
+			fallback = f
+	return fallback
+
+## server-кэш цикла читается через этот геттер: /api/vein/cycle/status отдаёт
+## tag2 как Optional[str] = null (цикл ещё не «расползлся»), а String(null) —
+## это ошибка рантайма, которая обрывала бы _commit_brew посреди варки.
+func _cache_str(key: String) -> String:
+	var v: Variant = _cycle_cache.get(key, "")
+	return String(v) if typeof(v) == TYPE_STRING else ""
+
+func _vein_report_pair(a: String, b: String, out: String) -> void:
+	# §3.3.1: personal find рождается только для пары из серверной книги, тег
+	# которой активен в текущем цикле; anti-farm — одна пара на цикл (R2: без
+	# кэша цикла find не заводится).
+	if out == "" or not g._online._is_server_pair(a, b):
+		return
+	var cyc := _cache_str("cycle_id")
+	var tag := String(g._online._server_tag.get(out, ""))
+	if cyc == "" or tag == "":
+		return
+	if tag != _cache_str("tag1") and tag != _cache_str("tag2"):
+		return
+	var pk := g._pair_key(a, b)
+	if _vein_find_exists(cyc, pk):
+		return
+	_vein_finds.append({"id": "%s-%d-%s" % [cyc, int(Time.get_unix_time_from_system()), pk],
+		"tag": tag, "points": 1, "found_at": int(Time.get_unix_time_from_system()),
+		"pair_key": pk, "cycle_id": cyc, "status": "pending_server", "server_response": {}})
+	g._saves._save_game()
+	_vein_sync_pending()
+	# доска v2: заявка капли меняет набор находок текущего цикла — прогресс
+	# строки vein пересчитываем сразу после записи.
+	_sync_vein()
+	refresh_board()
+
+func _vein_add_from_discover(pair_key: String, out: String, vein: Dictionary) -> void:
+	# world-first: сервер уже начислил очки в /discover — капля сразу registered
+	if typeof(vein) != TYPE_DICTIONARY or vein.is_empty() or out == "":
+		return
+	var cyc := String(_cycle_cache.get("cycle_id", ""))
+	var tag := String(vein.get("tag", ""))
+	if tag == "":
+		tag = String(g._online._server_tag.get(out, ""))
+	if cyc == "" or tag == "" or _vein_find_exists(cyc, pair_key):
+		return
+	_vein_finds.append({"id": "wf-%d-%s" % [int(Time.get_unix_time_from_system()), pair_key],
+		"tag": tag, "points": int(vein.get("points", Game.VEIN_POINTS_WORLD)),
+		"found_at": int(Time.get_unix_time_from_system()), "pair_key": pair_key,
+		"cycle_id": cyc, "status": "registered", "server_response": vein})
+	g._saves._save_game()
+	_sync_vein()
+	refresh_board()
+
+func _on_net_vein_find_result(pair_key: String, cycle_id: String, result: Dictionary) -> void:
+	if result.get("offline", false) == true:
+		return
+	if cycle_id == "":
+		return
+	var f := _vein_find_entry(pair_key, cycle_id)
+	if f.is_empty():
+		return
+	if result.get("ok", false) != true:
+		var err := String(result.get("error", ""))
+		if err == "cycle_mismatch":
+			# R2: пересоздаём find в актуальном цикле сервера
+			var new_cyc := String(result.get("cycle_id", ""))
+			if new_cyc == "":
+				new_cyc = String(_cycle_cache.get("cycle_id", ""))
+			f["cycle_id"] = new_cyc
+			f["id"] = "%s-%d-%s" % [new_cyc, int(Time.get_unix_time_from_system()), pair_key]
+			f["status"] = "pending_server"
+			f["points"] = 0
+			_vein_sync_pending()
+		else:
+			_vein_finds.erase(f)  # unknown_pair / tag_mismatch — снимаем
+		g._saves._save_game()
+		_sync_vein()
+		refresh_board()
+		return
+	f["status"] = "registered"
+	f["server_response"] = result
+	f["points"] = int(result.get("points", 1))
+	Analytics.track("vein_personal_find", {"tag": String(f["tag"]),
+		"points": int(result.get("points", 1)), "streak_roll": bool(result.get("streak_added", false)),
+		"cycle_id": String(f["cycle_id"])})
+	if bool(result.get("cap_reached", false)) and int(f.get("cap_paid", 0)) == 0:
+		f["cap_paid"] = 1
+		g._engine._grant_ether(Game.VEIN_STREAK_REWARD, "vein_streak_cap")
+		Analytics.track("vein_streak_cap", {"cycle_id": String(f["cycle_id"]),
+			"reward": Game.VEIN_STREAK_REWARD})
+		g._engine.status_text = "Прожилка дошла до капа! +%d ⚡" % Game.VEIN_STREAK_REWARD
+	g._saves._save_game()
+	_sync_vein()
+	refresh_board()
+
+func _vein_tag_slug(tag: String) -> String:
+	# тег → любое вещество с этим тегом (для цвета капли); "" если нет
+	for slug in g._online._server_tag:
+		if String(g._online._server_tag[slug]) == tag:
+			return String(slug)
+	return ""
+
+func _vein_pour(find_id: String) -> void:
+	if not Net.is_available() or g._online._device_id == "":
+		g._engine.status_text = "Вливание ждёт связи с миром."
+		Sfx.error()
+		return
+	for f in _vein_finds:
+		if typeof(f) == TYPE_DICTIONARY and String(f.get("id", "")) == find_id:
+			if String(f.get("status", "")) != "registered":
+				return
+			Net.vein_pour(g._online._device_id, find_id)
+			return
+
+func _on_net_vein_pour_result(find_id: String, result: Dictionary) -> void:
+	if result.get("ok", false) != true:
+		return
+	for f in _vein_finds:
+		if typeof(f) == TYPE_DICTIONARY and String(f.get("id", "")) == find_id:
+			if String(f.get("status", "")) == "registered":
+				f["status"] = "poured"
+				Analytics.track("vein_pour", {"tag": String(f.get("tag", "")), "manual": true})
+			break
+	g._saves._save_game()
+	_sync_vein()
+	refresh_board()
+
+func _week_fair() -> Dictionary:
+	var f = _week_cache.get("fair", {})
+	return f if typeof(f) == TYPE_DICTIONARY else {}
+
+func _week_claimable() -> bool:
+	var f := _week_fair()
+	if f.is_empty():
+		return false
+	if bool(f.get("closed", false)) and int(f.get("my_contrib", 0)) >= 3 and not bool(f.get("claimed", false)):
+		return true
+	return typeof(f.get("prev", null)) == TYPE_DICTIONARY
+
+func _fair_report_brew(a: String, b: String) -> void:
+	if g._selftest or a == "" or b == "":
+		return
+	if not g._online._net_enabled or not Net.is_available() or g._online._device_id == "":
+		return
+	Net.fair_brew(g._online._device_id, a, b)
+
+func _on_net_fair_brew_result(result: Dictionary) -> void:
+	if result.get("offline", false) == true or result.get("ok", false) != true:
+		return
+	if bool(result.get("counted", false)):
+		g._engine.status_text = "Вклад в котёл ярмарки засчитан! (твоих: %d)" % int(result.get("contrib", 0))
+		var f := _week_fair()
+		if not f.is_empty():
+			f["progress"] = int(result.get("progress", f.get("progress", 0)))
+			f["my_contrib"] = int(result.get("contrib", f.get("my_contrib", 0)))
+			f["closed"] = bool(result.get("closed", f.get("closed", false)))
+			_week_cache["fair"] = f
+			g._saves._save_game()
+		_sync_fair()
+		refresh_board()
+		g._engine._refresh()
+
+func _fair_claim() -> void:
+	if g._selftest:
+		return
+	if not g._online._net_enabled or not Net.is_available() or g._online._device_id == "":
+		g._engine.status_text = "Ярмарка ждёт связи с миром."
+		Sfx.error()
+		return
+	Net.fair_claim(g._online._device_id)
+
+func _fair_on_brew(output: String) -> void:
+	# Локальный котёл (A3): считаем варки разных веществ, чтобы ярмарка жила и
+	# без сети — вдвое дешевле на выходе. Чистый счётчик: без гейта selftest,
+	# как _circle_on_discovery (suite_resonance_net: его мутации восстанавливаются).
+	if output == "":
+		return
+	var w := Home._iso_week_id()
+	if _fair_local_week != w:
+		_fair_local_week = w
+		_fair_local_brews.clear()
+	if not _fair_local_brews.has(output):
+		_fair_local_brews.append(output)
+		# доска v2: без сети локальный котёл — единственный источник прогресса
+		# строки fair, поэтому синк обязателен и здесь (сейв и перерисовка
+		# остаются за гейтом selftest, как в оригинале).
+		_sync_fair()
+		if not g._selftest:
+			g._saves._save_game()
+			refresh_board()
+
+func _fair_offline_available() -> bool:
+	return not g._online._net_enabled or not Net.is_available() or g._online._device_id == ""
+
+func _fair_offline_claimable() -> bool:
+	if _fair_off_claim_week == Home._iso_week_id():
+		return false
+	if _fair_local_week != Home._iso_week_id():
+		return false
+	return _fair_local_brews.size() >= Game.FAIR_OFFLINE_GOAL \
+		and _fair_regen_total < Game.FAIR_REGEN_CAP
+
+# Вечный грант локального котла — тело _fair_offline_claim() БЕЗ проверки гейта:
+# у досочного контракта fair гейт уже выполнен в _fair_gate() (иначе claim()
+# вернул бы "incomplete"), и повторная проверка отсекла бы законную выдачу доски.
+func _fair_offline_grant() -> void:
+	_fair_off_claim_week = Home._iso_week_id()
+	var before := _fair_regen_total
+	_fair_regen_total = minf(Game.FAIR_REGEN_CAP, _fair_regen_total + Game.FAIR_REGEN_EACH * Game.FAIR_OFFLINE_FACTOR)
+	g._hub._log_event("Ярмарка без мира: +%.2f регена навсегда (вполовину)" % (_fair_regen_total - before))
+	g._engine.status_text = "Локальный котёл закрыт: +%.2f к регену навсегда. Без мира — вполовину." % (_fair_regen_total - before)
+	g._spirit._companion_react("milestone", "ярмарка")
+	Sfx.stage_up()
+	g._saves._save_game()
+	refresh_board()
+	g._engine._refresh()
+
+func _fair_offline_claim() -> void:
+	if not _fair_offline_claimable():
+		g._engine.status_text = "Локальный котёл: свари %d разных вещества за неделю (%d/%d)." % [
+			Game.FAIR_OFFLINE_GOAL, _fair_local_brews.size(), Game.FAIR_OFFLINE_GOAL]
+		Sfx.error()
+		return
+	_fair_offline_grant()
+
+func _on_net_fair_claim_result(result: Dictionary) -> void:
+	if result.get("offline", false) == true or result.get("ok", false) != true:
+		g._engine.status_text = "Мир не ответил — награда котла подождёт."
+		Sfx.error()
+		return
+	var grants_raw = result.get("grants")
+	var grants: Array = grants_raw as Array if typeof(grants_raw) == TYPE_ARRAY else []
+	if grants.is_empty():
+		g._engine.status_text = "Забирать пока нечего: котёл варится или вклад уже забран."
+		return
+	for gr in grants:
+		if typeof(gr) != TYPE_DICTIONARY:
+			continue
+		var gd := gr as Dictionary
+		if String(gd.get("kind", "")) == "regen":
+			var before := _fair_regen_total
+			_fair_regen_total = minf(Game.FAIR_REGEN_CAP, _fair_regen_total + Game.FAIR_REGEN_EACH)
+			g._hub._log_event("Ярмарка %s: +%.2f регена навсегда" % [String(gd.get("week", "?")), _fair_regen_total - before])
+			g._engine.status_text = "Котёл ярмарки закрыт! +%.2f к регену навсегда." % (_fair_regen_total - before)
+			g._spirit._companion_react("milestone", "ярмарка")
+			Sfx.legendary()
+		else:
+			var amount := int(gd.get("amount", 0))
+			g._engine._grant_ether(amount, "fair_compensation")
+			g._engine.status_text = "Ярмарка %s: утешение +%d ⚡." % [String(gd.get("week", "?")), amount]
+			Sfx.stage_up()
+	g._saves._save_game()
+	_fetch_week()
+	_sync_fair()
+	refresh_board()
+	g._engine._refresh()
+
+func _discover_vein_bonus(result: Dictionary) -> void:
+	var v = result.get("vein", null)
+	if typeof(v) != TYPE_DICTIONARY or (v as Dictionary).is_empty():
+		return
+	var vd := v as Dictionary
+	if bool(vd.get("streak", false)):
+		_vein_cap_total += 1
+		g._engine.status_text = "Прожилка в жиле «%s»! +1 к капу навсегда." % g._clean_str(vd.get("tag", ""))
+		g._spirit._companion_react("milestone", "жила")
+		Sfx.legendary()
+		g._saves._save_game()
+		g._engine._refresh()
+	else:
+		g._engine.status_text = "Находка в жиле «%s»: +%d очк. дня!" % [g._clean_str(vd.get("tag", "")), int(vd.get("points", 0))]
+		_fetch_week()
+
+# ---------- §1 (доска v2): синки прогресса pinned-строк vein/fair ----------
+# Оба пишут абсолютный прогресс и пропускают закрытые контракты — ровно как
+# _sync_orders. Из ensure_period() они НЕ вызываются: _set_progress →
+# contract_by_id → all_contracts → ensure_period дал бы рекурсивный цикл смены
+# периода внутри смены периода.
+func _sync_vein() -> void:
+	var cyc := String(_cycle_cache.get("cycle_id", ""))
+	var n := 0
+	for f in _vein_finds:
+		if typeof(f) == TYPE_DICTIONARY \
+				and (cyc == "" or String(f.get("cycle_id", "")) == cyc) \
+				and ["registered", "poured"].has(String(f.get("status", ""))):
+			n += 1
+	for c in _contracts_weekly:
+		var contract := c as Dictionary
+		if String(contract["type"]) != "vein":
+			continue
+		var id := String(contract["id"])
+		if _contracts_weekly_done.has(id):
+			continue
+		_set_progress(id, n)
+
+func _sync_fair() -> void:
+	# Вклад котла: онлайн — серверный my_contrib, без сети — локальный счётчик
+	# разных варок (A3). Готовность ярмарки на этом прогрессе не строится: она
+	# в _fair_gate().
+	var n := _fair_local_brews.size() if _fair_offline_available() \
+		else int(_week_fair().get("my_contrib", 0))
+	for c in _contracts_weekly:
+		var contract := c as Dictionary
+		if String(contract["type"]) != "fair":
+			continue
+		var id := String(contract["id"])
+		if _contracts_weekly_done.has(id):
+			continue
+		_set_progress(id, n)
+
+# Готовность ярмарки: закрытый серверный котёл с вкладом ≥3 (награда ещё не
+# забрана) либо локальный котёл, который можно закрыть.
+func _fair_gate() -> bool:
+	var f := _week_fair()
+	if not f.is_empty() and bool(f.get("closed", false)) \
+			and int(f.get("my_contrib", 0)) >= 3 and not bool(f.get("claimed", false)):
+		return true
+	return _fair_offline_claimable()
+
+# Единственная точка «перерисовать доску» для переехавшего недельного слоя:
+# UI-страницы Круг/Неделя живут в Retention до Task 5, доска — self.
+func refresh_board() -> void:
+	var b := g.get_node_or_null("ContractBoard")
+	if b != null and b.has_method("refresh"):
+		b.refresh()

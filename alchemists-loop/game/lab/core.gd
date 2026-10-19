@@ -306,7 +306,7 @@ func _max_ether() -> int:
 	return Game.MAX_ETHER + 50 * _up_lvl("ether_cap") + _collection_cap_bonus() \
 		+ 40 * sage_gold + g._progress_ui._quest_cap_bonus() + g._progress_ui._ach_cap_bonus() + g._resonance._res_cap_bonus() \
 		+ g._retort._essence_cap_bonus() + g._riddles._letter_cap_bonus() + g._riddles._atlas_cap_bonus() + g._retention._circle_cap_bonus() \
-		+ g._retention._vein_cap_total + g._sigil.milestone_cap_bonus()
+		+ g._contracts._vein_cap_total + g._sigil.milestone_cap_bonus()
 
 func spring_interval() -> float:
 	var speed_lvl: int = spring_levels.get("speed", 0)
@@ -347,7 +347,7 @@ func spring_purchase(axis: String) -> Dictionary:
 func _ether_rate() -> float:
 	return (Game.BASE_ETHER_REGEN + 0.35 * float(_up_lvl("ether_regen")) + _collection_regen_bonus() \
 		+ g._progress_ui._quest_regen_bonus() + g._progress_ui._ach_regen_bonus() + g._resonance._res_regen_bonus() \
-		+ g._retention._circle_regen_bonus() + g._retention._fair_regen_total) \
+		+ g._retention._circle_regen_bonus() + g._contracts._fair_regen_total) \
 		* _sage_multiplier() * (1.0 + g._contracts.buff_power("ether_regen"))
 
 func _brew_time() -> float:
@@ -1677,11 +1677,11 @@ func _commit_brew_locked(a: String, b: String, context: Dictionary) -> Dictionar
 	if output == "spark":
 		g._spirit._companion_unlock()
 	g._guild._quest_on_brew(output)
-	g._retention._fair_report_brew(a, b)
-	g._retention._fair_on_brew(output)
+	g._contracts._fair_report_brew(a, b)
+	g._contracts._fair_on_brew(output)
 	# план 2 §3.3.1: варка серверно-известной пары = личное открытие (офлайн —
 	# уйдёт в pending_server, онлайн — зарегистрируется сразу).
-	g._retention._vein_report_pair(a, b, output)
+	g._contracts._vein_report_pair(a, b, output)
 	# §2.4: очки цели — по факту успеха и фактического слоя; заявка снимается
 	# только здесь (отмена/провал не платят и не сгорают молча — она сбросится
 	# следующим успешным путём или новой модалкой).

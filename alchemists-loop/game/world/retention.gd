@@ -23,22 +23,15 @@ var _circle_local_done_day := ""
 var _circle_local_goal_cache := {}
 var _circle_head: Label = null
 var _circle_list: VBoxContainer = null
-# недельный слой (v30): кэш статуса недели + вечные бонусы
-var _week_cache: Dictionary = {}
-var _week_offline := false
-var _vein_cap_total := 0
-var _fair_regen_total := 0.0
-var _fair_local_week := ""
-var _fair_local_brews: Array = []
-var _fair_off_claim_week := ""
+# недельный слой (v30): состояние и логика переехали в Contracts (доска v2,
+# Task 3) — здесь остались только виджеты страницы «Неделя» (она удаляется в
+# Task 5) и делегаты к g._contracts. Поля делегировать нельзя, поэтому страница
+# читает g._contracts.<поле> напрямую.
 var _week_head: Label = null
 var _week_list: VBoxContainer = null
-# план 2: цикл жилы, pending finds, титулы ранга
-var _cycle_cache: Dictionary = {}
-var _vein_finds: Array = []
+# план 2: титулы ранга (дневной круг, переезжают в Task 4)
 var _unlocked_titles: Array = []
 var _active_title := ""
-var _cycle_prev_state := ""
 var _circle_intro_shown := false
 
 func _init(game: Game) -> void:
@@ -521,6 +514,10 @@ func _inject_circle_demo() -> void:
 		g._guild._order_done[String(t)] = true
 
 # ---------- недельный слой: туманная жила + ярмарка гильдии (v30) ----------
+# Доска v2 (Task 3): всё состояние и вся логика слоя переехали в Contracts
+# (game/world/contracts.gd). Здесь остались только делегаты, на которые ещё
+# смотрит страница «Неделя» (ниже): файл Retention удаляется в Task 5 вместе
+# со страницей и этими обёртками.
 # Жила: первооткрытие с тегом недели → +2 очк. дня и 10% прожилка (+1 кап,
 # кап 5/нед. — на сервере). Ярмарка: варки пар с выходом-тегом недели идут
 # в общий котёл (пара — раз в неделю); закрытый котёл + вклад ≥3 → +0.05/с
@@ -528,388 +525,51 @@ func _inject_circle_demo() -> void:
 # на сервере; клиент оперирует только строками недели.
 
 func _fetch_week() -> void:
-	if not g._online._net_enabled or g._online._device_id == "":
-		return
-	if not Net.is_available():
-		_week_offline = true
-		_refresh_week_page()
-		return
-	Net.week_status(g._online._device_id)
-	_fetch_cycle()
+	g._contracts._fetch_week()
 
 
-func _on_net_week_result(result: Dictionary) -> void:
-	if result.get("offline", false) == true or result.get("ok", false) != true:
-		_week_offline = true
-		_refresh_week_page()
-		return
-	_week_offline = false
-	_week_cache = result
-	g._saves._save_game()
-	_refresh_week_page()
+func _fetch_cycle() -> void:
+	g._contracts._fetch_cycle()
+
+
+func _cache_str(key: String) -> String:
+	return g._contracts._cache_str(key)
 
 
 func _week_vein() -> Dictionary:
-	var v = _week_cache.get("vein", {})
-	return v if typeof(v) == TYPE_DICTIONARY else {}
-
-# ---------- план 2: цикл жилы ----------
-
-func _fetch_cycle() -> void:
-	if not g._online._net_enabled or g._online._device_id == "":
-		return
-	if not Net.is_available():
-		return
-	Net.cycle_status(g._online._device_id)
-
-
-func _on_net_cycle_result(result: Dictionary) -> void:
-	if result.get("offline", false) == true or result.get("ok", false) != true:
-		return
-	var prev_id := String(_cycle_cache.get("cycle_id", ""))
-	_cycle_cache = result
-	if String(result.get("state", "")) == "spread" and _cycle_prev_state != "spread":
-		# R5: reason — порог достигнут или max_days; duration — от started_at до сегодня
-		var wf := int(result.get("world_finds", 0))
-		var thr := int(result.get("spread_threshold", 0))
-		var dur := 0
-		var sa := String(result.get("started_at", ""))
-		if sa.length() >= 10:
-			dur = maxi(0, int((Time.get_unix_time_from_system() - float(
-				Time.get_unix_time_from_datetime_string(sa))) / 86400.0))
-		Analytics.track("vein_cycle_spread", {"reason": "threshold" if wf >= thr else "max_days",
-			"world_finds": wf, "duration_days": dur})
-	_cycle_prev_state = String(result.get("state", ""))
-	if prev_id != "" and String(result.get("cycle_id", "")) != prev_id:
-		# R1: закрытие старого цикла — невлитые капли его становятся auto_applied
-		var autoed := 0
-		for f in _vein_finds:
-			if typeof(f) == TYPE_DICTIONARY and String(f.get("cycle_id", "")) == prev_id \
-					and String(f.get("status", "")) == "registered":
-				f["status"] = "auto_applied"
-				autoed += 1
-				Analytics.track("vein_pour", {"tag": String(f.get("tag", "")), "manual": false})
-		Analytics.track("vein_cycle_closed", {"auto_applied_count": autoed,
-			"total_points": int(_cycle_cache.get("my_points", 0))})
-		_vein_sync_pending()
-	g._saves._save_game()
-	_refresh_week_page()
-
-
-func _vein_sync_pending() -> void:
-	if not Net.is_available() or g._online._device_id == "":
-		return
-	var cyc := String(_cycle_cache.get("cycle_id", ""))
-	if cyc == "":
-		return
-	for f in _vein_finds:
-		if typeof(f) != TYPE_DICTIONARY:
-			continue
-		if String(f.get("status", "")) == "pending_server" and String(f.get("cycle_id", "")) == cyc:
-			Net.vein_find(g._online._device_id, String(f["pair_key"]), String(f["tag"]), cyc)
-
-
-func _vein_find_exists(cycle_id: String, pair_key: String) -> bool:
-	for f in _vein_finds:
-		if typeof(f) == TYPE_DICTIONARY and String(f.get("cycle_id", "")) == cycle_id \
-				and String(f.get("pair_key", "")) == pair_key:
-			return true
-	return false
-
-
-func _vein_find_entry(pair_key: String, cycle_id: String = "") -> Dictionary:
-	# Fix #6: та же пара может жить в _vein_finds дважды — заявка текущего цикла
-	# и уже зарегистрированная запись прошлого цикла. Ответ сервера (цикл здесь не
-	# known) относится к незакрытой заявке, поэтому pending_server приоритетен; без
-	# этого цикла find из прошлого цикла перехватил бы ответ (R2-пересоздание
-	# ушло бы в старый cycle_id). Если pending нет, берём первую запись той же
-	# пары — иначе запоздалый повторный ответ (ok после registered, cycle_mismatch
-	# после register) молча терялся и локальная запись оставалась inconsistent.
-	var fallback := {}
-	for f in _vein_finds:
-		if typeof(f) != TYPE_DICTIONARY:
-			continue
-		if String(f.get("pair_key", "")) != pair_key:
-			continue
-		if cycle_id != "":
-			if String(f.get("cycle_id", "")) == cycle_id:
-				return f
-			continue
-		if String(f.get("status", "")) == "pending_server":
-			return f
-		if fallback.is_empty():
-			fallback = f
-	return fallback
-
-
-## server-кэш цикла читается через этот геттер: /api/vein/cycle/status отдаёт
-## tag2 как Optional[str] = null (цикл ещё не «расползлся»), а String(null) —
-## это ошибка рантайма, которая обрывала бы _commit_brew посреди варки.
-func _cache_str(key: String) -> String:
-	var v: Variant = _cycle_cache.get(key, "")
-	return String(v) if typeof(v) == TYPE_STRING else ""
-
-
-func _vein_report_pair(a: String, b: String, out: String) -> void:
-	# §3.3.1: personal find рождается только для пары из серверной книги, тег
-	# которой активен в текущем цикле; anti-farm — одна пара на цикл (R2: без
-	# кэша цикла find не заводится).
-	if out == "" or not g._online._is_server_pair(a, b):
-		return
-	var cyc := _cache_str("cycle_id")
-	var tag := String(g._online._server_tag.get(out, ""))
-	if cyc == "" or tag == "":
-		return
-	if tag != _cache_str("tag1") and tag != _cache_str("tag2"):
-		return
-	var pk := g._pair_key(a, b)
-	if _vein_find_exists(cyc, pk):
-		return
-	_vein_finds.append({"id": "%s-%d-%s" % [cyc, int(Time.get_unix_time_from_system()), pk],
-		"tag": tag, "points": 1, "found_at": int(Time.get_unix_time_from_system()),
-		"pair_key": pk, "cycle_id": cyc, "status": "pending_server", "server_response": {}})
-	g._saves._save_game()
-	_vein_sync_pending()
-	_refresh_week_page()
-
-
-func _vein_add_from_discover(pair_key: String, out: String, vein: Dictionary) -> void:
-	# world-first: сервер уже начислил очки в /discover — капля сразу registered
-	if typeof(vein) != TYPE_DICTIONARY or vein.is_empty() or out == "":
-		return
-	var cyc := String(_cycle_cache.get("cycle_id", ""))
-	var tag := String(vein.get("tag", ""))
-	if tag == "":
-		tag = String(g._online._server_tag.get(out, ""))
-	if cyc == "" or tag == "" or _vein_find_exists(cyc, pair_key):
-		return
-	_vein_finds.append({"id": "wf-%d-%s" % [int(Time.get_unix_time_from_system()), pair_key],
-		"tag": tag, "points": int(vein.get("points", Game.VEIN_POINTS_WORLD)),
-		"found_at": int(Time.get_unix_time_from_system()), "pair_key": pair_key,
-		"cycle_id": cyc, "status": "registered", "server_response": vein})
-	g._saves._save_game()
-	_refresh_week_page()
-
-
-func _on_net_vein_find_result(pair_key: String, cycle_id: String, result: Dictionary) -> void:
-	if result.get("offline", false) == true:
-		return
-	if cycle_id == "":
-		return
-	var f := _vein_find_entry(pair_key, cycle_id)
-	if f.is_empty():
-		return
-	if result.get("ok", false) != true:
-		var err := String(result.get("error", ""))
-		if err == "cycle_mismatch":
-			# R2: пересоздаём find в актуальном цикле сервера
-			var new_cyc := String(result.get("cycle_id", ""))
-			if new_cyc == "":
-				new_cyc = String(_cycle_cache.get("cycle_id", ""))
-			f["cycle_id"] = new_cyc
-			f["id"] = "%s-%d-%s" % [new_cyc, int(Time.get_unix_time_from_system()), pair_key]
-			f["status"] = "pending_server"
-			f["points"] = 0
-			_vein_sync_pending()
-		else:
-			_vein_finds.erase(f)  # unknown_pair / tag_mismatch — снимаем
-		g._saves._save_game()
-		_refresh_week_page()
-		return
-	f["status"] = "registered"
-	f["server_response"] = result
-	f["points"] = int(result.get("points", 1))
-	Analytics.track("vein_personal_find", {"tag": String(f["tag"]),
-		"points": int(result.get("points", 1)), "streak_roll": bool(result.get("streak_added", false)),
-		"cycle_id": String(f["cycle_id"])})
-	if bool(result.get("cap_reached", false)) and int(f.get("cap_paid", 0)) == 0:
-		f["cap_paid"] = 1
-		g._engine._grant_ether(Game.VEIN_STREAK_REWARD, "vein_streak_cap")
-		Analytics.track("vein_streak_cap", {"cycle_id": String(f["cycle_id"]),
-			"reward": Game.VEIN_STREAK_REWARD})
-		g._engine.status_text = "Прожилка дошла до капа! +%d ⚡" % Game.VEIN_STREAK_REWARD
-	g._saves._save_game()
-	_refresh_week_page()
-
-
-func _vein_tag_slug(tag: String) -> String:
-	# тег → любое вещество с этим тегом (для цвета капли); "" если нет
-	for slug in g._online._server_tag:
-		if String(g._online._server_tag[slug]) == tag:
-			return String(slug)
-	return ""
-
-
-func _vein_pour(find_id: String) -> void:
-	if not Net.is_available() or g._online._device_id == "":
-		g._engine.status_text = "Вливание ждёт связи с миром."
-		Sfx.error()
-		return
-	for f in _vein_finds:
-		if typeof(f) == TYPE_DICTIONARY and String(f.get("id", "")) == find_id:
-			if String(f.get("status", "")) != "registered":
-				return
-			Net.vein_pour(g._online._device_id, find_id)
-			return
-
-
-func _on_net_vein_pour_result(find_id: String, result: Dictionary) -> void:
-	if result.get("ok", false) != true:
-		return
-	for f in _vein_finds:
-		if typeof(f) == TYPE_DICTIONARY and String(f.get("id", "")) == find_id:
-			if String(f.get("status", "")) == "registered":
-				f["status"] = "poured"
-				Analytics.track("vein_pour", {"tag": String(f.get("tag", "")), "manual": true})
-			break
-	g._saves._save_game()
-	_refresh_week_page()
+	return g._contracts._week_vein()
 
 
 func _week_fair() -> Dictionary:
-	var f = _week_cache.get("fair", {})
-	return f if typeof(f) == TYPE_DICTIONARY else {}
+	return g._contracts._week_fair()
 
 
 func _week_claimable() -> bool:
-	var f := _week_fair()
-	if f.is_empty():
-		return false
-	if bool(f.get("closed", false)) and int(f.get("my_contrib", 0)) >= 3 and not bool(f.get("claimed", false)):
-		return true
-	return typeof(f.get("prev", null)) == TYPE_DICTIONARY
+	return g._contracts._week_claimable()
 
 
-func _fair_report_brew(a: String, b: String) -> void:
-	if g._selftest or a == "" or b == "":
-		return
-	if not g._online._net_enabled or not Net.is_available() or g._online._device_id == "":
-		return
-	Net.fair_brew(g._online._device_id, a, b)
+func _vein_tag_slug(tag: String) -> String:
+	return g._contracts._vein_tag_slug(tag)
 
 
-func _on_net_fair_brew_result(result: Dictionary) -> void:
-	if result.get("offline", false) == true or result.get("ok", false) != true:
-		return
-	if bool(result.get("counted", false)):
-		g._engine.status_text = "Вклад в котёл ярмарки засчитан! (твоих: %d)" % int(result.get("contrib", 0))
-		var f := _week_fair()
-		if not f.is_empty():
-			f["progress"] = int(result.get("progress", f.get("progress", 0)))
-			f["my_contrib"] = int(result.get("contrib", f.get("my_contrib", 0)))
-			f["closed"] = bool(result.get("closed", f.get("closed", false)))
-			_week_cache["fair"] = f
-			g._saves._save_game()
-		_refresh_week_page()
-		g._engine._refresh()
-
-
-func _fair_claim() -> void:
-	if g._selftest:
-		return
-	if not g._online._net_enabled or not Net.is_available() or g._online._device_id == "":
-		g._engine.status_text = "Ярмарка ждёт связи с миром."
-		Sfx.error()
-		return
-	Net.fair_claim(g._online._device_id)
-
-
-func _fair_on_brew(output: String) -> void:
-	# Локальный котёл (A3): считаем варки разных веществ, чтобы ярмарка жила и
-	# без сети — вдвое дешевле на выходе. Чистый счётчик: без гейта selftest,
-	# как _circle_on_discovery (suite_resonance_net: его мутации восстанавливаются).
-	if output == "":
-		return
-	var w := Home._iso_week_id()
-	if _fair_local_week != w:
-		_fair_local_week = w
-		_fair_local_brews.clear()
-	if not _fair_local_brews.has(output):
-		_fair_local_brews.append(output)
-		if not g._selftest:
-			g._saves._save_game()
-			_refresh_week_page()
+func _vein_pour(find_id: String) -> void:
+	g._contracts._vein_pour(find_id)
 
 
 func _fair_offline_available() -> bool:
-	return not g._online._net_enabled or not Net.is_available() or g._online._device_id == ""
+	return g._contracts._fair_offline_available()
 
 
 func _fair_offline_claimable() -> bool:
-	if _fair_off_claim_week == Home._iso_week_id():
-		return false
-	if _fair_local_week != Home._iso_week_id():
-		return false
-	return _fair_local_brews.size() >= Game.FAIR_OFFLINE_GOAL \
-		and _fair_regen_total < Game.FAIR_REGEN_CAP
+	return g._contracts._fair_offline_claimable()
 
 
 func _fair_offline_claim() -> void:
-	if not _fair_offline_claimable():
-		g._engine.status_text = "Локальный котёл: свари %d разных вещества за неделю (%d/%d)." % [
-			Game.FAIR_OFFLINE_GOAL, _fair_local_brews.size(), Game.FAIR_OFFLINE_GOAL]
-		Sfx.error()
-		return
-	_fair_off_claim_week = Home._iso_week_id()
-	var before := _fair_regen_total
-	_fair_regen_total = minf(Game.FAIR_REGEN_CAP, _fair_regen_total + Game.FAIR_REGEN_EACH * Game.FAIR_OFFLINE_FACTOR)
-	g._hub._log_event("Ярмарка без мира: +%.2f регена навсегда (вполовину)" % (_fair_regen_total - before))
-	g._engine.status_text = "Локальный котёл закрыт: +%.2f к регену навсегда. Без мира — вполовину." % (_fair_regen_total - before)
-	g._spirit._companion_react("milestone", "ярмарка")
-	Sfx.stage_up()
-	g._saves._save_game()
-	_refresh_week_page()
-	g._engine._refresh()
+	g._contracts._fair_offline_claim()
 
 
-func _on_net_fair_claim_result(result: Dictionary) -> void:
-	if result.get("offline", false) == true or result.get("ok", false) != true:
-		g._engine.status_text = "Мир не ответил — награда котла подождёт."
-		Sfx.error()
-		return
-	var grants_raw = result.get("grants")
-	var grants: Array = grants_raw as Array if typeof(grants_raw) == TYPE_ARRAY else []
-	if grants.is_empty():
-		g._engine.status_text = "Забирать пока нечего: котёл варится или вклад уже забран."
-		return
-	for gr in grants:
-		if typeof(gr) != TYPE_DICTIONARY:
-			continue
-		var gd := gr as Dictionary
-		if String(gd.get("kind", "")) == "regen":
-			var before := _fair_regen_total
-			_fair_regen_total = minf(Game.FAIR_REGEN_CAP, _fair_regen_total + Game.FAIR_REGEN_EACH)
-			g._hub._log_event("Ярмарка %s: +%.2f регена навсегда" % [String(gd.get("week", "?")), _fair_regen_total - before])
-			g._engine.status_text = "Котёл ярмарки закрыт! +%.2f к регену навсегда." % (_fair_regen_total - before)
-			g._spirit._companion_react("milestone", "ярмарка")
-			Sfx.legendary()
-		else:
-			var amount := int(gd.get("amount", 0))
-			g._engine._grant_ether(amount, "fair_compensation")
-			g._engine.status_text = "Ярмарка %s: утешение +%d ⚡." % [String(gd.get("week", "?")), amount]
-			Sfx.stage_up()
-	g._saves._save_game()
-	_fetch_week()
-	_refresh_week_page()
-	g._engine._refresh()
-
-
-func _discover_vein_bonus(result: Dictionary) -> void:
-	var v = result.get("vein", null)
-	if typeof(v) != TYPE_DICTIONARY or (v as Dictionary).is_empty():
-		return
-	var vd := v as Dictionary
-	if bool(vd.get("streak", false)):
-		_vein_cap_total += 1
-		g._engine.status_text = "Прожилка в жиле «%s»! +1 к капу навсегда." % g._clean_str(vd.get("tag", ""))
-		g._spirit._companion_react("milestone", "жила")
-		Sfx.legendary()
-		g._saves._save_game()
-		g._engine._refresh()
-	else:
-		g._engine.status_text = "Находка в жиле «%s»: +%d очк. дня!" % [g._clean_str(vd.get("tag", "")), int(vd.get("points", 0))]
-		_fetch_week()
-
+func _fair_claim() -> void:
+	g._contracts._fair_claim()
 
 func _build_week_page(container: VBoxContainer) -> void:
 	var pad := MarginContainer.new()
@@ -941,20 +601,20 @@ func _refresh_week_page() -> void:
 	for child in _week_list.get_children():
 		_week_list.remove_child(child)
 		child.queue_free()
-	if _week_cache.is_empty():
+	if g._contracts._week_cache.is_empty():
 		var idle := g._label("Жду неделю от мира…", 13)
-		if _week_offline:
+		if g._contracts._week_offline:
 			idle.text = "Мир недоступен — неделя появится, когда будет связь."
 		idle.add_theme_color_override("font_color", Color(0.62, 0.74, 0.82))
 		_week_list.add_child(idle)
 		_week_head.text = ""
 		return
-	_week_head.text = "Неделя %s" % g._clean_str(_week_cache.get("week", "?"))
+	_week_head.text = "Неделя %s" % g._clean_str(g._contracts._week_cache.get("week", "?"))
 	var v := _week_vein()
-	if not _cycle_cache.is_empty():
-		v = {"tag1": _cycle_cache.get("tag1", ""), "tag2": _cycle_cache.get("tag2", ""),
-			"spread": String(_cycle_cache.get("state", "")) == "spread",
-			"my_hits": _cycle_cache.get("my_points", 0), "my_streaks": _cycle_cache.get("my_streak", 0),
+	if not g._contracts._cycle_cache.is_empty():
+		v = {"tag1": g._contracts._cycle_cache.get("tag1", ""), "tag2": g._contracts._cycle_cache.get("tag2", ""),
+			"spread": String(g._contracts._cycle_cache.get("state", "")) == "spread",
+			"my_hits": g._contracts._cycle_cache.get("my_points", 0), "my_streaks": g._contracts._cycle_cache.get("my_streak", 0),
 			"streak_cap": Game.VEIN_STREAK_CAP}
 	var vtitle := "Жила: «%s»" % g._clean_str(v.get("tag1", "?"))
 	if bool(v.get("spread", false)):
@@ -962,15 +622,15 @@ func _refresh_week_page() -> void:
 	var vt := g._label(vtitle + (" · ждёт связи с миром" if _fair_offline_available() else ""), 14)
 	vt.add_theme_color_override("font_color", Color(0.55, 0.95, 0.9))
 	_week_list.add_child(vt)
-	if not _cycle_cache.is_empty():
-		vt.text += " · туман: %s · миров находок %d/%d" % [String(_cycle_cache.get("state", "?")),
-			int(_cycle_cache.get("world_finds", 0)), int(_cycle_cache.get("spread_threshold", 0))]
+	if not g._contracts._cycle_cache.is_empty():
+		vt.text += " · туман: %s · миров находок %d/%d" % [String(g._contracts._cycle_cache.get("state", "?")),
+			int(g._contracts._cycle_cache.get("world_finds", 0)), int(g._contracts._cycle_cache.get("spread_threshold", 0))]
 	_week_list.add_child(g._label("Твоих находок в жиле: %d · прожилки: %d/%d · +кап от жилы: %d" % [
 		int(v.get("my_hits", 0)), int(v.get("my_streaks", 0)),
-		int(v.get("streak_cap", 5)), _vein_cap_total], 13))
+		int(v.get("streak_cap", 5)), g._contracts._vein_cap_total], 13))
 	# капли жилы (план 2): по одной на find текущего цикла (R1/R3)
-	var cyc_now := String(_cycle_cache.get("cycle_id", ""))
-	for f in _vein_finds:
+	var cyc_now := String(g._contracts._cycle_cache.get("cycle_id", ""))
+	for f in g._contracts._vein_finds:
 		if typeof(f) != TYPE_DICTIONARY:
 			continue
 		if cyc_now != "" and String(f.get("cycle_id", "")) != cyc_now:
@@ -1021,7 +681,7 @@ func _refresh_week_page() -> void:
 	_week_list.add_child(cb)
 	if _fair_offline_available():
 		_week_list.add_child(g._label("Без мира: локальный котёл — %d/%d разных вещества за неделю, награда вполовину." % [
-			_fair_local_brews.size(), Game.FAIR_OFFLINE_GOAL], 13))
+			g._contracts._fair_local_brews.size(), Game.FAIR_OFFLINE_GOAL], 13))
 		var ob := g._small_button("Закрыть локальный котёл (−50 %)", Vector2(0, 46), 2)
 		ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		ob.disabled = not _fair_offline_claimable()
@@ -1039,17 +699,17 @@ func _refresh_week_page() -> void:
 
 
 func _inject_week_demo() -> void:
-	_week_cache = {"week": "2026-W37",
+	g._contracts._week_cache = {"week": "2026-W37",
 		"vein": {"tag1": "Свет", "tag2": "Тьма", "spread": true, "my_hits": 2, "my_streaks": 1, "streak_cap": 5},
 		"fair": {"tag": "Трава", "goal": 22, "progress": 14, "apprentice": 4, "closed": false,
 			"my_contrib": 3, "claimed": false,
 			"prev": {"week": "2026-W36", "kind": "ether", "amount": 90}}}
-	_vein_cap_total = 4
-	_fair_regen_total = 0.05
-	_week_offline = false
-	_cycle_cache = {"cycle_id": "vc:demo", "tag1": "Свет", "state": "spread", "world_finds": 9,
+	g._contracts._vein_cap_total = 4
+	g._contracts._fair_regen_total = 0.05
+	g._contracts._week_offline = false
+	g._contracts._cycle_cache = {"cycle_id": "vc:demo", "tag1": "Свет", "state": "spread", "world_finds": 9,
 		"my_points": 4, "my_streak": 2, "spread_threshold": 12, "started_at": "2026-09-20T00:00:00"}
-	_vein_finds = [
+	g._contracts._vein_finds = [
 		{"id": "wf-vc:demo", "tag": "Свет", "points": 2, "found_at": 0, "pair_key": "a|b",
 			"cycle_id": "vc:demo", "status": "registered", "server_response": {}},
 		{"id": "p-vc:demo", "tag": "Тьма", "points": 1, "found_at": 0, "pair_key": "c|d",

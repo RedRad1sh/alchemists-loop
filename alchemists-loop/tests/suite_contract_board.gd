@@ -530,6 +530,122 @@ static func run(g: Game) -> void:
 	g._guild._order_done = t2_ord_done
 	_cb_restore(g._contracts, t2_snap)
 
+	# доска v2 Task 3 (§1 строки 7–8): недельный слой (жила + ярмарка) переехал в
+	# Contracts, поэтому pinned weekly[0]=vein и weekly[1]=fair живут доской.
+	# Снимки: доска (_cb_snapshot), поля недельного слоя, инвентарь с Домом (у
+	# успешного claim fair есть выдача) и флаги сети — на время проверки офлайн-
+	# котёл обязан быть недоступным, иначе гейт ярмарки краснеет не по своей
+	# причине. Локалы с суффиксом/именами блока: в run() уже есть блочные dt/d,
+	# переобъявление уровня функции GDScript карает Parse Error.
+	var t3_snap := _cb_snapshot(g._contracts)
+	var t3_week := {
+		"week_cache": g._contracts._week_cache, "cycle_cache": g._contracts._cycle_cache,
+		"vein_finds": g._contracts._vein_finds, "vein_cap": g._contracts._vein_cap_total,
+		"regen": g._contracts._fair_regen_total, "local_week": g._contracts._fair_local_week,
+		"local_brews": g._contracts._fair_local_brews, "off_claim": g._contracts._fair_off_claim_week,
+		"offline": g._contracts._week_offline, "prev_state": g._contracts._cycle_prev_state,
+	}
+	var t3_env := {
+		"inv": g._engine.inventory.duplicate(true),
+		"owned": g._home.house_owned.duplicate(true),
+		"net": g._online._net_enabled, "avail": Net.is_available(),
+		"dev": g._online._device_id, "status": g._engine.status_text,
+	}
+	# Онлайн-фикстура: _fair_offline_available() обязан стать false, иначе ярмарка
+	# читает локальный котёл, а не серверный гейт (в selftest Net обрезан).
+	g._online._net_enabled = true
+	Net._available = true
+	g._online._device_id = "t3-device"
+	var wk := (g._contracts.weekly())[0] as Dictionary  # vein
+	var sv_cyc: Dictionary = g._contracts._cycle_cache
+	var sv_finds: Array = g._contracts._vein_finds.duplicate(true)
+	g._contracts._cycle_cache = {"cycle_id": "vc:T1", "tag1": "Туман", "state": "active"}
+	g._contracts._vein_finds = [
+		{"id": "a", "tag": "Туман", "points": 1, "found_at": 1, "pair_key": "p1",
+			"cycle_id": "vc:T1", "status": "registered", "server_response": {}},
+		{"id": "b", "tag": "Туман", "points": 1, "found_at": 1, "pair_key": "p2",
+			"cycle_id": "vc:T1", "status": "poured", "server_response": {}},
+		{"id": "c", "tag": "Туман", "points": 1, "found_at": 1, "pair_key": "p3",
+			"cycle_id": "vc:OLD", "status": "registered", "server_response": {}},
+		{"id": "d", "tag": "Туман", "points": 1, "found_at": 1, "pair_key": "p4",
+			"cycle_id": "vc:T1", "status": "pending_server", "server_response": {}}]
+	g._contracts._sync_vein()
+	# цель bronze=1..gold=3 по тиру; прогресс = только текущий цикл, registered|poured:
+	Selftest.check("vein contract counts current-cycle registered+poured only",
+		g._contracts.progress(String(wk["id"])) == mini(2, int(wk["goal"])))
+	var wf := (g._contracts.weekly())[1] as Dictionary
+	g._contracts._week_cache = {"fair": {"closed": true, "my_contrib": 3, "claimed": false,
+		"progress": 9, "goal": 12, "tag": "Туман"}}
+	g._contracts._sync_fair()
+	Selftest.check("fair contract ready via server gate",
+		g._contracts.is_ready(String(wf["id"])))
+	var claim_res := g._contracts.claim(String(wf["id"]))
+	Selftest.check("fair claim grants board reward once",
+		bool(claim_res["ok"]) and g._contracts.claim(String(wf["id"]))["reason"] == "claimed")
+	g._contracts._week_cache = {}
+	g._contracts._cycle_cache = sv_cyc
+	g._contracts._vein_finds = sv_finds
+	# Прогресс vein обязан догоняться и на самом входе weekly(): доска рисует
+	# строку сразу, без отдельного вызова синка из UI.
+	g._contracts._cycle_cache = {"cycle_id": "vc:T3", "tag1": "Туман", "state": "active"}
+	g._contracts._vein_finds = [
+		{"id": "a", "tag": "Туман", "points": 1, "found_at": 1, "pair_key": "p1",
+			"cycle_id": "vc:T3", "status": "registered", "server_response": {}},
+		{"id": "b", "tag": "Туман", "points": 1, "found_at": 1, "pair_key": "p2",
+			"cycle_id": "vc:T3", "status": "poured", "server_response": {}}]
+	g._contracts.weekly()
+	Selftest.check("weekly() syncs the pinned vein contract",
+		g._contracts.progress(String(wk["id"])) == mini(2, int(wk["goal"])))
+	# Done-skip: закрытый контракт синк не оживляет — то же правило, что у orders
+	# (иначе недельная награда выдавалась бы повторно до конца недели).
+	var wk_id := String(wk["id"])
+	g._contracts._contracts_weekly_done[wk_id] = true
+	g._contracts._contracts_weekly_prog.erase(wk_id)
+	g._contracts._sync_vein()
+	Selftest.check("vein sync leaves a done contract at zero progress",
+		g._contracts.progress(wk_id) == 0)
+	g._contracts._contracts_weekly_done.erase(wk_id)
+	# Офлайн-гейт ярмарки: без сети readiness даёт локальный котёл
+	# (_fair_offline_claimable, FAIR_OFFLINE_GOAL == 3), а прогресс пишется с
+	# _fair_local_brews — так ярмарка остаётся проходимой без сервера.
+	var wf_id := String(wf["id"])
+	g._online._net_enabled = false
+	Net._available = false
+	# Строка fair была закрыта успешным claim выше (проверка «один раз»), для
+	# офлайн-гейта её надо вернуть в открытое состояние — иначе done-skip в
+	# _sync_fair законно оставит прогресс нулевым, и проверка покраснеет не по
+	# своей причине.
+	g._contracts._contracts_weekly_done.erase(wf_id)
+	g._contracts._contracts_weekly_prog.erase(wf_id)
+	g._contracts._fair_off_claim_week = ""
+	g._contracts._fair_regen_total = 0.0
+	g._contracts._fair_local_week = Home._iso_week_id()
+	g._contracts._fair_local_brews = ["steam", "stone", "clay"]
+	g._contracts._sync_fair()
+	Selftest.check("fair contract ready via local pot gate",
+		g._contracts.progress(wf_id) == int(wf["goal"]) and g._contracts.is_ready(wf_id))
+	g._contracts._fair_local_brews = ["steam", "stone"]
+	g._contracts._sync_fair()
+	Selftest.check("fair local pot below goal is not ready",
+		g._contracts.progress(wf_id) == int(wf["goal"]) - 1 and not g._contracts.is_ready(wf_id))
+	g._online._net_enabled = bool(t3_env["net"])
+	Net._available = bool(t3_env["avail"])
+	g._online._device_id = String(t3_env["dev"])
+	g._engine.status_text = String(t3_env["status"])
+	g._engine.inventory = (t3_env["inv"] as Dictionary).duplicate(true)
+	g._home.house_owned = (t3_env["owned"] as Dictionary).duplicate(true)
+	g._contracts._week_cache = t3_week["week_cache"]
+	g._contracts._cycle_cache = t3_week["cycle_cache"]
+	g._contracts._vein_finds = t3_week["vein_finds"]
+	g._contracts._vein_cap_total = int(t3_week["vein_cap"])
+	g._contracts._fair_regen_total = float(t3_week["regen"])
+	g._contracts._fair_local_week = String(t3_week["local_week"])
+	g._contracts._fair_local_brews = t3_week["local_brews"]
+	g._contracts._fair_off_claim_week = String(t3_week["off_claim"])
+	g._contracts._week_offline = bool(t3_week["offline"])
+	g._contracts._cycle_prev_state = String(t3_week["prev_state"])
+	_cb_restore(g._contracts, t3_snap)
+
 	# Разные даты дают разные наборы. Точечное сравнение двух конкретных дней
 	# могло бы совпасть случайно, поэтому меряем разнообразие на 30 днях.
 	var base_unix := int(Time.get_unix_time_from_datetime_dict(

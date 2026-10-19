@@ -69,7 +69,7 @@ static func _seed(g: Game, fixture: WorkshopFixture, depth := 99, blueprint := f
 	g._guild._quests_done.clear()
 	g._guild._order_done.clear()
 	g._retention._circle_disc = 0
-	g._retention._fair_local_brews.clear()
+	g._contracts._fair_local_brews.clear()
 	g._pages._spring_clock = 0.0
 	g._pages._bench_target = ""
 	g._pages._bench_on = false

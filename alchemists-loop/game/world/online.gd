@@ -542,7 +542,7 @@ func _experiment_outcome(out: Dictionary, a: String, b: String, created: bool = 
 	var first_milestones: Array = []
 	if first_open:
 		first_milestones = g._engine._grant_first_open(slug)
-	g._retention._fair_report_brew(a, b)
+	g._contracts._fair_report_brew(a, b)
 	if created:
 		_set_status("ПЕРВОЭКСПЕРИМЕНТ: %s — мир записал тебя первым!" % _item_name(slug))
 		g._spirit._companion_react("world_first", _item_name(slug))
@@ -581,7 +581,7 @@ func _on_net_pair_result(pair_key: String, result: Dictionary) -> void:
 			_register_server_recipe(a, b, slug)
 			g._engine.learn_recipe(a, b, slug)
 			g._sync.mark_dirty()
-			g._retention._fair_report_brew(a, b)
+			g._contracts._fair_report_brew(a, b)
 			# U11 (T15): первое ЛОКАЛЬНОЕ получение мир-открытого вещества — через
 			# _grant_local_acquisition (+1 в инвентарь, circular-эффект Круга,
 			# _grant_first_open: rarity-пошлина, tier-учёт гильдии, вехи атласа,
@@ -676,7 +676,7 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 			# Знание изменилось → пакет синка грязный; троттл-флэш отправит его
 			# на следующем тике (request_sync сам гейтит _net_enabled/Net).
 			g._sync.mark_dirty()
-			g._retention._fair_report_brew(a, b)
+			g._contracts._fair_report_brew(a, b)
 			# first_open нужен ниже (статус/реакция спутника); хелпер считает его сам
 			# перед тем же инкрементом — значения совпадают.
 			var first_open := not g._engine.inventory.has(slug)
@@ -684,7 +684,7 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 			if status == "known":
 				# §3.3.1: пара известна серверу, но клиент её ещё не регистрировал
 				# как личную — маршрутизируем в /api/vein/find.
-				g._retention._vein_report_pair(a, b, slug)
+				g._contracts._vein_report_pair(a, b, slug)
 			var author := g._clean_str(disc.get("author", _net_nick))
 			_server_authors[slug] = author
 			if status == "created" and not reused:
@@ -729,10 +729,10 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 					sub2 += "\n%s" % g._engine._milestone_text(int(m))
 				g._present_popup(slug, sub2, "НОВЫЙ РЕЦЕПТ!", rr["color"])
 			if status == "created" and not reused:
-				g._retention._discover_vein_bonus(result)
+				g._contracts._discover_vein_bonus(result)
 				var vein_data = result.get("vein")
 				if typeof(vein_data) == TYPE_DICTIONARY:
-					g._retention._vein_add_from_discover(pair_key, slug, vein_data)
+					g._contracts._vein_add_from_discover(pair_key, slug, vein_data)
 	elif status == "not_combinable":
 		if is_experiment:
 			g._engine._experiment_failed(a, b)

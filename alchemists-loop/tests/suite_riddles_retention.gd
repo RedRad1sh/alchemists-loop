@@ -320,38 +320,38 @@ static func run(g: Game) -> void:
 	g._retention._circle_disc_day = ""
 	g._retention._circle_disc = 0
 	# --- v30: недельный слой ---
-	g._retention._week_cache = {"week": "2026-W37",
+	g._contracts._week_cache = {"week": "2026-W37",
 		"vein": {"tag1": "Свет", "tag2": "Тьма", "spread": false, "my_hits": 0, "my_streaks": 0, "streak_cap": 5},
 		"fair": {"tag": "Трава", "goal": 22, "progress": 10, "apprentice": 2, "closed": false,
 			"my_contrib": 1, "claimed": false}}
-	Selftest.check("week claimable no", not g._retention._week_claimable())
-	(g._retention._week_cache["fair"] as Dictionary)["closed"] = true
-	(g._retention._week_cache["fair"] as Dictionary)["my_contrib"] = 3
-	Selftest.check("week claimable yes", g._retention._week_claimable())
-	(g._retention._week_cache["fair"] as Dictionary)["closed"] = false
-	(g._retention._week_cache["fair"] as Dictionary)["my_contrib"] = 1
-	(g._retention._week_cache["fair"] as Dictionary)["prev"] = {"week": "2026-W36", "kind": "ether", "amount": 60}
-	Selftest.check("week claimable prev", g._retention._week_claimable())
-	g._retention._vein_cap_total = 0
-	g._retention._discover_vein_bonus({"vein": {"tag": "Свет", "points": 2, "streak": false}})
-	Selftest.check("week vein points", g._retention._vein_cap_total == 0)
-	g._retention._discover_vein_bonus({"vein": {"tag": "Свет", "points": 2, "streak": true}})
-	Selftest.check("week vein streak", g._retention._vein_cap_total == 1)
-	g._retention._fair_regen_total = 0.0
+	Selftest.check("week claimable no", not g._contracts._week_claimable())
+	(g._contracts._week_cache["fair"] as Dictionary)["closed"] = true
+	(g._contracts._week_cache["fair"] as Dictionary)["my_contrib"] = 3
+	Selftest.check("week claimable yes", g._contracts._week_claimable())
+	(g._contracts._week_cache["fair"] as Dictionary)["closed"] = false
+	(g._contracts._week_cache["fair"] as Dictionary)["my_contrib"] = 1
+	(g._contracts._week_cache["fair"] as Dictionary)["prev"] = {"week": "2026-W36", "kind": "ether", "amount": 60}
+	Selftest.check("week claimable prev", g._contracts._week_claimable())
+	g._contracts._vein_cap_total = 0
+	g._contracts._discover_vein_bonus({"vein": {"tag": "Свет", "points": 2, "streak": false}})
+	Selftest.check("week vein points", g._contracts._vein_cap_total == 0)
+	g._contracts._discover_vein_bonus({"vein": {"tag": "Свет", "points": 2, "streak": true}})
+	Selftest.check("week vein streak", g._contracts._vein_cap_total == 1)
+	g._contracts._fair_regen_total = 0.0
 	g._engine.ether = 0
-	g._retention._on_net_fair_claim_result({"ok": true, "grants": [{"week": "2026-W37", "kind": "regen", "amount": 0}]})
-	Selftest.check("week claim regen", is_equal_approx(g._retention._fair_regen_total, Game.FAIR_REGEN_EACH))
-	g._retention._on_net_fair_claim_result({"ok": true, "grants": [{"week": "2026-W36", "kind": "ether", "amount": 90}]})
+	g._contracts._on_net_fair_claim_result({"ok": true, "grants": [{"week": "2026-W37", "kind": "regen", "amount": 0}]})
+	Selftest.check("week claim regen", is_equal_approx(g._contracts._fair_regen_total, Game.FAIR_REGEN_EACH))
+	g._contracts._on_net_fair_claim_result({"ok": true, "grants": [{"week": "2026-W36", "kind": "ether", "amount": 90}]})
 	Selftest.check("week claim ether", g._engine.ether == 90)
-	g._retention._fair_regen_total = 0.49
-	g._retention._on_net_fair_claim_result({"ok": true, "grants": [{"week": "2026-W37", "kind": "regen", "amount": 0}]})
-	Selftest.check("week claim regen cap", is_equal_approx(g._retention._fair_regen_total, 0.5))
-	g._retention._fair_regen_total = 0.0
-	g._retention._on_net_fair_brew_result({"ok": true, "counted": true, "progress": 11, "contrib": 2, "closed": false})
-	Selftest.check("week brew cache", int(g._retention._week_fair().get("progress", 0)) == 11 and int(g._retention._week_fair().get("my_contrib", 0)) == 2)
+	g._contracts._fair_regen_total = 0.49
+	g._contracts._on_net_fair_claim_result({"ok": true, "grants": [{"week": "2026-W37", "kind": "regen", "amount": 0}]})
+	Selftest.check("week claim regen cap", is_equal_approx(g._contracts._fair_regen_total, 0.5))
+	g._contracts._fair_regen_total = 0.0
+	g._contracts._on_net_fair_brew_result({"ok": true, "counted": true, "progress": 11, "contrib": 2, "closed": false})
+	Selftest.check("week brew cache", int(g._contracts._week_fair().get("progress", 0)) == 11 and int(g._contracts._week_fair().get("my_contrib", 0)) == 2)
 	g._retention._refresh_week_page()
 	Selftest.check("week chip dot", String((g._pages._mode_chips["week"] as Button).text) == "Неделя ●")
-	g._retention._week_cache = {}
+	g._contracts._week_cache = {}
 	g._retention._refresh_week_page()
 	Selftest.check("week chip calm", String((g._pages._mode_chips["week"] as Button).text) == "Неделя")
 	var b_week := Net._build_request({"kind": "week", "path": "/week/status?device_id=d"})
@@ -359,40 +359,40 @@ static func run(g: Game) -> void:
 	var b_fair := Net._build_request({"kind": "fair_brew", "path": "/fair/brew", "body": {"device_id": "d", "a": "x", "b": "y"}})
 	Selftest.check("net fair route", String(b_fair["url"]).ends_with("/api/fair/brew") and int(b_fair["method"]) == HTTPClient.METHOD_POST)
 	# ============ U36 (A3): офлайн-котёл ярмарки ============
-	var u36_total := g._retention._fair_regen_total
-	var u36_lw := g._retention._fair_local_week
-	var u36_lb := (g._retention._fair_local_brews as Array).duplicate()
-	var u36_ow := g._retention._fair_off_claim_week
-	g._retention._fair_local_week = ""
-	g._retention._fair_local_brews.clear()
-	g._retention._fair_off_claim_week = ""
-	g._retention._fair_regen_total = 0.0
-	Selftest.check("u36 not claimable empty", not g._retention._fair_offline_claimable())
+	var u36_total := g._contracts._fair_regen_total
+	var u36_lw := g._contracts._fair_local_week
+	var u36_lb := (g._contracts._fair_local_brews as Array).duplicate()
+	var u36_ow := g._contracts._fair_off_claim_week
+	g._contracts._fair_local_week = ""
+	g._contracts._fair_local_brews.clear()
+	g._contracts._fair_off_claim_week = ""
+	g._contracts._fair_regen_total = 0.0
+	Selftest.check("u36 not claimable empty", not g._contracts._fair_offline_claimable())
 	for u36_out in ["steam", "stone", "steam", "clay"]:
-		g._retention._fair_on_brew(u36_out)
-	Selftest.check("u36 distinct counted", (g._retention._fair_local_brews as Array).size() == 3)
-	Selftest.check("u36 claimable at 3", g._retention._fair_offline_claimable())
-	g._retention._fair_offline_claim()
-	Selftest.check("u36 half regen", absf(g._retention._fair_regen_total - Game.FAIR_REGEN_EACH * Game.FAIR_OFFLINE_FACTOR) < 0.0001)
-	Selftest.check("u36 once per week", not g._retention._fair_offline_claimable()
-		and g._retention._fair_off_claim_week == Home._iso_week_id())
+		g._contracts._fair_on_brew(u36_out)
+	Selftest.check("u36 distinct counted", (g._contracts._fair_local_brews as Array).size() == 3)
+	Selftest.check("u36 claimable at 3", g._contracts._fair_offline_claimable())
+	g._contracts._fair_offline_claim()
+	Selftest.check("u36 half regen", absf(g._contracts._fair_regen_total - Game.FAIR_REGEN_EACH * Game.FAIR_OFFLINE_FACTOR) < 0.0001)
+	Selftest.check("u36 once per week", not g._contracts._fair_offline_claimable()
+		and g._contracts._fair_off_claim_week == Home._iso_week_id())
 	# потолок общий с серверной ярмаркой
-	g._retention._fair_regen_total = Game.FAIR_REGEN_CAP
-	g._retention._fair_off_claim_week = ""
-	Selftest.check("u36 cap respected", not g._retention._fair_offline_claimable())
+	g._contracts._fair_regen_total = Game.FAIR_REGEN_CAP
+	g._contracts._fair_off_claim_week = ""
+	Selftest.check("u36 cap respected", not g._contracts._fair_offline_claimable())
 	# неделя сменилась — счётчик обнулился, ключ недели поменялся
-	g._retention._fair_regen_total = 0.0
-	g._retention._fair_local_week = "2000-W01"
-	g._retention._fair_off_claim_week = "2000-W01"
-	g._retention._fair_on_brew("steam")
-	Selftest.check("u36 week rollover resets", (g._retention._fair_local_brews as Array).size() == 1
-		and g._retention._fair_local_week == Home._iso_week_id()
-		and g._retention._fair_off_claim_week == "2000-W01")
+	g._contracts._fair_regen_total = 0.0
+	g._contracts._fair_local_week = "2000-W01"
+	g._contracts._fair_off_claim_week = "2000-W01"
+	g._contracts._fair_on_brew("steam")
+	Selftest.check("u36 week rollover resets", (g._contracts._fair_local_brews as Array).size() == 1
+		and g._contracts._fair_local_week == Home._iso_week_id()
+		and g._contracts._fair_off_claim_week == "2000-W01")
 	# restore
-	g._retention._fair_regen_total = u36_total
-	g._retention._fair_local_week = u36_lw
-	g._retention._fair_local_brews = u36_lb
-	g._retention._fair_off_claim_week = u36_ow
+	g._contracts._fair_regen_total = u36_total
+	g._contracts._fair_local_week = u36_lw
+	g._contracts._fair_local_brews = u36_lb
+	g._contracts._fair_off_claim_week = u36_ow
 	await _test_circle_synthesis_paths(g)
 
 
@@ -423,8 +423,13 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 			"_rejected_pairs", "_first_open_calls"])],
 		[g._retention, _circle_snapshot(g._retention, ["_circle_disc_day", "_circle_disc",
 			"_circle_local_done_day", "_circle_local_goal_cache", "_circle_mine", "_circle_reward_day",
-			"_circle_pts_total", "_circle_mpts", "_circle_head", "_circle_list", "_fair_local_week",
-			"_fair_local_brews", "_cycle_cache"])],
+			"_circle_pts_total", "_circle_mpts", "_circle_head", "_circle_list"])],
+		# Доска v2 (Task 3): недельный слой переехал в Contracts — снимок его полей
+		# едет отдельной записью (индексы snapshots[0]/[1] выше по коду не
+		# сдвигаются), иначе варка в этом тесте оставила бы чужой локальный котёл.
+		[g._contracts, _circle_snapshot(g._contracts, ["_week_cache", "_cycle_cache", "_vein_finds",
+			"_vein_cap_total", "_fair_regen_total", "_fair_local_week", "_fair_local_brews",
+			"_fair_off_claim_week"])],
 		[g._guild, _circle_snapshot(g._guild, ["_quest_brew", "_order_day", "_order_targets_cache", "_order_done"])],
 		[g._pages, _circle_snapshot(g._pages, ["_bench_on", "_bench_target", "_bench_busy", "_spring_clock"])],
 		[g._saves, _circle_snapshot(g._saves, ["_save_frozen", "_saves_bench_probe", "_return_craft_steps",
@@ -437,7 +442,7 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 	g._saves._save_frozen = true
 	g._online._net_enabled = false
 	g._online._pending_requests.clear()
-	g._retention._cycle_cache = {}
+	g._contracts._cycle_cache = {}
 	g._engine.brewing = false
 	g._engine._auto = false
 	g._pages._bench_busy = false

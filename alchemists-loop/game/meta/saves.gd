@@ -153,18 +153,21 @@ func _save_game() -> bool:
 		"circle_hint": g._retention._circle_hint,
 		"circle_mine": g._retention._circle_mine,
 		"circle_local_done_day": g._retention._circle_local_done_day,
-		"week_cache": g._retention._week_cache,
-		"vein_cap_total": g._retention._vein_cap_total,
-		"cycle_cache": g._retention._cycle_cache,
-		"vein_pending_finds": g._retention._vein_finds,
+		# Доска v2 (Task 3): недельный слой принадлежит Contracts — меняется
+		# только объект-владелец, ИМЕНА КЛЮЧЕЙ сейва остаются старыми (миграция
+		# ключей — Task 6, иначе старые файлы перестали бы читаться).
+		"week_cache": g._contracts._week_cache,
+		"vein_cap_total": g._contracts._vein_cap_total,
+		"cycle_cache": g._contracts._cycle_cache,
+		"vein_pending_finds": g._contracts._vein_finds,
 		"unlocked_titles": g._retention._unlocked_titles,
 		"active_title": g._retention._active_title,
 		"circle_intro_shown": g._retention._circle_intro_shown,
 		"server_tags": g._online._server_tag,
-		"fair_regen_total": g._retention._fair_regen_total,
-		"fair_local_week": g._retention._fair_local_week,
-		"fair_local_brews": g._retention._fair_local_brews,
-		"fair_off_claim_week": g._retention._fair_off_claim_week,
+		"fair_regen_total": g._contracts._fair_regen_total,
+		"fair_local_week": g._contracts._fair_local_week,
+		"fair_local_brews": g._contracts._fair_local_brews,
+		"fair_off_claim_week": g._contracts._fair_off_claim_week,
 		"contracts": g._contracts.save_block()
 	}
 	var file := FileAccess.open(g.TEMP_PATH, FileAccess.WRITE)
@@ -454,14 +457,14 @@ func _load_game() -> void:
 	g._retention._circle_hint = String(data.get("circle_hint", ""))
 	g._retention._circle_mine = maxi(0, int(data.get("circle_mine", 0)))
 	g._retention._circle_local_done_day = String(data.get("circle_local_done_day", ""))
-	g._retention._week_cache = data.get("week_cache", {}) if data.get("week_cache", {}) is Dictionary else {}
-	g._retention._vein_cap_total = maxi(0, int(data.get("vein_cap_total", 0)))
-	g._retention._cycle_cache = data.get("cycle_cache", {}) if data.get("cycle_cache", {}) is Dictionary else {}
-	g._retention._vein_finds.clear()
+	g._contracts._week_cache = data.get("week_cache", {}) if data.get("week_cache", {}) is Dictionary else {}
+	g._contracts._vein_cap_total = maxi(0, int(data.get("vein_cap_total", 0)))
+	g._contracts._cycle_cache = data.get("cycle_cache", {}) if data.get("cycle_cache", {}) is Dictionary else {}
+	g._contracts._vein_finds.clear()
 	if data.get("vein_pending_finds") is Array:
 		for f in data["vein_pending_finds"]:
 			if typeof(f) == TYPE_DICTIONARY and f.has("id"):
-				g._retention._vein_finds.append(f)
+				g._contracts._vein_finds.append(f)
 	g._retention._unlocked_titles.clear()
 	if data.get("unlocked_titles") is Array:
 		for t in data["unlocked_titles"]:
@@ -474,13 +477,13 @@ func _load_game() -> void:
 	if data.get("server_tags") is Dictionary:
 		for k in data["server_tags"]:
 			g._online._server_tag[String(k)] = String(data["server_tags"][k])
-	g._retention._fair_regen_total = clampf(float(data.get("fair_regen_total", 0.0)), 0.0, Game.FAIR_REGEN_CAP)
-	g._retention._fair_local_week = String(data.get("fair_local_week", ""))
-	g._retention._fair_local_brews.clear()
+	g._contracts._fair_regen_total = clampf(float(data.get("fair_regen_total", 0.0)), 0.0, Game.FAIR_REGEN_CAP)
+	g._contracts._fair_local_week = String(data.get("fair_local_week", ""))
+	g._contracts._fair_local_brews.clear()
 	if data.get("fair_local_brews") is Array:
 		for b in data["fair_local_brews"]:
-			g._retention._fair_local_brews.append(String(b))
-	g._retention._fair_off_claim_week = String(data.get("fair_off_claim_week", ""))
+			g._contracts._fair_local_brews.append(String(b))
+	g._contracts._fair_off_claim_week = String(data.get("fair_off_claim_week", ""))
 	g._spirit._companion_apply_level()
 	g._engine.ether_overflow = maxi(0, int(data.get("ether_overflow", 0)))
 	# Состояние конверта синхронизации: ревизия клиента и якорь оффлайн-накопления.

@@ -629,9 +629,9 @@ func _ready() -> void:
 		Net.atlas_result.connect(_riddles._on_net_atlas_result)
 		Net.atlas_solve_result.connect(_riddles._on_net_atlas_solve_result)
 		Net.atlas_today(_online._device_id)
-		Net.week_result.connect(_retention._on_net_week_result)
-		Net.fair_brew_result.connect(_retention._on_net_fair_brew_result)
-		Net.fair_claim_result.connect(_retention._on_net_fair_claim_result)
+		Net.week_result.connect(_contracts._on_net_week_result)
+		Net.fair_brew_result.connect(_contracts._on_net_fair_brew_result)
+		Net.fair_claim_result.connect(_contracts._on_net_fair_claim_result)
 		Net.week_status(_online._device_id)
 		Net.cycle_status(_online._device_id)
 		# #8: доводка удаления аккаунта. Хендлер чистит маркер при ok; ретрай
@@ -647,9 +647,10 @@ func _ready() -> void:
 		App.application_resumed.connect(_sync.request_sync.bind(self))
 	# План 2 (жила/круг): connects вне _net_enabled-блока — хендлеры сами
 	# гейтят offline/ok, а ST эмитит сигналы напрямую (suite_vein_circle).
-	Net.cycle_result.connect(_retention._on_net_cycle_result)
-	Net.vein_find_result.connect(_retention._on_net_vein_find_result)
-	Net.vein_pour_result.connect(_retention._on_net_vein_pour_result)
+	# Доска v2 (Task 3): жила живёт на доске, поэтому хендлеры — из Contracts.
+	Net.cycle_result.connect(_contracts._on_net_cycle_result)
+	Net.vein_find_result.connect(_contracts._on_net_vein_find_result)
+	Net.vein_pour_result.connect(_contracts._on_net_vein_pour_result)
 	# Аркан Сигилов
 	Net.sigil_daily_result.connect(_sigil._on_daily_result)
 	Net.sigil_craft_result.connect(_sigil._on_craft_result)
