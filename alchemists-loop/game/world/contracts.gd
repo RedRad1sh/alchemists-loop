@@ -1076,6 +1076,8 @@ func _fetch_week() -> void:
 	_fetch_cycle()
 
 func _on_net_week_result(result: Dictionary) -> void:
+	if _boardfull_frozen():
+		return  # boardfull: недельный слой заморожен демо-инъекцией
 	if result.get("offline", false) == true or result.get("ok", false) != true:
 		_week_offline = true
 		refresh_board()
@@ -1101,6 +1103,8 @@ func _fetch_cycle() -> void:
 	Net.cycle_status(g._online._device_id)
 
 func _on_net_cycle_result(result: Dictionary) -> void:
+	if _boardfull_frozen():
+		return  # boardfull: цикл и капли заморожены демо-инъекцией
 	if result.get("offline", false) == true or result.get("ok", false) != true:
 		return
 	var prev_id := String(_cycle_cache.get("cycle_id", ""))
@@ -1781,6 +1785,13 @@ func fair_pot_line() -> String:
 		goal, int(f.get("my_contrib", 0))]
 
 # ---------- Task 8 (спека §8): демо-состояние boardfull ----------
+# Заморозка boardfull: недельный слой инъектирован демо, и живые ответы сервера
+# (_on_net_week_result/_on_net_cycle_result) не должны затирать его — иначе
+# карточка vein теряет капли чужого цикла, а fair печатает реальный нулевой котёл.
+func _boardfull_frozen() -> bool:
+	return g._demo_harness != null and g._demo_harness._demo \
+		and g._demo_harness._contract_state == "boardfull"
+
 # Слияние удалённых _inject_circle_demo (retention.gd:135) и _inject_week_demo
 # (retention.gd:334) в поля Contracts по именам после переезда, без страниц.
 # Очаг/вехи/ранг: 100 визит-дней, заканчивающихся сегодня (ранг-4 «Полено» —
@@ -1805,7 +1816,7 @@ func _inject_board_demo() -> void:
 	_mdays = 3
 	_mpts = 1
 	_day_hint = "Свари что-нибудь из «Мха»"
-	_week_cache = {"week": "2026-W37",
+	_week_cache = {"week": week_key_from(_dt({})),
 		"vein": {"tag1": "Свет", "tag2": "Тьма", "spread": true, "my_hits": 2, "my_streaks": 1, "streak_cap": 5},
 		"fair": {"tag": "Трава", "goal": 22, "progress": 14, "apprentice": 4, "closed": false,
 			"my_contrib": 3, "claimed": false,
