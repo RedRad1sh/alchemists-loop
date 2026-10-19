@@ -114,11 +114,17 @@ func _build_layers() -> void:
 	_shelf_weekly = _layer("shelf_bar.png", "ShelfWeekly")
 
 	_sign = _layer("sign_hang.png", "Sign")
-	_sign_word = g._label(BOARD_TITLE, 15)
+	_sign_word = g._label(BOARD_TITLE, 18)
 	_sign_word.name = "SignWord"
 	_sign_word.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_sign_word.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_sign_word.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# Парадный шрифт — тот же, что у заголовка шапки: доска не должна выглядеть
+	# приложенной к игре системным Manrope.
+	if g._font_runic != null:
+		_sign_word.add_theme_font_override("font", g._font_runic)
+	elif g._font_xbold != null:
+		_sign_word.add_theme_font_override("font", g._font_xbold)
 	_sign_word.add_theme_color_override("font_color", SIGN_INK)
 	_sign.add_child(_sign_word)
 
@@ -248,9 +254,12 @@ func _make_note(b: Dictionary) -> TextureButton:
 	note.set_meta("effect", String(ContractsBalance.BUFF_TEXT.get(id, "")))
 	note.set_meta("pct", "%d%%" % int(round(100.0 * float(b["power"]))))
 	note.set_meta("shown_detail", false)
+	# Наведение — полная расшифровка: что за бафф, что делает, насколько силён.
+	note.tooltip_text = "%s — %s (+%s), осталось %s" % [String(b["title"]),
+		String(ContractsBalance.BUFF_TEXT.get(id, "")), String(note.get_meta("pct")), shown]
 	note.pressed.connect(_on_note_pressed.bind(note))
 
-	var w := g._label(shown, 12)
+	var w := g._label(shown, 13)
 	w.name = "Time"
 	w.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	w.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -324,8 +333,8 @@ func _reward_text(r: Dictionary) -> String:
 		lines.append(", ".join(names))
 	var buff := String(r["buff"])
 	if buff != "":
-		lines.append("%s · %s" % [String(ContractsBalance.BUFF_TITLE.get(buff, "")),
-			_mm(int(r["duration"]))])
+		lines.append("%s +%d%% · %s" % [String(ContractsBalance.BUFF_TITLE.get(buff, "")),
+			int(round(100.0 * float(r["power"]))), _mm(int(r["duration"]))])
 	var decor := String(r["decor"])
 	if decor != "":
 		var decor_line := String(ContractsBalance.DECOR_LABEL.get(decor, ""))
@@ -352,15 +361,17 @@ func _show_reward(result: Dictionary) -> void:
 	paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	paper.size = POPUP_SIZE
 	pop.add_child(paper)
-	var title := g._label(POPUP_TITLE, 16)
+	var title := g._label(POPUP_TITLE, 18)
 	title.name = "Title"
 	title.autowrap_mode = TextServer.AUTOWRAP_OFF
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if g._font_semi != null:
+		title.add_theme_font_override("font", g._font_semi)
 	title.add_theme_color_override("font_color", NOTE_INK)
 	title.position = Vector2(0.0, 18.0)
 	title.size = Vector2(POPUP_SIZE.x, 26.0)
 	pop.add_child(title)
-	var body := g._label(_reward_text(result), 11)
+	var body := g._label(_reward_text(result), 13)
 	body.name = "Body"
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

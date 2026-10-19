@@ -1452,6 +1452,61 @@ static func _contract_board_checks(g: Game) -> void:
 		Selftest.check("§5.4 pressing OK closes the reward popup",
 			board.get_node_or_null("RewardPopup") == null)
 
+	# --- Точная награда по наведению (Polish 1) ---
+	# 20. Строка награды и штамп показывают при наведении точную награду:
+	#     бафф называется с процентом силы, а строка ловит мышь.
+	var tip_card := dr.get_child(0) as ContractCard
+	var tip_c: Dictionary = (c.daily() as Array)[0]
+	var r_tip: Dictionary = c.reward_for(tip_c)
+	var tip_pct := int(round(100.0 * float(r_tip["power"])))
+	var tip_lbl: Label = tip_card.get_node("Hang/Reward") as Label
+	var tip_stamp: TextureButton = tip_card.get_node("Hang/Stamp") as TextureButton
+	Selftest.check("§5.3 hovering the reward line or stamp states the exact buff power",
+		tip_lbl.mouse_filter == Control.MOUSE_FILTER_STOP
+		and tip_lbl.tooltip_text.contains("+%d%%" % tip_pct)
+		and tip_stamp.tooltip_text.contains("+%d%%" % tip_pct)
+		and tip_lbl.tooltip_text.contains(String(ContractsBalance.BUFF_TITLE.get(String(r_tip["buff"]), "нетбаффа"))))
+
+	# 21. Записка активного баффа: наведение показывает название, эффект и силу.
+	c.grant_buff("craft_discount", 3600, 0.2, int(Time.get_unix_time_from_system()))
+	board.refresh()
+	await g.get_tree().process_frame
+	var note2: TextureButton = null
+	for ch in notes.get_children():
+		var nb := ch as TextureButton
+		if nb != null and String(nb.get_meta("id")) == "craft_discount":
+			note2 = nb
+	Selftest.check("§5.4 hovering a buff note states its title, effect and exact power",
+		note2 != null and note2.tooltip_text.contains("Дешёвый крафт")
+		and note2.tooltip_text.contains("20%"))
+
+	# --- Аутентичные шрифты (Polish 2) ---
+	# 22. Вывеска — тот же парадный шрифт, что заголовок шапки, не 15 px Manrope.
+	Selftest.check("§5.2 the sign title uses the display face at 17 px or more",
+		sign_word.has_theme_font_override("font")
+		and int(sign_word.get_theme_font_size("font_size")) >= 17)
+	# 23. Бумага: заголовок полужирным 14+, строка награды читаемые 11+.
+	var t_lbl: Label = tip_card.get_node("Hang/Title") as Label
+	Selftest.check("§5.3 paper titles use the semi-bold face and the reward line is readable",
+		t_lbl.has_theme_font_override("font")
+		and int(t_lbl.get_theme_font_size("font_size")) >= 14
+		and int(tip_lbl.get_theme_font_size("font_size")) >= 11)
+	# 24. Попап награды: текст 13+ — игрок читает награду, а не разгадывает.
+	board._show_reward(fake_reward)
+	var pop2: Control = board.get_node_or_null("RewardPopup")
+	var body2: Label = pop2.get_node_or_null("Body") as Label
+	Selftest.check("§5.4 the reward popup body is readable at 13 px or more",
+		body2 != null and int(body2.get_theme_font_size("font_size")) >= 13)
+	board._close_reward()
+
+	# --- Кнопка входа (Polish 3) ---
+	# 25. Кнопка доски понижена из ряда шапки в ряд эфира и несёт свою иконку.
+	var hb: Button = g._contracts_header_btn
+	Selftest.check("§7 the board button lives in the lower row with its own board icon",
+		hb != null and hb.get_parent() != null and hb.get_parent().name == "EtherRow"
+		and UIIcon.texture("board") != null
+		and hb.get_node_or_null("IconCenter/Icon_board") != null)
+
 	# --- Закрытие и перекрёстное закрытие ---
 	# 20 (bonus): повторный open не создаёт вторую доску.
 	ContractBoard.open(g)

@@ -91,6 +91,9 @@ func setup(c: Dictionary) -> void:
 	_title.text = String(ContractsBalance.TITLE.get(String(c.get("type", "")), ""))
 	_count.text = "%d / %d" % [g._contracts.progress(id), int(c.get("goal", 0))]
 	_reward.text = _reward_text(c)
+	var tip := _reward_tip(c)
+	_reward.tooltip_text = tip
+	_stamp.tooltip_text = tip
 	_stamp.visible = done or g._contracts.is_ready(id)
 	_stamp.disabled = done
 	# Материал OWN: у каждой карточки свой экземпляр, иначе одна полученная записка
@@ -113,26 +116,31 @@ func _build() -> void:
 	_paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hang.add_child(_paper)
 
-	_title = g._label("", 12)
+	_title = g._label("", 14)
 	_title.name = "Title"
 	_title.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if g._font_semi != null:
+		_title.add_theme_font_override("font", g._font_semi)
 	_title.add_theme_color_override("font_color", INK)
 	_hang.add_child(_title)
 
-	_count = g._label("", 17)
+	_count = g._label("", 18)
 	_count.name = "Count"
 	_count.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_count.add_theme_color_override("font_color", INK)
 	_hang.add_child(_count)
 
-	_reward = g._label("", 9)
+	_reward = g._label("", 11)
 	_reward.name = "Reward"
 	_reward.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_reward.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_reward.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	_reward.clip_text = true
+	# Строка награды ловит мышь: наведение показывает точную награду (§5.3),
+	# потому что «Быстрая варка» без процента и срока для игрока — загадка.
+	_reward.mouse_filter = Control.MOUSE_FILTER_STOP
 	_reward.add_theme_color_override("font_color", INK)
 	_hang.add_child(_reward)
 
@@ -204,3 +212,24 @@ func _reward_text(c: Dictionary) -> String:
 	if decor != "":
 		parts.append(String(ContractsBalance.DECOR_LABEL.get(decor, "")))
 	return " · ".join(parts)
+
+# Точная награда для наведения: процент силы и срок баффа печатаются из
+# reward_for — на бумаде их нет, единый множитель §3.1 меняет числа каждый день.
+func _reward_tip(c: Dictionary) -> String:
+	var r: Dictionary = g._contracts.reward_for(c)
+	var lines: Array = []
+	var mats: Dictionary = r["materials"]
+	var names: Array = []
+	for m in mats:
+		names.append("%s ×%d" % [g._online._item_name(String(m)), int(mats[m])])
+	if not names.is_empty():
+		lines.append("Материалы: " + ", ".join(names))
+	var buff := String(r["buff"])
+	if buff != "":
+		lines.append("%s — %s (+%d%%, %s)" % [String(ContractsBalance.BUFF_TITLE.get(buff, "")),
+			String(ContractsBalance.BUFF_TEXT.get(buff, "")),
+			int(round(100.0 * float(r["power"]))), ContractBoard._mm(int(r["duration"]))])
+	var decor := String(r["decor"])
+	if decor != "":
+		lines.append("%s — украсит Дом" % String(ContractsBalance.DECOR_LABEL.get(decor, "")))
+	return "\n".join(lines)

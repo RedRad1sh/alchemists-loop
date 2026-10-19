@@ -1212,13 +1212,6 @@ func _build_ui() -> void:
 	sigil_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	sigil_btn.pressed.connect(_sigil_ui._open_sigil_modal)
 	head.add_child(sigil_btn)
-	var contracts_btn := _header_button(0)
-	_contracts_header_btn = contracts_btn
-	UIIcon.into_button(contracts_btn, "check", 24)
-	contracts_btn.tooltip_text = "Контрактная доска: дневные и недельные задания"
-	contracts_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	contracts_btn.pressed.connect(_open_contract_board)
-	head.add_child(contracts_btn)
 	# «▲N» → родная иконка trend_up + счётчик текстом (core._refresh_header).
 	# Если SVG не импортирован (текстуры нет), _refresh_header оставит глиф «▲».
 	var up_icon := UIIcon.texture("trend_up")
@@ -1256,6 +1249,7 @@ func _build_ui() -> void:
 	head.add_child(me_btn)
 
 	var ether_row := HBoxContainer.new()
+	ether_row.name = "EtherRow"
 	ether_row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	ether_row.add_theme_constant_override("separation", 8)
 	root.add_child(ether_row)
@@ -1272,6 +1266,15 @@ func _build_ui() -> void:
 	market_btn.tooltip_text = "Покупки, награды за просмотр и приватность"
 	market_btn.pressed.connect(_shop.open)
 	ether_row.add_child(market_btn)
+	# Доска живёт в нижнем ряду, а не в шапке: вход в неё — не счётчик и не
+	# настройки, а «дело дня», рядом с Домом и Лавкой.
+	var contracts_btn := _small_button("", Vector2(46, 34), 0)
+	contracts_btn.name = "ContractsBtn"
+	_contracts_header_btn = contracts_btn
+	UIIcon.into_button(contracts_btn, "board", 20)
+	contracts_btn.tooltip_text = "Контрактная доска: дневные и недельные задания"
+	contracts_btn.pressed.connect(_open_contract_board)
+	ether_row.add_child(contracts_btn)
 	_engine._collection_label = _label("", 14)
 	_engine._collection_label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	root.add_child(_engine._collection_label)
