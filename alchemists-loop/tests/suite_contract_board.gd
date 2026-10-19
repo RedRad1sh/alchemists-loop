@@ -483,6 +483,20 @@ static func run(g: Game) -> void:
 		and Game.BASE_IDS.has(String(goal_t2["b"]))
 		and goal_t2 == g._contracts._local_goal_for(today_t2))
 	var gd_t2 := (g._contracts.daily() as Array)[0] as Dictionary
+	# Pre-phase (Fix round 1, Important #1): бриф-проверка «goal_day ignores other
+	# outputs» не способна краснеть на удалённом guard в on_brew (contracts.gd:503):
+	# цель goal_day == 1, _bump отсечён капом, и после зелёной positive-варки
+	# before2 == 1 — unconditional bump оставляет 1. Здесь же прогресс
+	# принудительно обнулён (done-флаг снят, чтобы _bump не пропускал строку
+	# молча), варится НЕ-цель, и прогресс обязан остаться 0: на удалённом guard
+	# это единственная проверка, которая краснеет. Делается ДО positive-варки,
+	# positive-проверка брифа ниже остаётся дословно, как post-cap assertion.
+	# Состояние доски возвращает общий t2_snap в конце блока.
+	g._contracts._contracts_daily_done.erase(String(gd_t2["id"]))
+	g._contracts._set_progress(String(gd_t2["id"]), 0)
+	g._contracts.on_brew("zz_not_goal_output", "water", "fire", false, "manual")
+	Selftest.check("goal_day pre-cap ignores other outputs",
+		g._contracts.progress(String(gd_t2["id"])) == 0)
 	var before_t2 := g._contracts.progress(String(gd_t2["id"]))
 	if before_t2 == 0 and goal_t2.has("out"):
 		g._contracts.on_brew(String(goal_t2["out"]), String(goal_t2["a"]),
