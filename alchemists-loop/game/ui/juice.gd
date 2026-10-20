@@ -180,10 +180,10 @@ class JuiceFx extends Control:
 
 
 static func _kill_prev(node: Control) -> void:
-	var prev: Tween = node.get_meta(META_TWEEN, null) as Tween
-	if prev != null and prev.is_valid():
-		prev.kill()
 	if node.has_meta(META_TWEEN):
+		var prev := node.get_meta(META_TWEEN) as Tween
+		if prev != null and prev.is_valid():
+			prev.kill()
 		node.remove_meta(META_TWEEN)
 
 
