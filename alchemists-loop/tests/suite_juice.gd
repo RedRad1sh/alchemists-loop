@@ -160,5 +160,82 @@ static func run(g: Game) -> void:
 	Juice.close(g._popup_dim, g._popup)
 	Selftest.check("modal close paths are synchronous under selftest",
 		not g._popup.visible and not g._popup_dim.visible)
+
+	# --- Task 3: эфир через pop + полёт реагента в котёл ---
+	Juice.enabled = true
+	var ether_host := _mk_host(g, probes)
+	var ether_label := Label.new()
+	ether_host.add_child(ether_label)
+	g._engine._ether_label = ether_label
+
+	# T3-1: spend_ether success creates fx
+	g._engine.ether = 100
+	var ac0 := Juice.active_count()
+	g._engine._spend_ether(1)
+	Selftest.check("spend_ether success creates fx", Juice.active_count() == ac0 + 1)
+	_drain()
+	ether_label.remove_meta(Juice.META_POP_FRAME)
+
+	# T3-2: spend_ether failure creates no fx
+	g._engine.ether = 0
+	g._engine.ether_overflow = 0
+	var ac1 := Juice.active_count()
+	g._engine._spend_ether(1)
+	Selftest.check("spend_ether failure creates no fx", Juice.active_count() == ac1)
+
+	# T3-3: grant_ether pops ether label
+	g._engine.ether = 0
+	var ac2 := Juice.active_count()
+	g._engine._grant_ether(1)
+	Selftest.check("grant_ether pops ether label", Juice.active_count() == ac2 + 1)
+	_drain()
+	ether_label.remove_meta(Juice.META_POP_FRAME)
+
+	# T3-4: ether pop spawns exactly one ring (краснеет, если вернуть spark в _fx_ether_spent)
+	g._engine.ether = 100
+	var ac3 := Juice.active_count()
+	g._engine._spend_ether(1)
+	Selftest.check("ether pop spawns exactly one ring", Juice.active_count() == ac3 + 1)
+	_drain()
+	ether_label.remove_meta(Juice.META_POP_FRAME)
+
+	# T3-5: grant_ether in the spend's frame does not restrobe the label
+	# (тот же кадр: _spend_ether(1) затем _grant_ether(1) → прирост fx == 1, не 2;
+	# краснеет без META_POP_FRAME)
+	g._engine.ether = 100
+	var ac4 := Juice.active_count()
+	g._engine._spend_ether(1)
+	g._engine._grant_ether(1)
+	Selftest.check("grant_ether in the spend's frame does not restrobe the label",
+		Juice.active_count() == ac4 + 1)
+	_drain()
+	ether_label.remove_meta(Juice.META_POP_FRAME)
+
+	# T3-6: cauldron splash deferred until fly arrives
+	var cauldron: CauldronView = g._pages._experiment_cauldron
+	cauldron.flash = 0.0
+	cauldron._ingredient_particles.clear()
+	cauldron.trigger_ingredient(Color.RED)
+	Selftest.check("cauldron splash deferred until fly arrives",
+		cauldron.flash <= 0.01 and cauldron._ingredient_particles.is_empty())
+
+	# T3-7: cauldron splashes after arrival
+	if not Juice._live.is_empty():
+		var fly_fx: Control = Juice._live[0]
+		if fly_fx is Juice.JuiceFx:
+			(fly_fx as Juice.JuiceFx).advance(0.20)
+	Selftest.check("cauldron splashes after arrival",
+		cauldron.flash > 0.0 and cauldron._ingredient_particles.size() >= 12)
+	_drain()
+
+	# T3-8: cauldron splash synchronous when juice disabled
+	Juice.enabled = false
+	cauldron.flash = 0.0
+	cauldron._ingredient_particles.clear()
+	cauldron.trigger_ingredient(Color.BLUE)
+	Selftest.check("cauldron splash synchronous when juice disabled",
+		cauldron.flash > 0.0 and cauldron._ingredient_particles.size() >= 12)
+
+	g._engine._ether_label = null
 	Juice.enabled = prev_enabled
 	Juice.max_concurrent = prev_max

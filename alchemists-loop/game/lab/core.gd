@@ -435,6 +435,8 @@ func _grant_ether(amount: int, _reason: String = "") -> int:
 	var direct := mini(amount, maxi(0, _max_ether() - ether))
 	ether += direct
 	ether_overflow += amount - direct
+	if direct > 0:
+		_fx_ether_gain()
 	return direct
 
 func _experiment_day_key() -> String:
@@ -566,10 +568,25 @@ func _spend_ether(amount: int) -> bool:
 	var rest := amount - from_current
 	if rest > 0:
 		ether_overflow -= rest
+	_fx_ether_spent()
 	return true
 
 func _spend_mastery_ether(amount: int) -> bool:
 	return _resource_mutation_allowed() and _spend_ether(amount)
+
+func _fx_ether_spent() -> void:
+	# Эффект в воронке, а не в местах вызова: все траты получают его бесплатно.
+	# Искры нет (R5): _grant_ether вызывается из событийных мест, где мышь
+	# в произвольной точке экрана.
+	if not is_instance_valid(_ether_label):
+		return
+	Juice.pop(_ether_label, UIStyle.GOLD)
+
+
+func _fx_ether_gain() -> void:
+	if not is_instance_valid(_ether_label):
+		return
+	Juice.pop(_ether_label, UIStyle.TEAL)
 
 func _resource_mutation_allowed() -> bool:
 	return not _resource_commit_busy

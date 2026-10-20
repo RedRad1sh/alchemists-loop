@@ -67,7 +67,14 @@ func set_mixture(a_col: Color, b_col: Color) -> void:
 func trigger_ingredient(col: Color) -> void:
 	_ingredient_color = col
 	_ingredient_pulse = INGREDIENT_PULSE_DURATION
-	flash = maxf(flash, 0.72)
+	if not Juice.enabled:
+		_splash_now(col)
+		return
+	Juice.fly(self, get_global_mouse_position(), _mouth_global(), col, Juice.FLY_DUR, Callable(self, "_splash_now").bind(col))
+
+
+func _splash_now(col: Color) -> void:
+	flash = 0.35
 	flash_color = col.lightened(0.18)
 	var origin := Vector2(DRAW_SIZE.x * 0.5, 61.0)
 	for i in 12:
@@ -88,6 +95,10 @@ func trigger_ingredient(col: Color) -> void:
 		_ingredient_particles.pop_front()
 	set_process(true)
 	queue_redraw()
+
+
+func _mouth_global() -> Vector2:
+	return global_position + Vector2(DRAW_SIZE.x * 0.5, 61.0) * _draw_scale
 
 
 func clear_mixture() -> void:
