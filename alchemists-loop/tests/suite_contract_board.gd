@@ -2277,6 +2277,111 @@ static func _contract_board_checks(g: Game) -> void:
 		and UIIcon.texture("board") != null
 		and hb.get_node_or_null("IconCenter/Icon_board") != null)
 
+	# --- Juice Task 4: hover, stamp, board/reward, hearth/rank ---
+	# T4-1. Card root takes hover input.
+	var t4_card := dr.get_child(0) as ContractCard
+	Selftest.check("card root takes hover input",
+		t4_card != null and t4_card.mouse_filter == Control.MOUSE_FILTER_STOP
+		and t4_card.get_signal_connection_list("mouse_entered").size() == 1
+		and t4_card.get_signal_connection_list("mouse_exited").size() == 1)
+
+	# T4-2. Claim with juice disabled shows reward synchronously.
+	Juice.enabled = false
+	var t4_daily := [_mk(c, "daily", "brew", "bronze", 15)]
+	_force_set(c, t4_daily, [])
+	_clear_prog(c)
+	var t4_id := String(t4_daily[0]["id"])
+	c._set_progress(t4_id, 15)
+	board.refresh()
+	await g.get_tree().process_frame
+	var t4_ready_card: ContractCard = dr.get_child(0) as ContractCard
+	if t4_ready_card != null:
+		var t4_stamp := t4_ready_card.get("_stamp") as TextureButton
+		if t4_stamp != null:
+			t4_stamp.pressed.emit()
+	Selftest.check("claim with juice disabled shows reward synchronously",
+		t4_ready_card != null and board._popup != null
+		and c.is_done(t4_id))
+	board._close_reward()
+	_force_set(c, [], [])
+	_clear_prog(c)
+	Juice.enabled = true
+
+	# T4-3. Claim defers reward while seal settles.
+	var t4_daily2 := [_mk(c, "daily", "brew", "bronze", 15)]
+	_force_set(c, t4_daily2, [])
+	_clear_prog(c)
+	var t4_id2 := String(t4_daily2[0]["id"])
+	c._set_progress(t4_id2, 15)
+	board.refresh()
+	await g.get_tree().process_frame
+	var t4_ready_card2: ContractCard = dr.get_child(0) as ContractCard
+	var t4_deferred := false
+	if t4_ready_card2 != null:
+		var t4_stamp2 := t4_ready_card2.get("_stamp") as TextureButton
+		if t4_stamp2 != null:
+			t4_stamp2.pressed.emit()
+			t4_deferred = (board._popup == null)
+	await g.get_tree().create_timer(ContractBoard.SEAL_HOLD + 0.15).timeout
+	Selftest.check("claim defers reward while seal settles",
+		t4_deferred and board._popup != null)
+	board._close_reward()
+
+	# T4-4. Seal settles stamp to rest pose.
+	var t4_stamp_rest := false
+	if t4_ready_card2 != null:
+		var t4_stamp3 := t4_ready_card2.get("_stamp") as TextureButton
+		if t4_stamp3 != null:
+			t4_stamp_rest = (t4_stamp3.scale == Vector2.ONE
+				and is_equal_approx(t4_stamp3.rotation_degrees, ContractCard.STAMP_TILT))
+	Selftest.check("seal settles stamp to rest pose", t4_stamp_rest)
+	_force_set(c, [], [])
+	_clear_prog(c)
+
+	# T4-5. Reward popup fades in.
+	var t4_fake := {
+		"ok": true, "reason": "",
+		"materials": {"stone": 20, "brick": 10},
+		"truncated": false,
+		"buff": "brew_speed", "duration": 7200, "power": 0.25,
+		"decor": "", "missing_decor": false,
+	}
+	board._show_reward(t4_fake)
+	var t4_pop: Control = board._popup
+	var t4_fade_in := false
+	if t4_pop != null:
+		t4_fade_in = (t4_pop.modulate.a < 1.0)
+	await g.get_tree().create_timer(0.35).timeout
+	var t4_fade_done := false
+	if t4_pop != null:
+		t4_fade_done = is_equal_approx(t4_pop.modulate.a, 1.0)
+	Selftest.check("reward popup fades in", t4_fade_in and t4_fade_done)
+	board._close_reward()
+
+	# T4-6. Hearth claim pops flame.
+	c._hearth_claim = ""
+	c._streak_run = 3
+	c._pts_total = 0
+	c._mdays = 0
+	c._mpts = 0
+	var t4_lvl_before := c.rank_level()
+	board.refresh()
+	await g.get_tree().process_frame
+	var t4_active_before := Juice.active_count()
+	var t4_hearth_btn := board.get("_hearth_btn") as Button
+	if t4_hearth_btn != null:
+		t4_hearth_btn.pressed.emit()
+	await g.get_tree().process_frame
+	var t4_active_after := Juice.active_count()
+	Selftest.check("hearth claim pops flame",
+		t4_active_after > t4_active_before
+		and c._hearth_claim == Time.get_date_string_from_system())
+	c._hearth_claim = ""
+	c._streak_run = 0
+	c._pts_total = 0
+	c._mdays = 0
+	c._mpts = 0
+
 	# --- Закрытие и перекрёстное закрытие ---
 	# 20 (bonus): повторный open не создаёт вторую доску.
 	ContractBoard.open(g)
@@ -3400,9 +3505,10 @@ static func _contract_card_checks(g: Game) -> void:
 		asked.size() == 1 and String(asked[0]) == ready_id
 		and stamp_r != null and stamp_r.pressed.is_connected(ready._on_stamp_pressed))
 
-	# 15. Штамп приседает в момент нажатия (без кадра между emit и проверкой).
-	Selftest.check("§5.3 the stamp squashes the moment it is hit",
-		stamp_r != null and stamp_r.scale.x < 1.0 and stamp_r.scale.y < 1.0)
+	# 15. Штамп садится в позу покоя в момент нажатия (под selftest — мгновенно).
+	Selftest.check("§5.3 the stamp settles to rest pose the moment it is hit",
+		stamp_r != null and stamp_r.scale == Vector2.ONE
+		and is_equal_approx(stamp_r.rotation_degrees, ContractCard.STAMP_TILT))
 
 	for card in cards:
 		(card as ContractCard).queue_free()

@@ -16,6 +16,7 @@ const RING_SIZE := Vector2(44, 44)
 const NOTE_SIZE := Vector2(132, 88)
 const POPUP_SIZE := Vector2(276, 366)
 const NOTE_TICK := 1.0
+const SEAL_HOLD := 0.26
 # доска v2 (Task 7, спека §5): полка очага под дневным рядом и строка ранга
 # над нижним рельсом.
 const HEARTH_H := 56.0
@@ -74,6 +75,7 @@ static func open(game: Game) -> void:
 	var board := ContractBoard.new(game)
 	game.add_child(board)
 	board.build()
+	Juice.open(null, board)
 	Sfx.click()
 
 static func close_any(root: Node) -> void:
@@ -365,7 +367,12 @@ func _refresh_rank() -> void:
 
 func _on_hearth_pressed() -> void:
 	Sfx.click()
+	var lvl_before := g._contracts.rank_level()
 	g._contracts.claim_hearth()
+	Juice.pop(_hearth_flame, UIStyle.TEAL)
+	if g._contracts.rank_level() > lvl_before:
+		Juice.pop(_rank_symbol, UIStyle.GOLD)
+		Juice.ring(_rank_symbol, _rank_symbol.get_global_rect().get_center(), UIStyle.GOLD, 60.0)
 
 func _layout_notes() -> void:
 	# remove_child + queue_free: освобождение отложено до конца кадра, и без remove_child
@@ -462,6 +469,16 @@ static func _mm(total: int) -> String:
 
 func _on_claim(id: String) -> void:
 	var result := g._contracts.claim(id)
+	if Juice.enabled and bool(result["ok"]):
+		# Состояние списано СРАЗУ; только выдача ждёт, пока штамп сядет.
+		var t := create_tween()
+		t.tween_interval(SEAL_HOLD)
+		t.tween_callback(_after_claim.bind(result))
+	else:
+		_after_claim(result)
+
+
+func _after_claim(result: Dictionary) -> void:
 	refresh()
 	if bool(result["ok"]):
 		_show_reward(result)
@@ -531,6 +548,7 @@ func _show_reward(result: Dictionary) -> void:
 	ok.pressed.connect(_on_reward_ok)
 	pop.add_child(ok)
 	_popup = pop
+	Juice.open(null, pop)
 
 func _on_reward_ok() -> void:
 	Sfx.click()

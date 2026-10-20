@@ -14,6 +14,11 @@ const SEAL_SIZE := 52.0
 const STAMP_SIZE := Vector2(132, 56)
 const STAMP_TILT := -6.0
 const PAD := 14.0
+const HOVER_SCALE := 1.03
+const HOVER_SECONDS := 0.12
+const SEAL_SCALE := 1.5
+const SEAL_ROT := -8.0
+const SEAL_SECONDS := 0.18
 # Полоса тела карточки (доска v2, Task 7): между счётчиком и наградой.
 const DETAIL_TOP := 70.0
 const DETAIL_GAP := 4.0
@@ -57,7 +62,7 @@ static func rot_deg(id: String) -> float:
 func _init(game: Game) -> void:
 	g = game
 	name = "ContractCard"
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mouse_filter = Control.MOUSE_FILTER_STOP
 
 func setup(c: Dictionary) -> void:
 	_c = c
@@ -72,6 +77,7 @@ func setup(c: Dictionary) -> void:
 	# Пивот — точка, в которую вбит гвоздь: лист качается вокруг него, а не вокруг центра.
 	_hang.pivot_offset = Vector2(w / 2.0, 0.0)
 	_hang.rotation_degrees = rot_deg(String(c["id"]))
+	scale = Vector2.ONE
 	_paper.size = sz
 	_paper.texture = tex("paper_weekly.png") if weekly else tex("paper_daily.png")
 	_title.position = Vector2(PAD, 16.0)
@@ -204,13 +210,61 @@ func _build() -> void:
 	_nail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_nail.texture = tex("nail_brass.png")
 	add_child(_nail)
+	mouse_entered.connect(_on_hover_enter)
+	mouse_exited.connect(_on_hover_exit)
 
 func _on_stamp_pressed() -> void:
 	Sfx.click()
-	_stamp.scale = Vector2(0.90, 0.90)
-	create_tween().tween_property(_stamp, "scale", Vector2.ONE, 0.13) \
-		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_seal_slam()
 	claimed.emit(String(_c["id"]))
+
+
+## Печать: штамп влетает с +50% размера и доворотом −8°, TRANS_BACK садится
+## на прежний наклон; кольцо расходится по чернилам; бумага вздрагивает
+## вокруг гвоздя. Под selftest — мгновенная поза покоя (ничего не висит).
+func _seal_slam() -> void:
+	if not Juice.enabled:
+		_stamp.scale = Vector2.ONE
+		_stamp.rotation_degrees = STAMP_TILT
+		return
+	_stamp.pivot_offset = STAMP_SIZE * 0.5
+	Juice._kill_prev(_stamp)
+	_stamp.scale = Vector2(SEAL_SCALE, SEAL_SCALE)
+	_stamp.rotation_degrees = STAMP_TILT + SEAL_ROT
+	var tw := _stamp.create_tween()
+	tw.tween_property(_stamp, "scale", Vector2.ONE, SEAL_SECONDS).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(_stamp, "rotation_degrees", STAMP_TILT, SEAL_SECONDS)
+	_stamp.set_meta(Juice.META_TWEEN, tw)
+	var r := _stamp.get_global_rect()
+	Juice.ring(_stamp, r.get_center(), STAMP_INK, maxf(36.0, r.size.x * 0.45))
+	var sh := _hang.create_tween()
+	sh.tween_property(_hang, "scale", Vector2(0.985, 0.985), 0.05)
+	sh.tween_property(_hang, "scale", Vector2(1.005, 1.005), 0.05)
+	sh.tween_property(_hang, "scale", Vector2.ONE, 0.04)
+
+
+func _on_hover_enter() -> void:
+	_set_hover(true)
+
+
+func _on_hover_exit() -> void:
+	_set_hover(false)
+
+
+## Лист приподнимается к курсору. Под selftest и на тач-пути — без твина:
+## scale выставляется сразу (или не трогается вовсе при выходе).
+func _set_hover(on: bool) -> void:
+	var to := Vector2.ONE
+	if on:
+		to = Vector2.ONE * HOVER_SCALE
+	if not Juice.enabled:
+		scale = to
+		return
+	pivot_offset = size * 0.5
+	Juice._kill_prev(self)
+	var tw := create_tween()
+	tw.tween_property(self, "scale", to, HOVER_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	set_meta(Juice.META_TWEEN, tw)
 
 # Строка награды: материалы (уже масштабированные в reward_for), бафф, витраж.
 # Пустая строка поля = ничего не упоминаем, « · · » на доске быть не может.
@@ -311,6 +365,7 @@ func _fill_vein() -> void:
 			pb.add_theme_font_size_override("font_size", 10)
 			UIStyle.style_button(pb, 2, 6)
 			pb.pressed.connect(_on_pour_pressed.bind(String(row_data["find_id"])))
+			pb.pressed.connect(func() -> void: Juice.pop(drop, row_data["color"] as Color))
 			hbox.add_child(pb)
 	if rows.size() > shown:
 		var more := g._label("…ещё %d" % (rows.size() - shown), 9)
