@@ -894,16 +894,14 @@ func _build_return_popup() -> void:
 
 func _open_return_popup() -> void:
 	_refresh_return_popup()
-	_return_dim.visible = true
-	_return_popup.visible = true
+	Juice.open(_return_dim, _return_popup)
 	_return_open = true
 	_return_shown = true
 	if not g._selftest:
 		Sfx.mystic()
 
 func _close_return_popup() -> void:
-	_return_dim.visible = false
-	_return_popup.visible = false
+	Juice.close(_return_dim, _return_popup)
 	_return_open = false
 	if not g._selftest:
 		Sfx.click()

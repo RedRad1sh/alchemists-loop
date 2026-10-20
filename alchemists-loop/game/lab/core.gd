@@ -1321,8 +1321,7 @@ func _auto_craft(item_id: String) -> void:
 		blueprint_note = "Чертёж: −%d%% · " % [int(round((1.0 - Game.BLUEPRINT_DISCOUNT) * 100.0))]
 	g._confirm_l3.text = "%s%sВарок: %d · всего эфир: %d · сейчас этап: %d ⚡ · можно продолжить позже" % [
 		warning_note, blueprint_note, int(plan["total"]), ether_need, stage_cost]
-	g._confirm_dim.visible = true
-	g._confirm.visible = true
+	Juice.open(g._confirm_dim, g._confirm)
 	Sfx.click()
 
 func _record_blueprint(item_id: String, plan: Dictionary) -> void:

@@ -469,6 +469,7 @@ func _ready() -> void:
 	# снята: вызываемый демо-обходом Analytics.track пишет в ST-двойник очереди.
 	var args := OS.get_cmdline_user_args()
 	_selftest = SelftestMode.enabled()
+	Juice.enabled = not _selftest
 	_analytics_text_at_boot = _boot_snapshot_text(Analytics.REAL_QUEUE_PATH)
 	_user_data_text_at_boot = _boot_snapshot_text(UserData.REAL_SAVE_PATH)
 	_riddles = Riddles.new(self)
@@ -1696,11 +1697,7 @@ func _show_challenge_win_popup(item_id: String, target_name: String, a: String, 
 	var head := "Ты первым в мире получил вещество из «%s»!" if first else "Цель дня выполнена: вещество из «%s»!"
 	_popup_sub.text = head + "\n%s + %s → %s\n+%d эфира" % [
 		target_name, _online._item_name(a), _online._item_name(b), _online._item_name(item_id), CHALLENGE_REWARD]
-	_popup_dim.visible = true
-	_popup.visible = true
-	_popup.scale = Vector2(0.7, 0.7)
-	var tw := create_tween()
-	tw.tween_property(_popup, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
+	Juice.open(_popup_dim, _popup)
 	Sfx.legendary()
 
 func _show_discovery_popup(item_id: String, a: String, b: String, milestones: Array = []) -> void:
@@ -1736,16 +1733,11 @@ func _present_popup(item_id: String, subtext: String, title: String = "", title_
 	_popup_title.add_theme_color_override("font_color", title_color)
 	_popup_orb.setup(item_id, _item_colors.get(item_id, Color(0.7, 0.8, 0.9)), true, _online._item_glyph(item_id))
 	_popup_sub.text = subtext
-	_popup_dim.visible = true
-	_popup.visible = true
-	_popup.scale = Vector2(0.7, 0.7)
-	var tw := create_tween()
-	tw.tween_property(_popup, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
+	Juice.open(_popup_dim, _popup)
 	Sfx.brew_discover()
 
 func _hide_popup() -> void:
-	_popup_dim.visible = false
-	_popup.visible = false
+	Juice.close(_popup_dim, _popup)
 	Sfx.click()
 
 func _show_sigil_card(tex: ImageTexture, item_id: String, display_name: String, rarity: String) -> void:
@@ -2149,8 +2141,7 @@ func _build_confirm() -> void:
 	btns.add_child(cancel)
 
 func _hide_confirm() -> void:
-	_confirm_dim.visible = false
-	_confirm.visible = false
+	Juice.close(_confirm_dim, _confirm)
 	_engine._pending_item = ""
 	_engine._pending_plan = {}
 	Sfx.click()

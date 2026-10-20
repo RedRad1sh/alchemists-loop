@@ -191,16 +191,12 @@ func _companion_open_dialog(text: String, ask_name: bool) -> void:
 	_companion_dlg_title.text = _spirit_name
 	if _companion_dlg_aff != null:
 		_companion_dlg_aff.text = _companion_affinity_line()
-	_companion_dim.visible = true
-	_companion_dlg.visible = true
+	Juice.open(_companion_dim, _companion_dlg)
 	if _companion != null:
 		_companion.z_index = 10
 
 func _companion_close_dialog() -> void:
-	if _companion_dim != null:
-		_companion_dim.visible = false
-	if _companion_dlg != null:
-		_companion_dlg.visible = false
+	Juice.close(_companion_dim, _companion_dlg)
 	if _companion != null:
 		_companion.z_index = 3
 	Sfx.click()

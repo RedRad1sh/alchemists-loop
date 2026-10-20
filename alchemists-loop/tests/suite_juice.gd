@@ -152,5 +152,13 @@ static func run(g: Game) -> void:
 	dim.free()
 	pop.free()
 	fade.free()
+	# --- связность (Task 2): гейт main.gd и реальная модалка Game через слой.
+	# Под enabled=false close обязан спрятать g._popup/_popup_dim в том же кадре:
+	# если кто-то вернёт отложенный hide, проверка краснеет здесь же.
+	Juice.enabled = false
+	Juice.open(g._popup_dim, g._popup)
+	Juice.close(g._popup_dim, g._popup)
+	Selftest.check("modal close paths are synchronous under selftest",
+		not g._popup.visible and not g._popup_dim.visible)
 	Juice.enabled = prev_enabled
 	Juice.max_concurrent = prev_max

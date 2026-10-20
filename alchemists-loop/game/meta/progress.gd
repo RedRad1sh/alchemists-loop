@@ -82,8 +82,7 @@ func _build_progress_popup() -> void:
 	var close := g._small_button("Закрыть", Vector2(150, 44))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.pressed.connect(func() -> void:
-		_prog_dim.visible = false
-		_prog_popup.visible = false
+		Juice.close(_prog_dim, _prog_popup)
 		Sfx.click())
 	col.add_child(close)
 
@@ -120,8 +119,7 @@ func _open_progress_popup() -> void:
 	_rebuild_set_rows()
 	_rebuild_order_rows()
 	_prog_tabs.current_tab = 0
-	_prog_dim.visible = true
-	_prog_popup.visible = true
+	Juice.open(_prog_dim, _prog_popup)
 	Sfx.click()
 
 func _rebuild_quest_rows() -> void:

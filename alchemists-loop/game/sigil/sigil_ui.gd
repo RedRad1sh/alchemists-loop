@@ -1881,43 +1881,35 @@ func _close_top_modal() -> bool:
 		main._saves._close_return_popup()
 		return true
 	elif main._hub._settings_popup.visible:
-		main._hub._settings_dim.visible = false
-		main._hub._settings_popup.visible = false
+		Juice.close(main._hub._settings_dim, main._hub._settings_popup)
 		Sfx.click()
 		return true
 	elif main._hub._craftable_popup.visible:
-		main._hub._craftable_dim.visible = false
-		main._hub._craftable_popup.visible = false
+		Juice.close(main._hub._craftable_dim, main._hub._craftable_popup)
 		Sfx.click()
 		return true
 	elif main._retort._retort_popup.visible:
-		main._retort._retort_dim.visible = false
-		main._retort._retort_popup.visible = false
+		Juice.close(main._retort._retort_dim, main._retort._retort_popup)
 		Sfx.click()
 		return true
 	elif main._hub._journal_popup.visible:
-		main._hub._journal_dim.visible = false
-		main._hub._journal_popup.visible = false
+		Juice.close(main._hub._journal_dim, main._hub._journal_popup)
 		Sfx.click()
 		return true
 	elif main._hub._prestige_popup.visible:
-		main._hub._prestige_dim.visible = false
-		main._hub._prestige_popup.visible = false
+		Juice.close(main._hub._prestige_dim, main._hub._prestige_popup)
 		Sfx.click()
 		return true
 	elif main._progress_ui._prog_popup.visible:
-		main._progress_ui._prog_dim.visible = false
-		main._progress_ui._prog_popup.visible = false
+		Juice.close(main._progress_ui._prog_dim, main._progress_ui._prog_popup)
 		Sfx.click()
 		return true
 	elif main._hub._profile_popup.visible:
-		main._hub._profile_dim.visible = false
-		main._hub._profile_popup.visible = false
+		Juice.close(main._hub._profile_dim, main._hub._profile_popup)
 		Sfx.click()
 		return true
 	elif main._hub._up_popup.visible:
-		main._hub._up_dim.visible = false
-		main._hub._up_popup.visible = false
+		Juice.close(main._hub._up_dim, main._hub._up_popup)
 		Sfx.click()
 		return true
 	elif main._spirit._companion_dlg != null and main._spirit._companion_dlg.visible:
