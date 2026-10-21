@@ -1240,3 +1240,26 @@ class TestCancelGift:
         assert _rows(s, "SELECT * FROM trade_orders") == [], "строки не должно быть"
         counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
         assert counts == {"dev-a": 10}, counts
+
+    def test_gift_limit_ignores_receiver_week_count(self, tmp_path, monkeypatch):
+        """Недельный лимит в gift тратит только даритель (спека §6, шаг 3).
+
+        Пинит одиночество `me` в `server.py:5781`
+        (`if _trade_week_count(conn, week, me) >= TRADE_WEEK_LIMIT`). Мутация
+        «считать и получателя», как это делает accept, обязана краснить ровно этот
+        тест: dev-b стоит на лимите, а подарок обязан пройти и вырастить только
+        счётчик dev-a. Зеркальный случай (даритель на лимите = отказ без записей)
+        прижат соседним тестом выше, поэтому здесь нужна именно асимметрия.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00")])
+        _fill_week(s, ("dev-b",))
+        r = _gift(client, "dev-a", "dev-b", card="spark")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert (body["ok"], body["craft_id"], body["remain"]) == (True, "c1", 9)
+        assert _owners(s) == {"c1": "dev-b"}
+        counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
+        assert counts == {"dev-a": 1, "dev-b": 10}, counts
