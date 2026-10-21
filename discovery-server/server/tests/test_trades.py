@@ -107,6 +107,69 @@ def _order(s, maker, taker, state, created_at):
     conn.close()
 
 
+import json
+
+TRADE_CARDS = ["spark", "coal", "ember", "ice", "stone"]
+
+TRADE_CATALOG = {
+    "version": "0123456789abcdef",
+    "generated_at": "2026-10-21T00:00:00Z",
+    "sets": [{"id": "fire", "title": "Стихия Огня",
+              "card_ids": ["spark", "coal", "ember"]}],
+    "cards": [],
+}
+for _i, _cid in enumerate(TRADE_CARDS):
+    TRADE_CATALOG["cards"].append({
+        "id": _cid, "set": "fire" if _cid in ("spark", "coal", "ember") else "water",
+        "rarity": "common", "recipe": [{"item_id": "fire", "qty": 10}],
+        "ether_cost": 40, "process": "процесс", "stage": "nigredo",
+        "fallback_name": _cid.capitalize(), "object_type": "object",
+        "seed": 10 + _i,
+    })
+
+
+def _trade_client(s, tmp_path, monkeypatch):
+    """Клиент с подменённым каталогом: want_card_id проверяется по нему (§7.1)."""
+    path = tmp_path / "trade_catalog.json"
+    path.write_text(json.dumps(TRADE_CATALOG, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(s, "SIGIL_CATALOG_PATH", str(path))
+    s._sigil_catalog_cache_clear()
+    return _client(s)
+
+
+def _friends(client, a="dev-a", b="dev-b"):
+    """A ↔ B друзья — через контрактные ручки S1, не прямым INSERT'ом."""
+    _player(client, "Аня", a)
+    _player(client, "Николя", b)
+    r = client.post("/api/friend/request",
+                    json={"device_id": a, "target_nick": "Николя"})
+    assert r.status_code == 200, r.text
+    r = client.post("/api/friend/respond",
+                    json={"device_id": b, "requester_device": a, "accept": True})
+    assert r.status_code == 200, r.text
+
+
+def _offer(client, device_id, to, give=("spark", ""), want=("ice", "")):
+    return client.post("/api/trade/offer", json={
+        "device_id": device_id, "to": to,
+        "give_card_id": give[0], "give_craft_id": give[1],
+        "want_card_id": want[0], "want_craft_id": want[1]})
+
+
+def _rows(s, sql, args=()):
+    conn = sqlite3.connect(s.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        return [dict(r) for r in conn.execute(sql, args).fetchall()]
+    finally:
+        conn.close()
+
+
+def _owners(s):
+    return {r["craft_id"]: r["device_id"] for r in
+            _rows(s, "SELECT craft_id, device_id FROM sigil_crafts")}
+
+
 class TestSchema:
     def test_fresh_db_has_trade_tables(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
@@ -352,3 +415,117 @@ class TestHelpers:
             assert ("dev-a", "x2") not in got
         finally:
             conn.close()
+
+
+class TestOffer:
+    def test_offer_creates_one_pending_row(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00")])
+        r = _offer(client, "dev-a", "dev-b")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["ok"] is True and body["id"] > 0 and body["existed"] is False
+        rows = _rows(s, "SELECT * FROM trade_orders")
+        assert len(rows) == 1 and rows[0]["state"] == "pending"
+        assert rows[0]["maker_device"] == "dev-a" and rows[0]["taker_device"] == "dev-b"
+        assert rows[0]["give_card_id"] == "spark" and rows[0]["want_card_id"] == "ice"
+        # оффер НЕ переносит карты (§5.0, §7.1) и не тратит лимит
+        assert _owners(s)["c1"] == "dev-a"
+        assert _rows(s, "SELECT * FROM trade_counts") == []
+
+    def test_duplicate_pending_offer_is_idempotent(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00")])
+        first = _offer(client, "dev-a", "dev-b").json()
+        again = _offer(client, "dev-a", "dev-b")
+        assert again.status_code == 200
+        body = again.json()
+        assert body["existed"] is True and body["id"] == first["id"]
+        assert len(_rows(s, "SELECT * FROM trade_orders")) == 1        # §7.1
+
+    def test_offer_of_card_not_owned_is_422(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        r = _offer(client, "dev-a", "dev-b")
+        assert (r.status_code, r.json()["detail"]) == (422, "card_not_owned")
+        assert _rows(s, "SELECT * FROM trade_orders") == []            # кейс 15
+
+    def test_offer_rejects_ghost_want_card(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00")])
+        r = _offer(client, "dev-a", "dev-b", want=("phantom", ""))
+        assert (r.status_code, r.json()["detail"]) == (422, "unknown_card")  # кейс 17
+        # хроматик в want каталогом не проверяется: экземпляра в каталоге нет
+        _seed(s, "dev-b", [("x9", "", "Радуга", "2026-01-01T00:00:00")])
+        assert _offer(client, "dev-a", "dev-b", want=("", "x9")).status_code == 200
+
+    def test_offer_selector_and_self_deal_codes(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00")])
+        r = _offer(client, "dev-a", "dev-b", give=("", ""))
+        assert (r.status_code, r.json()["detail"]) == (422, "bad_selector")   # кейс 8
+        r = _offer(client, "dev-a", "dev-b", give=("spark", "c1"))
+        assert (r.status_code, r.json()["detail"]) == (422, "bad_selector")
+        r = _offer(client, "dev-a", "dev-a")
+        assert (r.status_code, r.json()["detail"]) == (422, "self_deal")      # кейс 9
+
+    def test_offer_guards_caller_friends_registration(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _player(client, "Аня", "dev-a")
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00")])
+        r = _offer(client, "dev-a", "dev-z")
+        assert (r.status_code, r.json()["detail"]) == (404, "not_registered")
+        _player(client, "Варя", "dev-v")
+        r = _offer(client, "dev-a", "dev-v")
+        assert (r.status_code, r.json()["detail"]) == (404, "not_friends")
+        assert _rows(s, "SELECT * FROM trade_orders") == []                   # кейс 5
+        r = _offer(client, "npc-spirit", "dev-a")
+        assert r.status_code == 400, r.text                                   # кейс 6
+
+    def test_open_offer_cap(self, tmp_path, monkeypatch):
+        """21-й активный pending у одного maker → 409 too_many_open (кейс 16).
+
+        Честными офферами набирается только len(TRADE_CARDS) = 5, поэтому остаток
+        до потолка добирается прямым INSERT'ом: тест проверяет константу
+        TRADE_OPEN_MAX, а не способность каталога исчерпать её честными офферами.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c%d" % i, cid, "N%d" % i, "2026-01-0%dT00:00:00" % (i + 1))
+                           for i, cid in enumerate(TRADE_CARDS)])
+        for cid in TRADE_CARDS:
+            r = _offer(client, "dev-a", "dev-b", give=(cid, ""))
+            assert r.status_code == 200, (cid, r.text)
+        dup = _offer(client, "dev-a", "dev-b", give=("spark", ""))
+        assert dup.json()["existed"] is True          # дубль потолок не расходует
+        conn = sqlite3.connect(s.DB_PATH)
+        # created_at — от часов сервера, а не литерал: строки обязаны быть
+        # свежими. С жёсткой датой офферы через TRADE_TTL_DAYS суток уходят в
+        # просрочку, потолок не набирается, и кейс краснеет по календарю.
+        now = s._now_iso()
+        for i in range(s.TRADE_OPEN_MAX - len(TRADE_CARDS)):
+            conn.execute(
+                "INSERT INTO trade_orders (maker_device, taker_device,"
+                " give_card_id, give_craft_id, want_card_id, want_craft_id,"
+                " state, created_at, updated_at) VALUES (?, ?, '', ?, '', ?,"
+                " 'pending', ?, ?)",
+                ("dev-a", "dev-b", "cx%d" % i, "ice", now, now))
+        conn.commit()
+        conn.close()
+        assert len(_rows(s, "SELECT * FROM trade_orders WHERE state='pending'")) == s.TRADE_OPEN_MAX
+        # 21-й оффер намеренно отдаёт карту, уже висящая в pending (все 5 карт
+        # израсходованы в цикле): 409 здесь выдаёт только проверка потолка,
+        # стоящая ДО дедупликации. Переставить их местами — кейс покраснеет.
+        r = _offer(client, "dev-a", "dev-b", give=("stone", ""), want=("ice", ""))
+        assert (r.status_code, r.json()["detail"]) == (409, "too_many_open")

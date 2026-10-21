@@ -5531,6 +5531,66 @@ def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
         conn.close()
 
 
+@app.post("/api/trade/offer", response_model=TradeOfferResponse)
+def trade_offer(payload: TradeOfferPayload):
+    """Выставить встречный оффер другу (спека §7.1).
+
+    Карты НЕ переносит и недельный лимит НЕ тратит (§5.0). Две проверки
+    обязательны, иначе модель «без блокировки» начинает производить мусор:
+    владение на момент оффера («не ври заранее»; карта остаётся рабочей) и
+    потолок открытых офферов (иначе строки trade_orders плодятся бесконечно,
+    раз лимит их не считает). want_card_id проверяется по каталогу: просить
+    «карту-призрак» бессмысленно; want_craft_id — нет, существование
+    экземпляра докажет accept.
+
+    BEGIN IMMEDIATE здесь нужен не ради CAS, а чтобы «подсчёт потолка → INSERT»
+    и «поиск дубля → INSERT» были атомарны: без него два параллельных оффера
+    от одного maker дали бы и 21-ю строку, и дубль.
+    """
+    me = _social_caller(payload.device_id)
+    to = _social_id(payload.to)
+    give_card, give_craft = _trade_selector(payload.give_card_id, payload.give_craft_id)
+    want_card, want_craft = _trade_selector(payload.want_card_id, payload.want_craft_id)
+    if to == me:
+        raise HTTPException(status_code=422, detail="self_deal")
+    conn = get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        _trade_registered(conn, me)
+        _trade_registered(conn, to)
+        if not _social_accepted(conn, me, to):
+            raise HTTPException(status_code=404, detail="not_friends")
+        if want_card and want_card not in _sigil_catalog()["by_id"]:
+            raise HTTPException(status_code=422, detail="unknown_card")
+        if _trade_pick_row(conn, me, give_card, give_craft) is None:
+            raise HTTPException(status_code=422, detail="card_not_owned")
+        if _trade_open_count(conn, me) >= TRADE_OPEN_MAX:
+            raise HTTPException(status_code=409, detail="too_many_open")
+        dup = conn.execute(
+            "SELECT id FROM trade_orders WHERE maker_device = ? AND taker_device = ?"
+            " AND state = 'pending' AND give_card_id = ? AND give_craft_id = ?",
+            (me, to, give_card, give_craft)).fetchone()
+        if dup is not None:
+            conn.rollback()
+            return TradeOfferResponse(ok=True, id=int(dup["id"]), existed=True)
+        now = _now_iso()
+        cursor = conn.execute(
+            "INSERT INTO trade_orders (maker_device, taker_device, give_card_id,"
+            " give_craft_id, want_card_id, want_craft_id, state, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
+            (me, to, give_card, give_craft, want_card, want_craft, now, now))
+        conn.commit()
+        return TradeOfferResponse(ok=True, id=int(cursor.lastrowid))
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 @app.get("/api/rating", response_model=RatingResponse)
 def rating(device_id: str = Query("", max_length=128)):
     """Рейтинг игроков: открытия, вещества, очки целей, наличие домика."""
