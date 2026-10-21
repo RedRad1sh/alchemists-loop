@@ -5566,10 +5566,17 @@ def trade_offer(payload: TradeOfferPayload):
             raise HTTPException(status_code=422, detail="card_not_owned")
         if _trade_open_count(conn, me) >= TRADE_OPEN_MAX:
             raise HTTPException(status_code=409, detail="too_many_open")
+        # Дедуп обязан смотреть тот же TTL, что и `_trade_open_count` (§7.1
+        # rule 2): просроченный pending неактивен — его не отдаёт list и
+        # отвергает accept (§6.1), поэтому он не «висящий первый оффер» из
+        # rule 4 и не имеет права плодить existed:true на мёртвую строку.
+        # Ключ дедупа — maker/taker/state/give: изменённый ask rule 4
+        # намеренно возвращает существующую строку.
         dup = conn.execute(
             "SELECT id FROM trade_orders WHERE maker_device = ? AND taker_device = ?"
-            " AND state = 'pending' AND give_card_id = ? AND give_craft_id = ?",
-            (me, to, give_card, give_craft)).fetchone()
+            " AND state = 'pending' AND give_card_id = ? AND give_craft_id = ?"
+            " AND created_at >= ?",
+            (me, to, give_card, give_craft, _trade_ttl_cutoff())).fetchone()
         if dup is not None:
             conn.rollback()
             return TradeOfferResponse(ok=True, id=int(dup["id"]), existed=True)

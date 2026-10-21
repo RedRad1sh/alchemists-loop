@@ -447,6 +447,50 @@ class TestOffer:
         assert body["existed"] is True and body["id"] == first["id"]
         assert len(_rows(s, "SELECT * FROM trade_orders")) == 1        # §7.1
 
+    def test_expired_pending_is_not_a_duplicate(self, tmp_path, monkeypatch):
+        """Дедуп обязан видеть TTL: просроченный pending — не дубль (F1/Q1).
+
+        `_trade_open_count` (§7.1 rule 2) просроченные строки из квоты уже
+        выбрасывает — это закреплено тестом
+        test_open_count_counts_only_my_fresh_pending, а поиск дубля в этой же
+        ручке — нет. Пока условия отличались, на практике недели без ответа
+        (`TRADE_TTL_DAYS = 7`) игрок получал `ok:true, existed:true` с id
+        строки, которую `GET /api/trade/list` скрывает, а
+        `POST /api/trade/accept` отвергает как `expired` (§6.1): повтор той же
+        карты тому же другу был невозможен до cancel. Просрочка моделируется
+        UPDATE'ом created_at ОТ ЧАСОВ СЕРВЕРА (`s._now_iso()`), а не
+        дата-литералом, — иначе кейс краснеет/зеленеет по календарю.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00")])
+        first = _offer(client, "dev-a", "dev-b").json()
+        assert first["existed"] is False, first
+        stale = (datetime.fromisoformat(s._now_iso())
+                 - timedelta(days=s.TRADE_TTL_DAYS + 1)).isoformat()
+        conn = sqlite3.connect(s.DB_PATH)
+        conn.execute("UPDATE trade_orders SET created_at = ?", (stale,))
+        conn.commit()
+        conn.close()
+        conn = s.get_db()
+        try:
+            # посылка: строка для квоты уже мертва, иначе «свежий» дубль ниже
+            # был бы законным (активный pending, rule 4)
+            assert s._trade_open_count(conn, "dev-a") == 0
+        finally:
+            conn.close()
+        again = _offer(client, "dev-a", "dev-b")
+        assert again.status_code == 200, again.text
+        body = again.json()
+        assert body["existed"] is False, ("просроченный pending не дубль", body)
+        assert body["id"] != first["id"], body
+        rows = _rows(s, "SELECT id, created_at FROM trade_orders"
+                        " WHERE state = 'pending' ORDER BY id")
+        assert len(rows) == 2, rows                                # + живая строка
+        assert rows[0]["created_at"] == stale, rows                # старую не «реанимировали»
+        assert rows[1]["id"] == body["id"] and rows[1]["created_at"] > stale, rows
+
     def test_offer_of_card_not_owned_is_422(self, tmp_path, monkeypatch):
         s = _srv(tmp_path, monkeypatch)
         client = _trade_client(s, tmp_path, monkeypatch)
@@ -478,6 +522,35 @@ class TestOffer:
         r = _offer(client, "dev-a", "dev-a")
         assert (r.status_code, r.json()["detail"]) == (422, "self_deal")      # кейс 9
 
+    def test_offer_want_side_selector_is_enforced(self, tmp_path, monkeypatch):
+        """Want-сторона инварианта XOR защищена не меньше give-стороны (§4).
+
+        У `trade_orders` нет CHECK'а на `want_card_id != '' XOR
+        want_craft_id != ''` (schema.sql и migrations/003_trades.sql), а
+        `_trade_selector` вызывается для want ровно один раз — здесь. Заменить
+        эту строку на прямое чтение payload — и сервер сам начнёт плодить
+        строки с двумя заполненными want-селекторами (или с двумя пустыми),
+        которые accept не может ни удовлетворить, ни объяснить: на таком
+        мутанте тест краснеет, а остальные кейсы остаются зелёными.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00")])
+        # обе заполнены: несуществующий хроматик «zz» каталогом не проверяется
+        # и не проходит XOR
+        r = _offer(client, "dev-a", "dev-b", want=("ice", "zz"))
+        assert (r.status_code, r.json()["detail"]) == (422, "bad_selector")
+        # обе пусты — want обязана быть чем-то задана
+        r = _offer(client, "dev-a", "dev-b", want=("", ""))
+        assert (r.status_code, r.json()["detail"]) == (422, "bad_selector")
+        # пробелы — это пустота: без .strip() в селекторе ушла бы пара
+        # «непустой want_card_id из пробелов + пустой want_craft_id»
+        r = _offer(client, "dev-a", "dev-b", want=("  ", " "))
+        assert (r.status_code, r.json()["detail"]) == (422, "bad_selector")
+        # ни одна rejected-ветка не оставила строку, в том числе битую
+        assert _rows(s, "SELECT * FROM trade_orders") == []
+
     def test_offer_guards_caller_friends_registration(self, tmp_path, monkeypatch):
         s = _srv(tmp_path, monkeypatch)
         client = _trade_client(s, tmp_path, monkeypatch)
@@ -490,7 +563,14 @@ class TestOffer:
         assert (r.status_code, r.json()["detail"]) == (404, "not_friends")
         assert _rows(s, "SELECT * FROM trade_orders") == []                   # кейс 5
         r = _offer(client, "npc-spirit", "dev-a")
-        assert r.status_code == 400, r.text                                   # кейс 6
+        assert (r.status_code, r.json()["detail"]) == (400, "npc"), r.text     # кейс 6
+        # `_social_id`/`_social_caller` общие с соц-ручками, и там коды названы
+        # (test_social.py:669/798/890) — на этом маршруте тоже пинится машинный
+        # код, а не только статус: min_length=1 считается по сырой строке,
+        # поэтому "   " и "a|b" доходят до хендлера.
+        for bad in ("   ", "a|b"):
+            r = _offer(client, bad, "dev-a")
+            assert (r.status_code, r.json()["detail"]) == (400, "bad_device_id"), (bad, r.text)
 
     def test_open_offer_cap(self, tmp_path, monkeypatch):
         """21-й активный pending у одного maker → 409 too_many_open (кейс 16).
