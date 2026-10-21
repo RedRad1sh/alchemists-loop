@@ -12,7 +12,9 @@ const BAND_DX := 4.0
 const NOTE_GAP := 8.0
 const CARD_GAP := 4.0
 const SIGN_SIZE := Vector2(300, 84)
-const RING_SIZE := Vector2(44, 44)
+const CLOSE_SIZE := Vector2(118, 38)
+const SCROLL_STEP := 72.0
+const SCROLL_HINT_SIZE := Vector2(160, 24)
 const NOTE_SIZE := Vector2(132, 88)
 const POPUP_SIZE := Vector2(276, 366)
 const NOTE_TICK := 1.0
@@ -23,8 +25,20 @@ const HEARTH_H := 56.0
 const RANK_H := 56.0
 const RANK_NOTE := Vector2(150, 48)
 const FLAME_INK := Color(1.0, 0.72, 0.30)
+# Слои отрисовки: контент листается под рамой, поэтому рама, строка ранга,
+# подсказка и кнопка закрытия обязаны лежать выше него.
+const Z_RAIL := 2
+const Z_CORNER := 3
+const Z_RANK := 4
+const Z_HINT := 5
+const Z_CLOSE := 6
 
 const BOARD_TITLE := "Контрактная доска"
+const CLOSE_TEXT := "Закрыть"
+const CLOSE_TIP := "Закрыть доску и вернуться в Дом"
+const HINT_MORE := "▼ листай вниз"
+const HINT_TOP := "▲ наверх"
+const HINT_MID := "▲▼ листай"
 const POPUP_TITLE := "Получено"
 const CAP_HINT := "Склад забит: часть награды не влезла"
 const DECOR_MISSING_HINT := "в каталоге пока нет"
@@ -53,7 +67,12 @@ var _mile_days_word: Label
 var _mile_pts_word: Label
 var _sign: TextureRect
 var _sign_word: Label
-var _ring: TextureButton
+var _close_btn: Button
+var _mask_top: Control
+var _mask_bottom: Control
+var _scroll_hint: Label
+var _drag_from := NAN
+var _notes_sig_cache := ""
 var _daily_row: Control
 var _weekly_row: Control
 var _notes: Control
@@ -62,6 +81,8 @@ var _popup: Control
 var _note_clock := 0.0
 var _closed := false
 var _wired := false
+var _scroll_y := 0.0
+var _scroll_max := 0.0
 
 static func open(game: Game) -> void:
 	if game.get_node_or_null("ContractBoard") != null:
@@ -120,6 +141,10 @@ func _build_layers() -> void:
 		_layer("frame_v.png", "RailLeft"), _layer("frame_v.png", "RailRight")]
 	(_rails[1] as TextureRect).flip_v = true
 	(_rails[3] as TextureRect).flip_h = true
+	# Рама рисуется поверх листающегося контента: бумага, уехавшая под рельс,
+	# должна исчезать под деревом, а не поверх него.
+	for raw in _rails:
+		(raw as TextureRect).z_index = Z_RAIL
 
 	# Один кованый уголок, четыре раза зеркалом (§5.2.2).
 	_corners = []
@@ -127,6 +152,7 @@ func _build_layers() -> void:
 		var corner := _layer("corner_iron.png", "Corner%d" % i)
 		corner.flip_h = (i & 1) == 1
 		corner.flip_v = (i & 2) == 2
+		corner.z_index = Z_CORNER
 		_corners.append(corner)
 
 	_shelf_daily = _layer("shelf_bar.png", "ShelfDaily")
@@ -193,11 +219,19 @@ func _build_layers() -> void:
 	_hearth_flame.add_theme_color_override("font_color", FLAME_INK)
 	_hearth_box.add_child(_hearth_flame)
 
+	# Маски ввода поверх полос рамы: листаясь, бумага уходит под рельс и под
+	# строку ранга, и клик по ней там был бы кликом по невидимому контракту.
+	# Добавлены ДО строки ранга и кнопки закрытия, чтобы те перехватывали ввод
+	# раньше маски (Godot разбирает детей с конца).
+	_mask_top = _input_mask("MaskTop")
+	_mask_bottom = _input_mask("MaskBottom")
+
 	# Строка ранга (спека §5): символ + титул + два бумажных свитка вех, над
 	# нижним рельсом.
 	_rank_strip = Control.new()
 	_rank_strip.name = "RankStrip"
 	_rank_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rank_strip.z_index = Z_RANK
 	add_child(_rank_strip)
 	_rank_symbol = CircleRankSymbol.new()
 	_rank_symbol.name = "RankSymbol"
@@ -218,14 +252,31 @@ func _build_layers() -> void:
 	_mile_days_word = _mile_days.get_node("Word") as Label
 	_mile_pts_word = _mile_pts.get_node("Word") as Label
 
-	_ring = TextureButton.new()
-	_ring.name = "Ring"
-	_ring.texture_normal = ContractCard.tex("ring_pull.png")
-	_ring.ignore_texture_size = true
-	_ring.stretch_mode = TextureButton.STRETCH_SCALE
-	_ring.mouse_filter = Control.MOUSE_FILTER_STOP
-	_ring.pressed.connect(_on_close)
-	add_child(_ring)
+	_scroll_hint = g._label("", 12)
+	_scroll_hint.name = "ScrollHint"
+	_scroll_hint.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_scroll_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_scroll_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_scroll_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_scroll_hint.z_index = Z_HINT
+	_scroll_hint.add_theme_color_override("font_color", SIGN_INK)
+	add_child(_scroll_hint)
+
+	# Закрытие — подписанная кнопка, как на каждом другом экране: кованое
+	# кольцо без надписи игрок принимал за декор и не находил выход.
+	_close_btn = g._small_button(CLOSE_TEXT, CLOSE_SIZE, 2)
+	_close_btn.name = "Close"
+	_close_btn.tooltip_text = CLOSE_TIP
+	_close_btn.z_index = Z_CLOSE
+	_close_btn.pressed.connect(_on_close)
+	add_child(_close_btn)
+
+func _input_mask(node_name: String) -> Control:
+	var m := Control.new()
+	m.name = node_name
+	m.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(m)
+	return m
 
 func _add_card(row: Control) -> void:
 	var card := ContractCard.new(g)
@@ -276,12 +327,52 @@ func _relayout() -> void:
 		corner.position = Vector2(0.0 if (i & 1) == 0 else _w - CORNER,
 			0.0 if (i & 2) == 0 else _h - CORNER)
 
-	_sign.position = Vector2((_w - SIGN_SIZE.x) / 2.0, RAIL + 4.0)
+	var inner := _w - 2.0 * RAIL
+	# Контент листается: восемь бумаг (4 дневных + 4 недельных) в портрете
+	# 540×960 дают ~1360 px при видимой полосе ~824 px. Первый проход без
+	# сдвига измеряет настоящую высоту (wrapping-_place пересчитывает её сам),
+	# второй — сдвигает на уже ограниченный _scroll_y.
+	_layout_flow(RAIL, inner)
+	var view_bottom := _h - RAIL - RANK_H
+	var nat_bottom := _weekly_row.position.y + _weekly_row.size.y
+	_scroll_max = maxf(0.0, nat_bottom - view_bottom)
+	_scroll_y = clampf(_scroll_y, 0.0, _scroll_max)
+	if _scroll_y > 0.0:
+		_layout_flow(RAIL - _scroll_y, inner)
+
+	# Строка ранга — над нижним рельсом (спека §5), ниже её только сам рельс.
+	_rank_strip.position = Vector2(RAIL, _h - RAIL - RANK_H)
+	_rank_strip.size = Vector2(inner, RANK_H)
+	_rank_symbol.position = Vector2(2.0, (RANK_H - 48.0) / 2.0)
+	_rank_symbol.size = Vector2(48.0, 48.0)
+	_mile_pts.position = Vector2(inner - RANK_NOTE.x, (RANK_H - RANK_NOTE.y) / 2.0)
+	_mile_pts.size = RANK_NOTE
+	_mile_days.position = Vector2(inner - 2.0 * RANK_NOTE.x - 4.0, _mile_pts.position.y)
+	_mile_days.size = RANK_NOTE
+	_rank_title.position = Vector2(56.0, 0.0)
+	_rank_title.size = Vector2(_mile_days.position.x - 62.0, RANK_H)
+
+	_mask_top.position = Vector2.ZERO
+	_mask_top.size = Vector2(_w, RAIL)
+	_mask_bottom.position = Vector2(0.0, view_bottom)
+	_mask_bottom.size = Vector2(_w, _h - view_bottom)
+	# Кнопка закрытия — в правом краю верхнего рельса: вывеска по центру
+	# (x 120..420), а правый уголок начинается с _w - CORNER.
+	_close_btn.position = Vector2(_w - CORNER - CLOSE_SIZE.x - 4.0, (RAIL - CLOSE_SIZE.y) / 2.0)
+	_close_btn.size = CLOSE_SIZE
+	_scroll_hint.position = Vector2((_w - SCROLL_HINT_SIZE.x) / 2.0,
+		view_bottom - SCROLL_HINT_SIZE.y - 2.0)
+	_scroll_hint.size = SCROLL_HINT_SIZE
+	_refresh_scroll_hint()
+	_layout_notes()
+
+# Поток контента: вывеска → записки баффов → дневная полка и ряд → очаг →
+# недельная полка и ряд. `top` — верх видимой полосы с учётом прокрутки.
+func _layout_flow(top: float, inner: float) -> void:
+	_sign.position = Vector2((_w - SIGN_SIZE.x) / 2.0, top + 4.0)
 	_sign.size = SIGN_SIZE
 	_sign_word.size = SIGN_SIZE
-
-	var inner := _w - 2.0 * RAIL
-	_notes.position = Vector2(RAIL + BAND_DX, RAIL + SIGN_SIZE.y + 16.0)
+	_notes.position = Vector2(RAIL + BAND_DX, top + SIGN_SIZE.y + 16.0)
 	_notes.size = Vector2(inner - 2.0 * BAND_DX, 2.0 * (NOTE_SIZE.y + NOTE_GAP))
 	_shelf_daily.position = Vector2(RAIL, _notes.position.y + _notes.size.y + 4.0)
 	_shelf_daily.size = Vector2(inner, SHELF_H)
@@ -301,20 +392,51 @@ func _relayout() -> void:
 	_weekly_row.position = Vector2(RAIL, _shelf_weekly.position.y + SHELF_H)
 	_weekly_row.size = Vector2(inner, ContractCard.WEEKLY_SIZE.y)
 	_place(_weekly_row, ContractCard.WEEKLY_SIZE)
-	# Строка ранга — над нижним рельсом (спека §5), ниже её только сам рельс.
-	_rank_strip.position = Vector2(RAIL, _h - RAIL - RANK_H)
-	_rank_strip.size = Vector2(inner, RANK_H)
-	_rank_symbol.position = Vector2(2.0, (RANK_H - 48.0) / 2.0)
-	_rank_symbol.size = Vector2(48.0, 48.0)
-	_mile_pts.position = Vector2(inner - RANK_NOTE.x, (RANK_H - RANK_NOTE.y) / 2.0)
-	_mile_pts.size = RANK_NOTE
-	_mile_days.position = Vector2(inner - 2.0 * RANK_NOTE.x - 4.0, _mile_pts.position.y)
-	_mile_days.size = RANK_NOTE
-	_rank_title.position = Vector2(56.0, 0.0)
-	_rank_title.size = Vector2(_mile_days.position.x - 62.0, RANK_H)
-	_ring.position = Vector2(_w - RAIL - RING_SIZE.x - 6.0, RAIL + 6.0)
-	_ring.size = RING_SIZE
-	_layout_notes()
+
+func _scroll_to(v: float) -> void:
+	var y := clampf(v, 0.0, _scroll_max)
+	if is_equal_approx(y, _scroll_y):
+		return
+	_scroll_y = y
+	_relayout()
+
+func _scroll_by(dy: float) -> void:
+	_scroll_to(_scroll_y + dy)
+
+func _refresh_scroll_hint() -> void:
+	if _scroll_max <= 0.0:
+		_scroll_hint.visible = false
+		return
+	_scroll_hint.visible = true
+	if _scroll_y <= 0.0:
+		_scroll_hint.text = HINT_MORE
+	elif _scroll_y >= _scroll_max:
+		_scroll_hint.text = HINT_TOP
+	else:
+		_scroll_hint.text = HINT_MID
+
+## Колесо и перетаскивание листают доску. Drag обязателен: игра портретная и
+## целевая платформа — Android, где колеса нет вовсе.
+func _gui_input(ev: InputEvent) -> void:
+	var mb := ev as InputEventMouseButton
+	if mb != null:
+		if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
+			accept_event()
+			_scroll_by(SCROLL_STEP)
+			return
+		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
+			accept_event()
+			_scroll_by(-SCROLL_STEP)
+			return
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			_drag_from = mb.global_position.y if mb.pressed else NAN
+			return
+	var mm := ev as InputEventMouseMotion
+	if mm == null or is_nan(_drag_from):
+		return
+	accept_event()
+	_scroll_by(_drag_from - mm.global_position.y)
+	_drag_from = mm.global_position.y
 
 # Доска v2 (Task 7, спека §2): ряд — wrapping-сетка. Карточки фиксированного
 # размера, сколько влезает в ширину ряда — ровно столько в линии; остаток
@@ -375,6 +497,13 @@ func _on_hearth_pressed() -> void:
 		Juice.ring(_rank_symbol, _rank_symbol.get_global_rect().get_center(), UIStyle.GOLD, 60.0)
 
 func _layout_notes() -> void:
+	# Прокрутка зовёт _relayout на каждое событие пальца/колеса; без подписи
+	# полоса пересобирала бы записки 60 раз в секунду на ровном месте.
+	var buffs: Array = g._contracts.active_buffs()
+	var sig := _notes_sig(buffs)
+	if sig == _notes_sig_cache and _notes.get_child_count() == buffs.size():
+		return
+	_notes_sig_cache = sig
 	# remove_child + queue_free: освобождение отложено до конца кадра, и без remove_child
 	# полоса на один кадр осталась бы с двумя наборами записок.
 	for ch in _notes.get_children():
@@ -382,12 +511,19 @@ func _layout_notes() -> void:
 		ch.queue_free()
 	var per_row := maxi(1, int((_notes.size.x + NOTE_GAP) / (NOTE_SIZE.x + NOTE_GAP)))
 	var i := 0
-	for raw in g._contracts.active_buffs():
+	for raw in buffs:
 		var note := _make_note(raw as Dictionary)
 		_notes.add_child(note)
 		note.position = Vector2(float(i % per_row) * (NOTE_SIZE.x + NOTE_GAP),
 			float(i / per_row) * (NOTE_SIZE.y + NOTE_GAP))
 		i += 1
+
+func _notes_sig(buffs: Array) -> String:
+	var parts: Array = ["%d" % int(_notes.size.x)]
+	for raw in buffs:
+		var b := raw as Dictionary
+		parts.append("%s:%d" % [String(b["id"]), int(b["left"])])
+	return "|".join(parts)
 
 func _make_note(b: Dictionary) -> TextureButton:
 	var id := String(b["id"])

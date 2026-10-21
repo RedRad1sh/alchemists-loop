@@ -98,6 +98,22 @@ static func _clear_prog(c: Contracts) -> void:
 	c._contracts_set_week.clear()
 	c._last_output = ""
 
+# Ввод для проверки клика/скролла: события подаются прямо в _gui_input виджета,
+# поэтому координаты локальные и headless-прогон не зависит от настоящего курсора.
+static func _mb(btn: int, pressed: bool, at: Vector2) -> InputEventMouseButton:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = btn
+	ev.pressed = pressed
+	ev.position = at
+	ev.global_position = at
+	return ev
+
+static func _mm(at: Vector2) -> InputEventMouseMotion:
+	var ev := InputEventMouseMotion.new()
+	ev.position = at
+	ev.global_position = at
+	return ev
+
 # ---------- Task 7: хелперы сейв-блока ----------
 # Контракт, который генератор СЕГОДНЯ мог бы выдать, но не обязан. goal считается
 # из таблицы напрямую, а не через Contracts._make_contract: иначе валидатор и
@@ -340,6 +356,16 @@ static func run(g: Game) -> void:
 		if not ContractsBalance.BUFF_TEXT.has(String(id)) or str(ContractsBalance.BUFF_TEXT[String(id)]) == "":
 			buff_ok = false
 	Selftest.check("every buff has positive base duration, positive base power, a title and an effect text", buff_ok)
+	# Баг владельца 2026-10-20: «Спешка в мастерской — мастерская спешит» игрок
+	# не понял. Текст эффекта обязан называть подсистему и то, что с ней
+	# происходит, а не повторять заголовок другими словами.
+	Selftest.check("§5.4 buff effect texts name the subsystem and the effect, not the title",
+		String(ContractsBalance.BUFF_TEXT["workshop_speed"]).contains("Мастерской")
+		and not String(ContractsBalance.BUFF_TEXT["workshop_speed"]).contains("спешит")
+		and String(ContractsBalance.BUFF_TEXT["brew_speed"]).contains("варка")
+		and String(ContractsBalance.BUFF_TEXT["spring_yield"]).contains("материала")
+		and String(ContractsBalance.BUFF_TEXT["craft_discount"]).contains("эфира")
+		and String(ContractsBalance.BUFF_TEXT["ether_regen"]).contains("эфир"))
 	Selftest.check("§3.3 brew_speed base is 7200 s at power 0.25",
 		ContractsBalance.BUFF_BASE.get("brew_speed", {}) == {"duration": 7200, "power": 0.25})
 	Selftest.check("§3.3 spring_yield base is 1800 s at power 1.0",
@@ -1846,11 +1872,13 @@ static func _contract_board_checks(g: Game) -> void:
 		and str(sign.texture.resource_path).contains("sign_hang")
 		and sign_word != null and sign_word.text == ContractBoard.BOARD_TITLE)
 
-	# 8. Кольцо закрытия — кованое, из PNG.
-	var ring: TextureButton = board.get_node_or_null("Ring") as TextureButton
-	Selftest.check("§5.2 the close ring is a forged iron texture button",
-		ring != null and ring.texture_normal != null
-		and str(ring.texture_normal.resource_path).contains("ring_pull"))
+	# 8. Закрытие доски — подписанная кнопка, а не безымянное кольцо: владелец
+	# не понял, как закрыть доску (баг 2026-10-20).
+	var close_btn: Button = board.get_node_or_null("Close") as Button
+	Selftest.check("§5.2 the board closes with a labeled button, not an unlabeled ring",
+		close_btn != null and close_btn.text.contains("Закрыть")
+		and close_btn.tooltip_text != ""
+		and board.get_node_or_null("Ring") == null)
 
 	# 9. Доска v2: восемь карточек — 4 daily + 4 weekly (было 3+2).
 	var dr: Control = board.get_node_or_null("DailyRow") as Control
@@ -2232,7 +2260,7 @@ static func _contract_board_checks(g: Game) -> void:
 	var tip_lbl: Label = tip_card.get_node("Hang/Reward") as Label
 	var tip_stamp: TextureButton = tip_card.get_node("Hang/Stamp") as TextureButton
 	Selftest.check("§5.3 hovering the reward line or stamp states the exact buff power",
-		tip_lbl.mouse_filter == Control.MOUSE_FILTER_STOP
+		tip_lbl.mouse_filter == Control.MOUSE_FILTER_PASS
 		and tip_lbl.tooltip_text.contains("+%d%%" % tip_pct)
 		and tip_stamp.tooltip_text.contains("+%d%%" % tip_pct)
 		and tip_lbl.tooltip_text.contains(String(ContractsBalance.BUFF_TITLE.get(String(r_tip["buff"]), "нетбаффа"))))
@@ -2278,12 +2306,26 @@ static func _contract_board_checks(g: Game) -> void:
 		and hb.get_node_or_null("IconCenter/Icon_board") != null)
 
 	# --- Juice Task 4: hover, stamp, board/reward, hearth/rank ---
-	# T4-1. Card root takes hover input.
+	# T4-1. Наведение считается по всей бумаге: STOP-потомок (строка награды,
+	# тело, штамп) больше не крадёт hover у корня карточки — владелец видел
+	# реакцию только на части листа (баг 2026-10-20).
 	var t4_card := dr.get_child(0) as ContractCard
-	Selftest.check("card root takes hover input",
+	var t4_reward: Label = t4_card.get_node("Hang/Reward") as Label
+	var t4_detail: Control = t4_card.get_node("Hang/Detail") as Control
+	var t4_line: Control = null
+	if t4_detail.get_child_count() > 0:
+		t4_line = t4_detail.get_child(0) as Control
+	var t4_other: ContractCard = dr.get_child(1) as ContractCard
+	Selftest.check("card hover covers every part of the paper, not only the bare root",
 		t4_card != null and t4_card.mouse_filter == Control.MOUSE_FILTER_STOP
-		and t4_card.get_signal_connection_list("mouse_entered").size() == 1
-		and t4_card.get_signal_connection_list("mouse_exited").size() == 1)
+		and t4_card._covers(t4_card)
+		and t4_card._covers(t4_reward)
+		and t4_card._covers(t4_card.get_node("Hang/Stamp") as Control)
+		and (t4_line == null or t4_card._covers(t4_line))
+		and not t4_card._covers(null)
+		and not t4_card._covers(t4_other)
+		and t4_reward.mouse_filter == Control.MOUSE_FILTER_PASS
+		and (t4_line == null or t4_line.mouse_filter == Control.MOUSE_FILTER_PASS))
 
 	# T4-2. Claim with juice disabled shows reward synchronously.
 	Juice.enabled = false
@@ -2381,6 +2423,132 @@ static func _contract_board_checks(g: Game) -> void:
 	c._pts_total = 0
 	c._mdays = 0
 	c._mpts = 0
+
+	# --- Баг владельца 2026-10-20: клик по бумаге и доступ к нижним рядам ---
+	# B1. Клик по любому месту листа закрывает готовый контракт: раньше работал
+	# только штамп, и игрок тыкал в бумагу без ответа.
+	var b1_daily := [_mk(c, "daily", "brew", "bronze", 15)]
+	_force_set(c, b1_daily, [])
+	_clear_prog(c)
+	var b1_id := String(b1_daily[0]["id"])
+	c._set_progress(b1_id, 15)
+	board.refresh()
+	await g.get_tree().process_frame
+	var b1_card: ContractCard = dr.get_child(0) as ContractCard
+	Juice.enabled = false
+	b1_card._gui_input(_mb(MOUSE_BUTTON_LEFT, true, Vector2(20, 20)))
+	b1_card._gui_input(_mb(MOUSE_BUTTON_LEFT, false, Vector2(20, 20)))
+	Selftest.check("clicking the paper itself claims a ready contract",
+		b1_card != null and c.is_done(b1_id))
+	Juice.enabled = true
+
+	# B2. Перетаскивание поверх листа (скролл доски) закрытием не считается.
+	var b2_daily := [_mk(c, "daily", "brew", "bronze", 15)]
+	_force_set(c, b2_daily, [])
+	_clear_prog(c)
+	var b2_id := String(b2_daily[0]["id"])
+	c._set_progress(b2_id, 15)
+	board.refresh()
+	await g.get_tree().process_frame
+	var b2_card: ContractCard = dr.get_child(0) as ContractCard
+	b2_card._gui_input(_mb(MOUSE_BUTTON_LEFT, true, Vector2(20, 20)))
+	b2_card._gui_input(_mm(Vector2(20, 64)))
+	b2_card._gui_input(_mb(MOUSE_BUTTON_LEFT, false, Vector2(20, 64)))
+	Selftest.check("dragging across the paper does not claim the contract",
+		b2_card != null and not c.is_done(b2_id))
+
+	# B3. Клик по неготовому контракту ничего не выдаёт. Поппап награды от B1
+	# закрываем: иначе `_popup == null` мерил бы не этот клик, а хвост прошлого.
+	board._close_reward()
+	_clear_prog(c)
+	board.refresh()
+	await g.get_tree().process_frame
+	var b3_card: ContractCard = dr.get_child(0) as ContractCard
+	b3_card._gui_input(_mb(MOUSE_BUTTON_LEFT, true, Vector2(20, 20)))
+	b3_card._gui_input(_mb(MOUSE_BUTTON_LEFT, false, Vector2(20, 20)))
+	Selftest.check("clicking an unfinished contract claims nothing",
+		b3_card != null and not c.is_done(b2_id) and board._popup == null)
+
+	# B4. Восемь карточек на 540×960 не влезают в один экран: доска листается,
+	# и нижний недельный ряд доезжает до видимой полосы целиком.
+	var b4_daily: Array = []
+	var b4_weekly: Array = []
+	for i in range(4):
+		var bd := _mk(c, "daily", "brew", "bronze", 15)
+		bd["id"] = String(bd["id"]) + ":b%d" % i
+		b4_daily.append(bd)
+		var bw := _mk(c, "weekly", "fair", "silver", 3)
+		bw["id"] = String(bw["id"]) + ":b%d" % i
+		b4_weekly.append(bw)
+	_force_set(c, b4_daily, b4_weekly)
+	_clear_prog(c)
+	board.refresh()
+	await g.get_tree().process_frame
+	var band_top := ContractBoard.RAIL
+	var band_bottom := 960.0 - ContractBoard.RAIL - ContractBoard.RANK_H
+	Selftest.check("a full board of eight cards is taller than the view and can be scrolled",
+		board._scroll_max > 0.0)
+	board._scroll_to(0.0)
+	await g.get_tree().process_frame
+	var b4_first: Control = dr.get_child(0) as Control
+	var b4_first_rect := b4_first.get_global_rect()
+	board._scroll_to(board._scroll_max)
+	await g.get_tree().process_frame
+	var b4_last: Control = wr.get_child(3) as Control
+	var b4_last_rect := b4_last.get_global_rect()
+	Selftest.check("the first card is reachable at the top and the last weekly card at the bottom",
+		b4_first_rect.position.y >= band_top - 0.5
+		and b4_first_rect.end.y <= band_bottom + 0.5
+		and b4_last_rect.position.y >= band_top - 0.5
+		and b4_last_rect.end.y <= band_bottom + 0.5)
+
+	# B5. Колесо мыши листает доску и упирается в края.
+	board._scroll_to(0.0)
+	board._gui_input(_mb(MOUSE_BUTTON_WHEEL_DOWN, true, Vector2(270, 500)))
+	var b5_scrolled: bool = board._scroll_y > 0.0
+	board._scroll_to(board._scroll_max)
+	board._gui_input(_mb(MOUSE_BUTTON_WHEEL_DOWN, true, Vector2(270, 500)))
+	var b5_clamped_low: bool = is_equal_approx(board._scroll_y, board._scroll_max)
+	board._gui_input(_mb(MOUSE_BUTTON_WHEEL_UP, true, Vector2(270, 500)))
+	var b5_back: bool = board._scroll_y < board._scroll_max
+	board._scroll_to(0.0)
+	board._gui_input(_mb(MOUSE_BUTTON_WHEEL_UP, true, Vector2(270, 500)))
+	Selftest.check("the mouse wheel scrolls the board and clamps at both ends",
+		b5_scrolled and b5_clamped_low and b5_back and board._scroll_y == 0.0)
+
+	# B6. Перетаскивание бумаги листает доску на дельту в координатах окна.
+	# Локальная координата здесь дала бы петлю: лист сам уезжает под пальцем,
+	# поэтому position и global_position в событиях намеренно разведены.
+	board._scroll_to(0.0)
+	var b6_card: ContractCard = dr.get_child(0) as ContractCard
+	var b6_down := _mb(MOUSE_BUTTON_LEFT, true, Vector2.ZERO)
+	b6_down.global_position = Vector2(270, 600)
+	b6_card._gui_input(b6_down)
+	var b6_move := _mm(Vector2.ZERO)
+	b6_move.global_position = Vector2(270, 540)
+	b6_card._gui_input(b6_move)
+	var b6_want := minf(60.0, board._scroll_max)
+	var b6_scrolled: bool = is_equal_approx(board._scroll_y, b6_want)
+	var b6_up := _mb(MOUSE_BUTTON_LEFT, false, Vector2.ZERO)
+	b6_up.global_position = Vector2(270, 540)
+	b6_card._gui_input(b6_up)
+	Selftest.check("dragging a paper scrolls the board by the viewport delta, not the local one",
+		b6_want > 0.0 and b6_scrolled)
+	board._scroll_to(0.0)
+
+	# B7. Уехавшая за раму бумага не кликабельна: маска перехватывает ввод там,
+	# где её закрывают рельс и строка ранга.
+	var b7_top: Control = board.get_node_or_null("MaskTop") as Control
+	var b7_bottom: Control = board.get_node_or_null("MaskBottom") as Control
+	Selftest.check("paper scrolled out of view cannot be clicked behind the frame",
+		b7_top != null and b7_bottom != null
+		and b7_top.mouse_filter == Control.MOUSE_FILTER_STOP
+		and b7_bottom.mouse_filter == Control.MOUSE_FILTER_STOP
+		and b7_top.get_global_rect().end.y <= band_top + 0.5
+		and absf(b7_bottom.get_global_rect().position.y - band_bottom) <= 0.5)
+	board._scroll_to(0.0)
+	_force_set(c, [], [])
+	_clear_prog(c)
 
 	# --- Закрытие и перекрёстное закрытие ---
 	# 20 (bonus): повторный open не создаёт вторую доску.

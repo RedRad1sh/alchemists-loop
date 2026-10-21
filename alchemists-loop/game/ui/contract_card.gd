@@ -22,6 +22,9 @@ const SEAL_SECONDS := 0.18
 # Полоса тела карточки (доска v2, Task 7): между счётчиком и наградой.
 const DETAIL_TOP := 70.0
 const DETAIL_GAP := 4.0
+# Насколько можно увести курсор между нажатием и отпусканием, чтобы клик
+# всё ещё считался тапом по бумаге, а не началом перетаскивания доски.
+const TAP_SLOP := 10.0
 
 const INK := Color(0.16, 0.11, 0.07)
 const STAMP_INK := Color(0.60, 0.24, 0.20)
@@ -46,6 +49,10 @@ var _seal: TextureRect
 var _stamp: TextureButton
 var _stamp_word: Label
 var _nail: TextureRect
+var _hover_on := false
+var _pressed := false
+var _press_pos := Vector2.ZERO
+var _last_y := 0.0
 
 static func tex(fname: String) -> Texture2D:
 	return load(ASSET_DIR + fname) as Texture2D
@@ -164,7 +171,8 @@ func _build() -> void:
 	_reward.clip_text = true
 	# Строка награды ловит мышь: наведение показывает точную награду (§5.3),
 	# потому что «Быстрая варка» без процента и срока для игрока — загадка.
-	_reward.mouse_filter = Control.MOUSE_FILTER_STOP
+	# PASS, а не STOP: тултип остаётся, а hover и тап уходят бумаге.
+	_reward.mouse_filter = Control.MOUSE_FILTER_PASS
 	_reward.add_theme_color_override("font_color", INK)
 	_hang.add_child(_reward)
 
@@ -210,8 +218,6 @@ func _build() -> void:
 	_nail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_nail.texture = tex("nail_brass.png")
 	add_child(_nail)
-	mouse_entered.connect(_on_hover_enter)
-	mouse_exited.connect(_on_hover_exit)
 
 func _on_stamp_pressed() -> void:
 	Sfx.click()
@@ -243,12 +249,63 @@ func _seal_slam() -> void:
 	sh.tween_property(_hang, "scale", Vector2.ONE, 0.04)
 
 
-func _on_hover_enter() -> void:
-	_set_hover(true)
+## Наведение опрашиваем, а не слушаем mouse_entered/exited: сигналы корня
+## молчат, когда курсор встал на STOP-ребёнка (штамп, кнопка «Влить»), и лист
+## «гас» на половине своей площади. Опрос по hovered_control + подъём
+## по предкам покрывает бумагу целиком.
+func _process(_delta: float) -> void:
+	var over := _covers(_hovered_control())
+	if over == _hover_on:
+		return
+	_hover_on = over
+	_set_hover(over)
 
+func _hovered_control() -> Control:
+	var vp := get_viewport()
+	return vp.gui_get_hovered_control() if vp != null else null
 
-func _on_hover_exit() -> void:
-	_set_hover(false)
+func _covers(hc: Control) -> bool:
+	while hc != null:
+		if hc == self:
+			return true
+		hc = hc.get_parent_control()
+	return false
+
+## Тап по любому месту бумаги закрывает контракт — раньше попадание шло только
+## по штампу, и игрок тыкал в бумагу без ответа. Увод курсора дальше TAP_SLOP
+## считаем перетаскиванием доски и передаём его ей: бумага ловит ввод (STOP),
+## поэтому сама доска эти события не увидела бы, а на Android колеса нет.
+func _gui_input(ev: InputEvent) -> void:
+	var mb := ev as InputEventMouseButton
+	if mb != null and mb.button_index == MOUSE_BUTTON_LEFT:
+		if mb.pressed:
+			_pressed = true
+			_press_pos = mb.global_position
+			_last_y = mb.global_position.y
+			return
+		var was_press := _pressed
+		_pressed = false
+		if not was_press or _press_pos.distance_to(mb.global_position) > TAP_SLOP:
+			return
+		if _stamp == null or not _stamp.visible or _stamp.disabled:
+			return
+		accept_event()
+		_on_stamp_pressed()
+		return
+	var mm := ev as InputEventMouseMotion
+	if mm == null or not _pressed:
+		return
+	# Только global_position: лист сам уезжает под пальцем при прокрутке, и
+	# локальная координата дала бы петлю — сдвиг ряда снова читался бы как
+	# движение пальца и доска листала себя сама.
+	if _press_pos.distance_to(mm.global_position) <= TAP_SLOP:
+		return
+	var board := g.get_node_or_null("ContractBoard")
+	if board == null or not board.has_method("_scroll_by"):
+		return
+	accept_event()
+	board._scroll_by(_last_y - mm.global_position.y)
+	_last_y = mm.global_position.y
 
 
 ## Лист приподнимается к курсору. Под selftest и на тач-пути — без твина:
@@ -324,7 +381,8 @@ func _fill_detail(id: String, type: String) -> void:
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.add_theme_color_override("font_color", INK)
 		# Строка тела ловит мышь: у goal_day в tooltip — подсказка мира.
-		l.mouse_filter = Control.MOUSE_FILTER_STOP
+		# PASS, а не STOP: тултип остаётся, hover и тап уходят бумаге.
+		l.mouse_filter = Control.MOUSE_FILTER_PASS
 		if type == "goal_day":
 			var hint := g._contracts.day_hint()
 			if hint != "":

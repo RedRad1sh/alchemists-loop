@@ -37,11 +37,43 @@ func _ready() -> void:
 		push_error("BOARD-SHOTS: нет карточки с живым штампом")
 		get_tree().quit(1)
 		return
+	await _shot_scroll()
 	await _shot_hover()
 	await _shot_seal()
 	await _shot_reward()
 	print("BOARD-SHOTS done")
 	get_tree().quit(0)
+
+
+## Кадры багов владельца 2026-10-20: доска листается (верх/низ) и текст баффа
+## называет подсистему. Бафф внедряется через grant_buff — тот же путь, что в игре.
+func _shot_scroll() -> void:
+	_game._contracts.grant_buff("workshop_speed", 3600, 0.3)
+	_board.refresh()
+	await get_tree().process_frame
+	_board._scroll_to(0.0)
+	await get_tree().process_frame
+	await _capture("board_scroll_top.png")
+	var note := _first_note()
+	if note != null:
+		_board._on_note_pressed(note)
+		await get_tree().process_frame
+		await _capture("board_buff_text.png")
+		_board._on_note_pressed(note)
+		await get_tree().process_frame
+	_board._scroll_to(_board._scroll_max)
+	await get_tree().process_frame
+	await _capture("board_scroll_bottom.png")
+	_board._scroll_to(0.0)
+	await get_tree().process_frame
+
+
+func _first_note() -> Control:
+	for ch in _board._notes.get_children():
+		var n := ch as Control
+		if n != null:
+			return n
+	return null
 
 
 func _shot_hover() -> void:
