@@ -1081,3 +1081,162 @@ class TestAccept:
         assert _owners(s) == {"c1": "dev-b", "c2": "dev-a"}
         counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
         assert counts == {"dev-a": 1, "dev-b": 4}, counts
+
+
+def _cancel(client, device_id, order_id):
+    return client.post("/api/trade/cancel",
+                       json={"device_id": device_id, "id": order_id})
+
+
+def _gift(client, device_id, to, card="", craft=""):
+    return client.post("/api/trade/gift", json={
+        "device_id": device_id, "to": to, "card_id": card, "craft_id": craft})
+
+
+class TestCancelGift:
+    def test_offer_and_cancel_do_not_spend_limit(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        _fill_week(s, ("dev-a",), count=9)
+        for _ in range(3):
+            oid = _offer(client, "dev-a", "dev-b", give=("spark", "")).json()["id"]
+            assert _cancel(client, "dev-a", oid).status_code == 200
+        counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
+        assert counts == {"dev-a": 9}, counts                                     # кейс 4a
+
+    def test_cancel_withdraws_pending_row_only(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        r = _cancel(client, "dev-a", oid)
+        assert r.status_code == 200, r.text
+        assert r.json() == {"ok": True, "id": oid}
+        row = _rows(s, "SELECT * FROM trade_orders")[0]
+        assert row["state"] == "cancelled"
+        assert row["updated_at"] >= row["created_at"]
+        assert _owners(s) == {"c1": "dev-a", "c2": "dev-b"}      # карты не тронуты
+        assert _rows(s, "SELECT * FROM trade_counts") == []      # и лимит не тронут
+        # снятый оффер нельзя принять — тот же 404, что у несуществующего
+        r = _accept(client, "dev-b", oid)
+        assert (r.status_code, r.json()["detail"]) == (404, "not_found")
+
+    def test_cancel_error_matrix(self, tmp_path, monkeypatch):
+        """Каждый код cancel проверяется отдельно: not_maker ≠ not_pending."""
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        r = _cancel(client, "dev-b", oid)
+        assert (r.status_code, r.json()["detail"]) == (409, "not_maker")
+        r = _cancel(client, "dev-z", oid)
+        assert (r.status_code, r.json()["detail"]) == (404, "not_registered")
+        assert _cancel(client, "npc-spirit", oid).status_code == 400              # кейс 6
+        r = _cancel(client, "dev-a", 987654)
+        assert (r.status_code, r.json()["detail"]) == (404, "not_found")
+        # раллинг 3c: гейт `_TRADE_ID_MAX` переиспользуется здесь, а не «своя
+        # граница на каждую ручку». Без него bind'инг 10**30 падает в
+        # OverflowError = 500 без машинного кода (§7).
+        r = _cancel(client, "dev-a", 10 ** 30)
+        assert (r.status_code, r.json()["detail"]) == (404, "not_found")
+        assert _cancel(client, "dev-a", oid).status_code == 200
+        r = _cancel(client, "dev-a", oid)
+        assert (r.status_code, r.json()["detail"]) == (409, "not_pending")
+        assert _rows(s, "SELECT * FROM trade_orders")[0]["state"] == "cancelled"
+
+    def test_gift_moves_card_and_charges_giver_only(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00")])
+        r = _gift(client, "dev-a", "dev-b", card="spark")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["craft_id"] == "c1" and body["moved_name"] == "Искра"
+        assert body["remain"] == 9                                                # кейс 10
+        assert _owners(s) == {"c1": "dev-b"}
+        counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
+        assert counts == {"dev-a": 1}, counts          # у получателя лимит не тронут
+        col = client.get("/api/sigil/collection",
+                         params={"device_id": "dev-b"}).json()
+        assert col["cards"]["spark"]["copies"] == 1    # и копия у него ровно одна
+        row = _rows(s, "SELECT * FROM trade_orders")[0]
+        assert row["state"] == "accepted"
+        assert row["want_card_id"] == "" and row["want_craft_id"] == ""   # §6, §6.1
+
+    def test_gift_chromatic_moves_exactly_that_instance(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("x1", "", "Радуга", "2026-01-01T00:00:00"),
+                           ("p1", "spark", "Искра", "2026-01-02T00:00:00")])
+        body = _gift(client, "dev-a", "dev-b", craft="x1").json()
+        assert (body["craft_id"], body["moved_name"]) == ("x1", "Радуга")
+        assert _owners(s) == {"x1": "dev-b", "p1": "dev-a"}
+        # чужой экземпляр — не подарок: _trade_pick_row ищет его у ME
+        r = _gift(client, "dev-a", "dev-b", craft="x2")
+        assert (r.status_code, r.json()["detail"]) == (422, "card_not_owned")
+
+    def test_gift_guards(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00")])
+        _player(client, "Варя", "dev-v")
+        r = _gift(client, "dev-a", "dev-v", card="spark")
+        assert (r.status_code, r.json()["detail"]) == (404, "not_friends")        # кейс 20
+        assert _owners(s) == {"c1": "dev-a"}, "карта обязана остаться на месте"
+        assert _rows(s, "SELECT * FROM trade_orders") == []
+        r = _gift(client, "dev-a", "dev-b", card="", craft="")
+        assert (r.status_code, r.json()["detail"]) == (422, "bad_selector")       # кейс 8
+        r = _gift(client, "dev-a", "dev-a", card="spark")
+        assert (r.status_code, r.json()["detail"]) == (422, "self_deal")          # кейс 9
+        r = _gift(client, "dev-a", "dev-b", card="mist")
+        assert (r.status_code, r.json()["detail"]) == (422, "card_not_owned")     # кейс 15
+        assert _rows(s, "SELECT * FROM trade_orders") == []
+        assert _gift(client, "npc-spirit", "dev-a", card="spark").status_code == 400
+
+    def test_gift_rejects_when_receiver_holds_that_craft_id(self, tmp_path, monkeypatch):
+        """Раллинг 3d: одинаковый `craft_id` у двух игроков — не выдумка теста.
+
+        `craft_id = f"{day}_{device_id[:8]}_{index}"` (`server.py:6482`, `:6511`)
+        берёт первые 8 символов клиентского id, поэтому две легальные строки
+        (PK — пара `(device_id, craft_id)`) могут назваться одинаково, и `UPDATE`
+        переездом на такой PK дал бы `IntegrityError` = 500 вместо машинного
+        кода. Состояние собрано `_seed`'ом напрямую, потому что выловить
+        коллизию через `/api/sigil/craft` в тесте — это два игрока с общим
+        префиксом; достижимость через публичные ручки доказана ревьюером
+        (`task-4-review.md` F1, `repro/review_repro.py`).
+        `_owners()` здесь не годится: он схлопывает карту `{craft_id: device}`
+        в один ключ ровно на коллизии, поэтому проверка — явный список строк.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("K", "spark", "Искра", "2026-01-01T00:00:00")])
+        _seed(s, "dev-b", [("K", "ice", "Лёд", "2026-01-02T00:00:00")])
+        r = _gift(client, "dev-a", "dev-b", card="spark")
+        assert (r.status_code, r.json()["detail"]) == (409, "card_gone")
+        assert _rows(s, "SELECT device_id, craft_id FROM sigil_crafts"
+                        " ORDER BY device_id") == [
+            {"craft_id": "K", "device_id": "dev-a"},
+            {"craft_id": "K", "device_id": "dev-b"}], "отказ обязан быть до записи"
+        assert _rows(s, "SELECT * FROM trade_orders") == []
+        assert _rows(s, "SELECT * FROM trade_counts") == []
+
+    def test_gift_week_limit_stops_before_any_write(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00")])
+        _fill_week(s, ("dev-a",))
+        r = _gift(client, "dev-a", "dev-b", card="spark")
+        assert (r.status_code, r.json()["detail"]) == (409, "week_limit")
+        assert _owners(s) == {"c1": "dev-a"}
+        assert _rows(s, "SELECT * FROM trade_orders") == [], "строки не должно быть"
+        counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
+        assert counts == {"dev-a": 10}, counts

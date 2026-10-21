@@ -5710,6 +5710,115 @@ def trade_accept(payload: TradeIdPayload):
         conn.close()
 
 
+@app.post("/api/trade/cancel", response_model=TradeCancelResponse)
+def trade_cancel(payload: TradeIdPayload):
+    """Отзыв своего оффера. Не тратит лимит (§5.0) и не трогает карты.
+
+    Порядок проверок — от общего к частному, и он виден в тестах: чужой
+    отзыв = not_maker (409), мёртвый = not_pending (409), а не 404. В accept
+    наоборот (спека §5.2 шаг 1): там не-pending это 404 not_found, потому что
+    принимальщик не должен отличать «оффер отозвали» от «такого оффера не
+    было» — обоим ему нечего делать.
+    """
+    me = _social_caller(payload.device_id)
+    # Раллинг 3c: ровно та же проверка и ровно та же константа, что в accept.
+    # «Своя граница на каждую ручку» — это два места, где int64 может разойтись.
+    if not 1 <= payload.id <= _TRADE_ID_MAX:
+        raise HTTPException(status_code=404, detail="not_found")
+    conn = get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        _trade_registered(conn, me)
+        order = conn.execute("SELECT * FROM trade_orders WHERE id = ?",
+                             (payload.id,)).fetchone()
+        if order is None:
+            raise HTTPException(status_code=404, detail="not_found")
+        if order["maker_device"] != me:
+            raise HTTPException(status_code=409, detail="not_maker")
+        if order["state"] != "pending":
+            raise HTTPException(status_code=409, detail="not_pending")
+        cur = conn.execute(
+            "UPDATE trade_orders SET state = 'cancelled', updated_at = ?"
+            " WHERE id = ? AND state = 'pending'", (_now_iso(), payload.id))
+        if cur.rowcount != 1:
+            raise HTTPException(status_code=409, detail="not_pending")
+        conn.commit()
+        return TradeCancelResponse(ok=True, id=int(payload.id))
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.post("/api/trade/gift", response_model=TradeGiftResponse)
+def trade_gift(payload: TradeGiftPayload):
+    """Односторонняя передача без согласия получателя (спека §6).
+
+    Лимит проверяется ДО выбора карты: у подарка счётчик тратит только
+    даритель, поэтому «нет такой карты» и «лимит исчерпан» не соревнуются за
+    код, а порядок фиксирует, что при 409 week_limit в таблицы не попадает
+    ни строки, ни перемещения (test_gift_week_limit_stops_before_any_write).
+    Отсутствующий профиль получателя свёрнут в not_friends — как во всём
+    S1 (`server.py:4638`, `friend_remove`): `_social_accepted` на чужом
+    device_id вернёт False, отдельного «такого игрока нет» соц-слой не даёт.
+    """
+    me = _social_caller(payload.device_id)
+    to = _social_id(payload.to)
+    card_id, craft_id = _trade_selector(payload.card_id, payload.craft_id)
+    if to == me:
+        raise HTTPException(status_code=422, detail="self_deal")
+    conn = get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        _trade_registered(conn, me)
+        if not _social_accepted(conn, me, to):
+            raise HTTPException(status_code=404, detail="not_friends")
+        week = _week_key()
+        if _trade_week_count(conn, week, me) >= TRADE_WEEK_LIMIT:
+            raise HTTPException(status_code=409, detail="week_limit")
+        row = _trade_pick_row(conn, me, card_id, craft_id)
+        if row is None:
+            raise HTTPException(status_code=422, detail="card_not_owned")
+        give_craft = str(row["craft_id"])
+        # Раллинг 3d: целевой PK обязан быть свободен до первой записи.
+        if conn.execute("SELECT 1 FROM sigil_crafts"
+                        " WHERE device_id = ? AND craft_id = ?",
+                        (to, give_craft)).fetchone() is not None:
+            raise HTTPException(status_code=409, detail="card_gone")
+        cur = conn.execute(
+            "UPDATE sigil_crafts SET device_id = ? WHERE device_id = ? AND craft_id = ?",
+            (to, me, give_craft))
+        if cur.rowcount != 1:
+            raise HTTPException(status_code=409, detail="card_gone")
+        moved = conn.execute(
+            "SELECT llm_name FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
+            (to, give_craft)).fetchone()
+        _trade_count_up(conn, week, me)
+        now = _now_iso()
+        conn.execute(
+            "INSERT INTO trade_orders (maker_device, taker_device, give_card_id,"
+            " give_craft_id, want_card_id, want_craft_id, state, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, '', '', 'accepted', ?, ?)",
+            (me, to, card_id, craft_id, now, now))
+        remain = max(0, TRADE_WEEK_LIMIT - _trade_week_count(conn, week, me))
+        conn.commit()
+        return TradeGiftResponse(ok=True, craft_id=give_craft,
+                                 moved_name=str(moved["llm_name"] or ""),
+                                 remain=remain)
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 @app.get("/api/rating", response_model=RatingResponse)
 def rating(device_id: str = Query("", max_length=128)):
     """Рейтинг игроков: открытия, вещества, очки целей, наличие домика."""
