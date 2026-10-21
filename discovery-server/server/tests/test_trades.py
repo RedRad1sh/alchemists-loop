@@ -67,7 +67,16 @@ def _columns(conn, table):
 
 
 def _indexes(conn, table):
-    return {r["name"] for r in conn.execute("PRAGMA index_list(%s)" % table).fetchall()}
+    """Что индекс покрывает, а не как он называется: имена совпадут и при
+    разных столбцах, а живой VPS получит индекс вне планов запросов.
+    index_xinfo (столбцы по порядку + unique) — как _columns выше, сверка
+    текста DDL из sqlite_master ловила бы и формат вместо семантики."""
+    out = {}
+    for r in conn.execute("PRAGMA index_list(%s)" % table).fetchall():
+        cols = [c["name"] for c in conn.execute(
+            "PRAGMA index_xinfo(%s)" % r["name"]).fetchall() if c["key"]]
+        out[r["name"]] = (r["unique"], cols)
+    return out
 
 
 class TestSchema:
@@ -94,7 +103,7 @@ class TestSchema:
         conn = srv.get_db()
         try:
             reference = {t: _columns(conn, t) for t in TRADE_TABLES}
-            idx = {t: _indexes(conn, t) for t in TRADE_TABLES}
+            ref_idx = {t: _indexes(conn, t) for t in TRADE_TABLES}
         finally:
             conn.close()
 
@@ -108,7 +117,7 @@ class TestSchema:
         try:
             for t in TRADE_TABLES:
                 assert _columns(bare, t) == reference[t], t
-                assert _indexes(bare, t) == idx[t], t
+                assert _indexes(bare, t) == ref_idx[t], t
         finally:
             bare.close()
 
