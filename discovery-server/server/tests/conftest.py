@@ -89,6 +89,11 @@ _TEST_ENV = {
     "ALCHEMY_LETTER_GLOBAL_DAILY_LIMIT": "3000",
     "ALCHEMY_ATLAS_COOLDOWN_SEC": "60",
     "ALCHEMY_ATLAS_DAILY_LIMIT": "10",
+    # S2 обмен: TRADE_WEEK_LIMIT читается при ИМПОРТЕ server.py (int(os.environ…)),
+    # поэтому ambient-значение из продного .env уехало бы в квоты торговли прямо
+    # в момент импорта — а Task 4 жёстко утверждает remain == 9 после одного
+    # совершённого обмена.
+    "ALCHEMY_TRADE_WEEK_LIMIT": "10",
     # Валидация чеков (T22): в тестах гейт всегда выключен — продные ключи
     # проверок платежей в тесты течь не должны (тесты с включённым гейтом
     # подменяют константы srv.RECEIPT_* сами).

@@ -594,7 +594,7 @@ class TradeOfferPayload(BaseModel):
     device_id: str = Field(..., min_length=1, max_length=128)
     to: str = Field(..., min_length=1, max_length=128)
     # Пустые обе или непустые обе → 422 bad_selector (инвариант XOR, спека §4).
-    # 64 — с запасом по тем же причинам, что и max_length=2000 у body письма:
+    # 128 — с запасом по тем же причинам, что и max_length=2000 у body письма:
     # контрактный код обязан отдавать наш валидатор, а не pydantic.
     give_card_id: str = Field("", max_length=128)
     give_craft_id: str = Field("", max_length=128)
@@ -4491,8 +4491,8 @@ def _social_accepted(conn: sqlite3.Connection, a: str, b: str) -> bool:
 
 
 def _trade_registered(conn: sqlite3.Connection, device_id: str) -> None:
-    """Профиль обязателен: trade-ручки не создают игроков, как и inbox
-    (`server.py:5184`). Поднимает 404 not_registered."""
+    """Профиль обязателен: trade-ручки не создают игроков, как и `social_inbox`.
+    Поднимает 404 not_registered."""
     if conn.execute("SELECT 1 FROM players WHERE device_id = ?",
                     (device_id,)).fetchone() is None:
         raise HTTPException(status_code=404, detail="not_registered")
@@ -4549,7 +4549,7 @@ def _trade_week_count(conn: sqlite3.Connection, week: str, device_id: str) -> in
 
 
 def _trade_count_up(conn: sqlite3.Connection, week: str, device_id: str) -> None:
-    """UPSERT по образцу fair_contrib (`server.py:5707-5710`)."""
+    """UPSERT по образцу `fair_contrib` из `fair_brew`."""
     conn.execute(
         "INSERT INTO trade_counts (week, device_id, count) VALUES (?, ?, 1) "
         "ON CONFLICT(week, device_id) DO UPDATE SET count = count + 1",
@@ -4581,20 +4581,24 @@ def _trade_want_owner(order) -> str:
 def _trade_name_map(conn: sqlite3.Connection, pairs) -> dict:
     """{(device_id, craft_id): llm_name} одним запросом (two-query идиома inbox).
 
-    Фильтр по craft_id, а владелец сопоставляется в Python: sqlite-ные
-    row-value IN здесь не нужны, а `(device_id, craft_id)` в индексе PK —
-    есть, так что запрос и так покрывается.
+    Фильтр по обоим спискам: без `device_id IN (...)` в предикате нет ведущего
+    столбца индекса PK `(device_id, craft_id)`, и план запроса — SCAN sigil_crafts.
+    Пара всё равно сверяется в Python (`if key in wanted`): два IN декартовы,
+    поэтому без этой сверки чужой экземпляр с тем же craft_id утёк бы в ответ.
     """
     uniq = sorted(set(pairs))
     if not uniq:
         return {}
     ph = ",".join(["?"] * len(uniq))
+    wanted = set(uniq)
     out = {}
     for r in conn.execute(
             "SELECT device_id, craft_id, llm_name FROM sigil_crafts "
-            "WHERE craft_id IN (%s)" % ph,
-            [p[1] for p in uniq]).fetchall():
-        out[(r["device_id"], r["craft_id"])] = r["llm_name"]
+            "WHERE device_id IN (%s) AND craft_id IN (%s)" % (ph, ph),
+            [p[0] for p in uniq] + [p[1] for p in uniq]).fetchall():
+        key = (r["device_id"], r["craft_id"])
+        if key in wanted:
+            out[key] = r["llm_name"]
     return out
 
 
