@@ -1,0 +1,127 @@
+"""S2 обмен картами: оффер/принятие/отмена/подарок поверх смены владельца строки.
+
+Идиома — tests/test_social.py:36-67 (in-process TestClient + подмена DB_PATH +
+явный init_db). Фикстура process_server здесь не годится: подпроцесс не даёт
+подменить get_llm (Task 6 зовёт inbox, где Светик генерирует весточку) и
+не даёт править created_at оффера для ленивой TTL. Просрочка во всех тестах
+моделируется прямым UPDATE строки, а не _now_dt: так проверка не зависит от
+того, в какой момент запускается pytest.
+"""
+
+import os
+import sqlite3
+import sys
+
+from fastapi.testclient import TestClient
+
+SERVER_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+
+TRADE_TABLES = ("trade_orders", "trade_counts")
+
+
+class _LocalLLM:
+    """Заглушка из tests/test_social.py:31-46. Без неё `_srv()` на машине с
+    живым ключом в .env делает реальный HTTP-запрос при каждом inbox, где есть
+    триггер Светика (Task 6 зовёт inbox за бейджем)."""
+    provider = "local"
+    api_key = ""
+    models = []
+
+    def generate_spirit_message(self, context, timeout=0):
+        raise AssertionError("тест не должен звать LLM без явной подмены")
+
+    def generate_card_identity(self, *args, **kwargs):
+        raise AssertionError("тест не должен звать LLM без явной подмены")
+
+
+def _srv(tmp_path, monkeypatch, llm=_LocalLLM()):
+    sys.path.insert(0, SERVER_DIR)
+    import server as srv
+    monkeypatch.setattr(srv, "DB_PATH", str(tmp_path / "trade.db"))
+    if llm is not None:
+        monkeypatch.setattr(srv, "get_llm", lambda: llm)
+    return srv
+
+
+def _client(srv):
+    srv.init_db()
+    return TestClient(srv.app)
+
+
+def _player(client, nick, device_id):
+    r = client.post("/api/me", json={"device_id": device_id, "nick": nick})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _tables(conn):
+    return {r["name"] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+
+
+def _columns(conn, table):
+    """Форма таблицы целиком: dflt_value в сравнении обязателен, иначе DEFAULT
+    разъедется между schema.sql и миграцией молча."""
+    return [(r["name"], r["type"], r["notnull"], r["pk"], r["dflt_value"])
+            for r in conn.execute("PRAGMA table_info(%s)" % table).fetchall()]
+
+
+def _indexes(conn, table):
+    return {r["name"] for r in conn.execute("PRAGMA index_list(%s)" % table).fetchall()}
+
+
+class TestSchema:
+    def test_fresh_db_has_trade_tables(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        srv.init_db()
+        conn = srv.get_db()
+        try:
+            have = _tables(conn)
+        finally:
+            conn.close()
+        for t in TRADE_TABLES:
+            assert t in have, (t, sorted(have))
+
+    def test_migration_file_alone_creates_same_shape(self, tmp_path, monkeypatch):
+        """Свежая БД (init_db) и живая (только 003_trades.sql) совпадают.
+
+        Дублирование DDL — действующая конвенция (001_social.sql / 002_*.sql):
+        без этого копии schema.sql и миграции разъезжаются молча, а живую БД
+        правка schema.sql не касается вовсе.
+        """
+        srv = _srv(tmp_path, monkeypatch)
+        srv.init_db()
+        conn = srv.get_db()
+        try:
+            reference = {t: _columns(conn, t) for t in TRADE_TABLES}
+            idx = {t: _indexes(conn, t) for t in TRADE_TABLES}
+        finally:
+            conn.close()
+
+        mig_path = os.path.join(SERVER_DIR, "migrations", "003_trades.sql")
+        assert os.path.exists(mig_path), mig_path
+        with open(mig_path, "r", encoding="utf-8") as f:
+            ddl = f.read()
+        bare = sqlite3.connect(str(tmp_path / "bare.db"))
+        bare.row_factory = sqlite3.Row
+        bare.executescript(ddl)
+        try:
+            for t in TRADE_TABLES:
+                assert _columns(bare, t) == reference[t], t
+                assert _indexes(bare, t) == idx[t], t
+        finally:
+            bare.close()
+
+    def test_init_db_twice_registers_version_three(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        srv.init_db()
+        srv.init_db()
+        conn = srv.get_db()
+        try:
+            rows = conn.execute(
+                "SELECT version, name FROM schema_version ORDER BY version").fetchall()
+        finally:
+            conn.close()
+        names = [r["name"] for r in rows]
+        assert "003_trades.sql" in names, names
+        assert len(names) == len(set(names)), ("миграция применена дважды", names)
