@@ -842,3 +842,172 @@ class TestAccept:
         assert _accept(client, "dev-b", oid).status_code == 200                   # кейс 12
         coll = client.get("/api/sigil/collection", params={"device_id": "dev-a"}).json()
         assert "spark" not in coll["cards"] and coll["cards"]["ice"]["copies"] == 1
+
+    def test_shared_craft_id_of_two_players_is_rejected_before_first_write(
+            self, tmp_path, monkeypatch):
+        """Одинаковый craft_id у двух игроков — это 409 card_gone:taker, а не 500.
+
+        `craft_id = f"{day}_{device_id[:8]}_{index}"` (server.py:6482 для
+        каталога, :6511 для хроматика) берёт только ПЕРВЫЕ 8 символов
+        клиентского и не аутентифицированного `device_id`, а ключ у sigil_crafts
+        — пара `(device_id, craft_id)` (server.py:1332-1338). Значит два
+        аккаунта, заведённых одним клиентом через POST /api/me, законно владеют
+        строками с ОДИНАКОВЫМ craft_id, и перенос такой строки UPDATE'ом №6
+        попадает в занятый PK: `sqlite3.IntegrityError` → 500 без машинного кода,
+        чего §7 не допускает.
+
+        Достижимость — проверяемый факт, а не предположение, поэтому весь путь
+        идёт через публичные ручки: /api/me + дружба, /api/sigil/daily +
+        /api/sigil/craft в ОДИН слот одного дня обоим, /api/trade/offer,
+        /api/trade/accept. Перебор `device_id` (приватный `_generate_sigil_daily`
+        ничего не пишет в БД) лишь решает, какими id зарегистрироваться, чтобы
+        в одном слоте у maker'а оказался хроматик (его можно отдать по
+        craft_id), а у taker'а — каталожная карта (её можно попросить по
+        card_id).
+
+        Код — `card_gone:taker`, а не `:maker`: занятой PK виден на первой
+        проверке, `(me, give_craft)`, потому что строка taker'а с этим craft_id
+        стоит на своём месте. Отказ обязан остаться до первого UPDATE: обе
+        строки у своих владельцев, state = pending, trade_counts пуст.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        day = s._now_dt().date().isoformat()
+        prefix = "chroma00"            # ровно 8 символов id попадают в craft_id
+
+        maker, slot = None, None
+        for k in range(1, 20000):
+            d = "%s_%d" % (prefix, k)
+            chrom = [i for i, c in enumerate(s._generate_sigil_daily(d, day, set()))
+                     if c["is_chromatic"]]
+            if chrom:
+                maker, slot = d, chrom[0]
+                break
+        assert maker, "не найден device_id с хроматиком в оффере дня"
+
+        taker, taker_card = None, None
+        for k in range(1, 20000):
+            d = "%s_%d" % (prefix, k)
+            if d == maker:
+                continue
+            c = s._generate_sigil_daily(d, day, set())[slot]
+            if not c["is_chromatic"] and c["card_id"]:
+                taker, taker_card = d, c["card_id"]
+                break
+        assert taker, "не найден taker с каталожной картой в том же слоте"
+
+        _friends(client, maker, taker)
+
+        ids = {}
+        for dev in (maker, taker):
+            daily = client.get("/api/sigil/daily", params={"device_id": dev}).json()
+            cid = daily["crafts"][slot]["id"]
+            cr = client.post("/api/sigil/craft",
+                             json={"device_id": dev, "craft_id": cid})
+            assert cr.status_code == 200 and cr.json()["ok"] is True, cr.text
+            ids[dev] = cid
+        assert ids[maker] == ids[taker], ids              # тот самый коллидирующий id
+        shared = ids[maker]
+
+        oid = _offer(client, maker, taker, give=("", shared),
+                     want=(taker_card, "")).json()["id"]
+        r = _accept(client, taker, oid)
+        assert (r.status_code, r.json()["detail"]) == (409, "card_gone:taker"), r.text
+        # _owners здесь слеп (два одинаковых ключа), поэтому сверяются кортежи.
+        assert {(x["device_id"], x["craft_id"], x["card_id"]) for x in _rows(
+            s, "SELECT device_id, craft_id, card_id FROM sigil_crafts")} == {
+            (maker, shared, ""), (taker, shared, taker_card)}
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "pending"
+        assert _rows(s, "SELECT * FROM trade_counts") == []
+
+    def test_accept_without_taker_profile_is_not_registered(self, tmp_path, monkeypatch):
+        """`_trade_registered(conn, me)` на accept пинит код, а не декорацию.
+
+        Строка trade_orders переживает удаление аккаунта: `DELETE /api/account`
+        (server.py:4188) чистит social и per-device таблицы, а trade_orders и
+        trade_counts — нет. Так что «taker без players-строки» собирается честно:
+        оффер выставлен, а из players удалён только сам профиль. Ребро дружбы
+        при этом на месте, поэтому без проверки регистрации accept дошёл бы до
+        переноса и ответил 200 — именно это на тесте и краснеет.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        conn = sqlite3.connect(s.DB_PATH)
+        conn.execute("DELETE FROM players WHERE device_id = 'dev-b'")
+        conn.commit()
+        conn.close()
+        r = _accept(client, "dev-b", oid)
+        assert (r.status_code, r.json()["detail"]) == (404, "not_registered"), r.text
+        assert _owners(s) == {"c1": "dev-a", "c2": "dev-b"}
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "pending"
+        assert _rows(s, "SELECT * FROM trade_counts") == []
+
+    def test_accept_rejects_reserved_caller_ids(self, tmp_path, monkeypatch):
+        """`_social_caller` на accept стоит до БД: зарезервированный id → 400 (§7).
+
+        Без него accept от имени Светика или бота стал бы `404 not_found`
+        («оффера нет»), то есть потерял бы машинный код и полез бы SELECT'ом по
+        чужому device_id. Пара `id = 10**30` проверяет порядок: проверка формы
+        вызывающего обязательна ДО границы id и до `get_db()`, иначе этот вызов
+        вернул 404.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        for bad, code in (("npc-spirit", "npc"), ("bot-1", "bot"),
+                          ("   ", "bad_device_id"), ("dev-a|dev-b", "bad_device_id")):
+            r = _accept(client, bad, oid)
+            assert (r.status_code, r.json()["detail"]) == (400, code), (bad, r.text)
+        r = _accept(client, "npc-spirit", 10 ** 30)
+        assert (r.status_code, r.json()["detail"]) == (400, "npc"), r.text
+        assert _owners(s) == {"c1": "dev-a", "c2": "dev-b"}
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "pending"
+        assert _rows(s, "SELECT * FROM trade_counts") == []
+
+    def test_only_maker_at_week_limit_blocks_accept(self, tmp_path, monkeypatch):
+        """Недельный лимит считается и у maker'а: 10 у него при пустом taker'е → 409.
+
+        `test_week_limit_blocks_eleventh_action` заполняет ОБА счётчика, поэтому
+        цикл `for dev in (me, maker)` можно свести к `(me,)` и прогон останется
+        зелёным. Здесь на пределе только maker (dev-a), так что этот мутант
+        краснеет ровно на maker-половине ветки.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        _fill_week(s, ("dev-a",))                            # только maker = 10
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        r = _accept(client, "dev-b", oid)
+        assert (r.status_code, r.json()["detail"]) == (409, "week_limit"), r.text
+        assert _owners(s) == {"c1": "dev-a", "c2": "dev-b"}
+        counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
+        assert counts == {"dev-a": 10}, counts
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "pending"
+
+    def test_asymmetric_counts_separate_remain_and_peer_remain(self, tmp_path, monkeypatch):
+        """remain — счёт принявшего, peer_remain — счёт maker'а (§7).
+
+        Во всех успешных тестах стороны симметричны (по 1 переносу → 9 и 9),
+        поэтому перестановка `remain`/`peer_remain` местами не краснит ничего.
+        Здесь taker начал неделю с 3 завершённых переносов, maker — с 0: после
+        двух `_trade_count_up` это 4 и 1, то есть 6 и 9.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        _fill_week(s, ("dev-b",), count=3)                   # taker = 3, maker = 0
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        r = _accept(client, "dev-b", oid)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["remain"] == 6 and body["peer_remain"] == 9, body
+        assert _owners(s) == {"c1": "dev-b", "c2": "dev-a"}
+        counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
+        assert counts == {"dev-a": 1, "dev-b": 4}, counts

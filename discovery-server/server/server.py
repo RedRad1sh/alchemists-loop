@@ -5656,6 +5656,17 @@ def trade_accept(payload: TradeIdPayload):
             raise HTTPException(status_code=409, detail="card_gone:taker")
         give_craft = str(maker_row["craft_id"])
         want_craft = str(taker_row["craft_id"])
+        # Коллизия легальна: craft_id строится по device_id[:8], поэтому целевой
+        # PK бывает занят второй половиной этого же обмена, и UPDATE №6/№7 на
+        # таком PK бросил бы IntegrityError → 500 без машинного кода (§7).
+        # Порядок существенен: обе проверки обязаны стоять до первого UPDATE,
+        # иначе отказ перестал бы быть «нулём записей».
+        if conn.execute("SELECT 1 FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
+                        (me, give_craft)).fetchone() is not None:
+            raise HTTPException(status_code=409, detail="card_gone:taker")
+        if conn.execute("SELECT 1 FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
+                        (maker, want_craft)).fetchone() is not None:
+            raise HTTPException(status_code=409, detail="card_gone:maker")
         cur = conn.execute(
             "UPDATE sigil_crafts SET device_id = ? WHERE device_id = ? AND craft_id = ?",
             (me, maker, give_craft))
