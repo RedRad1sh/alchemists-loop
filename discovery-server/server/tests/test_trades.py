@@ -920,6 +920,76 @@ class TestAccept:
         assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "pending"
         assert _rows(s, "SELECT * FROM trade_counts") == []
 
+    def test_maker_side_collision_is_pinned_by_second_probe(self, tmp_path,
+                                                             monkeypatch):
+        """Второй проб `(maker, want_craft)` достижим отдельно, и без него — 500.
+
+        Первый проб ловит занятость PK `(me, give_craft)`. Коллизия на
+        `(maker, want_craft)` требует ДРУГОГО входа: у maker'а два слота одного
+        дня, у taker'а — только тот слот, что дублируется. Тогда PK
+        `(me, give_craft)` у taker'а свободен (первый проб молчит), а want_craft
+        уже принадлежит maker'у, и UPDATE №7 приезжает на занятый PK.
+        Проверено мутацией: с
+        удалённой второй проверкой этот путь даёт
+        `sqlite3.IntegrityError: UNIQUE constraint failed:
+        sigil_crafts.device_id, sigil_crafts.craft_id` → 500 без машинного кода,
+        чего §7 не допускает, а остальные тесты остаются зелёными.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        day = s._now_dt().date().isoformat()
+        prefix = "chroma00"
+
+        maker, give_i, want_i = None, None, None
+        for k in range(1, 40000):
+            d = "%s_%d" % (prefix, k)
+            cs = s._generate_sigil_daily(d, day, set())
+            chrom = [i for i, c in enumerate(cs) if c["is_chromatic"]]
+            cat = [i for i, c in enumerate(cs)
+                   if not c["is_chromatic"] and c["card_id"]]
+            if chrom and cat:
+                maker, give_i, want_i = d, chrom[0], cat[0]
+                break
+        assert maker, "нет device_id с хроматиком и каталогом в разных слотах"
+
+        taker, taker_card = None, None
+        for k in range(1, 40000):
+            d = "%s_%d" % (prefix, k)
+            if d == maker:
+                continue
+            c = s._generate_sigil_daily(d, day, set())[want_i]
+            if not c["is_chromatic"] and c["card_id"]:
+                taker, taker_card = d, c["card_id"]
+                break
+        assert taker, "нет taker'а с каталожной картой в коллидирующем слоте"
+
+        _friends(client, maker, taker)
+        ids = {}
+        for dev, slots in ((maker, (give_i, want_i)), (taker, (want_i,))):
+            for slot in slots:
+                daily = client.get("/api/sigil/daily",
+                                   params={"device_id": dev}).json()
+                cid = daily["crafts"][slot]["id"]
+                cr = client.post("/api/sigil/craft",
+                                 json={"device_id": dev, "craft_id": cid})
+                assert cr.status_code == 200 and cr.json()["ok"] is True, cr.text
+                ids[(dev, slot)] = cid
+        # Оба края коллизии собраны публичным крафтом, без прямых INSERT'ов:
+        # один и тот же craft_id у двух игроков, и ни одного лишнего пересечения.
+        assert ids[(maker, want_i)] == ids[(taker, want_i)]
+        assert ids[(maker, give_i)] != ids[(taker, want_i)]
+
+        oid = _offer(client, maker, taker, give=("", ids[(maker, give_i)]),
+                     want=(taker_card, "")).json()["id"]
+        r = _accept(client, taker, oid)
+        assert (r.status_code, r.json()["detail"]) == (409, "card_gone:maker"), r.text
+        assert {(x["device_id"], x["craft_id"]) for x in _rows(
+            s, "SELECT device_id, craft_id FROM sigil_crafts")} == {
+            (maker, ids[(maker, give_i)]), (maker, ids[(maker, want_i)]),
+            (taker, ids[(taker, want_i)])}
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "pending"
+        assert _rows(s, "SELECT * FROM trade_counts") == []
+
     def test_accept_without_taker_profile_is_not_registered(self, tmp_path, monkeypatch):
         """`_trade_registered(conn, me)` на accept пинит код, а не декорацию.
 
