@@ -609,3 +609,236 @@ class TestOffer:
         # стоящая ДО дедупликации. Переставить их местами — кейс покраснеет.
         r = _offer(client, "dev-a", "dev-b", give=("stone", ""), want=("ice", ""))
         assert (r.status_code, r.json()["detail"]) == (409, "too_many_open")
+
+
+def _both(s):
+    """По карте у каждого: dev-a отдаёт spark, dev-b отдаёт ice."""
+    _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00")])
+    _seed(s, "dev-b", [("c2", "ice", "Лёд", "2026-01-02T00:00:00")])
+
+
+def _accept(client, device_id, order_id):
+    return client.post("/api/trade/accept",
+                       json={"device_id": device_id, "id": order_id})
+
+
+def _fill_week(s, devices, count=10):
+    conn = sqlite3.connect(s.DB_PATH)
+    for dev in devices:
+        conn.execute("INSERT INTO trade_counts (week, device_id, count)"
+                     " VALUES (?, ?, ?)", (s._week_key(), dev, count))
+    conn.commit()
+    conn.close()
+
+
+def _stale_iso(s):
+    """created_at заведомо старше TTL **по часам сервера**.
+
+    Дата-литерал («2026-01-01») проверял бы не правило TTL, а календарь прогона:
+    он остаётся в прошлом при любом TRADE_TTL_DAYS, поэтому при подъёме константы
+    (например до 300 суток) строка перестала бы быть просроченной и кейс
+    покраснел бы из-за законной смены настройки. Здесь возраст выведен из
+    `s._now_iso()` и из самой константы, поэтому премиса «строка старше cutoff»
+    проверяема (её ассертует вызывающий тест), а не предполагается. Тот же идиом
+    уже закреплён в test_expired_pending_is_not_a_duplicate.
+    """
+    return (datetime.fromisoformat(s._now_iso())
+            - timedelta(days=s.TRADE_TTL_DAYS + 1)).isoformat()
+
+
+class TestAccept:
+    def test_swap_moves_rows_and_counts(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        r = _accept(client, "dev-b", oid)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["moved_in"] == {"craft_id": "c1", "card_id": "spark",
+                                    "llm_name": "Искра"}, body
+        assert body["moved_out"] == {"craft_id": "c2", "card_id": "ice",
+                                     "llm_name": "Лёд"}, body
+        assert _owners(s) == {"c1": "dev-b", "c2": "dev-a"}
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "accepted"
+        counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
+        assert counts == {"dev-a": 1, "dev-b": 1}, counts
+        assert body["remain"] == 9 and body["peer_remain"] == 9   # §7: число серверное
+
+    def test_double_accept_is_not_found(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        assert _accept(client, "dev-b", oid).status_code == 200
+        again = _accept(client, "dev-b", oid)
+        assert (again.status_code, again.json()["detail"]) == (404, "not_found")  # 3b
+        counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
+        assert counts == {"dev-a": 1, "dev-b": 1}, counts        # ровно один перенос
+        # maker не может принять свой же оффер (шаг 1: taker_device != me).
+        # Отдельный оффер, а не повтор spark: дубль вернул бы тот же id.
+        _seed(s, "dev-a", [("c3", "coal", "Уголь", "2026-01-03T00:00:00")])
+        oid2 = _offer(client, "dev-a", "dev-b", give=("coal", "")).json()["id"]
+        r = _accept(client, "dev-a", oid2)
+        assert (r.status_code, r.json()["detail"]) == (404, "not_found")
+
+    def test_id_out_of_sqlite_range_is_not_found(self, tmp_path, monkeypatch):
+        """`id` вне int64 и `id <= 0` — это «оффера нет», а не 500 и не 422 (§7).
+
+        `TradeIdPayload.id` — неограниченный int (pydantic 2.5 принимает и
+        10**30), а bind значения вне SQLite INTEGER бросает OverflowError из
+        sqlite3: без границы такой запрос падал бы в `except Exception` и
+        отдавал 500 вместо машинного кода. Ноль и минус SELECT отвергает и сам,
+        они здесь закрепляют, что «несуществующий id» не различает два разных
+        способа несуществования.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        for bad in (0, -1, 2 ** 63, 10 ** 30):
+            r = _accept(client, "dev-b", bad)
+            assert (r.status_code, r.json()["detail"]) == (404, "not_found"), bad
+        assert _rows(s, "SELECT id FROM trade_orders")[0]["id"] == oid
+        assert _owners(s) == {"c1": "dev-a", "c2": "dev-b"}
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "pending"
+        assert _rows(s, "SELECT * FROM trade_counts") == []
+
+    def test_maker_card_gone_leaves_everything_untouched(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        conn = sqlite3.connect(s.DB_PATH)          # maker «съел» карту в эфир
+        conn.execute("DELETE FROM sigil_crafts WHERE device_id='dev-a' AND craft_id='c1'")
+        conn.commit()
+        conn.close()
+        r = _accept(client, "dev-b", oid)
+        assert (r.status_code, r.json()["detail"]) == (409, "card_gone:maker")   # кейс 3
+        assert _owners(s) == {"c2": "dev-b"}, "у taker тоже ничего не ушло"
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "pending"
+        assert _rows(s, "SELECT * FROM trade_counts") == []
+
+    def test_taker_card_gone_is_symmetric(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        conn = sqlite3.connect(s.DB_PATH)
+        conn.execute("DELETE FROM sigil_crafts WHERE device_id='dev-b' AND craft_id='c2'")
+        conn.commit()
+        conn.close()
+        r = _accept(client, "dev-b", oid)
+        assert (r.status_code, r.json()["detail"]) == (409, "card_gone:taker")   # 3a
+        assert _owners(s) == {"c1": "dev-a"}
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "pending"
+        assert _rows(s, "SELECT * FROM trade_counts") == []
+
+    def test_week_limit_blocks_eleventh_action(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        _fill_week(s, ("dev-a", "dev-b"))
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        r = _accept(client, "dev-b", oid)
+        assert (r.status_code, r.json()["detail"]) == (409, "week_limit")         # кейс 4
+        assert _owners(s) == {"c1": "dev-a", "c2": "dev-b"}
+        counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
+        assert counts == {"dev-a": 10, "dev-b": 10}, counts
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "pending"
+        # «оффер + отмена лимит не тратят» (кейс 4a) доказывается целиком в Task 5 —
+        # там же, где появляется `/api/trade/cancel` (`test_offer_and_cancel_do_not_spend_limit`
+        # в `TestCancelGift`): здесь проверять нечего, отменять ещё нечего.
+
+    def test_expired_offer_is_409(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        stale = _stale_iso(s)
+        conn = sqlite3.connect(s.DB_PATH)
+        conn.execute("UPDATE trade_orders SET created_at = ? WHERE id = ?",
+                     (stale, oid))
+        conn.commit()
+        conn.close()
+        # премиса, а не удача по календарю: строка старше cutoff по тем же
+        # часам, из которых считается `_trade_ttl_cutoff()`.
+        assert stale < s._trade_ttl_cutoff(), (stale, s._trade_ttl_cutoff())
+        r = _accept(client, "dev-b", oid)
+        assert (r.status_code, r.json()["detail"]) == (409, "expired")            # кейс 11
+        assert _rows(s, "SELECT * FROM trade_counts") == []
+        assert _owners(s) == {"c1": "dev-a", "c2": "dev-b"}
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "pending"
+
+    def test_chromatic_swap_moves_exactly_that_instance(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("x1", "", "Радуга", "2026-01-01T00:00:00"),
+                           ("p1", "spark", "Искра", "2026-01-02T00:00:00")])
+        _seed(s, "dev-b", [("c2", "ice", "Лёд", "2026-01-03T00:00:00")])
+        oid = _offer(client, "dev-a", "dev-b", give=("", "x1")).json()["id"]
+        body = _accept(client, "dev-b", oid).json()
+        assert body["moved_in"]["craft_id"] == "x1", body
+        assert _owners(s) == {"x1": "dev-b", "p1": "dev-a", "c2": "dev-a"}
+
+    def test_foreign_craft_id_in_want_dies_at_accept(self, tmp_path, monkeypatch):
+        """Чужой экземпляр в want_craft_id.
+
+        Выставить такой оффер через /offer нельзя (у taker его нет), но строка
+        в БД — намерение, а device_id ничем не аутентифицирован (§10.1), поэтому
+        accept обязан держаться за факт владения, а не за историю создания.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        _seed(s, "dev-c", [("x2", "", "Спектр", "2026-01-04T00:00:00")])
+        conn = sqlite3.connect(s.DB_PATH)
+        conn.execute("INSERT INTO trade_orders (maker_device, taker_device,"
+                     " give_card_id, give_craft_id, want_card_id, want_craft_id,"
+                     " state, created_at, updated_at)"
+                     " VALUES ('dev-a', 'dev-b', 'spark', '', '', 'x2',"
+                     " 'pending', ?, ?)",
+                     (s._now_iso(), s._now_iso()))
+        conn.commit()
+        conn.close()
+        oid = _rows(s, "SELECT id FROM trade_orders")[0]["id"]
+        r = _accept(client, "dev-b", oid)
+        assert (r.status_code, r.json()["detail"]) == (409, "card_gone:taker")   # кейс 7
+        assert _owners(s) == {"c1": "dev-a", "c2": "dev-b", "x2": "dev-c"}
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "pending"
+        assert _rows(s, "SELECT * FROM trade_counts") == []
+
+    def test_not_friends_at_accept_time(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        r = client.post("/api/friend/remove",
+                        json={"device_id": "dev-b", "peer_device": "dev-a"})
+        assert r.status_code == 200, r.text
+        acc = _accept(client, "dev-b", oid)
+        assert (acc.status_code, acc.json()["detail"]) == (404, "not_friends")
+        assert _rows(s, "SELECT * FROM trade_counts") == []
+        assert _owners(s) == {"c1": "dev-a", "c2": "dev-b"}
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "pending"
+
+    def test_last_copy_trades_freely(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00")])
+        _seed(s, "dev-b", [("c2", "ice", "Лёд", "2026-01-02T00:00:00")])
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        assert _accept(client, "dev-b", oid).status_code == 200                   # кейс 12
+        coll = client.get("/api/sigil/collection", params={"device_id": "dev-a"}).json()
+        assert "spark" not in coll["cards"] and coll["cards"]["ice"]["copies"] == 1

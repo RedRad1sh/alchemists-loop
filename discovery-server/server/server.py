@@ -296,6 +296,11 @@ TRADE_WEEK_LIMIT = int(os.environ.get("ALCHEMY_TRADE_WEEK_LIMIT", "10"))
 TRADE_OPEN_MAX = 20        # активных pending-офферов на одного как maker (§7.1)
 TRADE_TTL_DAYS = 7         # просрочка оффера; проверяется лениво (§6.1)
 TRADE_HISTORY_MAX = 20     # строк истории в GET /api/trade/list
+# Верхняя граница `TradeIdPayload.id`: это НЕ настраиваемый параметр, а предел
+# SQLite INTEGER. id в контракте — неограниченный int (pydantic принимает и
+# 10**30), а bind значения вне int64 бросает OverflowError из sqlite3 уже
+# внутри хендлера, то есть «оффера с таким id нет» дал бы 500 вместо §7.
+_TRADE_ID_MAX = 2 ** 63 - 1
 
 SPIRIT_DEVICE = "npc-spirit"   # зарезервированный device_id Светика. Строки в
                                # players для него НЕТ: иначе он попал бы в
@@ -5588,6 +5593,102 @@ def trade_offer(payload: TradeOfferPayload):
             (me, to, give_card, give_craft, want_card, want_craft, now, now))
         conn.commit()
         return TradeOfferResponse(ok=True, id=int(cursor.lastrowid))
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.post("/api/trade/accept", response_model=TradeAcceptResponse)
+def trade_accept(payload: TradeIdPayload):
+    """Принять встречный оффер 1↔1 (спека §5.2: десять шагов под одним
+    BEGIN IMMEDIATE).
+
+    Карты не блокируются, поэтому настоящая гонка — не между двумя сделками, а
+    между оффером и любой другой рукой, тронувшей ту же карту (эфир, реагент,
+    другой обмен, админ-сброс DELETE FROM sigil_crafts WHERE device_id=?).
+    Разрешает её шаг 4/5: _trade_pick_row вернул None → честный 409 card_gone.
+    rowcount != 1 на шагах 6/7 под write-локом формально недостижим и является
+    инвариантом: он превращает «что-то пошло не так» в отказ, а не в половину
+    сделанное перемещение. Тот же смысл у AND state = 'pending' на шаге 8.
+
+    Порядок шагов — единственный защитник инвариантов trade_orders: у таблицы
+    нет ни CHECK на state, ни XOR на селекторы (§4), поэтому «не тот taker»,
+    «не pending», «просрочен» и «карты больше нет» проверяются здесь, а
+    отклонённая сделка откатывается целиком — ни одна карта не сдвинута,
+    trade_counts не тронут, state остался pending.
+    """
+    me = _social_caller(payload.device_id)
+    # Форма идентификатора проверяется до соединения: значение вне int64 дошло
+    # бы до bind'а и OverflowError в conn.execute дал бы 500 там, где контракт
+    # (§7) обещает 404 not_found. Нулевой и отрицательный id SELECT отвергает
+    # и сам — граница лишь делает «несуществующий» одинаково дешёвым.
+    if not 1 <= payload.id <= _TRADE_ID_MAX:
+        raise HTTPException(status_code=404, detail="not_found")
+    conn = get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        order = conn.execute("SELECT * FROM trade_orders WHERE id = ?",
+                             (payload.id,)).fetchone()
+        if order is None or order["state"] != "pending" or order["taker_device"] != me:
+            raise HTTPException(status_code=404, detail="not_found")
+        maker = order["maker_device"]
+        _trade_registered(conn, me)
+        if order["created_at"] < _trade_ttl_cutoff():
+            raise HTTPException(status_code=409, detail="expired")
+        if not _social_accepted(conn, me, maker):
+            raise HTTPException(status_code=404, detail="not_friends")
+        week = _week_key()
+        for dev in (me, maker):
+            if _trade_week_count(conn, week, dev) >= TRADE_WEEK_LIMIT:
+                raise HTTPException(status_code=409, detail="week_limit")
+        maker_row = _trade_pick_row(conn, maker, order["give_card_id"],
+                                    order["give_craft_id"])
+        if maker_row is None:
+            raise HTTPException(status_code=409, detail="card_gone:maker")
+        taker_row = _trade_pick_row(conn, me, order["want_card_id"],
+                                    order["want_craft_id"])
+        if taker_row is None:
+            raise HTTPException(status_code=409, detail="card_gone:taker")
+        give_craft = str(maker_row["craft_id"])
+        want_craft = str(taker_row["craft_id"])
+        cur = conn.execute(
+            "UPDATE sigil_crafts SET device_id = ? WHERE device_id = ? AND craft_id = ?",
+            (me, maker, give_craft))
+        if cur.rowcount != 1:
+            raise HTTPException(status_code=409, detail="card_gone:maker")
+        cur = conn.execute(
+            "UPDATE sigil_crafts SET device_id = ? WHERE device_id = ? AND craft_id = ?",
+            (maker, me, want_craft))
+        if cur.rowcount != 1:
+            raise HTTPException(status_code=409, detail="card_gone:taker")
+        cur = conn.execute(
+            "UPDATE trade_orders SET state = 'accepted', updated_at = ?"
+            " WHERE id = ? AND state = 'pending'", (_now_iso(), payload.id))
+        if cur.rowcount != 1:
+            raise HTTPException(status_code=409, detail="not_pending")
+        _trade_count_up(conn, week, me)
+        _trade_count_up(conn, week, maker)
+        moved_in = conn.execute(
+            "SELECT llm_name FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
+            (me, give_craft)).fetchone()
+        moved_out = conn.execute(
+            "SELECT llm_name FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
+            (maker, want_craft)).fetchone()
+        remain = max(0, TRADE_WEEK_LIMIT - _trade_week_count(conn, week, me))
+        peer_remain = max(0, TRADE_WEEK_LIMIT - _trade_week_count(conn, week, maker))
+        conn.commit()
+        return TradeAcceptResponse(
+            ok=True, id=int(payload.id),
+            moved_out=TradeMoved(craft_id=want_craft, card_id=order["want_card_id"],
+                                 llm_name=str(moved_out["llm_name"] or "")),
+            moved_in=TradeMoved(craft_id=give_craft, card_id=order["give_card_id"],
+                                llm_name=str(moved_in["llm_name"] or "")),
+            remain=remain, peer_remain=peer_remain)
     except HTTPException:
         conn.rollback()
         raise
