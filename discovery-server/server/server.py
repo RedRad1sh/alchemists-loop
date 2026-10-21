@@ -288,6 +288,15 @@ MSG_RETENTION_DAYS = 30        # глобальная уборка почты п
 MSG_KEEP_PER_PAIR = 200        # хвост переписки на пару
 MSG_PREVIEW_LEN = 60           # длина превью в инбоксе
 
+# --- S2 обмен картами ------------------------------------------------------
+# Клиент ни одно из этих чисел НЕ дублирует (урок T20): TRADE_WEEK_LIMIT —
+# регулируемый параметр владельца, он приезжает в каждом ответе, а текст отказа
+# клиент рисует из detail.
+TRADE_WEEK_LIMIT = int(os.environ.get("ALCHEMY_TRADE_WEEK_LIMIT", "10"))
+TRADE_OPEN_MAX = 20        # активных pending-офферов на одного как maker (§7.1)
+TRADE_TTL_DAYS = 7         # просрочка оффера; проверяется лениво (§6.1)
+TRADE_HISTORY_MAX = 20     # строк истории в GET /api/trade/list
+
 SPIRIT_DEVICE = "npc-spirit"   # зарезервированный device_id Светика. Строки в
                                # players для него НЕТ: иначе он попал бы в
                                # /api/rating и в поиск по нику как живой игрок.
@@ -579,6 +588,92 @@ class SocialInboxResponse(BaseModel):
     # Дефолт вычисляется в момент создания класса, поэтому FRIEND_MAX обязан
     # быть объявлен выше моделей (он стоит в блоке констант после ECHO_CAP).
     friend_limit: int = FRIEND_MAX
+
+
+class TradeOfferPayload(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    to: str = Field(..., min_length=1, max_length=128)
+    # Пустые обе или непустые обе → 422 bad_selector (инвариант XOR, спека §4).
+    # 64 — с запасом по тем же причинам, что и max_length=2000 у body письма:
+    # контрактный код обязан отдавать наш валидатор, а не pydantic.
+    give_card_id: str = Field("", max_length=128)
+    give_craft_id: str = Field("", max_length=128)
+    want_card_id: str = Field("", max_length=128)
+    want_craft_id: str = Field("", max_length=128)
+
+
+class TradeIdPayload(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    id: int
+
+
+class TradeGiftPayload(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    to: str = Field(..., min_length=1, max_length=128)
+    card_id: str = Field("", max_length=128)
+    craft_id: str = Field("", max_length=128)
+
+
+class TradeMoved(BaseModel):
+    craft_id: str = ""
+    card_id: str = ""
+    llm_name: str = ""
+
+
+class TradeOfferResponse(BaseModel):
+    ok: bool
+    id: int = 0
+    # Дубль из §7.1: повторный оффер той же карты тому же игроку не создаёт
+    # вторую строку, а возвращает существующий id.
+    existed: bool = False
+
+
+class TradeAcceptResponse(BaseModel):
+    ok: bool
+    id: int = 0
+    # Названо от лица принявшего: moved_out — то, что ушло от него (он просил),
+    # moved_in — то, что пришло (предложил maker).
+    moved_out: TradeMoved = Field(default_factory=TradeMoved)
+    moved_in: TradeMoved = Field(default_factory=TradeMoved)
+    remain: int = TRADE_WEEK_LIMIT
+    peer_remain: int = TRADE_WEEK_LIMIT
+
+
+class TradeCancelResponse(BaseModel):
+    ok: bool
+    id: int = 0
+
+
+class TradeGiftResponse(BaseModel):
+    ok: bool
+    craft_id: str = ""
+    moved_name: str = ""
+    remain: int = TRADE_WEEK_LIMIT
+
+
+class TradeListItem(BaseModel):
+    id: int
+    maker_device: str
+    taker_device: str
+    maker_nick: str = ""
+    taker_nick: str = ""
+    state: str
+    created_at: str
+    give_card_id: str = ""
+    give_craft_id: str = ""
+    give_name: str = ""
+    want_card_id: str = ""
+    want_craft_id: str = ""
+    want_name: str = ""
+
+
+class TradeListResponse(BaseModel):
+    ok: bool
+    incoming: list[TradeListItem] = []
+    outgoing: list[TradeListItem] = []
+    history: list[TradeListItem] = []
+    week_limit: int = TRADE_WEEK_LIMIT
+    remain: int = TRADE_WEEK_LIMIT
 
 
 class ProfileResponse(BaseModel):
@@ -4393,6 +4488,124 @@ def _social_edge(conn: sqlite3.Connection, a: str, b: str) -> Optional[sqlite3.R
 def _social_accepted(conn: sqlite3.Connection, a: str, b: str) -> bool:
     row = _social_edge(conn, a, b)
     return row is not None and row["state"] == "accepted"
+
+
+def _trade_registered(conn: sqlite3.Connection, device_id: str) -> None:
+    """Профиль обязателен: trade-ручки не создают игроков, как и inbox
+    (`server.py:5184`). Поднимает 404 not_registered."""
+    if conn.execute("SELECT 1 FROM players WHERE device_id = ?",
+                    (device_id,)).fetchone() is None:
+        raise HTTPException(status_code=404, detail="not_registered")
+
+
+def _trade_selector(card_id: str, craft_id: str) -> tuple:
+    """Нормализация пары селекторов по инварианту XOR (спека §4).
+
+    Хроматик опознаётся по непустому craft_id при пустом card_id — второго
+    способа «отдать экземпляр» в модели нет.
+    """
+    c = (card_id or "").strip()
+    k = (craft_id or "").strip()
+    if bool(c) == bool(k):
+        raise HTTPException(status_code=422, detail="bad_selector")
+    return c, k
+
+
+def _trade_pick_row(conn: sqlite3.Connection, owner: str, card_id: str, craft_id: str):
+    """Экземпляр карты `owner` под селектор, или None (спека §5.1).
+
+    Хроматик — ровно этот craft_id И `is_chromatic = 1`: без второго условия
+    запрос подобрал бы комплектную карту по её craft_id, и «подарить хроматик»
+    превратился бы в «подарить любую карту, если знать её id».
+    Карта вида — самая старая копия. `ORDER BY crafted_at, craft_id`: без
+    второго ключа выбор недетерминирован при одинаковом crafted_at, а
+    детерминизм нужен тестам «11-е действие → 409» и «карта ушла».
+    """
+    if craft_id:
+        return conn.execute(
+            "SELECT craft_id FROM sigil_crafts "
+            "WHERE device_id = ? AND craft_id = ? AND is_chromatic = 1",
+            (owner, craft_id)).fetchone()
+    if not card_id:
+        return None
+    return conn.execute(
+        "SELECT craft_id FROM sigil_crafts "
+        "WHERE device_id = ? AND card_id = ? "
+        "ORDER BY crafted_at, craft_id LIMIT 1",
+        (owner, card_id)).fetchone()
+
+
+def _trade_ttl_cutoff() -> str:
+    """ISO-момент, раньше которого pending-оффер считается просроченным.
+    Уборки нет (спека §6.1): это единственная проверка TTL."""
+    return (_now_dt() - timedelta(days=TRADE_TTL_DAYS)).isoformat()
+
+
+def _trade_week_count(conn: sqlite3.Connection, week: str, device_id: str) -> int:
+    row = conn.execute(
+        "SELECT count FROM trade_counts WHERE week = ? AND device_id = ?",
+        (week, device_id)).fetchone()
+    return int(row["count"]) if row is not None else 0
+
+
+def _trade_count_up(conn: sqlite3.Connection, week: str, device_id: str) -> None:
+    """UPSERT по образцу fair_contrib (`server.py:5707-5710`)."""
+    conn.execute(
+        "INSERT INTO trade_counts (week, device_id, count) VALUES (?, ?, 1) "
+        "ON CONFLICT(week, device_id) DO UPDATE SET count = count + 1",
+        (week, device_id))
+
+
+def _trade_open_count(conn: sqlite3.Connection, maker: str) -> int:
+    """Активные pending, где я — инициатор. Просроченные не считаются: они
+    уже не активны для taker, и держать их в квоте значило бы «наказывать
+    молчанием партнёра» (спека §7.1)."""
+    row = conn.execute(
+        "SELECT COUNT(*) AS c FROM trade_orders "
+        "WHERE maker_device = ? AND state = 'pending' AND created_at >= ?",
+        (maker, _trade_ttl_cutoff())).fetchone()
+    return int(row["c"])
+
+
+def _trade_give_owner(order) -> str:
+    """Кто держит give-экземпляр СЕЙЧАС. pending/cancelled — maker (карта не
+    блокируется, §5.2), accepted — taker (перешла). Это не «резерв», а способ
+    достать правильное llm_name для подписи строки списка."""
+    return order["taker_device"] if order["state"] == "accepted" else order["maker_device"]
+
+
+def _trade_want_owner(order) -> str:
+    return order["maker_device"] if order["state"] == "accepted" else order["taker_device"]
+
+
+def _trade_name_map(conn: sqlite3.Connection, pairs) -> dict:
+    """{(device_id, craft_id): llm_name} одним запросом (two-query идиома inbox).
+
+    Фильтр по craft_id, а владелец сопоставляется в Python: sqlite-ные
+    row-value IN здесь не нужны, а `(device_id, craft_id)` в индексе PK —
+    есть, так что запрос и так покрывается.
+    """
+    uniq = sorted(set(pairs))
+    if not uniq:
+        return {}
+    ph = ",".join(["?"] * len(uniq))
+    out = {}
+    for r in conn.execute(
+            "SELECT device_id, craft_id, llm_name FROM sigil_crafts "
+            "WHERE craft_id IN (%s)" % ph,
+            [p[1] for p in uniq]).fetchall():
+        out[(r["device_id"], r["craft_id"])] = r["llm_name"]
+    return out
+
+
+def _trade_nick_map(conn: sqlite3.Connection, devices) -> dict:
+    uniq = sorted(set(devices))
+    if not uniq:
+        return {}
+    ph = ",".join(["?"] * len(uniq))
+    return {r["device_id"]: r["nick"] for r in conn.execute(
+        "SELECT device_id, nick FROM players WHERE device_id IN (%s)" % ph,
+        uniq).fetchall()}
 
 
 def _social_friend_count(conn: sqlite3.Connection, device_id: str) -> int:

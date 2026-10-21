@@ -79,6 +79,22 @@ def _indexes(conn, table):
     return out
 
 
+def _seed(s, device_id, rows):
+    """rows: [(craft_id, card_id, llm_name, crafted_at), …] — собрать карты в
+    обход эндпоинта крафта (образец _seed_crafts из tests/test_sigil_api.py:236).
+    Хроматик = card_id '' → is_chromatic 1."""
+    conn = sqlite3.connect(s.DB_PATH)
+    for craft_id, card_id, name, at in rows:
+        conn.execute(
+            "INSERT OR REPLACE INTO sigil_crafts"
+            " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, crafted_at)"
+            " VALUES (?, ?, 'common', ?, ?, ?, ?)",
+            (device_id, craft_id, name, 1 if card_id == "" else 0, card_id, at),
+        )
+    conn.commit()
+    conn.close()
+
+
 class TestSchema:
     def test_fresh_db_has_trade_tables(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
@@ -134,3 +150,64 @@ class TestSchema:
         names = [r["name"] for r in rows]
         assert "003_trades.sql" in names, names
         assert len(names) == len(set(names)), ("миграция применена дважды", names)
+
+
+class TestHelpers:
+    def test_pick_row_prefers_oldest_copy_deterministically(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        _client(srv)
+        _seed(srv, "dev-a", [
+            ("c2", "spark", "Искра вторая", "2026-02-01T00:00:00"),
+            ("c1", "spark", "Искра первая", "2026-01-01T00:00:00"),
+            ("c3", "coal", "Уголь", "2026-01-05T00:00:00"),
+        ])
+        conn = srv.get_db()
+        try:
+            assert srv._trade_pick_row(conn, "dev-a", "spark", "")["craft_id"] == "c1"
+            assert srv._trade_pick_row(conn, "dev-a", "mist", "") is None
+            assert srv._trade_pick_row(conn, "dev-b", "spark", "") is None
+        finally:
+            conn.close()
+
+    def test_pick_row_chromatic_only_that_instance(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        _client(srv)
+        _seed(srv, "dev-a", [("x1", "", "Хроматик", "2026-01-01T00:00:00")])
+        _seed(srv, "dev-b", [("x1", "", "Чужой хроматик", "2026-01-01T00:00:00")])
+        conn = srv.get_db()
+        try:
+            assert srv._trade_pick_row(conn, "dev-a", "", "x1")["craft_id"] == "x1"
+            # обычная карта по чужому craft_id не подбирается: ветка требует
+            # is_chromatic = 1, иначе «хроматик» украдал бы комплектные копии.
+            _seed(srv, "dev-a", [("p1", "spark", "Искра", "2026-01-02T00:00:00")])
+            assert srv._trade_pick_row(conn, "dev-a", "", "p1") is None
+        finally:
+            conn.close()
+
+    def test_selector_enforces_xor_invariant(self, tmp_path, monkeypatch):
+        from fastapi import HTTPException
+        srv = _srv(tmp_path, monkeypatch)
+        assert srv._trade_selector("spark", "") == ("spark", "")
+        assert srv._trade_selector("", "x1") == ("", "x1")
+        for bad in (("spark", "x1"), ("", ""), ("  ", " ")):
+            try:
+                srv._trade_selector(bad[0], bad[1])
+                assert False, bad
+            except HTTPException as e:
+                assert (e.status_code, e.detail) == (422, "bad_selector"), bad
+
+    def test_week_counter_upsert_and_ttl_cutoff(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        _client(srv)
+        conn = srv.get_db()
+        try:
+            assert srv._trade_week_count(conn, "2026-W43", "dev-a") == 0
+            srv._trade_count_up(conn, "2026-W43", "dev-a")
+            srv._trade_count_up(conn, "2026-W43", "dev-a")
+            conn.commit()
+            assert srv._trade_week_count(conn, "2026-W43", "dev-a") == 2
+            assert srv._trade_week_count(conn, "2026-W44", "dev-a") == 0
+            # cutoff строго раньше «сейчас» на TRADE_TTL_DAYS суток
+            assert srv._trade_ttl_cutoff() < srv._now_iso()
+        finally:
+            conn.close()
