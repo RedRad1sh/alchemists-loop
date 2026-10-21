@@ -95,6 +95,11 @@ _load_dotenv()
 # Уменьшите через LLM_MAX_ATTEMPTS, чтобы недоступная LLM отваливалась быстрее.
 MAX_ATTEMPTS = int(os.environ.get("LLM_MAX_ATTEMPTS", "3"))
 
+# generate_card_identity вызывается внутри ритуала крафта (игрок ждёт), поэтому
+# потолка попыток здесь меньше, чем у генерации веществ: основная модель + одна
+# запасная. Настраивается тем же окружением, что и остальной бюджет LLM.
+IDENTITY_ATTEMPTS = int(os.environ.get("LLM_IDENTITY_ATTEMPTS", "2"))
+
 # Дефолтный пул бесплатных моделей OpenRouter. Список free-моделей регулярно
 # меняется: сверяться с https://openrouter.ai/api/v1/models (фильтр ":free").
 # Актуально на 2026-09-11. Ротация размазывает лимиты. Если какая-то модель
@@ -232,9 +237,10 @@ description — одна короткая фраза на русском (до 2
 имени результата в начале. Пример для Огонь+Вода: "Вода, вскипевшая под жаром,
 поднялась в воздух невидимым дыханием."
 
-Ставь combinable=true, только если у двух входных понятий есть прямой,
-общеизвестный, одношаговый результат, непосредственно объяснимый ОБОИМИ
-понятиями. Допустимые механизмы:
+Ставь combinable=true, если у двух входных понятий есть понятный одношаговый
+результат, объяснимый ОБОИМИ понятиями. Прямая и общеизвестная связь — лучший
+вариант, но не единственный: бытовая, ироничная или поэтическая связь тоже
+годится, если оба входа в ней реально участвуют. Допустимые механизмы:
 - construction — части образуют целое или конструкцию:
   Кирпич+Кирпич=Стена, Кирпич+Стена=Дом, Стена+Стена=Комната;
 - group — два объекта образуют пару, группу или множество:
@@ -258,8 +264,9 @@ description — одна короткая фраза на русском (до 2
    (Стена+Стена=Ртуть — ЗАПРЕЩЕНО).
 6. Отсылки разрешены, только если сильно оправданы (см. механизм reference).
    Слабая или натянутая отсылка — не повод: верни combinable=false.
-7. Сомневаешься — верни {"combinable": false}. Честный отказ лучше натянутого
-   результата.
+7. Решает тест на удаление (правило 2), а не сомнения: если результат объясняется
+   ОБОИМИ входами и исчезает при замене любого из них — {"combinable": true}.
+   {"combinable": false} — только когда объяснения обоими входами нет вовсе.
 8. name — конкретное русское слово или словосочетание из 1-4 слов, именительный
    падеж, только кириллица и пробелы, с заглавной буквы, БЕЗ дефисов, цифр и
    латиницы.
@@ -272,20 +279,20 @@ description — одна короткая фраза на русском (до 2
 Примеры ответов:
 Кирпич+Кирпич -> {"combinable": true, "name": "Стена", "glyph": "wall", "description": "Кирпичи, уложенные в ряд, стали преградой.", "tag": "камень"}
 Огонь+Вода    -> {"combinable": true, "name": "Пар", "glyph": "steam", "description": "Вода, вскипевшая под жаром, поднялась в воздух.", "tag": "вода"}
-Камень+Камень -> {"combinable": false}
+Камень+Камень -> {"combinable": true, "name": "Куча камней", "glyph": "cluster(5)", "description": "Два валуна, легшие рядом, сложились в небрежный холмик.", "tag": "камень"}
 Птица+Пепел   -> {"combinable": false}
 """
 
 # Промпт отдельного этапа семантической проверки кандидата.
 VALIDATOR_PROMPT = """\
-Ты — строгий проверяющий для игры-алхимии. Даны два вещества и кандидат-результат.
-Ответь {"valid": true}, только если результат — САМЫЙ очевидный и непосредственно
-объясним ОБОИМИ входными веществами: прямой физический/природный результат,
-очевидное построение или взаимодействие, естественная пара/группа. Отсылка к
-поп-культуре, игре, мему или музыке допустима, только если ОБА вещества напрямую
-и без натяжек указывают на неё и результат — каноническое имя отсылки.
-Если результат натянут, связан в основном с одним веществом, требует цепочки
-ассоциаций или натянутой отсылки — {"valid": false}.
+Ты — проверяющий для игры-алхимии. Даны два вещества и кандидат-результат.
+Ответь {"valid": true}, если результат разумно объясним обоими входными
+веществами: прямое взаимодействие, естественная пара/группа, характерное
+свойство или известная связь. Допустимы и неожиданные, но осмысленные сочетания
+(ирония, поэзия, бытовые связи), если оба вещества реально участвуют в смысле.
+Отсылка к поп-культуре/игре допустима, если оба вещества указывают на неё.
+Грубый мусор — случайная склейка имён, результат без всякой связи с входными —
+{"valid": false}. Если есть хоть какое-то осмысленное объяснение — склоняйся к true.
 Верни ровно один JSON-объект и ничего больше.
 """
 
@@ -299,6 +306,17 @@ SEMANTIC_FEEDBACK = (
     "Предыдущий кандидат «%s» семантически не подходит (%s). "
     "Выбери другой, более очевидный результат, непосредственно объяснимый ОБОИМИ веществами. "
     "Если подходящего результата нет — {\"combinable\": false}."
+)
+
+# Модель ответила «не сочетается» — просим пересмотреть: в алхимии почти у
+# любой пары есть осмысленная связь, отказ — только при полном отсутствии.
+COMBINABLE_FEEDBACK = (
+    "Ты ответил, что «%s» и «%s» не сочетаются. Подумай ещё раз: почти у "
+    "любых двух веществ в алхимии есть естественная или поэтическая связь "
+    "(взаимодействие, свойство, пара, отсылка). Если найдёшь осмысленный "
+    "результат, объяснимый ОБОИМИ веществами, — верни {\"combinable\": true, "
+    "\"name\": \"...\"}. {\"combinable\": false} — только если связь "
+    "действительно отсутствует."
 )
 
 # Письмо Светика (v27): короткий уютный намёк-загадка на заданную пару.
@@ -485,7 +503,25 @@ class LLMGenerator:
         self.timeout = timeout if timeout is not None else float(os.environ.get("LLM_TIMEOUT", "30"))
         raw = models if models is not None else os.environ.get("LLM_MODELS", DEFAULT_MODELS)
         self.models = [m.strip() for m in raw.split(",") if m.strip()]
-        self._rot = 0
+        # Раздельные модели для генератора и валидатора: первая из LLM_MODELS —
+        # генератор, вторая (если есть) — валидатор. Удобно: генератор можно
+        # сделать креативнее/быстрее, валидатор — строже и надёжнее.
+        # Практика: mistralai/mistral-nemo хорошо подходит и для генератора,
+        # и для валидатора этой логики (генерит осмысленные абстракции вроде
+        # «Сознание»/«Амулет», rechняет только по делу) — проверено при сборке
+        # «Магии» цепочкой крафтов (2026-10-06).
+        self._gen_model: str = self.models[0] if self.models else ""
+        self._valid_model: str = self.models[1] if len(self.models) > 1 else self._gen_model
+
+    def _gen_chain(self) -> list[str]:
+        """Модели для генерации: основная первой, остальные — бэкапы.
+
+        Роль закреплена за models[0] (и это же обещает .env.example: «первая
+        модель — основная, остальные подключаются при 429/5xx/сети»), но
+        закрепление роли не означает закрепления попытки: 403 на основной
+        модели иначе съедал все MAX_ATTEMPTS, и запасная не вызывалась никогда.
+        """
+        return [self._gen_model] + [m for m in self.models if m != self._gen_model]
 
     def available(self) -> bool:
         if self.provider in ("off", ""):
@@ -521,8 +557,10 @@ class LLMGenerator:
                  a_name, b_name, self.provider, ", ".join(self.models))
         feedback = ""
         errors: list[str] = []
+        chain = self._gen_chain()
+        refused = False
         for attempt in range(MAX_ATTEMPTS):
-            model = self.models[(self._rot + attempt) % len(self.models)]
+            model = chain[attempt % len(chain)]
             try:
                 raw = self._call_once(model, a_name, b_name, feedback)
             except LLMError as e:
@@ -540,10 +578,15 @@ class LLMGenerator:
                 errors.append(f"{model}: ответ не соответствует формату")
                 continue
             if valid.get("combinable") is False:
-                self._rot = (self._rot + attempt + 1) % len(self.models)
-                log.info("пара «%s» + «%s»: модель решила «не сочетается» (%.1fs)",
+                # Модель сказала «не сочетается» — НЕ приговор: повторяем с
+                # инструкцией поискать осмысленную связь. Отказ фиксируем
+                # только если ВСЕ попытки сказали «нет».
+                log.info("пара «%s» + «%s»: модель решила «не сочетается», пробую ещё (%.1fs)",
                          a_name, b_name, time.time() - t_start)
-                return {"combinable": False}
+                feedback = COMBINABLE_FEEDBACK % (a_name, b_name)
+                errors.append(f"{model}: combinable=false")
+                refused = True
+                continue
 
             name = valid["name"]
             ok, reason = self._semantic_validate(name, a_name, b_name)
@@ -551,7 +594,6 @@ class LLMGenerator:
                 # кандидат совпал с ингредиентом (огонь+уголь=уголь): ретраи
                 # бессмысленны — отдаём как есть, сервер привяжет пару
                 # к существующему веществу по имени
-                self._rot = (self._rot + attempt + 1) % len(self.models)
                 log.info("пара «%s» + «%s» → «%s» (совпал с ингредиентом, без ретраев)",
                          a_name, b_name, name)
                 return _with_flavor({"combinable": True, "name": name}, valid)
@@ -562,10 +604,18 @@ class LLMGenerator:
                 errors.append(f"{model}: кандидат «{name}» отклонён ({reason})")
                 continue
 
-            self._rot = (self._rot + attempt + 1) % len(self.models)
             log.info("пара «%s» + «%s» → «%s» (модель %s, %.1fs)",
                      a_name, b_name, name, model, time.time() - t_start)
             return _with_flavor({"combinable": True, "name": name}, valid)
+
+        if refused:
+            # Модель ответила «не сочетается» и ни одна перепроверка не
+            # переубедила. Это решение, а не технический сбой: сервер обязан
+            # записать rejected_pairs, иначе пара останется кандидатом и
+            # каждый новый вызов будет платить те же MAX_ATTEMPTS заново.
+            log.info("пара «%s» + «%s»: отказ подтверждён (%d попыток, %.1fs)",
+                     a_name, b_name, MAX_ATTEMPTS, time.time() - t_start)
+            return {"combinable": False}
 
         # Ни одна модель не дала валидного ответа (сеть/429/битый формат).
         # Это технический сбой: НЕ помечаем пару как «не сочетается» — она
@@ -596,8 +646,9 @@ class LLMGenerator:
         log.info("намёк на «%s» + «%s»: генерирую", a_name, b_name)
         feedback = ""
         errors: list[str] = []
+        chain = self._gen_chain()
         for attempt in range(MAX_ATTEMPTS):
-            model = self.models[(self._rot + attempt) % len(self.models)]
+            model = chain[attempt % len(chain)]
             try:
                 raw = self._call_hint_once(model, a_name, b_name, feedback)
             except LLMError as e:
@@ -610,7 +661,6 @@ class LLMGenerator:
                 feedback = HINT_FORMAT_FEEDBACK
                 errors.append(f"{model}: ответ не соответствует формату")
                 continue
-            self._rot = (self._rot + attempt + 1) % len(self.models)
             log.info("намёк на «%s» + «%s» готов (модель %s, %.1fs)",
                      a_name, b_name, model, time.time() - t_start)
             return valid
@@ -632,20 +682,23 @@ class LLMGenerator:
         if not self.api_key or not self.models:
             return self._template_identity(ingredient_names, rarity)
 
-        # Одна попытка LLM с коротким таймаутом: ритуал крафта не должен
-        # ждать 3 ретрая (qwen локальная часто отвечает не по формату).
+        # Потолок попыток для ритуала крафта: основная модель + одна запасная.
+        # Три полноценных ретрая здесь лишние (qwen локальная часто отвечает не
+        # по формату), но и одна попытка на одной модели не оставляла игроку
+        # ничего, кроме шаблона, если у основной модели 403/429.
         t_start = time.time()
         log.info("identity для хроматика (ингредиенты: %s): генерирую",
                  ", ".join(ingredient_names))
         errors: list[str] = []
-        for attempt in range(1):
-            model = self.models[(self._rot + attempt) % len(self.models)]
+        chain = self._gen_chain()
+        for attempt in range(min(IDENTITY_ATTEMPTS, len(chain))):
+            model = chain[attempt]
             try:
                 raw = self._call_identity_once(model, ingredient_names, rarity)
             except LLMError as e:
                 log.warning("identity: %s → %s", model, e)
                 errors.append(f"{model}: {e}")
-                break
+                continue
             try:
                 data = _extract_json(raw)
                 name = str(data.get("name", "")).strip()
@@ -655,8 +708,7 @@ class LLMGenerator:
             except Exception:
                 log.warning("identity: %s → ответ не по формату", model)
                 errors.append(f"{model}: не по формату")
-                break
-            self._rot = (self._rot + attempt + 1) % len(self.models)
+                continue
             log.info("identity готов (модель %s, %.1fs)", model, time.time() - t_start)
             return {"name": name[:80], "lore": lore[:400]}
         log.warning("identity: не удался (%.1fs): %s; шаблон-фолбэк",
@@ -701,6 +753,91 @@ class LLMGenerator:
         except Exception as e:
             raise LLMError(f"битый ответ: {e}") from e
         log.info("IDENTITY-RAW (id=%s): %.400s", model, content or "")
+        return content
+
+    # ------------------------------------------------------------------
+    def generate_spirit_message(self, context: dict, timeout: int = 0) -> dict:
+        """Весточка Светика: {"body": "..."} или {} (сервер уходит на шаблон).
+
+        Одна попытка и короткий таймаут — весточка генерируется внутри
+        GET /api/social/inbox, и игрок не должен ждать ретраев. Форма метода
+        повторяет generate_card_identity (тот же провайдер-гейт, тот же
+        _extract_json, та же ротация self._rot).
+        """
+        if self.provider in ("off", "", "mock", "local"):
+            return {}
+        if not self.api_key or not self.models:
+            return {}
+        t_start = time.time()
+        model = self.models[self._rot % len(self.models)]
+        try:
+            raw = self._call_spirit_once(model, context, timeout)
+        except LLMError as e:
+            log.warning("spirit: %s → %s", model, e)
+            return {}
+        try:
+            data = _extract_json(raw)
+            body = str(data.get("body", "")).strip()
+            if not body:
+                raise ValueError("пустой body")
+        except Exception:
+            log.warning("spirit: %s → ответ не по формату", model)
+            return {}
+        self._rot = (self._rot + 1) % len(self.models)
+        log.info("spirit готов (модель %s, %.1fs)", model, time.time() - t_start)
+        return {"body": body}
+
+    def _call_spirit_once(self, model: str, context: dict, timeout: int = 0) -> str:
+        """Один вызов модели за весточку; вернуть сырой текст (или LLMError)."""
+        nick = str(context.get("nick", "")).strip() or "друг"
+        weekday = str(context.get("weekday", "")).strip()
+        detail = str(context.get("trigger_detail", "")).strip()
+        trigger = str(context.get("trigger_id", "")).strip()
+        reason = {
+            "return": "игрок давно не заходил и вот вернулся",
+            "guest": "в его дом сегодня заглянул гость: " + (detail or "кто-то"),
+            "vein_find": "сегодня он нашёл новое сочетание стихий ("
+                         + (detail or "1") + " шт.)",
+            "sigil_milestone": "сегодня он заявил комплект печатей: " + (detail or ""),
+            "sigil_craft": "сегодня он закрепил карту: " + (detail or "новую"),
+            "first_brew": "сегодня у него впервые получился резонанс варки",
+        }.get(trigger, "в лаборатории обычный день")
+        messages = [
+            {"role": "system", "content":
+                "Ты — Светик, маленький добрый дух алхимической лаборатории. "
+                "Отвечай строго JSON. Пиши по-русски, тепло и коротко: 1-2 "
+                "предложения, не длиннее 200 символов, без переводов строк. "
+                "Не давай советов о реальной жизни, здоровье, деньгах и "
+                "отношениях. Не повторяй имя игрока больше одного раза."},
+            {"role": "user", "content":
+                "Сегодня " + (weekday or "обычный день") + ". Игрок " + nick +
+                ": " + reason + ". Скажи ему одну короткую добрую весточку. "
+                'Формат: {"body": "..."}'},
+        ]
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0.9,
+            "max_tokens": 128,
+            "max_completion_tokens": 128,
+            "reasoning_effort": "none",
+            "response_format": {"type": "json_object"},
+        }
+        url, headers = self._endpoint(model)
+        try:
+            r = requests.post(url, json=payload, headers=headers,
+                              timeout=(timeout or self.timeout))
+        except Exception as e:
+            raise LLMError(f"сеть: {e}") from e
+        if r.status_code != 200:
+            text = (r.text or "")[:200].strip()
+            raise LLMError(f"HTTP {r.status_code}: {text}")
+        try:
+            envelope = r.json()
+            content = envelope["choices"][0]["message"]["content"]
+        except Exception as e:
+            raise LLMError(f"битый ответ: {e}") from e
+        log.info("SPIRIT-RAW (id=%s): %.400s", model, content or "")
         return content
 
     def _template_identity(self, ingredient_names: list[str], rarity: str) -> dict:
@@ -785,14 +922,14 @@ class LLMGenerator:
             return True, ""
 
         user_text = f"Вещества: «{a_name}» и «{b_name}». Кандидат: «{name}»."
-        for model in self.models:
+        for model in [self._valid_model]:
             payload = {
                 "model": model,
                 "messages": [
                     {"role": "system", "content": VALIDATOR_PROMPT},
                     {"role": "user", "content": user_text},
                 ],
-                "temperature": 0.2,
+                "temperature": 0.9,
                 "max_tokens": 512,
                 "max_completion_tokens": 512,
                 "reasoning_effort": "none",
@@ -832,7 +969,7 @@ class LLMGenerator:
         payload = {
             "model": model,
             "messages": messages,
-            "temperature": 0.2,
+            "temperature": 0.9,
             "max_tokens": 512,
             "max_completion_tokens": 512,
             "reasoning_effort": "none",
@@ -846,15 +983,24 @@ class LLMGenerator:
         # Часть провайдеров не умеет response_format=json_object, reasoning-поля
         # (max_completion_tokens/reasoning_effort) или заваливает JSON-валидацию
         # (400 json_validate_failed) → повторяем в «совместимом» виде без них.
-        if r.status_code == 400 and any(
+        # 503 «не осталось провайдеров после фильтрации параметров» — та же
+        # причина: прокси не находит провайдера с такими параметрами. Формулировка
+        # приходит и по-русски, и по-английски, поэтому ключи списки двух сторон.
+        if r.status_code in (400, 503) and any(
             key in r.text.lower()
-            for key in ("response_format", "json", "reasoning", "max_tokens", "unsupported")
+            for key in ("response_format", "json", "reasoning", "max_tokens", "unsupported",
+                        "провайдер", "фильтрац",
+                        "provider", "filter", "endpoint", "not supported", "does not support")
         ):
-            log.info("%s: 400 (%s…) — повторяю в совместимом виде",
-                     model, r.text.strip()[:80].replace("\n", " "))
+            log.info("%s: %s (%s…) — повторяю в совместимом виде",
+                     model, r.status_code, r.text.strip()[:80].replace("\n", " "))
             payload.pop("response_format", None)
             payload.pop("reasoning_effort", None)
+            # Оба лимитных поля: провайдеры называют то же ограничение то
+            # max_tokens, то max_completion_tokens. Снять только второе —
+            # оставить в ретрае причину, из-за которой первый запрос и упал.
             payload.pop("max_completion_tokens", None)
+            payload.pop("max_tokens", None)
             try:
                 r = requests.post(url, json=payload, headers=headers, timeout=self.timeout)
             except requests.RequestException as e:
@@ -920,6 +1066,7 @@ class LLMGenerator:
 def _user_prompt(a_name: str, b_name: str) -> str:
     return (
         f"Соедини «{a_name}» и «{b_name}».\n"
-        "Если очевидного, непосредственно объяснимого обоими веществами результата нет — "
-        '{"combinable": false}.'
+        "Если есть осмысленный, объяснимый обоими веществами результат — "
+        'верни его ({"combinable": true, ...}). Откажи ({"combinable": false}) '
+        "только если связь между ними действительно отсутствует."
     )

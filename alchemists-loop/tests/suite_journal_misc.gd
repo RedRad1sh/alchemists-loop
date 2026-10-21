@@ -1584,6 +1584,12 @@ static func _no_modal_visible(g: Game) -> bool:
 		return false
 	if g._home._house_popup != null and g._home._house_popup.visible:
 		return false
+	if g._social_ui != null and g._social_ui._confirm != null and g._social_ui._confirm.visible:
+		return false
+	if g._social_ui != null and g._social_ui._peer != "":
+		return false
+	if g._social_ui != null and g._social_ui._screen != null and g._social_ui._screen.visible:
+		return false
 	if g._home._house_screen != null and g._home._house_screen.visible:
 		return false
 	return true

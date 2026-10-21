@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+  <!-- badge_author — золотой ✨ (автор первооткрытия) -->
+  <circle cx="12" cy="12" r="11" fill="#E6BD6B" stroke="#7A5A1C" stroke-width="1"/>
+  <path d="M12 6 L13.5 10.5 L18 12 L13.5 13.5 L12 18 L10.5 13.5 L6 12 L10.5 10.5 Z" fill="#FFF4D1" stroke="#7A5A1C" stroke-width="1.2"/>
+</svg>

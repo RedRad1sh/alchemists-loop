@@ -19,6 +19,7 @@ import os
 import re
 import sys
 import time
+import unicodedata
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
@@ -132,8 +133,8 @@ except ValueError:
 # в клиентской экономике. Кэшированные/curated ответы лимит не расходуют.
 # Квота резервируется на сервере по ФАКТУ обращения к генератору (см.
 # _generate_for_pair), а не по клиентскому флагу experiment.
-EXPERIMENT_COOLDOWN_SEC = float(os.environ.get("ALCHEMY_EXPERIMENT_COOLDOWN_SEC", "5"))
-EXPERIMENT_DAILY_LIMIT = int(os.environ.get("ALCHEMY_EXPERIMENT_DAILY_LIMIT", "200"))
+EXPERIMENT_COOLDOWN_SEC = float(os.environ.get("ALCHEMY_EXPERIMENT_COOLDOWN_SEC", "0.5"))
+EXPERIMENT_DAILY_LIMIT = int(os.environ.get("ALCHEMY_EXPERIMENT_DAILY_LIMIT", "500"))
 EXPERIMENT_GLOBAL_DAILY_LIMIT = int(os.environ.get("ALCHEMY_EXPERIMENT_GLOBAL_DAILY_LIMIT", "10000"))
 # Письма Светика — отдельный дневной бюджет LLM-вызовов (не смешивать с
 # экспериментами): генерация намёка тоже стоит денег.
@@ -271,6 +272,30 @@ def _accrual_ceiling(elapsed: float, declared_rate: float) -> float:
     return elapsed * rate
 # При недоступности LLM решение НЕ фиксируется: пара остаётся кандидатом,
 # её можно будет сгенерировать позже (никаких «пулов» произвольных имён).
+
+# ---------------------------------------------------------------------------
+# S1 «Друзья и переписка»: серверные лимиты.
+# Клиент их НЕ дублирует (урок T20 «тексты экономики из констант»): клиент
+# получает только факт отказа и рисует текст из detail, а число friend_limit
+# приезжает в ответе GET /api/social/inbox.
+# ---------------------------------------------------------------------------
+
+FRIEND_MAX = 50                # принятых рёбер на игрока, Светик не в счёт
+FRIEND_PENDING_OUT_MAX = 20    # исходящих заявок в ожидании
+MSG_MAX_LEN = 500              # символов в теле сообщения
+MSG_PER_DAY = 50               # исходящих в сутки на игрока
+MSG_RETENTION_DAYS = 30        # глобальная уборка почты по возрасту
+MSG_KEEP_PER_PAIR = 200        # хвост переписки на пару
+MSG_PREVIEW_LEN = 60           # длина превью в инбоксе
+
+SPIRIT_DEVICE = "npc-spirit"   # зарезервированный device_id Светика. Строки в
+                               # players для него НЕТ: иначе он попал бы в
+                               # /api/rating и в поиск по нику как живой игрок.
+SPIRIT_NICK = "Светик"         # витрина: возвращается константой, не из players
+SPIRIT_RETURN_DAYS = 3         # триггер «return»: дней с последнего inbox
+SPIRIT_LLM_TIMEOUT = 8         # секунд на генерацию; больше — фолбэк на шаблон
+SPIRIT_LLM_PER_DAY_GLOBAL = 200  # глобальный суточный потолок LLM-весточек
+SPIRIT_BODY_MAX = 200          # жёсткая длина тела весточки после чистки
 
 # Ежедневная цель: целевой ингредиент дня. Цель личная — награду получает
 # первое закрытие цели этим устройством за день; от дня фиксируется только
@@ -445,6 +470,115 @@ class HouseVisitResponse(BaseModel):
     ok: bool
     found: bool = True
     visits_week: int = 0
+
+
+# ---------------------------------------------------------------------------
+# S1 «Друзья и переписка»: модели
+# ---------------------------------------------------------------------------
+
+class SocialPeer(BaseModel):
+    device_id: str
+    nick: str
+    avatar: dict = {}
+    last_seen: str = ""
+
+
+class FriendRequestPayload(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    target_nick: str = Field(..., min_length=1, max_length=64)
+
+
+class FriendRequestResponse(BaseModel):
+    ok: bool
+    state: str
+    peer: SocialPeer
+
+
+class FriendRespondPayload(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    requester_device: str = Field(..., min_length=1, max_length=128)
+    accept: bool
+
+
+class FriendRespondResponse(BaseModel):
+    ok: bool
+    accepted: bool
+    peer: SocialPeer
+
+
+class FriendPeerPayload(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    peer_device: str = Field(..., min_length=1, max_length=128)
+
+
+class FriendBlockPayload(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    target_device: str = Field(..., min_length=1, max_length=128)
+
+
+class SocialOkResponse(BaseModel):
+    ok: bool
+
+
+class MessageItem(BaseModel):
+    id: int
+    from_me: bool
+    body: str
+    sent_at: str
+
+
+class MessagesResponse(BaseModel):
+    ok: bool
+    messages: list[MessageItem] = []
+
+
+class MessageSendPayload(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    peer_device: str = Field(..., min_length=1, max_length=128)
+    # 2000 намеренно больше MSG_MAX_LEN: иначе pydantic отдаст свой 422 вместо
+    # контрактного 400 too_long, а клиент обязан получить код из таблицы §5.
+    body: str = Field(..., max_length=2000)
+
+
+class MessageSendResponse(BaseModel):
+    ok: bool
+    id: int
+    sent_at: str
+
+
+class InboxFriend(BaseModel):
+    device_id: str
+    nick: str
+    avatar: dict = {}
+    last_seen: str = ""
+    unread: int = 0
+    last_msg_at: str = ""
+    last_msg_preview: str = ""
+
+
+class InboxRequest(BaseModel):
+    device_id: str
+    nick: str
+    avatar: dict = {}
+    last_seen: str = ""
+    requested_at: str = ""
+
+
+class InboxOutgoing(BaseModel):
+    nick: str
+    requested_at: str = ""
+
+
+class SocialInboxResponse(BaseModel):
+    ok: bool
+    friends: list[InboxFriend] = []
+    incoming: list[InboxRequest] = []
+    outgoing: list[InboxOutgoing] = []
+    unread_total: int = 0
+    requests_total: int = 0
+    # Дефолт вычисляется в момент создания класса, поэтому FRIEND_MAX обязан
+    # быть объявлен выше моделей (он стоит в блоке констант после ECHO_CAP).
+    friend_limit: int = FRIEND_MAX
 
 
 class ProfileResponse(BaseModel):
@@ -912,6 +1046,67 @@ def canonical_pair_key(a: str, b: str) -> str:
         return f"{a}|{a}"
     return f"{min(a, b)}|{max(a, b)}"
 
+# ---------------------------------------------------------------------------
+# Forward-only раннер версий схемы (S1, задача 0)
+# ---------------------------------------------------------------------------
+
+MIGRATIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations")
+_MIGRATION_NAME_RE = re.compile(r"^(\d{3})_([a-z0-9_]+)\.sql$")
+
+
+def _ensure_schema_version(conn: sqlite3.Connection) -> set[int]:
+    """Таблица версий + множество уже применённых номеров."""
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS schema_version (
+               version INTEGER PRIMARY KEY,
+               name TEXT NOT NULL,
+               applied_at TEXT NOT NULL
+           )"""
+    )
+    return {int(r["version"]) for r in conn.execute("SELECT version FROM schema_version").fetchall()}
+
+
+def _apply_migrations(conn: sqlite3.Connection) -> list[str]:
+    """Применить migrations/NNN_*.sql с version > записанных. Только вперёд.
+
+    Откатов нет: роль down-миграции играет снапшот БД перед деплоем
+    (README-server.md, раздел «Где хранится база данных»). Ошибка → rollback и
+    исключение наружу: сервер не стартует с наполовину применённой миграцией.
+
+    BEGIN IMMEDIATE/COMMIT зашиты ВНУТРЬ передаваемого скрипта, а не вокруг
+    вызова executescript: executescript неявно коммитит незакрытую транзакцию,
+    поэтому внешний BEGIN был бы проглочен до выполнения первой строки.
+    Интерполяция имени и номера безопасна — обе величины получены совпадением
+    _MIGRATION_NAME_RE, applied_at даёт _now_iso().
+    """
+    applied = _ensure_schema_version(conn)
+    if not os.path.isdir(MIGRATIONS_DIR):
+        return []
+    done: list[str] = []
+    for name in sorted(n for n in os.listdir(MIGRATIONS_DIR) if n.endswith(".sql")):
+        m = _MIGRATION_NAME_RE.match(name)
+        if m is None:
+            raise RuntimeError(
+                "Файл в migrations/ вне формата NNN_snake_case.sql: %s" % name)
+        version = int(m.group(1))
+        if version in applied:
+            continue
+        with open(os.path.join(MIGRATIONS_DIR, name), "r", encoding="utf-8") as f:
+            body = f.read()
+        script = (
+            "BEGIN IMMEDIATE;\n"
+            + body
+            + "\nINSERT INTO schema_version (version, name, applied_at) "
+              "VALUES (%d, '%s', '%s');\nCOMMIT;\n" % (version, name, _now_iso())
+        )
+        try:
+            conn.executescript(script)
+        except Exception:
+            conn.rollback()
+            raise
+        done.append(name)
+    return done
+
 def init_db():
     """Инициализация БД: создать таблицы и загрузить стартовый граф веществ."""
     conn = get_db()
@@ -940,6 +1135,12 @@ def init_db():
             with open(schema_path, "r", encoding="utf-8") as f:
                 schema_sql = f.read()
             conn.executescript(schema_sql)
+
+        # Раннер версий — после schema.sql: на свежей БД схема уже содержит все
+        # таблицы, и миграции того же DDL проходят вхолостую (IF NOT EXISTS),
+        # записывая только строку версии. Форма «schema.sql + migrations»
+        # покрыта tests/test_migrations.py и tests/test_social.py::TestSchema.
+        _apply_migrations(conn)
 
         # миграция старых БД: колонки glyph и d
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(elements)").fetchall()}
@@ -3777,22 +3978,29 @@ def set_me(req: ProfileRequest):
     nick = clean_nick(req.nick)
     if not nick:
         raise HTTPException(status_code=400, detail="Ник должен быть 2–24 символа и без спецсимволов")
+    # /api/me — единственная дверь, создающая строку players, поэтому граница
+    # идентичности соц-слоя стоит здесь: id с «|» делает canonical_pair_key
+    # неоднозначным (key("ab","c|d") == key("ab|c","d")) для любого, кто потом
+    # найдёт этого игрока по нику, а зарезервированные npc-spirit и bot-*
+    # превращаются в обычного игрока с ником — Светик появляется в рейтинге и
+    # поиске по нику.
+    device = _social_caller(req.device_id)
     conn = get_db()
     try:
         taken = conn.execute(
             "SELECT device_id FROM players WHERE nick = ? AND device_id <> ?",
-            (nick, req.device_id),
+            (nick, device),
         ).fetchone()
         if taken:
             raise HTTPException(status_code=400, detail="Ник уже занят")
         old = conn.execute(
-            "SELECT nick FROM players WHERE device_id = ?", (req.device_id,)
+            "SELECT nick FROM players WHERE device_id = ?", (device,)
         ).fetchone()
         try:
             conn.execute(
                 """INSERT INTO players (nick, device_id, created_at) VALUES (?, ?, ?)
                    ON CONFLICT(device_id) DO UPDATE SET nick = excluded.nick""",
-                (nick, req.device_id, _now_iso()),
+                (nick, device, _now_iso()),
             )
         except sqlite3.IntegrityError:
             # гонка: ник заняли между проверкой и записью
@@ -3802,12 +4010,12 @@ def set_me(req: ProfileRequest):
             conn.execute(
                 "UPDATE elements SET author_device = ? "
                 "WHERE author_device IS NULL AND author = ?",
-                (req.device_id, old["nick"]),
+                (device, old["nick"]),
             )
             conn.execute(
                 "UPDATE recipes SET discoverer_device = ? "
                 "WHERE discoverer_device IS NULL AND discoverer = ?",
-                (req.device_id, old["nick"]),
+                (device, old["nick"]),
             )
         conn.commit()
         # γ: переименование отдаёт те же дом-поля, что и GET /api/me, — иначе
@@ -3815,9 +4023,9 @@ def set_me(req: ProfileRequest):
         # до следующего GET-синка. 8 — дефолт limit_guests из GET /api/me
         # (POST параметров запроса не несёт).
         return ProfileResponse(
-            ok=True, nick=nick, device_id=req.device_id, avatar=avatar_for(nick),
-            house_visits_week=_visits_week(conn, req.device_id),
-            house_visitors=_guest_list(conn, req.device_id, 8),
+            ok=True, nick=nick, device_id=device, avatar=avatar_for(nick),
+            house_visits_week=_visits_week(conn, device),
+            house_visitors=_guest_list(conn, device, 8),
         )
     finally:
         conn.close()
@@ -3910,6 +4118,27 @@ def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
             "UPDATE challenges SET first_nick = 'Анонимный алхимик', first_device = NULL WHERE first_device = ?",
             (device_id,),
         )
+        # S1: социальный слой чистится целиком, а не «только мои строки».
+        # Порядок существенен — pair_key пары надо прочитать ДО удаления рёбер,
+        # иначе переписку нечем будет искать. Переписка удаляется с обоих
+        # концов: оставить её у второй стороны — та же дыра в приватности, что
+        # и в friend_remove/friend_block.
+        social_pairs = [r["pair_key"] for r in conn.execute(
+            "SELECT pair_key FROM friend_edges WHERE a_device = ? OR b_device = ?",
+            (device_id, device_id)).fetchall()]
+        social_pairs.append(canonical_pair_key(device_id, SPIRIT_DEVICE))
+        for pk in social_pairs:
+            conn.execute("DELETE FROM messages WHERE pair_key = ?", (pk,))
+        # Свой `from_device`, а не только pair_key рёбер: переписка игрока с
+        # собеседником, чьё ребро уже удалено (сиротская строка), иначе
+        # переживает аккаунт — спека §7 требует чистить и по `from_device`.
+        conn.execute("DELETE FROM messages WHERE from_device = ?", (device_id,))
+        conn.execute("DELETE FROM friend_edges WHERE a_device = ? OR b_device = ?",
+                     (device_id, device_id))
+        conn.execute("DELETE FROM blocks WHERE blocker_device = ? OR blocked_device = ?",
+                     (device_id, device_id))
+        conn.execute("DELETE FROM spirit_messages WHERE device_id = ?", (device_id,))
+        conn.execute("DELETE FROM social_state WHERE device_id = ?", (device_id,))
         for table in [
             "echoes", "letters", "challenge_scores", "vein_points", "atlas_solves",
             "fair_pairs", "fair_contrib", "fair_claims", "vein_hits", "legacy_vein_hits",
@@ -4116,6 +4345,971 @@ def get_house(nick: str = Query(..., min_length=1, max_length=64)):
             ok=True, nick=row["nick"], avatar=avatar_for(row["nick"]), house=house,
             visits_week=_visits_week(conn, row["device_id"]),
         )
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# S1 «Друзья и переписка»
+# ---------------------------------------------------------------------------
+
+def _social_peer(conn: sqlite3.Connection, device_id: str) -> SocialPeer:
+    """Витрина собеседника: ник и аватар читаются на каждом запросе.
+
+    Ник сменяем через POST /api/me, поэтому ничего не кэшируется в рёбрах:
+    переименование друга видно сразу и ничего не рвёт.
+    """
+    if device_id == SPIRIT_DEVICE:
+        # Светика нет в players (иначе попал бы в /api/rating), витрина — из
+        # констант, как уже сделано в inbox. Без этой ветки peer в ответе по
+        # дух-ребру возвращал nick: "".
+        return SocialPeer(device_id=device_id, nick=SPIRIT_NICK,
+                          avatar=avatar_for(SPIRIT_NICK))
+    row = conn.execute(
+        "SELECT nick, last_seen FROM players WHERE device_id = ?", (device_id,)
+    ).fetchone()
+    if row is None:
+        return SocialPeer(device_id=device_id, nick="", avatar=avatar_for(device_id))
+    return SocialPeer(device_id=device_id, nick=row["nick"],
+                      avatar=avatar_for(row["nick"]), last_seen=row["last_seen"] or "")
+
+
+def _social_blocked(conn: sqlite3.Connection, a: str, b: str) -> bool:
+    """Блок в любую сторону. Ответ не раскрывает, кто именно заблокировал."""
+    row = conn.execute(
+        "SELECT 1 FROM blocks WHERE (blocker_device = ? AND blocked_device = ?) "
+        "OR (blocker_device = ? AND blocked_device = ?)", (a, b, b, a)
+    ).fetchone()
+    return row is not None
+
+
+def _social_edge(conn: sqlite3.Connection, a: str, b: str) -> Optional[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM friend_edges WHERE pair_key = ?",
+        (canonical_pair_key(a, b),)
+    ).fetchone()
+
+
+def _social_accepted(conn: sqlite3.Connection, a: str, b: str) -> bool:
+    row = _social_edge(conn, a, b)
+    return row is not None and row["state"] == "accepted"
+
+
+def _social_friend_count(conn: sqlite3.Connection, device_id: str) -> int:
+    """Принятые рёбра, КРОМЕ Светика: закреплённый NPC не занимает слот."""
+    return conn.execute(
+        "SELECT COUNT(*) AS c FROM friend_edges "
+        "WHERE state = 'accepted' AND (a_device = ? OR b_device = ?) "
+        "AND a_device != ? AND b_device != ?",
+        (device_id, device_id, SPIRIT_DEVICE, SPIRIT_DEVICE)
+    ).fetchone()["c"]
+
+
+def _social_pending_out(conn: sqlite3.Connection, device_id: str) -> int:
+    return conn.execute(
+        "SELECT COUNT(*) AS c FROM friend_edges "
+        "WHERE state = 'pending' AND requester_device = ?", (device_id,)
+    ).fetchone()["c"]
+
+
+def _social_id(raw: str) -> str:
+    """Единая граница валидности device_id социальных роутов (F2/I-1, I-2).
+
+    min_length=1 в моделях применяется к СЫРОЙ строке pydantic, поэтому "   "
+    проходит валидацию и после strip() превращается в "" — ключ графа.
+    "|" внутри id делает canonical_pair_key неоднозначным
+    (key("ab", "c|d") == key("ab|c", "d")), а чтение по pair_key принадлежность
+    пары не проверяет. Пустое или с "| — 400 bad_device_id, до БД не доходит.
+    """
+    value = (raw or "").strip()
+    if not value or "|" in value:
+        raise HTTPException(status_code=400, detail="bad_device_id")
+    return value
+
+
+def _social_caller(raw: str) -> str:
+    """Идентичность ТОГО, кто зовёт роут (не собеседника).
+
+    device_id ничем не аутентифицирован, поэтому зарезервированные id нельзя
+    заявить от своего имени: Светик (`npc-spirit`) — закреплённый NPC, и вызов
+    от его имени читал бы чужую ленту со Светиком и ставил там read_at, а
+    send_message писал бы поддельные письма от духа (peer-сторона это уже
+    отсекает, `npc` в send — только про собеседника). Боты рейтинга (`bot-*`)
+    — тоже не игрок: они заводятся seed.py и в social-графе существовать не
+    могут (target-side правило то же).
+    """
+    value = _social_id(raw)
+    if value == SPIRIT_DEVICE:
+        raise HTTPException(status_code=400, detail="npc")
+    if value.startswith("bot-"):
+        raise HTTPException(status_code=400, detail="bot")
+    return value
+
+
+@app.post("/api/friend/request", response_model=FriendRequestResponse)
+def friend_request(payload: FriendRequestPayload):
+    """Заявка в друзья по нику. Ник — единственный вход, дальше только device_id.
+
+    Встречная заявка принимается сразу: игрок не должен видеть «заявку в ответ
+    на заявку». Своя повторная заявка идемпотентна — клиент не обязан различать
+    «не отправилось» и «уже отправлено».
+    """
+    me = _social_caller(payload.device_id)
+    target_nick = payload.target_nick.strip()
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT device_id, nick FROM players WHERE nick = ?", (target_nick,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=400, detail="target_not_found")
+        target = row["device_id"]
+        # Ребро строится по canonical_pair_key(me, target), поэтому id цели
+        # проходит ту же границу, что и id вызывающей стороны: легаси-строка
+        # players с «|» внутри device_id сделала бы pair_key неоднозначным
+        # (key("ab","c|d") == key("ab|c","d")), и такая заявка нашлась бы или
+        # принялась бы не той паре.
+        target = _social_id(target)
+        # Светик защищён с обеих сторон (F1/C-1): request от имени npc-spirit
+        # создавал pending-ребро dev|npc-spirit, которое _ensure_spirit_edge
+        # (INSERT OR IGNORE) не чинил — друг-Светик исчезал из списка.
+        if SPIRIT_DEVICE in (me, target):
+            raise HTTPException(status_code=400, detail="npc")
+        if target.startswith("bot-"):
+            raise HTTPException(status_code=400, detail="bot")
+        if target == me:
+            raise HTTPException(status_code=400, detail="self")
+        if _social_blocked(conn, me, target):
+            raise HTTPException(status_code=403, detail="blocked")
+
+        edge = _social_edge(conn, me, target)
+        if edge is not None:
+            if edge["state"] == "accepted":
+                raise HTTPException(status_code=409, detail="already_friends")
+            if edge["requester_device"] == me:
+                return FriendRequestResponse(ok=True, state="pending",
+                                             peer=_social_peer(conn, target))
+            # Встречная заявка — это приём, поэтому лимит друзей гейтит её так же,
+            # как /api/friend/respond: иначе игрок с полным списком получил бы
+            # лишнего друга, ответив на чужую заявку своей.
+            if _social_friend_count(conn, me) >= FRIEND_MAX:
+                raise HTTPException(status_code=429, detail="friend_limit")
+            cur = conn.execute(
+                "UPDATE friend_edges SET state = 'accepted', updated_at = ? "
+                "WHERE pair_key = ? AND state = 'pending'", (_now_iso(), edge["pair_key"]))
+            if cur.rowcount == 0:
+                # Ребро исчезло или перешло из pending между чтением и UPDATE
+                # (remove/block съели, параллельный respond принял) — тот же
+                # guarded-паттерн, что у friend_respond и race-ветка вставки:
+                # не возвращаем «успех», а отвечаем из фактической строки.
+                conn.rollback()
+                fresh = _social_edge(conn, me, target)
+                if fresh is None:
+                    raise HTTPException(status_code=404, detail="request_not_found")
+                if fresh["state"] == "accepted":
+                    raise HTTPException(status_code=409, detail="already_friends")
+                return FriendRequestResponse(
+                    ok=True,
+                    state="accepted" if fresh["requester_device"] != me else "pending",
+                    peer=_social_peer(conn, target))
+            conn.commit()
+            return FriendRequestResponse(ok=True, state="accepted",
+                                         peer=_social_peer(conn, target))
+
+        if _social_friend_count(conn, me) >= FRIEND_MAX:
+            raise HTTPException(status_code=429, detail="friend_limit")
+        if _social_pending_out(conn, me) >= FRIEND_PENDING_OUT_MAX:
+            raise HTTPException(status_code=429, detail="pending_limit")
+
+        pair_key = canonical_pair_key(me, target)
+        a_device, b_device = pair_key.split("|", 1)
+        now = _now_iso()
+        conn.execute("BEGIN IMMEDIATE")
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO friend_edges (pair_key, a_device, b_device, "
+            "state, requester_device, created_at, updated_at) "
+            "VALUES (?, ?, ?, 'pending', ?, ?, ?)",
+            (pair_key, a_device, b_device, me, now, now))
+        if cur.rowcount == 0:
+            # Гонку выиграл параллельный запрос: не возвращаем «успех вставки»,
+            # а отвечаем из фактической строки. Приём _ensure_sigil_daily / D7.
+            conn.rollback()
+            edge = _social_edge(conn, me, target)
+            if edge is None:
+                raise HTTPException(status_code=503, detail="race_lost")
+            if edge["state"] == "accepted":
+                raise HTTPException(status_code=409, detail="already_friends")
+            return FriendRequestResponse(
+                ok=True,
+                state="accepted" if edge["requester_device"] != me else "pending",
+                peer=_social_peer(conn, target))
+        conn.commit()
+        return FriendRequestResponse(ok=True, state="pending",
+                                     peer=_social_peer(conn, target))
+    except Exception:
+        # Один блок на все отказы: rollback нужен и при контрактном
+        # HTTPException, и при неожиданной ошибке — транзакция BEGIN IMMEDIATE
+        # не должна оставаться открытой к conn.close().
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.post("/api/friend/respond", response_model=FriendRespondResponse)
+def friend_respond(payload: FriendRespondPayload):
+    """Приём или отказ по заявке. Оба — guarded-переход по state='pending'.
+
+    rowcount == 0 означает «заявки нет, она уже принята или её принял второй
+    поток» — все три случая дают 404, а не «успех». Отказ удаляет строку.
+    """
+    me = _social_caller(payload.device_id)
+    requester = _social_id(payload.requester_device)
+    # Паритет с friend_request (F1/C-1): respond с requester_device="npc-spirit"
+    # — та же дыра, что и заявка от имени духа.
+    if SPIRIT_DEVICE in (me, requester):
+        raise HTTPException(status_code=400, detail="npc")
+    if me == requester:
+        raise HTTPException(status_code=400, detail="self")
+    conn = get_db()
+    try:
+        pair_key = canonical_pair_key(me, requester)
+        if _social_blocked(conn, me, requester):
+            raise HTTPException(status_code=403, detail="blocked")
+        if not payload.accept:
+            conn.execute("BEGIN IMMEDIATE")
+            cur = conn.execute(
+                "DELETE FROM friend_edges WHERE pair_key = ? AND state = 'pending' "
+                "AND requester_device = ? AND (a_device = ? OR b_device = ?)",
+                (pair_key, requester, me, me))
+            if cur.rowcount == 0:
+                conn.rollback()
+                raise HTTPException(status_code=404, detail="request_not_found")
+            conn.commit()
+            return FriendRespondResponse(ok=True, accepted=False,
+                                         peer=_social_peer(conn, requester))
+
+        if _social_friend_count(conn, me) >= FRIEND_MAX:
+            raise HTTPException(status_code=429, detail="friend_limit")
+        conn.execute("BEGIN IMMEDIATE")
+        cur = conn.execute(
+            "UPDATE friend_edges SET state = 'accepted', updated_at = ? "
+            "WHERE pair_key = ? AND state = 'pending' AND requester_device = ? "
+            "AND (a_device = ? OR b_device = ?)",
+            (_now_iso(), pair_key, requester, me, me))
+        if cur.rowcount == 0:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="request_not_found")
+        conn.commit()
+        return FriendRespondResponse(ok=True, accepted=True,
+                                     peer=_social_peer(conn, requester))
+    except Exception:
+        # Паритет с friend_request: rollback нужен и при контрактном
+        # HTTPException, и при неожиданной ошибке — BEGIN IMMEDIATE не должна
+        # оставаться открытой к conn.close().
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _social_delete_pair(conn: sqlite3.Connection, device_id: str, peer_device: str) -> None:
+    """Удалить ребро и переписку пары. Вызывается из remove и block.
+
+    Переписка удаляется у обоих: оставить её у второй стороны — дыра в
+    приватности («удалил друга, а мои сообщения остались у него»).
+    """
+    pair_key = canonical_pair_key(device_id, peer_device)
+    conn.execute("DELETE FROM messages WHERE pair_key = ?", (pair_key,))
+    conn.execute("DELETE FROM friend_edges WHERE pair_key = ?", (pair_key,))
+
+
+@app.post("/api/friend/remove", response_model=SocialOkResponse)
+def friend_remove(payload: FriendPeerPayload):
+    me = _social_caller(payload.device_id)
+    peer = _social_id(payload.peer_device)
+    # Светик защищён с обеих сторон: device_id ничем не аутентифицирован,
+    # поэтому вызов от имени npc-spirit удалил бы чужое закреплённое ребро.
+    if SPIRIT_DEVICE in (me, peer):
+        raise HTTPException(status_code=400, detail="npc")
+    conn = get_db()
+    try:
+        if not _social_accepted(conn, me, peer):
+            raise HTTPException(status_code=404, detail="not_friends")
+        conn.execute("BEGIN IMMEDIATE")
+        _social_delete_pair(conn, me, peer)
+        conn.commit()
+        return SocialOkResponse(ok=True)
+    except Exception:
+        # Паритет с friend_request/friend_respond: rollback нужен и при контрактном
+        # HTTPException, и при неожиданной ошибке — BEGIN IMMEDIATE не должна
+        # оставаться открытой к conn.close().
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.post("/api/friend/block", response_model=SocialOkResponse)
+def friend_block(payload: FriendBlockPayload):
+    """Блок направлен: блокирует тот, кто в blocker_device.
+
+    Проверяется потом на request, respond, messages, send. Ребра может и не
+    быть — блок это защита от навязчивых, а не только «раздруживание».
+    """
+    me = _social_caller(payload.device_id)
+    target = _social_id(payload.target_device)
+    if SPIRIT_DEVICE in (me, target):
+        raise HTTPException(status_code=400, detail="npc")
+    if target == me:
+        raise HTTPException(status_code=400, detail="self")
+    conn = get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            "INSERT OR IGNORE INTO blocks (blocker_device, blocked_device, created_at) "
+            "VALUES (?, ?, ?)", (me, target, _now_iso()))
+        _social_delete_pair(conn, me, target)
+        conn.commit()
+        return SocialOkResponse(ok=True)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.post("/api/friend/unblock", response_model=SocialOkResponse)
+def friend_unblock(payload: FriendBlockPayload):
+    """Снимает только собственный блок: удаляется строка (me, target).
+
+    Блок, который поставили мне, снимаю не я, а тот, кто его поставил. Ни
+    ребро, ни переписка не возвращаются — очистка была осознанным действием.
+    """
+    me = _social_caller(payload.device_id)
+    target = _social_id(payload.target_device)
+    conn = get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            "DELETE FROM blocks WHERE blocker_device = ? AND blocked_device = ?",
+            (me, target))
+        conn.commit()
+        return SocialOkResponse(ok=True)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+_MSG_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _clean_message_body(raw: str) -> str:
+    """Тело сообщения: CRLF → LF, управляющие символы вон, пробелы по краям.
+
+    Клиент рендерит тело как обычный текст (BBCode в лейблах выключен), но
+    ESC-последовательности и NUL не должны попадать ни в логи сервера, ни в
+    ленту. \\t (\\x09) и \\n (\\x0a) сохраняются намеренно.
+    """
+    text = (raw or "").replace("\r\n", "\n").replace("\r", "\n")
+    return _MSG_CONTROL_RE.sub("", text).strip()
+
+
+def _preview_line(raw: str) -> str:
+    """Превью для строки друга: одна строка длиной не больше MSG_PREVIEW_LEN.
+
+    Лента переводы строк сохраняет (_clean_message_body их не режет), а строка
+    списка друзей в клиенте — один Label в ряд: перенос внутри превью разодрал
+    бы её на две. Тот же приём, что у описания вещества: " ".join(split()).
+    """
+    return " ".join((raw or "").split())[:MSG_PREVIEW_LEN]
+
+
+def _social_prune(conn: sqlite3.Connection, device_id: str) -> None:
+    """Уборка почты: глобально по возрасту и хвостами по парам игрока.
+
+    Вызывается только из GET /api/social/inbox — единственной точки, которую
+    клиент зовёт при входе в игру. Фоновых задач и планировщика нет.
+
+    Граница возраста — строковое сравнение ISO-дат: _date_minus(N) даёт
+    'YYYY-MM-DD', а sent_at — 'YYYY-MM-DDTHH:MM:SS', поэтому сообщение,
+    отправленное ровно N дней назад сегодня, сохраняется. Запас в сутки
+    намеренный: точность до дня здесь достаточна, а часовые пояса — нет.
+
+    Хвост обрезается по id, а не по sent_at: id монотонен в пределах пары и не
+    зависит от часов. При ≤ MSG_KEEP_PER_PAIR строках подзапрос возвращает
+    NULL, и `id < NULL` не удаляет ничего.
+    """
+    conn.execute("DELETE FROM messages WHERE sent_at < ?",
+                 (_date_minus(MSG_RETENTION_DAYS),))
+    rows = conn.execute(
+        "SELECT pair_key FROM friend_edges WHERE (a_device = ? OR b_device = ?) "
+        "AND state = 'accepted'",
+        (device_id, device_id)).fetchall()
+    pair_keys = {r["pair_key"] for r in rows}
+    pair_keys.add(canonical_pair_key(device_id, SPIRIT_DEVICE))
+    for pk in pair_keys:
+        conn.execute(
+            "DELETE FROM messages WHERE pair_key = ? AND id < ("
+            "  SELECT id FROM messages WHERE pair_key = ? ORDER BY id DESC LIMIT 1 OFFSET ?)",
+            (pk, pk, MSG_KEEP_PER_PAIR - 1))
+
+
+def _social_mark_seen(conn: sqlite3.Connection, device_id: str, day: str) -> None:
+    """Запомнить день последнего обращения к inbox.
+
+    НЕ players.last_seen: тот обновляет _upsert_player на игровых роутах
+    (brew-check, discover, vein/find, player/register, house), а клиент зовёт
+    их в стартовом обмене РАНЬШЕ inbox — триггер «игрок вернулся» по last_seen
+    не сработал бы ни разу. POST /api/me к ним не относится: set_me пишет
+    только nick, last_seen там остаётся NULL.
+    """
+    conn.execute(
+        "INSERT INTO social_state (device_id, last_inbox_day, updated_at) "
+        "VALUES (?, ?, ?) "
+        "ON CONFLICT(device_id) DO UPDATE SET "
+        "last_inbox_day = MAX(excluded.last_inbox_day, social_state.last_inbox_day), "
+        "updated_at = excluded.updated_at",
+        (device_id, day, _now_iso()))
+
+
+_WEEKDAY_RU = ("понедельник", "вторник", "среда", "четверг",
+               "пятница", "суббота", "воскресенье")
+
+# Фолбэк-пул весточек: 5 фраз на каждый из 6 триггеров. Используется, когда LLM
+# недоступна, не уложилась в SPIRIT_LLM_TIMEOUT, вернула брак или исчерпан
+# глобальный суточный потолок. Выбор детерминирован по (device_id, day,
+# trigger_id): перезапуск клиента не мельтешит текстом.
+# Подстановки: {nick} — имя игрока, {detail} — деталь триггера.
+_SPIRIT_FALLBACK: dict[str, tuple[str, ...]] = {
+    "return": (
+        "{nick}, ты вернулся! Я тут слегка протёр колбы от пыли.",
+        "Без тебя лаборатория была тише обычного, {nick}. Рад, что ты снова здесь.",
+        "{nick}, я сохранил твой свет на полке. Всё на месте.",
+        "С возвращением, {nick}. Сегодня хороший день, чтобы что-нибудь смешать.",
+        "{nick}, пока тебя не было, я пересчитал все банки. Сходятся.",
+    ),
+    "guest": (
+        "{nick}, к тебе сегодня заглянул {detail}! Я старался быть приветливым.",
+        "В твоём доме побывал гость — {detail}. Пахнет интересом, {nick}.",
+        "{detail} заходил посмотреть на твои колбы, {nick}.",
+        "{nick}, сегодня твой дом видел {detail}. Мне понравилось.",
+        "Гость на пороге — это {detail}. Хороший день, {nick}.",
+    ),
+    "vein_find": (
+        "{nick}, ты нашёл новое сочетание! Я видел, как вспыхнула жила.",
+        "Сегодня в твоём котле родилось нечто новое, {nick}. Поздравляю!",
+        "{nick}, жила откликнулась. Это {detail} — и это твоё открытие.",
+        "Новое сочетание, {nick}! Я записал его себе на память.",
+        "{detail} находок сегодня, {nick}. Свету прибавилось.",
+    ),
+    "sigil_milestone": (
+        "{nick}, комплект собран! Печати светятся в один голос.",
+        "Сегодня ты заявил комплект ({detail}), {nick}. Я горжусь.",
+        "{nick}, твои печати сошлись. Это редкое ощущение.",
+        "Комплект {detail} закрыт, {nick}. Красиво вышло.",
+        "{nick}, круг замкнулся — печати вместе. Я тихо похлопал.",
+    ),
+    "sigil_craft": (
+        "{nick}, новая карта «{detail}» заняла своё место на полке.",
+        "Сегодня ты закрепил «{detail}», {nick}. Она ещё тёплая.",
+        "{detail} — так называется твоя новая карта, {nick}. Мне нравится.",
+        "{nick}, полка стала на одну карту богаче: «{detail}».",
+        "Новая печать «{detail}» у тебя дома, {nick}. Береги её.",
+    ),
+    "first_brew": (
+        "{nick}, котёл сегодня откликнулся. Первый резонанс — он запоминается.",
+        "Сварилось! {nick}, я видел, как поднялся пар.",
+        "{nick}, твой первый резонанс дня — хороший знак.",
+        "Котёл пел, {nick}. Значит, руки верные.",
+        "{nick}, сегодня варка пошла. Оставь немного света на завтра.",
+    ),
+}
+
+
+def _spirit_fallback(device_id: str, day: str, trigger_id: str,
+                     nick: str, detail: str) -> str:
+    """Детерминированная фраза из пула. sha256 — как в avatar_for: тот же приём."""
+    pool = _SPIRIT_FALLBACK.get(trigger_id) or _SPIRIT_FALLBACK["guest"]
+    digest = hashlib.sha256(
+        ("%s#%s#%s" % (device_id, day, trigger_id)).encode("utf-8")).hexdigest()
+    phrase = pool[int(digest, 16) % len(pool)]
+    return (phrase.replace("{nick}", nick or "друг")
+                  .replace("{detail}", detail or "кое-что"))
+
+
+def _spirit_clean_body(conn: sqlite3.Connection, raw: str, nick: str,
+                       device_id: str, detail: str) -> str:
+    """Проверка тела весточки от LLM. Брак → '' (сервер уходит на шаблон).
+
+    Отбраковывается (спека §6.5): пустое, с переводами строк, управляющие
+    символы любой Unicode-категории C*, вхождение device_id игрока, длинные
+    числа (телефоны, коды, суммы), ник третьего игрока и слишком длинное тело.
+    Содержимое по смыслу (советы о реальной жизни, здоровье, деньгах) здесь НЕ
+    фильтруется — это держит системный промпт в _call_spirit_once; решение
+    пользователя от 2026-10-07: словарный фильтр избыточен. Стоимость проверки
+    ограничена тем, что генерация бывает не чаще раза в сутки на устройство и
+    под глобальным потолком SPIRIT_LLM_PER_DAY_GLOBAL.
+    """
+    text = (raw or "").strip()
+    if not text or "\n" in text or "\r" in text:
+        return ""
+    if any(unicodedata.category(c).startswith("C") for c in text):
+        return ""
+    if device_id and device_id in text:
+        return ""
+    if re.search(r"\d{3,}", text):
+        return ""
+    if len(text) > SPIRIT_BODY_MAX:
+        cut = text[:SPIRIT_BODY_MAX]
+        space = cut.rfind(" ")
+        # Обрезаем по последнему пробелу внутри лимита. Если пробела нет, текст
+        # в пределах лимита — не связное предложение, а пачка символов (например
+        # 400 повторов), и обрезать её по слову не по чему: отбраковка целиком.
+        if space < 20:
+            return ""
+        text = cut[:space].strip()
+        if len(text) < 20:
+            return ""
+    for row in conn.execute(
+            "SELECT nick FROM players WHERE nick != '' AND nick != ? LIMIT 200",
+            (nick,)).fetchall():
+        other = row["nick"]
+        if other and other != detail and other in text:
+            return ""
+    return text
+
+
+def _reserve_spirit_llm(conn: sqlite3.Connection, today: str) -> bool:
+    """Собственный бюджетный гейт весточек.
+
+    НЕ общая _reserve_llm_generation: та квота защищает генерацию веществ, и
+    весточки не должны её съедать. Список провайдеров берём тот же, что у
+    _experiment_uses_llm, но на исключение отвечаем False, а не True: весточка
+    опциональна, и битый конфиг LLM не должен выталкивать сетевой вызов на
+    пути, который игрок ждёт при каждом входе в ленту.
+
+    Гейт намеренно не атомарный: это ограничение расхода, а не экономика. Два
+    одновременных inbox могут оба пройти счётчик — цена одна лишняя генерация,
+    и она всё равно ограничена «одна весточка в сутки на устройство».
+    """
+    try:
+        provider = (get_llm().provider or "").strip().lower()
+    except Exception:
+        return False
+    if provider in ("", "local", "mock", "off"):
+        return False
+    used = conn.execute(
+        "SELECT COUNT(*) AS c FROM spirit_messages WHERE day = ? AND source = 'llm'",
+        (today,)).fetchone()["c"]
+    return int(used) < SPIRIT_LLM_PER_DAY_GLOBAL
+
+
+def _ensure_spirit_edge(conn: sqlite3.Connection, device_id: str) -> None:
+    """Ленивое accepted-ребро со Светиком при первом inbox.
+
+    Ребро закреплено: не удаляется, не блокируется и не учитывается в
+    FRIEND_MAX (_social_friend_count исключает SPIRIT_DEVICE).
+    """
+    pair_key = canonical_pair_key(device_id, SPIRIT_DEVICE)
+    now = _now_iso()
+    conn.execute(
+        "INSERT OR IGNORE INTO friend_edges (pair_key, a_device, b_device, state, "
+        "requester_device, created_at, updated_at) "
+        "VALUES (?, ?, ?, 'accepted', ?, ?, ?)",
+        (pair_key, pair_key.split("|", 1)[0], pair_key.split("|", 1)[1],
+         SPIRIT_DEVICE, now, now))
+    # Само-лечение (F1/C-1): INSERT OR IGNORE не чинит уже отравленное ребро —
+    # request от имени npc-spirit оставлял пару dev|npc-spirit в pending,
+    # Светик исчезал из списка (фильтр state='accepted'), письма уходили в
+    # недоступную ветку. Чиним состояние на месте; rowcount не проверяем — на
+    # честной строке UPDATE не делает ничего, операция идемпотентна.
+    conn.execute(
+        "UPDATE friend_edges SET state = 'accepted', requester_device = ?, "
+        "updated_at = ? WHERE pair_key = ? AND state != 'accepted'",
+        (SPIRIT_DEVICE, now, pair_key))
+
+
+def _spirit_trigger(conn: sqlite3.Connection, device_id: str,
+                    today: str) -> tuple[Optional[str], str]:
+    """(trigger_id, деталь) по приоритету спеки §6.3, либо (None, '').
+
+    Все источники — данные, которые сервер уже хранит. Форматы дат различаются:
+    discovered_at/crafted_at/claimed_at пишутся _now_iso() → сравнение
+    substr(col,1,10) = today; house_visits.day уже ключ дня;
+    resonance_seen.first_at вставляется без значения (INSERT перечисляет только
+    pair_key и brewer_key) и получает sqlite-дефолт datetime('now') в UTC без
+    DAY_TZ_OFFSET — перекос до суток у триггера first_brew. Он 6-й по
+    приоритету, а запись resonance_seen участвует в атомарном дедупе T03,
+    поэтому её не меняем.
+
+    Триггер «return» читает social_state.last_inbox_day, а НЕ players.last_seen:
+    тот обновляет _upsert_player на игровых роутах (brew-check, discover,
+    vein/find, player/register, house), а клиент зовёт их в стартовом обмене
+    РАНЬШЕ inbox — по last_seen возврат не отличился бы никогда.
+    """
+    row = conn.execute(
+        "SELECT last_inbox_day FROM social_state WHERE device_id = ?",
+        (device_id,)).fetchone()
+    if row is not None:
+        try:
+            last = datetime.strptime(row["last_inbox_day"], "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            last = None
+        if last is not None:
+            days = (_today_date() - last).days
+            if days >= SPIRIT_RETURN_DAYS:
+                return "return", "%d" % days
+
+    guest = conn.execute(
+        "SELECT visitor_device FROM house_visits "
+        "WHERE host_device = ? AND day = ? LIMIT 1", (device_id, today)).fetchone()
+    if guest is not None:
+        nick_row = conn.execute(
+            "SELECT nick FROM players WHERE device_id = ?",
+            (guest["visitor_device"],)).fetchone()
+        return "guest", (nick_row["nick"] if nick_row is not None else "")
+
+    finds = conn.execute(
+        "SELECT COUNT(*) AS c FROM personal_discoveries "
+        "WHERE device_id = ? AND substr(discovered_at, 1, 10) = ?",
+        (device_id, today)).fetchone()["c"]
+    if int(finds) > 0:
+        return "vein_find", "%d" % finds
+
+    milestone = conn.execute(
+        "SELECT set_id, tier FROM sigil_milestones "
+        "WHERE device_id = ? AND substr(claimed_at, 1, 10) = ? "
+        "ORDER BY tier DESC LIMIT 1", (device_id, today)).fetchone()
+    if milestone is not None:
+        return "sigil_milestone", "%s %d" % (milestone["set_id"], int(milestone["tier"]))
+
+    craft = conn.execute(
+        "SELECT llm_name FROM sigil_crafts "
+        "WHERE device_id = ? AND substr(crafted_at, 1, 10) = ? "
+        "ORDER BY crafted_at DESC LIMIT 1", (device_id, today)).fetchone()
+    if craft is not None:
+        return "sigil_craft", (craft["llm_name"] or "новая карта")
+
+    brews = conn.execute(
+        "SELECT COUNT(*) AS c FROM resonance_seen "
+        "WHERE brewer_key = ? AND substr(first_at, 1, 10) = ?",
+        (device_id, today)).fetchone()["c"]
+    if int(brews) > 0:
+        return "first_brew", ""
+    return None, ""
+
+
+def _ensure_spirit_message(conn: sqlite3.Connection, device_id: str,
+                           today: str) -> None:
+    """Весточка дня: не чаще одной, только по событию, LLM с фолбэком.
+
+    Тело кладётся в ОБЩУЮ ленту пары (device_id, npc-spirit) — отдельного
+    хранилища нет, spirit_messages только фиксирует факт генерации дня.
+    """
+    if conn.execute("SELECT 1 FROM spirit_messages WHERE device_id = ? AND day = ?",
+                    (device_id, today)).fetchone() is not None:
+        return
+    trigger_id, detail = _spirit_trigger(conn, device_id, today)
+    if trigger_id is None:
+        return
+    nick_row = conn.execute(
+        "SELECT nick FROM players WHERE device_id = ?", (device_id,)).fetchone()
+    nick = nick_row["nick"] if nick_row is not None else ""
+
+    body = ""
+    source = "template"
+    if _reserve_spirit_llm(conn, today):
+        try:
+            out = get_llm().generate_spirit_message({
+                "nick": nick,
+                "trigger_id": trigger_id,
+                "trigger_detail": detail,
+                "weekday": _WEEKDAY_RU[_now_dt().weekday()],
+            }, timeout=SPIRIT_LLM_TIMEOUT)
+        except Exception as e:
+            log.warning("spirit: генерация упала → шаблон: %s", e)
+            out = {}
+        body = _spirit_clean_body(conn, (out or {}).get("body", ""), nick,
+                                  device_id, detail)
+        if body:
+            source = "llm"
+    if not body:
+        body = _spirit_fallback(device_id, today, trigger_id, nick, detail)
+        source = "template"
+
+    pair_key = canonical_pair_key(device_id, SPIRIT_DEVICE)
+    now = _now_iso()
+    cur = conn.execute(
+        "INSERT INTO messages (pair_key, from_device, body, sent_at, read_at) "
+        "VALUES (?, ?, ?, ?, NULL)", (pair_key, SPIRIT_DEVICE, body, now))
+    msg_id = int(cur.lastrowid)
+    saved = conn.execute(
+        "INSERT OR IGNORE INTO spirit_messages (device_id, day, trigger_id, body, "
+        "source, message_id, generated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (device_id, today, trigger_id, body, source, msg_id, now))
+    if saved.rowcount == 0:
+        # Гонку выиграл параллельный inbox: строку дня не дублируем, а своё
+        # сообщение забираем обратно — иначе в ленте будет две весточки.
+        conn.execute("DELETE FROM messages WHERE id = ?", (msg_id,))
+
+
+@app.get("/api/messages", response_model=MessagesResponse)
+def get_messages(device_id: str = Query(..., min_length=1, max_length=128),
+                 peer_device: str = Query("", max_length=128),
+                 since_id: int = Query(0, ge=0),
+                 limit: int = Query(100, ge=1, le=100)):
+    """Лента одной пары. Открытие ленты и есть прочтение — отданного хвоста.
+
+    Побочный эффект: read_at выставляется только ЧУЖИМ сообщениям пары и только
+    не выше границы отданной страницы. Фильтр from_device != me несёт
+    поведение, а не косметику: read_at значит «прочитано получателем» и ставится
+    при вставке в NULL, поэтому без фильтра моё же открытие ленты погасило бы
+    бейдж собеседника.
+    """
+    me = _social_caller(device_id)
+    peer = peer_device.strip()
+    if not peer:
+        raise HTTPException(status_code=400, detail="missing_peer")
+    # Та же граница F2 для собеседника: пустое уже отсечено missing_peer
+    # (контракт GET-параметра не меняем), остаётся проверка "|".
+    peer = _social_id(peer)
+    conn = get_db()
+    try:
+        if _social_blocked(conn, me, peer):
+            raise HTTPException(status_code=403, detail="blocked")
+        if not _social_accepted(conn, me, peer):
+            raise HTTPException(status_code=404, detail="not_friends")
+        pair_key = canonical_pair_key(me, peer)
+        # Страница — ХВОСТ ленты, а не её начало: клиент открывает переписку с
+        # since_id=0 и без прокрутки, поэтому ASC+LIMIT показывал бы самые
+        # старые строки пары (их до 200 при limit 100), а свежие сообщения
+        # игрок не догонял бы ничем.
+        rows = conn.execute(
+            "SELECT id, from_device, body, sent_at FROM messages "
+            "WHERE pair_key = ? AND id > ? ORDER BY id DESC LIMIT ?",
+            (pair_key, int(since_id), int(limit))).fetchall()
+        rows.reverse()
+        # Писаем под BEGIN IMMEDIATE, как в friend_request и _ensure_letter:
+        # вне явной транзакции модуль открывает под UPDATE deferred-транзакцию,
+        # и она берёт RESERVED уже на ходе записи.
+        conn.execute("BEGIN IMMEDIATE")
+        if rows:
+            # read_at только до границы отданной страницы: письмо, прилетевшее
+            # после SELECT или оставшееся за хвостом, непрочитанным не теряет
+            # бейдж — оно дождётся следующего открытия ленты.
+            conn.execute(
+                "UPDATE messages SET read_at = ? "
+                "WHERE pair_key = ? AND from_device != ? AND read_at IS NULL "
+                "AND id <= ?",
+                (_now_iso(), pair_key, me, int(rows[-1]["id"])))
+        conn.commit()
+        return MessagesResponse(ok=True, messages=[
+            MessageItem(id=r["id"], from_me=(r["from_device"] == me),
+                        body=r["body"], sent_at=r["sent_at"]) for r in rows])
+    except HTTPException:
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.post("/api/message/send", response_model=MessageSendResponse)
+def send_message(payload: MessageSendPayload):
+    me = _social_caller(payload.device_id)
+    peer = _social_id(payload.peer_device)
+    if peer == SPIRIT_DEVICE:
+        raise HTTPException(status_code=403, detail="npc")
+    body = _clean_message_body(payload.body)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty")
+    if len(body) > MSG_MAX_LEN:
+        raise HTTPException(status_code=400, detail="too_long")
+    conn = get_db()
+    try:
+        if _social_blocked(conn, me, peer):
+            raise HTTPException(status_code=403, detail="blocked")
+        if not _social_accepted(conn, me, peer):
+            raise HTTPException(status_code=404, detail="not_friends")
+        # Суточный счётчик намеренно НЕ атомарный с вставкой — это анти-спам, а
+        # не экономика (та же оговорка, что у VISITS_PER_VISITOR_DAY).
+        sent = conn.execute(
+            "SELECT COUNT(*) AS c FROM messages WHERE from_device = ? AND sent_at >= ?",
+            (me, _today())).fetchone()["c"]
+        if sent >= MSG_PER_DAY:
+            raise HTTPException(status_code=429, detail="daily_limit")
+        pair_key = canonical_pair_key(me, peer)
+        now = _now_iso()
+        conn.execute("BEGIN IMMEDIATE")
+        # read_at не ставится: он значит «прочитано ПОЛУЧАТЕЛЕМ». Столбец на
+        # строке один, и «видел отправитель» с «видел получатель» в нём не
+        # уживаются — вставка «своего» прочитанным гасила бы бейдж собеседника
+        # навсегда.
+        cur = conn.execute(
+            "INSERT INTO messages (pair_key, from_device, body, sent_at) "
+            "VALUES (?, ?, ?, ?)", (pair_key, me, body, now))
+        new_id = int(cur.lastrowid)
+        conn.commit()
+        return MessageSendResponse(ok=True, id=new_id, sent_at=now)
+    except HTTPException:
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.get("/api/social/inbox", response_model=SocialInboxResponse)
+def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
+    """Единственная «толстая» точка соц-слоя: уборка, Светик, список, бейджи.
+
+    Профиль не создаёт: нет строки в players — 404 not_registered. Порядок
+    шагов существенен — _social_mark_seen выполняется ПОСЛЕ сборки ответа,
+    потому что триггер «return» (задача 8) читает social_state.last_inbox_day
+    как «когда игрок заходил в прошлый раз».
+    """
+    # F2: отсутствие device_id по-прежнему 422 валидации Query(min_length=1),
+    # «нет строки в players» — 404 not_registered; здесь отсекается только
+    # формально прошедший валидация пустой/с «|» id, а зарезервированные id
+    # Светика и ботов не могут вызвать чужой inbox от своего имени.
+    me = _social_caller(device_id)
+    conn = get_db()
+    try:
+        if conn.execute("SELECT 1 FROM players WHERE device_id = ?", (me,)).fetchone() is None:
+            raise HTTPException(status_code=404, detail="not_registered")
+
+        today = _today()
+        # --- Светик: закреплённое ребро и весточка дня -----------------------
+        # Вне BEGIN IMMEDIATE и со своим commit: генерация весточки — сетевой
+        # вызов, под write-локом его держать нельзя (тот же порядок, что у
+        # _reserve_llm_generation). Оба вызова пишут по одной строке и уходят
+        # одним commit; ни one-per-day гейт, ни INSERT OR IGNORE от этого не
+        # меняются — гонку с параллельным inbox по-прежнему разрешает
+        # PRIMARY KEY (device_id, day).
+        _ensure_spirit_edge(conn, me)
+        _ensure_spirit_message(conn, me, today)
+        conn.commit()
+
+        conn.execute("BEGIN IMMEDIATE")
+        _social_prune(conn, me)
+
+        edges = conn.execute(
+            "SELECT pair_key, a_device, b_device, state, requester_device, updated_at "
+            "FROM friend_edges WHERE a_device = ? OR b_device = ?", (me, me)).fetchall()
+
+        friends: list[InboxFriend] = []
+        incoming: list[InboxRequest] = []
+        outgoing: list[InboxOutgoing] = []
+        accepted_pairs: dict[str, str] = {}     # peer_device -> pair_key
+        incoming_dev: dict[str, str] = {}       # peer_device -> updated_at
+        outgoing_dev: dict[str, str] = {}       # peer_device -> updated_at
+        for e in edges:
+            peer = e["b_device"] if e["a_device"] == me else e["a_device"]
+            if e["state"] == "accepted":
+                accepted_pairs[peer] = e["pair_key"]
+            elif e["requester_device"] == me:
+                outgoing_dev[peer] = e["updated_at"]
+            else:
+                incoming_dev[peer] = e["updated_at"]
+
+        # Витрины одним запросом: ник и аватар читаются заново, поэтому
+        # переименование друга видно сразу.
+        wanted = set(accepted_pairs) | set(incoming_dev) | set(outgoing_dev)
+        showcase: dict[str, sqlite3.Row] = {}
+        if wanted:
+            marks = ",".join("?" for _ in wanted)
+            for row in conn.execute(
+                    "SELECT device_id, nick, last_seen FROM players "
+                    "WHERE device_id IN (%s)" % marks, tuple(sorted(wanted))).fetchall():
+                showcase[row["device_id"]] = row
+
+        # Непрочитанное и id последнего сообщения — одной агрегацией на все
+        # пары. sent_at здесь НЕ берётся: дата живёт в строке-победителе по id,
+        # а MAX(sent_at) — по часам, и при переводе часов назад они разошлись бы
+        # (строка друга показывала бы дату одного сообщения и текст другого).
+        stats: dict[str, sqlite3.Row] = {}
+        if accepted_pairs:
+            marks = ",".join("?" for _ in accepted_pairs)
+            for row in conn.execute(
+                    "SELECT pair_key, "
+                    "SUM(CASE WHEN from_device != ? AND read_at IS NULL THEN 1 ELSE 0 END) AS unread, "
+                    "MAX(id) AS last_id "
+                    "FROM messages WHERE pair_key IN (%s) GROUP BY pair_key" % marks,
+                    tuple([me] + sorted(accepted_pairs.values()))).fetchall():
+                stats[row["pair_key"]] = row
+
+        # Тело и дата превью — вторым запросом по собранным id (N ≤ числу
+        # друзей): одна строка даёт оба поля, поэтому они про одно сообщение.
+        previews: dict[int, sqlite3.Row] = {}
+        last_ids = sorted({r["last_id"] for r in stats.values() if r["last_id"] is not None})
+        if last_ids:
+            marks = ",".join("?" for _ in last_ids)
+            for row in conn.execute(
+                    "SELECT id, body, sent_at FROM messages WHERE id IN (%s)" % marks,
+                    tuple(last_ids)).fetchall():
+                previews[row["id"]] = row
+
+        unread_total = 0
+        for peer, pk in accepted_pairs.items():
+            row = showcase.get(peer)
+            st = stats.get(pk)
+            unread = int(st["unread"] or 0) if st is not None else 0
+            unread_total += unread
+            last = previews.get(st["last_id"]) if st is not None else None
+            if peer == SPIRIT_DEVICE:
+                nick = SPIRIT_NICK
+                last_seen = today
+            else:
+                nick = row["nick"] if row is not None else ""
+                last_seen = (row["last_seen"] if row is not None and row["last_seen"]
+                             else "")
+            friends.append(InboxFriend(
+                device_id=peer, nick=nick,
+                avatar=avatar_for(nick or peer),
+                last_seen=last_seen,
+                unread=unread,
+                last_msg_at=(last["sent_at"] if last is not None else ""),
+                last_msg_preview=(_preview_line(last["body"]) if last is not None else "")))
+        for peer, at in incoming_dev.items():
+            row = showcase.get(peer)
+            nick = row["nick"] if row is not None else ""
+            incoming.append(InboxRequest(
+                device_id=peer, nick=nick, avatar=avatar_for(nick or peer),
+                last_seen=(row["last_seen"] if row is not None and row["last_seen"] else ""),
+                requested_at=at))
+        for peer, at in outgoing_dev.items():
+            row = showcase.get(peer)
+            outgoing.append(InboxOutgoing(nick=(row["nick"] if row is not None else ""),
+                                          requested_at=at))
+
+        # Сортировка — три стабильных прохода list.sort от младшего ключа к
+        # старшему. Светик всегда первым, дальше последнее сообщение (пустые в
+        # конце), дальше ник. Клиент порядок не переставляет и определяет
+        # закреплённого по device_id == SPIRIT_DEVICE.
+        friends.sort(key=lambda f: f.nick)
+        friends.sort(key=lambda f: f.last_msg_at or "", reverse=True)
+        friends.sort(key=lambda f: f.device_id == SPIRIT_DEVICE, reverse=True)
+        incoming.sort(key=lambda r: r.nick)
+        incoming.sort(key=lambda r: r.requested_at, reverse=True)
+        outgoing.sort(key=lambda o: o.requested_at, reverse=True)
+
+        _social_mark_seen(conn, me, today)
+        conn.commit()
+        return SocialInboxResponse(
+            ok=True, friends=friends, incoming=incoming, outgoing=outgoing,
+            unread_total=unread_total, requests_total=len(incoming),
+            friend_limit=FRIEND_MAX)
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 

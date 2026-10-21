@@ -67,6 +67,15 @@ signal sigil_admin_rotate_result(result: Dictionary)
 signal sigil_admin_chromatic_result(result: Dictionary)
 signal sigil_admin_chroma_slot_result(result: Dictionary)
 signal sync_package_result(result: Dictionary)
+# S1 социалка (плоские сигналы по образцу sigil_*)
+signal social_inbox_result(result: Dictionary)
+signal messages_result(result: Dictionary)
+signal message_send_result(result: Dictionary)
+signal friend_request_result(result: Dictionary)
+signal friend_respond_result(result: Dictionary)
+signal friend_remove_result(result: Dictionary)
+signal friend_block_result(result: Dictionary)
+signal friend_unblock_result(result: Dictionary)
 signal error(message: String)
 
 var base_url := DEFAULT_BASE
@@ -222,6 +231,42 @@ func week_status(device_id: String) -> void:
 	if device_id != "":
 		path += "?device_id=" + device_id.uri_encode()
 	_enqueue({"kind": "week", "path": path})
+
+# S1 «Друзья и переписка»: inbox/messages/friends. GET по образцу echoes,
+# POST по образцу house_visit (path+body => POST на явный путь).
+func social_inbox(device_id: String) -> void:
+	_enqueue({"kind": "social_inbox",
+		"path": "/social/inbox?device_id=" + device_id.uri_encode()})
+
+func messages(device_id: String, peer_device: String, since_id: int) -> void:
+	_enqueue({"kind": "messages", "path": "/messages?device_id="
+		+ device_id.uri_encode() + "&peer_device=" + peer_device.uri_encode()
+		+ "&since_id=" + str(since_id)})
+
+func message_send(device_id: String, peer_device: String, body: String) -> void:
+	_enqueue({"kind": "message_send", "path": "/message/send",
+		"body": {"device_id": device_id, "peer_device": peer_device, "body": body}})
+
+func friend_request(device_id: String, target_nick: String) -> void:
+	_enqueue({"kind": "friend_request", "path": "/friend/request",
+		"body": {"device_id": device_id, "target_nick": target_nick}})
+
+func friend_respond(device_id: String, requester_device: String, accept: bool) -> void:
+	_enqueue({"kind": "friend_respond", "path": "/friend/respond",
+		"body": {"device_id": device_id, "requester_device": requester_device,
+		"accept": accept}})
+
+func friend_remove(device_id: String, peer_device: String) -> void:
+	_enqueue({"kind": "friend_remove", "path": "/friend/remove",
+		"body": {"device_id": device_id, "peer_device": peer_device}})
+
+func friend_block(device_id: String, target_device: String) -> void:
+	_enqueue({"kind": "friend_block", "path": "/friend/block",
+		"body": {"device_id": device_id, "target_device": target_device}})
+
+func friend_unblock(device_id: String, target_device: String) -> void:
+	_enqueue({"kind": "friend_unblock", "path": "/friend/unblock",
+		"body": {"device_id": device_id, "target_device": target_device}})
 
 func fair_brew(device_id: String, a: String, b: String) -> void:
 	_enqueue({
@@ -552,3 +597,19 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 			sigil_admin_chromatic_result.emit(parsed)
 		"sync_package":
 			sync_package_result.emit(parsed)
+		"social_inbox":
+			social_inbox_result.emit(parsed)
+		"messages":
+			messages_result.emit(parsed)
+		"message_send":
+			message_send_result.emit(parsed)
+		"friend_request":
+			friend_request_result.emit(parsed)
+		"friend_respond":
+			friend_respond_result.emit(parsed)
+		"friend_remove":
+			friend_remove_result.emit(parsed)
+		"friend_block":
+			friend_block_result.emit(parsed)
+		"friend_unblock":
+			friend_unblock_result.emit(parsed)

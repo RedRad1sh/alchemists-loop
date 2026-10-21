@@ -153,6 +153,9 @@ func _save_game() -> bool:
 		"server_tags": g._online._server_tag,
 		"contracts": g._contracts.save_block()
 	}
+	# S1 социалка: ключи social_cache/social_last_read — единый источник формы
+	# (Social.to_save()); плоская сборка, как week_cache/cycle_cache выше.
+	data.merge(g._social.to_save())
 	var file := FileAccess.open(g.TEMP_PATH, FileAccess.WRITE)
 	if file == null:
 		push_warning("Не удалось открыть временный файл сохранения.")
@@ -464,9 +467,13 @@ func _load_game() -> void:
 	# построчно — при наличии хотя бы одного из них запускается однократная
 	# presence-миграция в Contracts (порядок присваиваний и побочные вызовы —
 	# прежние: вехи, титулы, капы). В v5-сейвах ключей нет, всё несёт блок v2.
+	# Строк мастера с g._retention.* здесь нет намеренно: Retention удалён
+	# доской v2, его состояние живёт в блоке contracts.
 	if data.has("circle_days") or data.has("circle_run") or data.has("vein_pending_finds") \
 			or data.has("fair_regen_total"):
 		_migrate_retention_into_contracts(data)
+	# S1 социалка: type-guard на старые сейвы (без ключей) — внутри from_save.
+	g._social.from_save(data)
 	g._online._server_tag.clear()
 	if data.get("server_tags") is Dictionary:
 		for k in data["server_tags"]:

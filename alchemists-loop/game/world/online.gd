@@ -141,6 +141,18 @@ func _refresh_rating() -> void:
 	if _net_enabled:
 		Net.rating(_device_id)
 
+## R1: SocialUI может переиспользовать публичные строки уже загруженного рейтинга.
+## Кэш не меняет порядок и не раскрывает новые данные — это только маленький
+## ник-индекс поверх существующего ответа /api/rating.
+func social_rating_cache_has(nick: String) -> bool:
+	return not social_rating_row_by_nick(nick).is_empty()
+
+func social_rating_row_by_nick(nick: String) -> Dictionary:
+	for raw in _rating_cache.get("rows", []):
+		if raw is Dictionary and String(raw.get("nick", "")) == nick:
+			return raw
+	return {}
+
 
 func _on_net_rating_result(result: Dictionary) -> void:
 	if _rating_list == null:
@@ -214,6 +226,11 @@ func _render_rating_rows(result: Dictionary) -> void:
 		var st := g._label("открытий %d · веществ %d · очки %d%s" % [disc, elems, pts, extra], 11)
 		st.add_theme_color_override("font_color", Color(0.55, 0.62, 0.68))
 		v.add_child(st)
+		# S1 §9.3 (задача 7): кнопка «в друзья» сразу после имени — состояние
+		# пересчитывается из кэша Social на каждой перерисовке строки. Отказы
+		# заявки (bot/self/blocked/лимиты) идут единой точкой в глобальный тост
+		# (R8, коннект friend_request_result в main.gd) — err_line строке не нужен.
+		SocialUI.attach(g, row, nick)
 		if has_house:
 			var btn := g._small_button("Домик", Vector2(80, 36), 1)
 			btn.pressed.connect(g._home._open_player_house.bind(nick))
@@ -1722,7 +1739,8 @@ func _build_toast_stack() -> void:
 	_ux_layer.add_child(_toast_stack)
 
 
-func _toast(text: String, kind: int = NoticeKind.INFO, duration := 3.0) -> void:
+func _toast(text: String, kind: int = NoticeKind.INFO, duration := 3.0,
+		on_tap: Callable = Callable()) -> void:
 	if text.strip_edges() == "":
 		return
 	if _toast_stack == null:
@@ -1778,16 +1796,32 @@ func _toast(text: String, kind: int = NoticeKind.INFO, duration := 3.0) -> void:
 	tween.set_parallel(true)
 	tween.tween_property(panel, "modulate:a", 1.0, 0.18)
 	tween.tween_property(panel, "position:x", -10.0, 0.18).from(16.0)
-	var timer := g.get_tree().create_timer(duration)
-	timer.timeout.connect(func() -> void:
-		if not is_instance_valid(panel):
+	# Закрытие — единственная функция на два пути (таймер и тап). Флаг и саму
+	# лямбду объявляем до on_tap-обёртки: GDScript захватывает локальные по
+	# значению в момент создания лямбды. Флаг — в boxed Array: ссылка на
+	# массив общая, повторного фейда/queue_free не будет.
+	var dismissed := [false]
+	var dismiss := func() -> void:
+		if dismissed[0] or not is_instance_valid(panel):
 			return
+		dismissed[0] = true
 		var hide_tween := g.create_tween()
 		hide_tween.set_parallel(true)
 		hide_tween.tween_property(panel, "modulate:a", 0.0, 0.2)
 		hide_tween.tween_property(panel, "position:x", 20.0, 0.2)
 		hide_tween.chain().tween_callback(panel.queue_free)
-	, CONNECT_ONE_SHOT)
+	if on_tap.is_valid():
+		# Кликабельный тост: панель ловит мышь (стек остаётся IGNORE), левый тап
+		# зовит on_tap и закрывает тост тем же путём, что и таймер.
+		panel.mouse_filter = Control.MOUSE_FILTER_STOP
+		panel.gui_input.connect(func(ev: InputEvent) -> void:
+			if ev is InputEventMouseButton and ev.pressed and (
+					ev as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+				on_tap.call()
+				dismiss.call()
+		)
+	var timer := g.get_tree().create_timer(duration)
+	timer.timeout.connect(dismiss, CONNECT_ONE_SHOT)
 
 
 static func _find_toast_label(panel: PanelContainer) -> Label:

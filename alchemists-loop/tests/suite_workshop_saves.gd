@@ -5,15 +5,19 @@ const Scheduler = preload("res://game/lab/workshop_scheduler.gd")
 class CountingScheduler extends WorkshopScheduler:
 	var replay_calls := 0
 	var advance_calls := 0
+	var online_calls := 0
+	var last_replay: Dictionary = {}
 	var initial_regen := 0.0
 	var initial_spring := 0.0
 	func replay_offline(from_ts: float, to_ts: float) -> Dictionary:
 		replay_calls += 1
 		initial_regen = g._engine.regen_clock
 		initial_spring = g._pages._spring_clock
-		return super(from_ts, to_ts)
+		last_replay = super(from_ts, to_ts)
+		return last_replay
 	func advance(delta_seconds: float, offline := false) -> Dictionary:
 		advance_calls += 1
+		if not offline: online_calls += 1
 		return super(delta_seconds, offline)
 
 static func run(g: Game) -> void:
@@ -32,6 +36,7 @@ static func run(g: Game) -> void:
 	_failures(g, fixture)
 	_adapters(g, fixture)
 	_popup(g, fixture)
+	_resume(g, fixture)
 	_wipe(g)
 	g._workshop_scheduler = original_scheduler
 	fixture.finish()
@@ -274,6 +279,37 @@ static func _adapters(g: Game, fixture) -> void:
 	g._sigil._milestones_claimed = {"earth": [13]}
 	Selftest.check("saves legacy ticks reflect category speed and current autonomy", g._saves._bench_offline_ticks(160.0) == 4
 		and g._saves._bench_offline_ticks(Game.OFFLINE_CAP_SEC * 4.0) == 240)
+
+static func _resume(g: Game, fixture) -> void:
+	var w := _prepare(g, fixture, ["steam", "dust"])
+	var scheduler = g._workshop_scheduler
+	w.autonomy_level = 1
+	g._engine.regen_clock = 0.0
+	g._pages._spring_clock = 0.0
+	var wall := Time.get_unix_time_from_system()
+	# Godot delivers the whole backgrounded interval as one frame delta on resume,
+	# so the boundary must be read from the wall clock, not from delta.
+	var suspended := Game.OFFLINE_CAP_SEC * 2.0
+	g._last_ts = wall - suspended
+	w.last_simulated_at = g._last_ts
+	g._engine.inventory["steam"] = 0
+	g._engine.inventory["dust"] = 0
+	g._saves._save_frozen = true
+	var selftest: bool = g._selftest
+	g._selftest = false
+	g._process(suspended)
+	g._selftest = selftest
+	Selftest.check("saves resume gap replays offline instead of one full speed online frame",
+		scheduler.replay_calls == 1 and scheduler.online_calls == 0)
+	Selftest.check("saves resume gap is bounded by the offline ceiling",
+		float(scheduler.last_replay.get("simulated_seconds", INF)) <= Game.OFFLINE_CAP_SEC + 0.5)
+	Selftest.check("saves resume watermark moves past the whole suspended interval",
+		w.last_simulated_at >= wall and g._last_ts >= wall)
+	var produced := g._engine.inventory.duplicate(true)
+	var xp := w.xp
+	g._process(0.0)
+	Selftest.check("saves suspended interval is consumed exactly once", scheduler.replay_calls == 1
+		and g._engine.inventory == produced and w.xp == xp)
 
 static func _popup(g: Game, fixture) -> void:
 	var w := _prepare(g, fixture, ["steam", "dust"])

@@ -435,6 +435,9 @@ var _set_rows: VBoxContainer = null
 var _feed_list: VBoxContainer = null
 
 var _spirit: Spirit  # Светик (R9)
+var _social: Social  # S1 друзья: кэш инбокса, ленты, optimistic (game/social/social.gd)
+var _social_ui: SocialUI = null
+var _social_btn: Button  # S1: кнопка «Друзья» в ether_row, бейдж правит core._refresh_header
 var _admin: AdminConsole  # админ-консоль (~)
 # Размер комплекта фиксирован генератором каталога (SET_SIZE = 25).
 const SIGIL_SET_SIZE := 25
@@ -479,6 +482,7 @@ func _ready() -> void:
 	_resonance = Resonance.new(self)
 	_retort = Retort.new(self)
 	_home = Home.new(self)
+	_social = Social.new(self)  # S1: до _saves/сборки UI; кнопки и коннекты — Task 3
 	_shop = Shop.new(self)
 	_online = Online.new(self)
 	_spirit = Spirit.new(self)
@@ -570,6 +574,22 @@ func _ready() -> void:
 			_demo_harness._action_experiment = true
 		elif a == "--action=brewprofile":
 			_demo_harness._action_brewprofile = true
+		elif a == "--action=social":
+			_demo_harness._action_social = true
+		elif a == "--action=social_requests":
+			_demo_harness._action_social_requests = true
+		elif a == "--action=social_thread":
+			_demo_harness._action_social_thread = true
+		elif a == "--action=social_confirm":
+			_demo_harness._action_social_confirm = true
+		elif a == "--action=social_search":
+			_demo_harness._action_social_search = true
+		elif a == "--action=social_badge":
+			_demo_harness._action_social_badge = true
+		elif a == "--action=social_rating":
+			_demo_harness._action_social_rating = true
+		elif a == "--action=social_guest":
+			_demo_harness._action_social_guest = true
 		elif a == "--action=circle":
 			# доска v2 Task 5: вкладка «Круг» снята — алас ведёт на доску контрактов
 			_demo_harness._action_contracts = true
@@ -646,12 +666,27 @@ func _ready() -> void:
 		_sync.g = self
 		Net.sync_package_result.connect(_sync._on_sync_result)
 		App.application_resumed.connect(_sync.request_sync.bind(self))
+		# S1 социалка: результаты Net маршрутизируем в Social; social_inbox_result
+		# дополнительно идёт в хук шапки/тоста (оба коннекта на один сигнал).
+		Net.social_inbox_result.connect(_social.on_inbox)
+		Net.messages_result.connect(_social.on_messages)
+		Net.message_send_result.connect(_social.on_send)
+		Net.social_inbox_result.connect(_on_social_inbox_arrived)
+		Net.friend_respond_result.connect(_on_friend_respond)
+		Net.friend_remove_result.connect(_on_social_action_result)
+		Net.friend_block_result.connect(_on_social_action_result)
 	# План 2 (жила/круг): connects вне _net_enabled-блока — хендлеры сами
 	# гейтят offline/ok, а ST эмитит сигналы напрямую (suite_vein_circle).
-	# Доска v2 (Task 3): жила живёт на доске, поэтому хендлеры — из Contracts.
+	# Доска v2 (Task 3): жила живёт на доске, поэтому хендлеры — из Contracts,
+	# а не из удалённого Retention.
 	Net.cycle_result.connect(_contracts._on_net_cycle_result)
 	Net.vein_find_result.connect(_contracts._on_net_vein_find_result)
 	Net.vein_pour_result.connect(_contracts._on_net_vein_pour_result)
+	# S1/R8 (задача 7): коннект вне _net_enabled-гейта — хендлер сам
+	# разбирает offline/отсутствие detail, а selftest эмитит
+	# friend_request_result напрямую. Под гейтом связки в ST не было бы, и
+	# удаление строки connect не краснило бы ничего (FIX-2 ревьюера).
+	Net.friend_request_result.connect(_on_friend_request_result)
 	# Аркан Сигилов
 	Net.sigil_daily_result.connect(_sigil._on_daily_result)
 	Net.sigil_craft_result.connect(_sigil._on_craft_result)
@@ -677,6 +712,40 @@ func _ready() -> void:
 		_shop._open_consent.call_deferred()
 	if _demo_harness._demo:
 		_demo_harness._apply_demo_state()
+	if _demo_harness._demo and (_demo_harness._action_social or _demo_harness._action_social_requests
+			or _demo_harness._action_social_thread or _demo_harness._action_social_confirm
+			or _demo_harness._action_social_search or _demo_harness._action_social_badge
+			or _demo_harness._action_social_rating or _demo_harness._action_social_guest):
+		_social._seed_demo()
+		if _demo_harness._action_social_search:
+			# R1: карточка поиска строится из уже кэшированных строк рейтинга —
+			# живого сервера в демо может не быть, поэтому строку «Николя» кладём
+			# в _rating_cache (то же поле, что наполняет _on_net_rating_result).
+			_online._rating_cache = {"rows": [
+				{"nick": "Николя", "rank": 2, "avatar": {},
+					"last_seen": "2026-10-10T07:10:00", "discoveries": 3,
+					"elements": 2, "points": 5, "house_built": true,
+					"house_guests": 1}]}
+			# Баннер «данные от Nс назад» (online.gd) считает возраст от
+			# _rating_cache_at_ms: без него посев демо выглядит как вечный
+			# кэш, открытый «когда-то».
+			_online._rating_cache_at_ms = Time.get_ticks_msec()
+		if _demo_harness._action_social_badge or _demo_harness._action_social_rating \
+				or _demo_harness._action_social_guest:
+			# Приёмка Task 8 Step 3: бейдж «Друзья •N» в шапке БЕЗ открытия экрана —
+			# сид + перерисовка (_engine._refresh() ниже зовёт _refresh_header,
+			# бейдж считает Social.badge_for). FIX-E: rating/guest — свои ветки
+			# ниже (вкладка РЕЙТИНГ / экран дома), соц-экран не открываем.
+			pass
+		else:
+			_social_ui.open(1 if _demo_harness._action_social_requests else 0)
+			if _demo_harness._action_social_thread:
+				_social_ui._open_thread("dev-b")
+			elif _demo_harness._action_social_confirm:
+				_social_ui._open_confirm("dev-b")
+			elif _demo_harness._action_social_search:
+				# приёмка задачи 7: карточка с кнопкой состояния из кэша друзей
+				_social_ui._search("Николя")
 	_engine._refresh()
 	if not _selftest and _engine._experiment_pending_pair.size() == 2:
 		_online._resume_pending_experiment.call_deferred()
@@ -685,6 +754,8 @@ func _ready() -> void:
 	# (Contracts.claim → track_visit).
 	if not _selftest and _online._net_enabled:
 		Net.me(_online._net_nick, _online._device_id)
+		# S1: пулл инбокса при входе — сразу после me; до ответа шапку держит кэш.
+		Net.social_inbox(_online._device_id)
 		# boot-пакет: первый sync после загрузки сейва (union-рековери грантов).
 		_sync.request_sync(self)
 	if not _selftest:
@@ -726,6 +797,47 @@ func _ready() -> void:
 	if _demo_harness._demo and _demo_harness._action_rating:
 		if _tabs_ref != null:
 			_tabs_ref.current_tab = TAB_RATING
+	if _demo_harness._demo and _demo_harness._action_social_rating:
+		# FIX-E приёмка: вкладка РЕЙТИНГ с рядами и кнопками состояний заявки.
+		# Строки — из посева (паттерн social_search: живой сервер в демо-приёмке
+		# не нужен); SocialUI.attach в ряду рисует состояние по кэшу Social,
+		# посевному _seed_demo выше: Николя «в друзьях», Мирра «заявка
+		# отправлена», Некто «в друзья».
+		_online._rating_cache = {"rows": [
+			{"nick": "Николя", "rank": 1, "avatar": {},
+				"last_seen": "2026-10-10T07:10:00", "discoveries": 3,
+				"elements": 2, "points": 5, "house_built": true, "house_guests": 1},
+			{"nick": "Мирра", "rank": 2, "avatar": {},
+				"last_seen": "2026-10-09T21:40:00", "discoveries": 2,
+				"elements": 1, "points": 3, "house_built": true, "house_guests": 0},
+			{"nick": "Некто", "rank": 3, "avatar": {},
+				"last_seen": "2026-10-08T12:00:00", "discoveries": 1,
+				"elements": 1, "points": 1, "house_built": false, "house_guests": 0}]}
+		_online._rating_cache_at_ms = Time.get_ticks_msec()
+		_online._render_rating_rows(_online._rating_cache)
+		if _tabs_ref != null:
+			_tabs_ref.current_tab = TAB_RATING
+	if _demo_harness._demo and _demo_harness._action_social_guest:
+		# FIX-E приёмка: экран дома + GuestFriendActions (row кнопок состояний
+		# рядом со строкой гостей) на том же посеве: «в друзьях»/«заявка
+		# отправлена»/«в друзья».
+		_home._open_house_screen()
+		_home._on_house_profile(2, [{"nick": "Николя"}, {"nick": "Мирра"}, {"nick": "Некто"}])
+		# Строка гостей лежит глубоко в длинном скролле дома — дотягиваем её до
+		# кадра приёмки: через несколько кадров после раскладки прокручиваем
+		# HouseScroll так, чтобы GuestFriendActions встал у верхнего края
+		# (паттерн --scroll: кадр 20/40, съёмка на 50-м).
+		var _scroll_to_guests := func() -> void:
+			var sc: ScrollContainer = _home._house_scroll
+			if sc == null:
+				return
+			var row := sc.find_child("GuestFriendActions", true, false) as Control
+			if row == null:
+				return
+			var delta: float = row.get_global_transform_with_canvas().origin.y \
+				- sc.get_global_transform_with_canvas().origin.y
+			sc.scroll_vertical = maxi(0, int(sc.scroll_vertical + delta - 8))
+		get_tree().create_timer(0.25).timeout.connect(_scroll_to_guests)
 	if _demo_harness._demo and _demo_harness._action_decor:
 		_home._cosmetic_house = true
 		_home.house_owned = {"rug": ["rug_1"]}
@@ -906,6 +1018,71 @@ func _ready() -> void:
 		# Вход в игру: приветственный звук (не в selftest-прогоне).
 		Sfx.game_start()
 
+# ---------- S1 социалка: хук после инбокса и открытие экрана ----------
+
+func _on_social_inbox_arrived(result: Dictionary) -> void:
+	if result.get("ok", false) != true:
+		return
+	_engine._refresh_header()
+	# FIX-B: прилёт нового инбокса перерисовывает ОТКРЫТЫЙ список соц-экрана.
+	# После Принять/Удалить/Заблокировать обработчики зовут _social.refresh()
+	# и мгновенный _refresh_list() от СТАРОГО кэша (ответ ещё в пути) — строка
+	# жила до ре-открытия экрана. Гейт _peer == "": ленту не затаптываем,
+	# перестройка списка штатно пересобирает и поисковую карточку.
+	if _social_ui != null and _social_ui._screen != null and _social_ui._screen.visible \
+			and _social_ui.visible_thread() == "":
+		_social_ui._refresh_list()
+	if _social.should_show_toast():
+		_social.mark_toast_shown()
+		_online._toast("Тебе написали. Загляни к друзьям.",
+			Online.NoticeKind.INFO, 6.0, _open_social)
+
+func _open_social() -> void:
+	# SocialUI приедет в Task 4; до этого клик по кнопке/тосту не должен падать.
+	if _social_ui == null:
+		return
+	_social_ui.open(0)
+
+func _on_friend_respond(result: Dictionary) -> void:
+	if result.get("ok", false) == true:
+		_social.refresh()
+		_engine._refresh_header()
+		if _social_ui != null and _social_ui._screen != null and _social_ui._screen.visible:
+			_social_ui._refresh_list()
+	else:
+		if _social_ui != null:
+			_social_ui.show_send_error(SocialUI._refusal_code(result))
+
+func _on_social_action_result(result: Dictionary) -> void:
+	if _social_ui != null:
+		_social_ui._on_friend_action_result(result)
+
+func _on_friend_request_result(result: Dictionary) -> void:
+	# R8 (задача 7): единая точка отказа заявки «в друзья» — глобальный тост.
+	# Строкам рейтинга и карточке гостя свои err_line не нужны; bot/self/
+	# blocked/лимиты проходят через эту же ветку. detail нетипизирован: при
+	# 422 сервер шлёт СПИСОК, при офлайне ключа нет вовсе — тостим только по
+	# строковому коду, не-String detail (422-список) — unmapped-копией, а
+	# офлайн (detail отсутствует) молчит. Успех — обновляем
+	# кэш (кнопки перерисуют состояние на ближайшей перестройке строк).
+	if result.get("ok", false) == true:
+		_social.refresh()
+		_engine._refresh_header()
+		return
+	var detail = result.get("detail")
+	if detail is String and detail != "":
+		_online._toast(SocialUI._detail_text(detail), Online.NoticeKind.WARNING)
+	elif result.has("detail") or String(result.get("error", "")).contains("422"):
+		# 422: detail приходит СПИСОКом (словарь/массив ошибки валидации) —
+		# по глобальным constraints плана такой ответ показываем unmapped-
+		# копией «Сервер не понял запрос», а не молчим. Сквозной 422 (T8 Step 0,
+		# решение контролёра): гейт T28 в net.gd:501-502 не поднимает не-String
+		# detail наверх, поэтому настоящий HTTP 422 доходит СЮДА без ключа
+		# detail, только с error:"HTTP 422" — тот же unmapped-текст по строке
+		# error. Офлайн-результат (ключа detail нет и в error нет 422) молчит
+		# сознательно: «Мир не на связи» — не задача 7.
+		_online._toast(SocialUI._detail_text("unmapped"), Online.NoticeKind.WARNING)
+
 # ---------- R14: см. game/demo.gd (616-620) ----------
 
 
@@ -951,7 +1128,21 @@ func _process(delta: float) -> void:
 	# and all consumers have committed the same completed time slice.
 	var save_was_frozen := _saves._save_frozen
 	_saves._save_frozen = true
-	var work: Dictionary = _workshop_scheduler.advance(delta)
+	# Кадры не идут, пока приложение приостановлено, о границе online/offline
+	# судит настенное время, а не delta: иначе пропуск за resume считается
+	# обычным онлайном и обходит офлайн-потолок и лимиты автономности.
+	var wall := Time.get_unix_time_from_system()
+	var gap := wall - _workshop.last_simulated_at if _workshop.last_simulated_at > 0.0 else 0.0
+	var work: Dictionary = {}
+	if not _selftest and gap >= Game.OFFLINE_MIN_SEC:
+		_saves._save_frozen = save_was_frozen
+		_saves._grant_offline()
+		_saves._save_frozen = true
+	else:
+		work = _workshop_scheduler.advance(delta)
+	# Водораздел = настенная метка последнего просимулированного кадра.
+	if not _workshop.is_read_only() and _workshop.last_simulated_at < wall:
+		_workshop.last_simulated_at = wall
 	_saves._save_frozen = save_was_frozen
 	if int(work.get("steps", 0)) > 0 or int(work.get("spring_items", 0)) > 0:
 		_engine._refresh()
@@ -1259,6 +1450,11 @@ func _build_ui() -> void:
 	contracts_btn.tooltip_text = "Контрактная доска: дневные и недельные задания"
 	contracts_btn.pressed.connect(_open_contract_board)
 	ether_row.add_child(contracts_btn)
+	var friends_btn := _small_button("Друзья", Vector2(96, 34), 2)
+	friends_btn.tooltip_text = "Друзья, заявки и личные сообщения"
+	friends_btn.pressed.connect(_open_social)
+	ether_row.add_child(friends_btn)
+	_social_btn = friends_btn
 	_engine._collection_label = _label("", 14)
 	_engine._collection_label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	root.add_child(_engine._collection_label)
@@ -1317,6 +1513,8 @@ func _build_ui() -> void:
 	_home._build_decor_popup()
 	_home._build_color_picker()
 	_home._build_house_popup()
+	_social_ui = SocialUI.new(self)
+	_social_ui.build()
 	# Событие мира — глобальный QTE поверх текущей вкладки, не кнопка в «Мире».
 	_online._build_event_qte()
 	# UX-слой онлайн-части (тосты + индикатор сети) — поверх страниц,
