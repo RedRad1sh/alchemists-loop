@@ -5763,7 +5763,7 @@ def trade_gift(payload: TradeGiftPayload):
     код, а порядок фиксирует, что при 409 week_limit в таблицы не попадает
     ни строки, ни перемещения (test_gift_week_limit_stops_before_any_write).
     Отсутствующий профиль получателя свёрнут в not_friends — как во всём
-    S1 (`server.py:4638`, `friend_remove`): `_social_accepted` на чужом
+    S1 (`_social_id`, `friend_remove`): `_social_accepted` на чужом
     device_id вернёт False, отдельного «такого игрока нет» соц-слой не даёт.
     """
     me = _social_caller(payload.device_id)

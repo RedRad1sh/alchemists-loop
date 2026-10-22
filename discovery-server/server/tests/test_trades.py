@@ -847,8 +847,8 @@ class TestAccept:
             self, tmp_path, monkeypatch):
         """Одинаковый craft_id у двух игроков — это 409 card_gone:taker, а не 500.
 
-        `craft_id = f"{day}_{device_id[:8]}_{index}"` (server.py:6482 для
-        каталога, :6511 для хроматика) берёт только ПЕРВЫЕ 8 символов
+        `craft_id = f"{day}_{device_id[:8]}_{index}"` (`grep -n 'device_id\\[:8\\]'
+        server.py`: каталог и хроматик строятся в двух местах) берёт только ПЕРВЫЕ 8 символов
         клиентского и не аутентифицированного `device_id`, а ключ у sigil_crafts
         — пара `(device_id, craft_id)` (server.py:1332-1338). Значит два
         аккаунта, заведённых одним клиентом через POST /api/me, законно владеют
@@ -1180,6 +1180,9 @@ class TestCancelGift:
         # чужой экземпляр — не подарок: _trade_pick_row ищет его у ME
         r = _gift(client, "dev-a", "dev-b", craft="x2")
         assert (r.status_code, r.json()["detail"]) == (422, "card_not_owned")
+        assert {x["device_id"]: x["count"] for x in
+                _rows(s, "SELECT * FROM trade_counts")} == {"dev-a": 1}, \
+            "чужой craft_id не списывает лимит повторно"
 
     def test_gift_guards(self, tmp_path, monkeypatch):
         s = _srv(tmp_path, monkeypatch)
@@ -1191,6 +1194,8 @@ class TestCancelGift:
         assert (r.status_code, r.json()["detail"]) == (404, "not_friends")        # кейс 20
         assert _owners(s) == {"c1": "dev-a"}, "карта обязана остаться на месте"
         assert _rows(s, "SELECT * FROM trade_orders") == []
+        assert _rows(s, "SELECT * FROM trade_counts") == [], \
+            "отказ не тратит недельный лимит дарителя"
         r = _gift(client, "dev-a", "dev-b", card="", craft="")
         assert (r.status_code, r.json()["detail"]) == (422, "bad_selector")       # кейс 8
         r = _gift(client, "dev-a", "dev-a", card="spark")
@@ -1198,12 +1203,15 @@ class TestCancelGift:
         r = _gift(client, "dev-a", "dev-b", card="mist")
         assert (r.status_code, r.json()["detail"]) == (422, "card_not_owned")     # кейс 15
         assert _rows(s, "SELECT * FROM trade_orders") == []
+        assert _rows(s, "SELECT * FROM trade_counts") == [], \
+            "нет карты — нет и списания лимита"
         assert _gift(client, "npc-spirit", "dev-a", card="spark").status_code == 400
 
     def test_gift_rejects_when_receiver_holds_that_craft_id(self, tmp_path, monkeypatch):
         """Раллинг 3d: одинаковый `craft_id` у двух игроков — не выдумка теста.
 
-        `craft_id = f"{day}_{device_id[:8]}_{index}"` (`server.py:6482`, `:6511`)
+        `craft_id = f"{day}_{device_id[:8]}_{index}"` — форма строится в двух
+        местах, координаты даёт `grep -n 'device_id\\[:8\\]' server.py`
         берёт первые 8 символов клиентского id, поэтому две легальные строки
         (PK — пара `(device_id, craft_id)`) могут назваться одинаково, и `UPDATE`
         переездом на такой PK дал бы `IntegrityError` = 500 вместо машинного
