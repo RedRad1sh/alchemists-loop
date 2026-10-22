@@ -224,18 +224,25 @@ static func _entry(g: Game) -> void:
 
 static func _constructor(g: Game) -> void:
 	# Мутации: добавить/убрать ключ в pick() (первый кейс), переписать is_last на
-	# copies < 1 (второй/третий), забыть ветку extras (четвёртый/пятый), not
-	# disabled у want в gift-режиме (шестой), вызвать Net.trade_offer из
-	# open_confirm() вместо кнопки (седьмой и восьмой: в первом падает потому,
-	# что сигнал уже прилетел до нажатия, во втором — fired становится 2, а
-	# запрос уже лежит в очереди до нажатия), снять маппинг detail (девятый).
+	# copies <= 1 без оговорки про craft_id (второй/третий/четвёртый), забыть ветку
+	# extras или фолбэк имени (пятый), not disabled у want в gift-режиме (шестой),
+	# вызвать Net.trade_offer из open_confirm() вместо кнопки (седьмой и восьмой: в
+	# первом падает потому, что сигнал уже прилетел до нажатия, во втором — fired
+	# становится 2, а запрос уже лежит в очереди до нажатия), снять маппинг detail
+	# (девятый), снять offline-ветку в `_on_write_result` (десятый), вернуть в
+	# предупреждение второй дизъюнкт про want (одиннадцатый), забыть сброс _note в
+	# open_confirm() (двенадцатый), оставить подарок на экране подтверждения с уже
+	# очищенным оффером (тринадцатый), убрать сброс черновика в open()
+	# (четырнадцатый).
 	# Страж has_script_method — он же и RED: удалить любой из семи новых методов
-	# значит получить все девять падений сразу, а не обрезанную сюиту.
+	# значит получить все четырнадцать падений сразу, а не обрезанную сюиту.
 	var names := ["pick contract is four fields", "pick single copy is last",
 		"pick third copy is not last", "pick chromatic is always last",
 		"entries list owned cards and extras", "gift mode kills want slot",
 		"confirm warns before offer", "offer sends only on proceed",
-		"offer failure shows server copy"]
+		"offer failure shows server copy", "offline refusal says no connection",
+		"confirm warns about what you give", "confirm drops the stale refusal",
+		"gift success leaves confirm", "open clears the draft"]
 	var T = load("res://game/social/trade_ui.gd")
 	var api := ["pick", "entries", "open_builder", "open_confirm",
 		"can_confirm", "on_offer", "on_gift"]
@@ -259,24 +266,18 @@ static func _constructor(g: Game) -> void:
 		bool(tu.pick("spark", "", 1, "").get("is_last", false)))
 	Selftest.check("pick third copy is not last",
 		not bool(tu.pick("ice", "", 3, "").get("is_last", true)))
-	var ch: Dictionary = tu.pick("", "x1", 0, "Радуга")
+	# copies=4 — единственный способ заставить этот кейс краснеть: при copies <= 1
+	# условие «копий мало» уже истинно, и ветка craft_id != "" не проверялась бы
+	# ничем. Хроматик всегда единственный экземпляр, поэтому именно он обязан
+	# считаться последним даже при формально большем числе копий.
+	var ch: Dictionary = tu.pick("", "x1", 4, "Радуга")
 	Selftest.check("pick chromatic is always last", bool(ch.get("is_last", false))
 		and String(ch.get("card_id", "")) == "" and String(ch.get("craft_id", "")) == "x1")
 
-	var sm = g._sigil
-	sm.set_catalog([
-		{"id": "spark", "set": "fire", "rarity": "common", "ether_cost": 100,
-			"recipe": [], "process": "sublimatio", "stage": "albedo",
-			"fallback_name": "Искра", "object_type": "object", "seed": 1},
-		{"id": "ice", "set": "water", "rarity": "rare", "ether_cost": 150,
-			"recipe": [], "process": "sublimatio", "stage": "albedo",
-			"fallback_name": "Лёд", "object_type": "object", "seed": 2},
-	], [], "unit-trade")
-	sm._server_collection = {"spark": {"copies": 1, "first_at": ""},
-		"ice": {"copies": 3, "first_at": ""}}
-	sm._server_extras = [{"craft_id": "x1", "rarity": "chromatic",
-		"llm_name": "Радуга", "crafted_at": "", "seed": 7, "lore": "",
-		"ingredients": []}]
+	# Достаём слой ДО правок общего g._sigil: если проверка на null стоит после
+	# присваиваний, её ранний return оставляет каталог unit-trade и экземпляр x1 в
+	# менеджере, а дальше идут SuiteJuice, SuiteSaveSync, SuiteSyncPackageNet и
+	# SuiteContractBoard (tests/selftest.gd:163-166) — падали бы они уже на себя.
 	var ui = g.get("_social_ui")
 	if ui == null:
 		for n in names.slice(4):
@@ -288,15 +289,37 @@ static func _constructor(g: Game) -> void:
 		for n in names.slice(4):
 			Selftest.check(n, false)
 		return
+	var sm = g._sigil
+	sm.set_catalog([
+		{"id": "spark", "set": "fire", "rarity": "common", "ether_cost": 100,
+			"recipe": [], "process": "sublimatio", "stage": "albedo",
+			"fallback_name": "Искра", "object_type": "object", "seed": 1},
+		{"id": "ice", "set": "water", "rarity": "rare", "ether_cost": 150,
+			"recipe": [], "process": "sublimatio", "stage": "albedo",
+			"fallback_name": "Лёд", "object_type": "object", "seed": 2},
+		# fallback_name пустой — ровно так поле приходит для вида без имени
+		# (SigilCatalogCard.fallback_name = "", server.py:1097). Пикер обязан
+		# показать id, иначе кнопка «— последняя» без названия недостижима глазами.
+		{"id": "dust", "set": "earth", "rarity": "common", "ether_cost": 50,
+			"recipe": [], "process": "calcinatio", "stage": "nigredo",
+			"fallback_name": "", "object_type": "object", "seed": 3},
+	], [], "unit-trade")
+	sm._server_collection = {"spark": {"copies": 1, "first_at": ""},
+		"ice": {"copies": 3, "first_at": ""},
+		"dust": {"copies": 2, "first_at": ""}}
+	sm._server_extras = [{"craft_id": "x1", "rarity": "chromatic",
+		"llm_name": "Радуга", "crafted_at": "", "seed": 7, "lore": "",
+		"ingredients": []}]
 	var list: Array = tr.entries()
 	var by_card := {}
 	for e in list:
 		var key := String(e.get("card_id", "")) + "|" + String(e.get("craft_id", ""))
 		by_card[key] = e
-	Selftest.check("entries list owned cards and extras", list.size() == 3
+	Selftest.check("entries list owned cards and extras", list.size() == 4
 		and bool(by_card.get("spark|", {}).get("is_last", false))
 		and String(by_card.get("spark|", {}).get("display_name", "")) == "Искра"
 		and not bool(by_card.get("ice|", {}).get("is_last", true))
+		and String(by_card.get("dust|", {}).get("display_name", "")) == "dust"
 		and String(by_card.get("|x1", {}).get("display_name", "")) == "Радуга")
 
 	tr.open("dev-b")
@@ -306,19 +329,28 @@ static func _constructor(g: Game) -> void:
 	tr._mode = 1
 	tr.call("_render")
 	var want_btn := _button_named(tr._body, "Лёд")
-	tr._offer["gift"] = true
-	tr.call("_render")
-	var want_btn2 := _button_named(tr._body, "Лёд")
-	Selftest.check("gift mode kills want slot", want_btn != null and want_btn2 != null
-		and not want_btn.disabled and want_btn2.disabled)
+	# Подарок включает _toggle_gift(), он же и обнуляет want. Присваивать
+	# _offer["gift"] = true напрямую нельзя: проверка описывала бы состояние,
+	# которого игрок не может получить, а настоящий путь (слот «не выбрана» и
+	# disabled) оставался бы без покрытия.
+	tr.call("_toggle_gift")
+	var none_btn := _button_named(tr._body, "не выбрана")
+	Selftest.check("gift mode kills want slot", want_btn != null and none_btn != null
+		and not want_btn.disabled and none_btn.disabled
+		and (tr._offer["want"] as Dictionary).is_empty()
+		and bool(tr._offer["gift"]))
 
 	var fired := {"n": 0}
 	var cb := func(_r: Dictionary) -> void: fired["n"] = int(fired["n"]) + 1
 	Net.trade_offer_result.connect(cb)
-	tr._offer["gift"] = false
+	# _toggle_gift() стёр want — собираем встречный оффер заново, иначе
+	# open_confirm() уйдёт в «Выбери карту» и проверка 7 покраснеет не за то.
+	tr._offer = {"give": tu.pick("spark", "", 1, "Искра"),
+		"want": tu.pick("ice", "", 3, "Лёд"), "gift": false}
 	tr.open_confirm()
 	Selftest.check("confirm warns before offer", tr._mode == 2
-		and _label_has(tr._body, "последн") and int(fired["n"]) == 0)
+		and _label_has(tr._body, "последн") and _label_has(tr._body, "вехи")
+		and int(fired["n"]) == 0)
 	var proceed := _button_named(tr._body, "Предложить")
 	# Offer обязан уходить по нажатию кнопки, а не из open_confirm(). Сигнал
 	# ждём детерминированно: гасим base_url на время нажатия (шаблон
@@ -338,6 +370,60 @@ static func _constructor(g: Game) -> void:
 	tr.open_confirm()
 	tr.call("on_offer", {"ok": false, "detail": "too_many_open"})
 	Selftest.check("offer failure shows server copy", _label_has(tr._body, "висящих"))
+
+	# Offline-ответ Net приходит без ключа detail (net.gd:454 — {ok:false,
+	# offline:true, message:...}), поэтому без отдельной ветки он попадёт в `_:`
+	# «Мир не понял запрос»: игрок читает это про запрос, который никуда не ушёл.
+	# Вызов прямой, а не через нажатие выше: синхронный слив очереди при нажатии
+	# может не состояться в этом кадре (чужой запрос в _inflight), а копия обязана
+	# быть запинена детерминированно.
+	tr.call("on_offer", {"ok": false, "offline": true, "message": "сервер не настроен"})
+	Selftest.check("offline refusal says no connection",
+		_label_has(tr._body, "не на связи"))
+
+	# Предупреждение — только про отдаваемую карту. Пикер want берёт тот же
+	# список, что и give (из МОЕЙ коллекции — §8.4: источник данных один),
+	# поэтому «последняя копия» на стороне want описывает карту, которую просят
+	# у меня. Теряю я другую, и копия «Это твоя последняя копия» поверх want
+	# говорит игроку неправду про необратимое последствие.
+	tr._offer = {"give": tu.pick("ice", "", 3, "Лёд"),
+		"want": tu.pick("spark", "", 1, "Искра"), "gift": false}
+	tr.open_confirm()
+	Selftest.check("confirm warns about what you give", tr._mode == 2
+		and not _label_has(tr._body, "последн"))
+
+	# Прошлый отказ не должен переживать следующее подтверждение: игрок обязан
+	# видеть причину отказа, который он получил сейчас, а не того, что он уже
+	# исправил.
+	tr._offer = {"give": tu.pick("spark", "", 1, "Искра"),
+		"want": tu.pick("ice", "", 3, "Лёд"), "gift": false}
+	tr.open_confirm()
+	tr.call("on_offer", {"ok": false, "detail": "week_limit"})
+	var note_shown := _label_has(tr._body, "Недельный")
+	tr.open_confirm()
+	Selftest.check("confirm drops the stale refusal", note_shown
+		and not _label_has(tr._body, "Недельный"))
+
+	# Успешный подарок обязан уйти с экрана подтверждения: _offer уже пуст,
+	# поэтому единственная живая кнопка «Подарить» через _send() отправила бы
+	# Net.trade_gift(dev, peer, "", "") — серверный 422 bad_selector вместо
+	# подтверждения, и игроку неоткуда узнать, что подарок дошёл.
+	tr._offer = {"give": tu.pick("", "x1", 1, "Радуга"),
+		"want": {}, "gift": true}
+	tr.open_confirm()
+	tr.call("on_gift", {"ok": true, "craft_id": "x1", "moved_name": "Радуга",
+		"remain": 7})
+	Selftest.check("gift success leaves confirm", tr._mode != 2
+		and (tr._offer["give"] as Dictionary).is_empty())
+
+	# Смена собеседника чистит черновик: иначе полусобранный оффер, начатый с
+	# другом A, уходит другу B одним нажатием «Дальше».
+	tr.open("dev-b")
+	tr.open_builder()
+	tr._offer["give"] = tu.pick("spark", "", 1, "Искра")
+	tr.open("dev-c")
+	Selftest.check("open clears the draft",
+		(tr._offer["give"] as Dictionary).is_empty() and not bool(tr.can_confirm()))
 	tr.call("close")
 	# Фикстура живёт в общем g._sigil, а после SuiteTrades идут SuiteJuice,
 	# SuiteSaveSync, SuiteSyncPackageNet и SuiteContractBoard

@@ -33,6 +33,9 @@ func open(peer: String) -> void:
 		build()
 	_peer = peer
 	_mode = 0
+	_offer = {"give": {}, "want": {}, "gift": false}
+	_picking = ""
+	_note = ""
 	_screen.visible = true
 	Net.trade_list(g._online._device_id)
 	_render()
@@ -73,6 +76,12 @@ func entries() -> Array:
 		if copies <= 0:
 			continue
 		var nm := str(g._sigil.card(str(cid)).get("fallback_name", cid))
+		# Пустое значение отличается от отсутствующего ключа: у вида без имени
+		# fallback_name приходит как "" (server.py:1097), и get(... , cid) вернёт
+		# именно "". Без фолбэка кнопка пикера рисуется безымянной — «— последняя»
+		# вместо названия, и опознать карту нельзя.
+		if nm == "":
+			nm = str(cid)
 		out.append(pick(str(cid), "", copies, nm))
 	for x in g._sigil.server_extras():
 		if not (x is Dictionary):
@@ -103,6 +112,7 @@ func open_confirm() -> void:
 		_mode = 1
 		_render()
 		return
+	_note = ""        # прошлый отказ нельзя приносить на новое подтверждение
 	_mode = 2
 	_render()
 
@@ -117,12 +127,22 @@ func _on_write_result(result: Dictionary, is_offer: bool) -> void:
 		_offer = {"give": {}, "want": {}, "gift": false}
 		_picking = ""
 		_note = ""
+		# Оба успеха уходят на список. Оставленный экран подтверждения рисует
+		# «Ты отдаёшь: » с пустым именем и живой кнопкой, нажатие которой шлёт
+		# пустые селекторы (422 bad_selector), а подтверждения игроку неоткуда.
+		_mode = 0
 		if is_offer:
-			_mode = 0          # оффер виден в «Я предложил»
-			Net.trade_list(g._online._device_id)
+			Net.trade_list(g._online._device_id)   # re-pull списка офферов
 		_render()
 		return
-	_note = _detail_text(String(result.get("detail", "")))
+	# Офлайн — не «сервер не понял»: запрос не уходил. У Net-слива нет ключа
+	# detail (net.gd:454), поэтому без ветки он падает в `_:` и игрок без сервера
+	# читает «Мир не понял запрос» на каждое действие. Текст совпадает с
+	# social_ui.gd:141 для того же состояния — один код, один текст на весь слой.
+	if result.get("offline", false) == true:
+		_note = "Мир не на связи"
+	else:
+		_note = _detail_text(String(result.get("detail", "")))
 	_render()
 
 ## Коды сервера (§7) → текст. Единая таблица на весь слой: отказ offer и отказ
@@ -130,7 +150,12 @@ func _on_write_result(result: Dictionary, is_offer: bool) -> void:
 ## разные механизмы.
 static func _detail_text(code: String) -> String:
 	match code:
-		"not_registered": return "Сначала заведись в мире — тогда обмен откроется"
+		# Код поднимается по обеим сторонам сделки (server.py:5577-5578 — и
+		# `_trade_registered(conn, me)`, и `(conn, to)`), поэтому копия не должна
+		# указывать на отправителя: «заведись» от пропавшего собеседника звучит как
+		# обвинение игрока. Формулировка совпадает с social_ui.gd:139 для того же
+		# кода — один код, один текст на весь слой.
+		"not_registered": return "Профиль ещё не зарегистрирован."
 		"not_friends": return "Меняться можно только с друзьями"
 		"not_found": return "Такого обмена уже нет"
 		"not_pending": return "Этот обмен уже закрыт"
@@ -342,10 +367,13 @@ func _render_confirm() -> void:
 		_body.add_child(g._label("Подарок (%s): без встречной карты" % _nick(), 13))
 	else:
 		_body.add_child(g._label("Ты получаешь: %s" % String(want.get("display_name", "")), 14))
-	if bool(give.get("is_last", false)) or (not bool(_offer["gift"])
-			and bool(want.get("is_last", false))):
+	if bool(give.get("is_last", false)):
 		# Единственная защита «последней копии» (спека §5.3): сервер такую сделку
 		# не блокирует, поэтому название последствия обязано быть на этом экране.
+		# И только про отдаваемую карту: want собирается из той же моей коллекции
+		# (§8.4 — источник данных один), поэтому «последняя копия» на его стороне
+		# описывает карту, которую просят у меня, а не ту, что теряю я. Про свою
+		# потерю игрок читает эту строку и отменяет законную сделку.
 		var warn := g._label(
 			"Это твоя последняя копия вида. Отдав её, теряешь карту из "
 			+ "коллекции: прогресс достижений по сигилам и невыбранные вехи "
