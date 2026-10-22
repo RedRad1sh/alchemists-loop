@@ -590,6 +590,14 @@ func _ready() -> void:
 			_demo_harness._action_social_rating = true
 		elif a == "--action=social_guest":
 			_demo_harness._action_social_guest = true
+		elif a == "--action=trade_list":
+			_demo_harness._action_trade_list = true
+		elif a == "--action=trade_build":
+			_demo_harness._action_trade_build = true
+		elif a == "--action=trade_confirm":
+			_demo_harness._action_trade_confirm = true
+		elif a == "--action=trade_gift":
+			_demo_harness._action_trade_gift = true
 		elif a == "--action=circle":
 			# доска v2 Task 5: вкладка «Круг» снята — алас ведёт на доску контрактов
 			_demo_harness._action_contracts = true
@@ -722,7 +730,9 @@ func _ready() -> void:
 	if _demo_harness._demo and (_demo_harness._action_social or _demo_harness._action_social_requests
 			or _demo_harness._action_social_thread or _demo_harness._action_social_confirm
 			or _demo_harness._action_social_search or _demo_harness._action_social_badge
-			or _demo_harness._action_social_rating or _demo_harness._action_social_guest):
+			or _demo_harness._action_social_rating or _demo_harness._action_social_guest
+			or _demo_harness._action_trade_list or _demo_harness._action_trade_build
+			or _demo_harness._action_trade_confirm or _demo_harness._action_trade_gift):
 		_social._seed_demo()
 		if _demo_harness._action_social_search:
 			# R1: карточка поиска строится из уже кэшированных строк рейтинга —
@@ -753,6 +763,11 @@ func _ready() -> void:
 			elif _demo_harness._action_social_search:
 				# приёмка задачи 7: карточка с кнопкой состояния из кэша друзей
 				_social_ui._search("Николя")
+	if _demo_harness._demo and (_demo_harness._action_trade_list
+			or _demo_harness._action_trade_build
+			or _demo_harness._action_trade_confirm
+			or _demo_harness._action_trade_gift):
+		_demo_seed_trades()
 	_engine._refresh()
 	if not _selftest and _engine._experiment_pending_pair.size() == 2:
 		_online._resume_pending_experiment.call_deferred()
@@ -2278,6 +2293,99 @@ func _demo_seed_sigil_coll() -> void:
 			_sigil_ui._open_sigil_set_screen("earth")
 		_:
 			pass
+
+func _demo_seed_trades() -> void:
+	# Кадры приёмки §12.2. Живого сервера нет, поэтому список и коллекция
+	# подставляются в те же поля, которые наполняет net-ответ (образец —
+	# _demo_seed_sigil_coll). Экран открывается настоящей кнопкой «Обменять»
+	# (_open_trade), а не прямым TradeUI.new(): иначе кадр не доказывал бы
+	# вход, который рисует игрок.
+	_sigil.set_catalog([
+		{"id": "clay", "set": "earth", "rarity": "common", "ether_cost": 50,
+			"recipe": [{"item_id": "clay", "qty": 12}, {"item_id": "water", "qty": 20}],
+			"process": "осадок и прессовка", "stage": "nigredo",
+			"fallback_name": "Глина", "object_type": "object", "seed": 90210},
+		{"id": "metal", "set": "earth", "rarity": "epic", "ether_cost": 400,
+			"recipe": [{"item_id": "metal", "qty": 30}, {"item_id": "fire", "qty": 45}],
+			"process": "плавка и закалка", "stage": "albedo",
+			"fallback_name": "Металл", "object_type": "relic", "seed": 90211},
+		{"id": "mountain", "set": "earth", "rarity": "legendary", "ether_cost": 800,
+			"recipe": [{"item_id": "mountain", "qty": 60}, {"item_id": "cloud", "qty": 80}],
+			"process": "горный венец", "stage": "rubedo",
+			"fallback_name": "Гора", "object_type": "planet", "seed": 90212}],
+		[{"id": "earth", "title": "Стихия Земли",
+			"card_ids": ["clay", "metal", "mountain"]}], "demo-trades")
+	# clay — 2 копии (не последняя), metal — 1 (последняя: именно она даёт
+	# is_last-предупреждение на кадре подтверждения).
+	_sigil._on_collection_result({"ok": true, "cards": {
+		"clay": {"copies": 2, "first_at": "2026-09-28T10:00:00"},
+		"metal": {"copies": 1, "first_at": "2026-09-30T18:30:00"},
+		"mountain": {"copies": 1, "first_at": "2026-10-01T09:15:00"}},
+		"extras": [{"craft_id": "c-17", "rarity": "chromatic",
+			"llm_name": "Серный круг", "crafted_at": "2026-10-01T09:00:00"}],
+		"milestones": {"earth": [3]}})
+	_social_ui._open_trade("dev-b")
+	var tr = _social_ui._trade
+	# remain=0 на кадре списка: только при нуле строка лимита показывает дату
+	# сброса (§7.2), а на конструкторе нужен ненулевой остаток — иначе гейт
+	# кнопки «Далее» законно серой, и кадр не докажет проходимый путь.
+	tr._list = {
+		"ok": true, "week_limit": 10,
+		"remain": 0 if _demo_harness._action_trade_list else 7,
+		"incoming": [
+			{"id": 101, "maker_device": "dev-b", "taker_device": _online._device_id,
+				"maker_nick": "Николя", "taker_nick": "", "state": "pending",
+				"created_at": "2026-10-20T09:12:00",
+				"give_card_id": "", "give_craft_id": "c-17", "give_name": "Серный круг",
+				"want_card_id": "clay", "want_craft_id": "", "want_name": ""},
+			{"id": 102, "maker_device": "dev-c", "taker_device": _online._device_id,
+				"maker_nick": "Аня", "taker_nick": "", "state": "pending",
+				"created_at": "2026-10-19T18:40:00",
+				"give_card_id": "mountain", "give_craft_id": "", "give_name": "",
+				"want_card_id": "metal", "want_craft_id": "", "want_name": ""}],
+		"outgoing": [
+			{"id": 103, "maker_device": _online._device_id, "taker_device": "dev-b",
+				"maker_nick": "", "taker_nick": "Николя", "state": "pending",
+				"created_at": "2026-10-20T11:05:00",
+				"give_card_id": "clay", "give_craft_id": "", "give_name": "",
+				"want_card_id": "", "want_craft_id": "c-23",
+				"want_name": "Лазурный виток"}],
+		"history": [
+			{"id": 98, "maker_device": "dev-b", "taker_device": _online._device_id,
+				"maker_nick": "Николя", "taker_nick": "", "state": "accepted",
+				"created_at": "2026-10-14T08:00:00",
+				"give_card_id": "sand", "give_craft_id": "", "give_name": "",
+				"want_card_id": "", "want_craft_id": "c-09",
+				"want_name": "Кобальтовая тропа"},
+			{"id": 97, "maker_device": _online._device_id, "taker_device": "dev-c",
+				"maker_nick": "", "taker_nick": "Аня", "state": "accepted",
+				"created_at": "2026-10-12T20:30:00",
+				"give_card_id": "", "give_craft_id": "c-31",
+				"give_name": "Пепельный язык",
+				"want_card_id": "", "want_craft_id": "", "want_name": ""},
+			{"id": 96, "maker_device": "dev-c", "taker_device": _online._device_id,
+				"maker_nick": "Аня", "taker_nick": "", "state": "cancelled",
+				"created_at": "2026-10-10T07:15:00",
+				"give_card_id": "stone", "give_craft_id": "", "give_name": "",
+				"want_card_id": "clay", "want_craft_id": "", "want_name": ""}]}
+	if _demo_harness._action_trade_gift:
+		tr.open_builder()
+		tr._offer = {"give": tr.pick("", "c-31", 1, "Пепельный язык"),
+			"want": {}, "gift": true}
+		tr._render()
+	elif _demo_harness._action_trade_confirm:
+		tr.open_builder()
+		tr._offer = {"give": tr.pick("metal", "", 1, "Металл"),
+			"want": tr.pick("", "c-17", 1, "Серный круг"), "gift": false}
+		tr._render()
+		tr.open_confirm()
+	elif _demo_harness._action_trade_build:
+		tr.open_builder()
+		tr._offer = {"give": tr.pick("clay", "", 2, "Глина"),
+			"want": tr.pick("", "c-17", 1, "Серный круг"), "gift": false}
+		tr._render()
+	else:
+		tr._render()
 
 
 ## Наборы демо-каталога: четыре стихии по 25 карт — свои предметы категории

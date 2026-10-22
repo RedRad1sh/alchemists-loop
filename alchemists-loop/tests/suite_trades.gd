@@ -503,6 +503,7 @@ static func _list_actions(g: Game) -> void:
 	var names := ["list rows follow server slices",
 		"incoming row has accept only", "outgoing row has cancel",
 		"accept press sends that order", "header shows server remain",
+		"offer entry live while remain remains",
 		"reset day is next monday", "proceed locked at zero remain",
 		"accept ok re-pulls collection and inbox",
 		"card gone is calm and does not re-pull",
@@ -590,6 +591,11 @@ static func _list_actions(g: Game) -> void:
 	# «Обменов на этой неделе: 10 из 10» при remain 0 зафиксирована в приёмке
 	# Task 11, поэтому при remain 7 из 10 здесь обязано быть «3 из 10».
 	Selftest.check("header shows server remain", _label_has(tr._body, "3 из 10"))
+	# Комплементарный пин к гейту §9.2: при ненулевом остатке вход обязан быть
+	# жив, иначе `new_btn.disabled = true` (обмен недоступен всегда) зелёный.
+	var entry_live := _button_named(tr._body, "Предложить обмен")
+	Selftest.check("offer entry live while remain remains",
+		entry_live != null and not entry_live.disabled)
 	# Чистые даты: 2026-10-21 — среда, следующий понедельник 26-е; с понедельника
 	# на понедельник (delta 0 → 7), иначе «сброс сегодня» ввёл бы в заблуждение.
 	var T = load("res://game/social/trade_ui.gd")
