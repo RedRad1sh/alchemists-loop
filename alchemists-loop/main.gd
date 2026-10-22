@@ -690,6 +690,8 @@ func _ready() -> void:
 	# S2 обмен: тот же мотив, что у friend_request выше — хендлер сам решает,
 	# что делать с offline/не-ok, а selftest эмитит trade_list_result напрямую.
 	Net.trade_list_result.connect(_on_trade_list_result)
+	Net.trade_offer_result.connect(_on_trade_offer_result)
+	Net.trade_gift_result.connect(_on_trade_gift_result)
 	# Аркан Сигилов
 	Net.sigil_daily_result.connect(_sigil._on_daily_result)
 	Net.sigil_craft_result.connect(_sigil._on_craft_result)
@@ -1066,6 +1068,14 @@ func _on_trade_list_result(result: Dictionary) -> void:
 	# первым: offline-слив очереди эмитит результаты синхронно.
 	if _social_ui != null and _social_ui._trade != null:
 		_social_ui._trade.on_list(result)
+
+func _on_trade_offer_result(result: Dictionary) -> void:
+	if _social_ui != null and _social_ui._trade != null:
+		_social_ui._trade.on_offer(result)
+
+func _on_trade_gift_result(result: Dictionary) -> void:
+	if _social_ui != null and _social_ui._trade != null:
+		_social_ui._trade.on_gift(result)
 
 func _on_friend_request_result(result: Dictionary) -> void:
 	# R8 (задача 7): единая точка отказа заявки «в друзья» — глобальный тост.

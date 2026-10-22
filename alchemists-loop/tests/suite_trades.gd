@@ -35,6 +35,7 @@ static func run(g: Game) -> void:
 	_shapes(g)
 	_dispatch_routes(g)
 	_entry(g)
+	_constructor(g)
 
 
 static func _methods(_g: Game) -> void:
@@ -114,11 +115,21 @@ static func _button_named(node: Node, text: String) -> Button:
 	return null
 
 
-static func _trade_list_pending() -> bool:
-	# Синхронного слива может не быть: чужой запрос ещё в _inflight, и _send_next
-	# выходит рано — тогда trade_list остаётся в очереди, что тоже доказательство.
+static func _label_has(node: Node, needle: String) -> bool:
+	for c in node.get_children():
+		if c is Label and (c as Label).text.contains(needle):
+			return true
+		if _label_has(c, needle):
+			return true
+	return false
+
+
+static func _pending(kind: String) -> bool:
+	# Синхронного offline-слива может не быть: чужой запрос ещё в _inflight, и
+	# _send_next выходит рано — тогда запрос остаётся в Net._queue, что тоже
+	# доказательство «метод вызвали».
 	for req in Net._queue:
-		if String(req.get("kind", "")) == "trade_list":
+		if String(req.get("kind", "")) == kind:
 			return true
 	return false
 
@@ -159,7 +170,7 @@ static func _entry(g: Game) -> void:
 	var pulls := {"n": 0}
 	var spy := func(_res: Dictionary) -> void:
 		pulls["n"] = int(pulls["n"]) + 1
-	var pending_before := _trade_list_pending()
+	var pending_before := _pending("trade_list")
 	Net.base_url = ""
 	Net.trade_list_result.connect(spy)
 	if swap != null:
@@ -171,7 +182,7 @@ static func _entry(g: Game) -> void:
 		and (tr.get("_screen") as Control) != null
 		and (tr.get("_screen") as Control).get_parent() == ui._screen)
 	Selftest.check("trade open pulls list",
-		not pending_before and (int(pulls["n"]) >= 1 or _trade_list_pending()))
+		not pending_before and (int(pulls["n"]) >= 1 or _pending("trade_list")))
 	if tr != null:
 		var s: Control = tr.get("_screen")
 		Selftest.check("trade layer z and group", s != null and s.z_index == 21
@@ -209,3 +220,129 @@ static func _entry(g: Game) -> void:
 	row.free()
 	spirit_row.free()
 	ui.close()
+
+
+static func _constructor(g: Game) -> void:
+	# Мутации: добавить/убрать ключ в pick() (первый кейс), переписать is_last на
+	# copies < 1 (второй/третий), забыть ветку extras (четвёртый/пятый), not
+	# disabled у want в gift-режиме (шестой), вызвать Net.trade_offer из
+	# open_confirm() вместо кнопки (седьмой и восьмой: в первом падает потому,
+	# что сигнал уже прилетел до нажатия, во втором — fired становится 2, а
+	# запрос уже лежит в очереди до нажатия), снять маппинг detail (девятый).
+	# Страж has_script_method — он же и RED: удалить любой из семи новых методов
+	# значит получить все девять падений сразу, а не обрезанную сюиту.
+	var names := ["pick contract is four fields", "pick single copy is last",
+		"pick third copy is not last", "pick chromatic is always last",
+		"entries list owned cards and extras", "gift mode kills want slot",
+		"confirm warns before offer", "offer sends only on proceed",
+		"offer failure shows server copy"]
+	var T = load("res://game/social/trade_ui.gd")
+	var api := ["pick", "entries", "open_builder", "open_confirm",
+		"can_confirm", "on_offer", "on_gift"]
+	var ready := true
+	for m in api:
+		if not T.has_script_method(StringName(m)):
+			ready = false
+	if not ready:
+		for n in names:
+			Selftest.check(n, false)
+		return
+	# Экземпляр, а не статика: selftest не ссылается на class_name TradeUI
+	# напрямую, а методы вызывает через Variant — ровно как SocialUI достают из
+	# g.get("_social_ui"). TradeUI наследует RefCounted, поэтому tu.free() не нужен.
+	var tu = T.new(g)
+	var p: Dictionary = tu.pick("spark", "", 1, "Искра")
+	Selftest.check("pick contract is four fields", p.keys().size() == 4
+		and p.has("card_id") and p.has("craft_id")
+		and p.has("is_last") and p.has("display_name"))
+	Selftest.check("pick single copy is last",
+		bool(tu.pick("spark", "", 1, "").get("is_last", false)))
+	Selftest.check("pick third copy is not last",
+		not bool(tu.pick("ice", "", 3, "").get("is_last", true)))
+	var ch: Dictionary = tu.pick("", "x1", 0, "Радуга")
+	Selftest.check("pick chromatic is always last", bool(ch.get("is_last", false))
+		and String(ch.get("card_id", "")) == "" and String(ch.get("craft_id", "")) == "x1")
+
+	var sm = g._sigil
+	sm.set_catalog([
+		{"id": "spark", "set": "fire", "rarity": "common", "ether_cost": 100,
+			"recipe": [], "process": "sublimatio", "stage": "albedo",
+			"fallback_name": "Искра", "object_type": "object", "seed": 1},
+		{"id": "ice", "set": "water", "rarity": "rare", "ether_cost": 150,
+			"recipe": [], "process": "sublimatio", "stage": "albedo",
+			"fallback_name": "Лёд", "object_type": "object", "seed": 2},
+	], [], "unit-trade")
+	sm._server_collection = {"spark": {"copies": 1, "first_at": ""},
+		"ice": {"copies": 3, "first_at": ""}}
+	sm._server_extras = [{"craft_id": "x1", "rarity": "chromatic",
+		"llm_name": "Радуга", "crafted_at": "", "seed": 7, "lore": "",
+		"ingredients": []}]
+	var ui = g.get("_social_ui")
+	if ui == null:
+		for n in names.slice(4):
+			Selftest.check(n, false)
+		return
+	ui.open(0)
+	var tr = ui.get("_trade")
+	if tr == null:
+		for n in names.slice(4):
+			Selftest.check(n, false)
+		return
+	var list: Array = tr.entries()
+	var by_card := {}
+	for e in list:
+		var key := String(e.get("card_id", "")) + "|" + String(e.get("craft_id", ""))
+		by_card[key] = e
+	Selftest.check("entries list owned cards and extras", list.size() == 3
+		and bool(by_card.get("spark|", {}).get("is_last", false))
+		and String(by_card.get("spark|", {}).get("display_name", "")) == "Искра"
+		and not bool(by_card.get("ice|", {}).get("is_last", true))
+		and String(by_card.get("|x1", {}).get("display_name", "")) == "Радуга")
+
+	tr.open("dev-b")
+	tr.open_builder()
+	tr._offer = {"give": tu.pick("spark", "", 1, "Искра"),
+		"want": tu.pick("ice", "", 3, "Лёд"), "gift": false}
+	tr._mode = 1
+	tr.call("_render")
+	var want_btn := _button_named(tr._body, "Лёд")
+	tr._offer["gift"] = true
+	tr.call("_render")
+	var want_btn2 := _button_named(tr._body, "Лёд")
+	Selftest.check("gift mode kills want slot", want_btn != null and want_btn2 != null
+		and not want_btn.disabled and want_btn2.disabled)
+
+	var fired := {"n": 0}
+	var cb := func(_r: Dictionary) -> void: fired["n"] = int(fired["n"]) + 1
+	Net.trade_offer_result.connect(cb)
+	tr._offer["gift"] = false
+	tr.open_confirm()
+	Selftest.check("confirm warns before offer", tr._mode == 2
+		and _label_has(tr._body, "последн") and int(fired["n"]) == 0)
+	var proceed := _button_named(tr._body, "Предложить")
+	# Offer обязан уходить по нажатию кнопки, а не из open_confirm(). Сигнал
+	# ждём детерминированно: гасим base_url на время нажатия (шаблон
+	# suite_companion_atlas.gd:24-40) — при пустом base_url очередь сливается в
+	# offline синхронно. Если чужой запрос ещё в _inflight, слива нет и
+	# trade_offer остаётся в очереди — это тоже доказательство вызова.
+	var pending0 := _pending("trade_offer")
+	var base0 := String(Net.base_url)
+	Net.base_url = ""
+	if proceed != null:
+		proceed.pressed.emit()
+	Net.base_url = base0
+	Selftest.check("offer sends only on proceed", proceed != null and not pending0
+		and (int(fired["n"]) == 1 or _pending("trade_offer")))
+	if Net.trade_offer_result.is_connected(cb):
+		Net.trade_offer_result.disconnect(cb)
+	tr.open_confirm()
+	tr.call("on_offer", {"ok": false, "detail": "too_many_open"})
+	Selftest.check("offer failure shows server copy", _label_has(tr._body, "висящих"))
+	tr.call("close")
+	# Фикстура живёт в общем g._sigil, а после SuiteTrades идут SuiteJuice,
+	# SuiteSaveSync, SuiteSyncPackageNet и SuiteContractBoard
+	# (tests/selftest.gd:163-166): возвращаем состояние покоя той же идиомой,
+	# которой чистит себя SuiteSigilCards.
+	sm.set_catalog([], [], "")
+	sm._server_collection = {}
+	sm._server_extras = []
