@@ -34,6 +34,7 @@ static func run(g: Game) -> void:
 	_methods(g)
 	_shapes(g)
 	_dispatch_routes(g)
+	_entry(g)
 
 
 static func _methods(_g: Game) -> void:
@@ -101,3 +102,83 @@ static func _dispatch_routes(_g: Game) -> void:
 		Selftest.check("dispatch emits " + String(kind), got.get(sig, {}) == want[sig])
 	for entry in cbs:
 		Net.disconnect(StringName(entry[0]), entry[1])
+
+
+static func _button_named(node: Node, text: String) -> Button:
+	for c in node.get_children():
+		if c is Button and (c as Button).text == text:
+			return c as Button
+		var deep := _button_named(c, text)
+		if deep != null:
+			return deep
+	return null
+
+
+static func _entry(g: Game) -> void:
+	# Мутации: убрать кнопку из _friend_row (первые два кейса); убрать z_index 21
+	# или add_to_group (четвёртый); снять elif-ветку в _close_top_modal (пятый —
+	# Esc гасит SocialUI); убрать _trade_close() в open/close (шестой — слой
+	# переживает закрытие экрана с чужим _peer); снять connect/forwarder в main
+	# (седьмой — _list не приходит).
+	var names := ["swap row for friend", "swap hidden for spirit",
+		"swap press opens trade", "trade layer z and group",
+		"esc closes trade not social", "social reopen drops trade",
+		"trade list routed to trade ui"]
+	var ui = g.get("_social_ui")
+	if ui == null:
+		for n in names:
+			Selftest.check(n, false)
+		return
+	g._social._seed_demo()
+	var row: Control = ui._friend_row(g._social.friend_by_device("dev-b"))
+	var swap := _button_named(row, "Обменять")
+	Selftest.check("swap row for friend", swap != null)
+	var spirit_row: Control = ui._friend_row(
+		{"device_id": Social.SPIRIT_DEVICE, "nick": Social.SPIRIT_NICK})
+	Selftest.check("swap hidden for spirit", _button_named(spirit_row, "Обменять") == null)
+	ui.open(0)
+	# `ui` пришёл через get() и потому Variant: `:=` не смог бы вывести тип из
+	# ui._screen (нет заданного типа), а без этого блок не компилируется вообще.
+	var before: int = ui._screen.get_child_count()
+	if swap != null:
+		swap.pressed.emit()
+	var tr = ui.get("_trade")
+	Selftest.check("swap press opens trade", tr != null and tr.is_open()
+		and ui._screen.get_child_count() > before)
+	if tr != null:
+		var s: Control = tr.get("_screen")
+		Selftest.check("trade layer z and group", s != null and s.z_index == 21
+			and s.is_in_group("modal_ui"))
+	else:
+		Selftest.check("trade layer z and group", false)
+	var k := InputEventKey.new()
+	k.pressed = true
+	k.keycode = KEY_ESCAPE
+	var esc_ok := g._handle_esc(k)
+	if tr != null:
+		Selftest.check("esc closes trade not social", esc_ok and not tr.is_open()
+			and ui._screen.visible)
+	else:
+		Selftest.check("esc closes trade not social", false)
+	ui.open(0)
+	var tr2 = ui.get("_trade")
+	if tr2 != null:
+		tr2.open("dev-b")
+		ui.close()
+		ui.open(0)
+		Selftest.check("social reopen drops trade", not tr2.is_open()
+			and String(tr2.get("_peer")) == "")
+		tr2.open("dev-b")
+		Net.trade_list_result.emit({"ok": true, "incoming": [], "outgoing": [],
+			"history": [], "week_limit": 10, "remain": 7})
+		Selftest.check("trade list routed to trade ui",
+			int((tr2.get("_list") as Dictionary).get("remain", -1)) == 7)
+	else:
+		Selftest.check("social reopen drops trade", false)
+		Selftest.check("trade list routed to trade ui", false)
+	# Оба ряда собранны detached (`_friend_row` ничего не добавляет в дерево),
+	# поэтому их обязан освободить создавший — иначе каждый прогон selftest
+	# оставляет узлы в ObjectDB (правило minors Task 7).
+	row.free()
+	spirit_row.free()
+	ui.close()

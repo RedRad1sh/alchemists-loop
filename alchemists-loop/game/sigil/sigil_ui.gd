@@ -1924,6 +1924,14 @@ func _close_top_modal() -> bool:
 		# быть не могут, порядок этих двух веток не важен.
 		main._home._close_house_popup()
 		return true
+	elif main._social_ui != null and main._social_ui._trade != null \
+			and main._social_ui._trade.is_open():
+		# S2 обмен: TradeUI лежит на z=21 ВНУТРИ SocialUI (z=20) и добавлен в
+		# дерево позже _confirm при равном z, поэтому закрывается раньше него.
+		# Без этой ветки Esc гасил весь экран «Друзья», а невидимый подслой
+		# оставался visible и на следующем open() показывал чужого _peer.
+		main._social_ui._trade.close()
+		return true
 	elif main._social_ui != null and main._social_ui._confirm != null and main._social_ui._confirm.visible:
 		main._social_ui._confirm_close()
 		return true

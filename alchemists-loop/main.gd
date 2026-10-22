@@ -687,6 +687,9 @@ func _ready() -> void:
 	# friend_request_result напрямую. Под гейтом связки в ST не было бы, и
 	# удаление строки connect не краснило бы ничего (FIX-2 ревьюера).
 	Net.friend_request_result.connect(_on_friend_request_result)
+	# S2 обмен: тот же мотив, что у friend_request выше — хендлер сам решает,
+	# что делать с offline/не-ok, а selftest эмитит trade_list_result напрямую.
+	Net.trade_list_result.connect(_on_trade_list_result)
 	# Аркан Сигилов
 	Net.sigil_daily_result.connect(_sigil._on_daily_result)
 	Net.sigil_craft_result.connect(_sigil._on_craft_result)
@@ -1056,6 +1059,12 @@ func _on_friend_respond(result: Dictionary) -> void:
 func _on_social_action_result(result: Dictionary) -> void:
 	if _social_ui != null:
 		_social_ui._on_friend_action_result(result)
+
+func _on_trade_list_result(result: Dictionary) -> void:
+	# Guard обязателен: _social_ui создаётся в _build_ui (:1525), а коннект
+	# живёт в блоке до построения UI (:692). Сигнал может прийти раньше.
+	if _social_ui != null and _social_ui._trade != null:
+		_social_ui._trade.on_list(result)
 
 func _on_friend_request_result(result: Dictionary) -> void:
 	# R8 (задача 7): единая точка отказа заявки «в друзья» — глобальный тост.
