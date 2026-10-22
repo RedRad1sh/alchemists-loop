@@ -54,8 +54,9 @@ func build() -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.visible = false
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
-	# z = 21 и группа modal_ui — ровно как у _confirm (social_ui.gd:525-526):
-	# слой перекрывает SocialUI (z = 20) и попадает в общий предикат модалок.
+	# z = 21 и группа modal_ui — ровно как у `_confirm` в `_open_confirm`
+	# (спека §8.2): слой перекрывает SocialUI (z = 20) и попадает в общий
+	# предикат модалок.
 	root.z_index = 21
 	root.add_to_group("modal_ui")
 	g._social_ui._screen.add_child(root)
