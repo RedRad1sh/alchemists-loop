@@ -4626,31 +4626,45 @@ def _trade_copies_available(conn: sqlite3.Connection, owner: str, card_id: str) 
         (owner, card_id)).fetchone()["c"])
 
 
-def _trade_side_norm(conn: sqlite3.Connection, owner: str, items, side: str,
-                     want_of_peer: bool):
-    """Нормализация и валидация одной стороны offer/gift (NM §2.3 п.2–5).
+def _trade_side_selectors(items):
+    """Стадия п.3 §2.3 — ГЛОБАЛЬНАЯ стадия формы обеих сторон.
 
-    -> (rows, err): rows — [{"card_id", "craft_id", "pos"}, ...] в порядке
-    входа (pos = индекс), err — машинный код из _TRADE_SIDE_CODES или None.
-    Порядок проверок внутри стороны: длина (п.2) → форма элемента (п.3) →
-    экземпляр/копии (п.4–5). give обязан непустым (сторона подарка/оффера),
-    want может быть пустой (0..TRADE_SIDE_MAX).
-    want_of_peer — сторона проверяется против коллекции taker: там нового кода
-    `peer_lacks` (S2 доказывал наличие want только на accept), и там же
-    каталожная проверка вида `unknown_card` (инвариант S2, ruling 1).
-    Ячейка = один экземпляр: вид занят не больше чем копиями, хроматик ровно
-    один раз и не повторяется в стороне (_trade_pick_row его и находит).
+    -> ([(cid, crid), ...], err): нормализация каждой позиции через
+    _trade_selector (strip-семантика S2: пробельные id → пусто → XOR нарушен),
+    err = "bad_item" при первой битой форме. Глотается ТОЛЬКО собственная
+    отказ-деталь селектора `bad_selector`: иначе будущий второй код отказа
+    молча обесценится в bad_item (re-view Minor 2), поэтому всё остальное
+    переподнимается как есть.
     """
-    if len(items) > TRADE_SIDE_MAX or (side == "give" and not items):
-        return [], "side_too_long"
+    sel = []
+    for it in items:
+        try:
+            cid, crid = _trade_selector(it.card_id, it.craft_id)
+        except HTTPException as exc:
+            if exc.detail != "bad_selector":
+                raise
+            return [], "bad_item"
+        sel.append((cid, crid))
+    return sel, None
+
+
+def _trade_side_collections(conn: sqlite3.Connection, owner: str, sels,
+                            want_of_peer: bool):
+    """Стадия п.4/п.5 §2.3: одна сторона против коллекции.
+
+    give проверяется против коллекции maker, want — против коллекции taker
+    (want_of_peer). -> (rows, err): rows — [{"card_id", "craft_id", "pos"}, ...]
+    в порядке входа (pos = индекс в СВОЕЙ стороне, как раньше), err — машинный
+    код из _TRADE_SIDE_CODES или None. Ячейка = один экземпляр: вид занят
+    ячейками не больше, чем копий, хроматик ровно один раз и не повторяется
+    в стороне (_trade_pick_row его и находит). В want дополнительно
+    каталожная проверка вида `unknown_card` (инвариант S2, ruling 1) и code
+    отказа `peer_lacks` вместо `not_enough_copies`.
+    """
     catalog = _sigil_catalog()["by_id"] if want_of_peer else None
     seen: dict = {}
     rows = []
-    for pos, it in enumerate(items):
-        try:
-            cid, crid = _trade_selector(it.card_id, it.craft_id)
-        except HTTPException:
-            return [], "bad_item"
+    for pos, (cid, crid) in enumerate(sels):
         if catalog is not None and cid and cid not in catalog:
             return [], "unknown_card"
         key = cid or crid
@@ -4660,6 +4674,40 @@ def _trade_side_norm(conn: sqlite3.Connection, owner: str, items, side: str,
             return [], ("peer_lacks" if want_of_peer else "not_enough_copies")
         rows.append({"card_id": cid, "craft_id": crid, "pos": pos})
     return rows, None
+
+
+def _trade_sides_norm(conn: sqlite3.Connection, give_owner: str, give_items,
+                      want_owner: str, want_items):
+    """Нормализация/валидация обеих сторон offer/gift по ГЛОБАЛЬНЫМ стадиям §2.3.
+
+    -> (give_rows, want_rows, err); err — код из _TRADE_SIDE_CODES или None.
+    Номера п.2–5 спеки — стадии НАД обеими сторонами, а не полный прогон give
+    перед want: сперва длина обеих сторон (give 1..TRADE_SIDE_MAX, want
+    0..TRADE_SIDE_MAX → 422 side_too_long), затем форма обеих сторон
+    (422 bad_item), затем коллекция give (409 not_enough_copies), и только
+    потом коллекция want (409 peer_lacks / 422 unknown_card). Композитное
+    нарушение (дефицит в give + слишком длинный want) обязано ответить 422-стадией,
+    а не 409 — иначе порядок стадий §2.3 читается как per-side, чем он не является.
+    Коды ошибок, статусы, нумерация pos и пер-позиционные копии/хроматик-квоты
+    сохранены без изменений; want_of_peer в gift не досчитывается — стороны нет.
+    """
+    if len(give_items) > TRADE_SIDE_MAX or not give_items:
+        return [], [], "side_too_long"
+    if len(want_items) > TRADE_SIDE_MAX:
+        return [], [], "side_too_long"
+    give_sel, err = _trade_side_selectors(give_items)
+    if err:
+        return [], [], err
+    want_sel, err = _trade_side_selectors(want_items)
+    if err:
+        return [], [], err
+    give_rows, err = _trade_side_collections(conn, give_owner, give_sel, False)
+    if err:
+        return [], [], err
+    want_rows, err = _trade_side_collections(conn, want_owner, want_sel, True)
+    if err:
+        return [], [], err
+    return give_rows, want_rows, None
 
 
 def _trade_side_fail(err: str):
@@ -5678,8 +5726,9 @@ def trade_offer(payload: TradeOfferPayload):
 
     Карты НЕ переносит и недельный лимит НЕ тратит (§5.0: действие — перенос,
     не намерение; peak «оффер+отмена лимит не тратят»). Проверки: регистрация
-    обеих сторон, self-deal, дружба (п.1) → обе стороны через _trade_side_norm
-    (п.2–5: длина, форма, коллекции maker и taker) → потолок открытых офферов →
+    обеих сторон, self-deal, дружба (п.1) → обе стороны через _trade_sides_norm
+    глобальными стадиями §2.3 (п.2 длина обеих сторон → п.3 форма обеих сторон
+    → п.4 коллекция give → п.5 коллекция want) → потолок открытых офферов →
     дедуп по give-мультимножеству → одна строка trade_orders + позиции в
     trade_items. Порядок «потолок до дедупа» закреплён тестом open_offer_cap.
 
@@ -5698,10 +5747,8 @@ def trade_offer(payload: TradeOfferPayload):
         _trade_registered(conn, to)
         if not _social_accepted(conn, me, to):
             raise HTTPException(status_code=404, detail="not_friends")
-        give_rows, err = _trade_side_norm(conn, me, payload.give, "give", False)
-        if err:
-            _trade_side_fail(err)
-        want_rows, err = _trade_side_norm(conn, to, payload.want, "want", True)
+        give_rows, want_rows, err = _trade_sides_norm(
+            conn, me, payload.give, to, payload.want)
         if err:
             _trade_side_fail(err)
         if _trade_open_count(conn, me) >= TRADE_OPEN_MAX:
@@ -5912,7 +5959,8 @@ def trade_gift(payload: TradeGiftPayload):
     ruling 15: подарок НЕ становится pending-оффером).
 
     give — список позиций; все они уезжают АТОМАРНО: сначала валидация стороны
-    (§2.3 п.2–4, дефицит любой позиции — 409 not_enough_copies), затем недельный
+    (§2.3 п.2–4 глобальными стадиями в _trade_sides_norm, want пуст; дефицит
+    любой позиции — 409 not_enough_copies), затем недельный
     лимит ДО любой записи, затем резолюция каждой позиции в конкретный экземпляр
     (карта вида — самые старые копии по тому же tie-break, что `_trade_pick_row`,
     без повтора экземпляра на двух позициях), затем проверка свободного целевого
@@ -5933,14 +5981,14 @@ def trade_gift(payload: TradeGiftPayload):
         _trade_registered(conn, me)
         if not _social_accepted(conn, me, to):
             raise HTTPException(status_code=404, detail="not_friends")
-        give_rows, err = _trade_side_norm(conn, me, payload.give, "give", False)
+        give_rows, _, err = _trade_sides_norm(conn, me, payload.give, to, [])
         if err:
             _trade_side_fail(err)
         week = _week_key()
         if _trade_week_count(conn, week, me) >= TRADE_WEEK_LIMIT:
             raise HTTPException(status_code=409, detail="week_limit")
         # Резолюция позиция→экземпляр: хроматик — ровно свой craft_id, карта
-        # вида — очередь старых копий; seen<=copies в _trade_side_norm гарантирует,
+        # вида — очередь старых копий; seen<=copies в _trade_sides_norm гарантирует,
         # что очередь не иссякает и один craft_id не уедет дважды.
         chosen: list = []
         by_card: dict = {}

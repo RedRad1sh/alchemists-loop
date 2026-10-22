@@ -946,6 +946,39 @@ class TestOfferNM:
         assert body["existed"] is False and body["id"] != first["id"], body
         assert len(_rows(s, "SELECT * FROM trade_orders")) == 2
 
+    def test_offer_compound_deficit_plus_overlong_want_is_side_too_long(
+            self, tmp_path, monkeypatch):
+        """§2.3: стадии ГЛОБАЛЬНЫЕ — длина обеих сторон (п.2) проверяется до
+        коллекции give (п.4). Композитное нарушение «дефицит в give + want
+        длиннее TRADE_SIDE_MAX» обязано ответить 422 side_too_long, а не 409
+        not_enough_copies: переставить стороны местами в валидаторе — и этот
+        тест краснеет на 409."""
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "coal", "Уголь", "2026-01-01T00:00:00")])
+        _seed(s, "dev-b", [("c2", "ice", "Лёд", "2026-01-02T00:00:00")])
+        r = _offer(client, "dev-a", "dev-b",
+                   give=[{"card_id": "coal"}, {"card_id": "coal"}],  # дефицит: 1 копия
+                   want=[{"card_id": "ice"}] * (s.TRADE_SIDE_MAX + 1))
+        assert (r.status_code, r.json()["detail"]) == (422, "side_too_long")
+        assert _rows(s, "SELECT * FROM trade_orders") == []
+
+    def test_offer_want_bad_item_form_beats_give_deficit(self, tmp_path, monkeypatch):
+        """§2.3 п.3 до п.4: форма элементов обеих сторон проверяется до коллекций.
+        Битая форма в want (оба id) при законном дефиците в give — 422 bad_item,
+        а не 409 not_enough_copies."""
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "coal", "Уголь", "2026-01-01T00:00:00")])
+        _seed(s, "dev-b", [("c2", "ice", "Лёд", "2026-01-02T00:00:00")])
+        r = _offer(client, "dev-a", "dev-b",
+                   give=[{"card_id": "coal"}, {"card_id": "coal"}],  # дефицит: 1 копия
+                   want=[{"card_id": "ice", "craft_id": "c2"}])      # XOR нарушен
+        assert (r.status_code, r.json()["detail"]) == (422, "bad_item")
+        assert _rows(s, "SELECT * FROM trade_orders") == []
+
 
 def _both(s):
     """По карте у каждого: dev-a отдаёт spark, dev-b отдаёт ice."""
@@ -1602,7 +1635,7 @@ class TestCancelGift:
     def test_gift_limit_ignores_receiver_week_count(self, tmp_path, monkeypatch):
         """Недельный лимит в gift тратит только даритель (спека §6, шаг 3).
 
-        Пинит одиночество `me` в `server.py:5781`
+        Пинит одиночество `me` в `server.py:5988`
         (`if _trade_week_count(conn, week, me) >= TRADE_WEEK_LIMIT`). Мутация
         «считать и получателя», как это делает accept, обязана краснить ровно этот
         тест: dev-b стоит на лимите, а подарок обязан пройти и вырастить только
