@@ -35,10 +35,15 @@ func open(peer: String) -> void:
 	_render()
 
 func close() -> void:
+	var was := is_open()
 	_peer = ""
 	if _screen != null:
 		_screen.visible = false
-	Sfx.click()
+	# Звук — только на закрытие видимого слоя: SocialUI дёргает _trade_close() и
+	# при open(), и при close(), поэтому без гейда каждый вход в «Друзья» после
+	# первого обмена давал бы фантомный клик при уже погашенном слое.
+	if was:
+		Sfx.click()
 
 func on_list(result: Dictionary) -> void:
 	if result.get("ok", false) != true:

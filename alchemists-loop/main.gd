@@ -1061,8 +1061,9 @@ func _on_social_action_result(result: Dictionary) -> void:
 		_social_ui._on_friend_action_result(result)
 
 func _on_trade_list_result(result: Dictionary) -> void:
-	# Guard обязателен: _social_ui создаётся в _build_ui (:1525), а коннект
-	# живёт в блоке до построения UI (:692). Сигнал может прийти раньше.
+	# Guard обязателен: _social_ui создаётся в _build_ui, а этот коннект живёт в
+	# сетевом блоке _ready — то есть раньше построения UI. Сигнал может прийти
+	# первым: offline-слив очереди эмитит результаты синхронно.
 	if _social_ui != null and _social_ui._trade != null:
 		_social_ui._trade.on_list(result)
 

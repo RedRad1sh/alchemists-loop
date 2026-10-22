@@ -114,14 +114,26 @@ static func _button_named(node: Node, text: String) -> Button:
 	return null
 
 
+static func _trade_list_pending() -> bool:
+	# Синхронного слива может не быть: чужой запрос ещё в _inflight, и _send_next
+	# выходит рано — тогда trade_list остаётся в очереди, что тоже доказательство.
+	for req in Net._queue:
+		if String(req.get("kind", "")) == "trade_list":
+			return true
+	return false
+
+
 static func _entry(g: Game) -> void:
-	# Мутации: убрать кнопку из _friend_row (первые два кейса); убрать z_index 21
-	# или add_to_group (четвёртый); снять elif-ветку в _close_top_modal (пятый —
-	# Esc гасит SocialUI); убрать _trade_close() в open/close (шестой — слой
+	# Мутации: убрать кнопку из _friend_row (первые два кейса); убрать add_child
+	# слоя в экран SocialUI (третий — слой не прикрепляется); снять Net.trade_list
+	# в open() (четвёртый — список не запрашивается); убрать z_index 21 или
+	# add_to_group (пятый); снять elif-ветку в _close_top_modal (шестой — Esc
+	# гасит SocialUI); убрать _trade_close() в open/close (седьмой — слой
 	# переживает закрытие экрана с чужим _peer); снять connect/forwarder в main
-	# (седьмой — _list не приходит).
+	# (восьмой — _list не приходит).
 	var names := ["swap row for friend", "swap hidden for spirit",
-		"swap press opens trade", "trade layer z and group",
+		"swap press opens trade", "trade open pulls list",
+		"trade layer z and group",
 		"esc closes trade not social", "social reopen drops trade",
 		"trade list routed to trade ui"]
 	var ui = g.get("_social_ui")
@@ -137,14 +149,29 @@ static func _entry(g: Game) -> void:
 		{"device_id": Social.SPIRIT_DEVICE, "nick": Social.SPIRIT_NICK})
 	Selftest.check("swap hidden for spirit", _button_named(spirit_row, "Обменять") == null)
 	ui.open(0)
-	# `ui` пришёл через get() и потому Variant: `:=` не смог бы вывести тип из
-	# ui._screen (нет заданного типа), а без этого блок не компилируется вообще.
-	var before: int = ui._screen.get_child_count()
+	# Запрос списка — вторая половина провода: open() обязан сам дёрнуть
+	# Net.trade_list. base_url гасим на время нажатия (шаблон
+	# suite_companion_atlas.gd:24-40): при пустом base_url очередь сливается в
+	# offline синхронно, значит trade_list_result гарантированно доходит до того,
+	# как мы снимем подписчика, и никакого настоящего HTTP не будет.
+	# `ui`/`tr` пришли через get() и потому Variant: `:=` на них тип не выводит.
+	var base0 := String(Net.base_url)
+	var pulls := {"n": 0}
+	var spy := func(_res: Dictionary) -> void:
+		pulls["n"] = int(pulls["n"]) + 1
+	var pending_before := _trade_list_pending()
+	Net.base_url = ""
+	Net.trade_list_result.connect(spy)
 	if swap != null:
 		swap.pressed.emit()
+	Net.trade_list_result.disconnect(spy)
+	Net.base_url = base0
 	var tr = ui.get("_trade")
 	Selftest.check("swap press opens trade", tr != null and tr.is_open()
-		and ui._screen.get_child_count() > before)
+		and (tr.get("_screen") as Control) != null
+		and (tr.get("_screen") as Control).get_parent() == ui._screen)
+	Selftest.check("trade open pulls list",
+		not pending_before and (int(pulls["n"]) >= 1 or _trade_list_pending()))
 	if tr != null:
 		var s: Control = tr.get("_screen")
 		Selftest.check("trade layer z and group", s != null and s.z_index == 21
