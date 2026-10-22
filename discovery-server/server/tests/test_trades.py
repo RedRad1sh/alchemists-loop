@@ -1885,18 +1885,19 @@ class TestListAndBadge:
         assert row["maker_device"] == "dev-a" and row["taker_device"] == "dev-b"
         assert row["maker_nick"] == "Аня" and row["taker_nick"] == "Николя"
         assert row["state"] == "pending"
-        # карта вида сервер именем не называет: обещан «одна копия spark»,
-        # какая именно уедет — решает accept (§5.1). Имя рисует каталог.
-        assert row["give_card_id"] == "spark" and row["give_name"] == ""
-        assert row["want_craft_id"] == "x1" and row["want_name"] == "Радуга"
+        # NM §2.2 (редакция S2-правила): сервер называет ВСЕ позиции — карту
+        # вида по fallback_name каталога фикстуры, хроматик по llm_name
+        # текущего носителя. Классификация строки и имена — прежние пины.
+        assert row["give_items"] == [{"card_id": "spark", "craft_id": "", "name": "Spark"}]
+        assert row["want_items"] == [{"card_id": "", "craft_id": "x1", "name": "Радуга"}]
         assert _accept(client, "dev-b", out_oid).status_code == 200
         body = client.get("/api/trade/list", params={"device_id": "dev-a"}).json()
         assert [h["id"] for h in body["history"]] == [out_oid]
         assert [o["id"] for o in body["outgoing"]] == []
         assert body["remain"] == 9                                    # кейс 13
         # после accepted экземпляр носит уже не maker: имя взято у текущего
-        assert body["history"][0]["want_name"] == "Радуга"
-        assert body["history"][0]["give_name"] == ""
+        assert body["history"][0]["want_items"][0]["name"] == "Радуга"
+        assert body["history"][0]["give_items"][0]["name"] == "Spark"
 
     def test_incoming_chromatic_is_named_by_makers_instance(self, tmp_path, monkeypatch):
         s = _srv(tmp_path, monkeypatch)
@@ -1907,19 +1908,19 @@ class TestListAndBadge:
         _offer(client, "dev-b", "dev-a", give=[{"craft_id": "x1"}], want=[{"card_id": "spark"}])
         row = client.get("/api/trade/list",
                          params={"device_id": "dev-a"}).json()["incoming"][0]
-        assert row["give_craft_id"] == "x1" and row["give_name"] == "Радуга"
-        assert row["want_card_id"] == "spark" and row["want_name"] == ""
+        assert row["give_items"] == [{"card_id": "", "craft_id": "x1", "name": "Радуга"}]
+        assert row["want_items"] == [{"card_id": "spark", "craft_id": "", "name": "Spark"}]
 
     def test_accepted_chromatic_give_is_named_by_taker(self, tmp_path, monkeypatch):
         """Имя give-хроматика после accept берётся у НОВОГО носителя.
 
         Ветка `state == 'accepted' → taker_device` в `_trade_give_owner` иначе
-        мертва: в `test_list_splits_incoming_outgoing_and_history` единственная
-        принятая строка отдаёт КАРТУ ВИДА (`give_craft_id` пустой), поэтому её
-        `give_name == ""` пусто по другой причине, и замена `_trade_give_owner`
-        на «всегда maker» оставляет весь модуль зелёным (проверено мутацией).
-        Здесь `x1` после accept лежит у taker'а, так что maker-ключ дал бы "" —
-        список выдал бы безымянный экземпляр (§5.1: имя у текущего носителя).
+        мертва: имена карт вида в `test_list_splits_incoming_outgoing_and_history`
+        рисует каталог и они от носителя не зависят вообще, поэтому замена
+        `_trade_give_owner` на «всегда maker» не изменила бы ни одной подписи
+        вида (проверено мутацией). Здесь `x1` после accept лежит у taker'а, так
+        что maker-ключ дал бы "" — список выдал бы безымянный экземпляр (§2.2:
+        имя хроматика у текущего носителя).
         """
         s = _srv(tmp_path, monkeypatch)
         client = _trade_client(s, tmp_path, monkeypatch)
@@ -1931,17 +1932,18 @@ class TestListAndBadge:
                      give=[{"craft_id": "x1"}], want=[{"card_id": "spark"}]).json()["id"]
         row = client.get("/api/trade/list",
                          params={"device_id": "dev-a"}).json()["incoming"][0]
-        assert (row["state"], row["give_craft_id"], row["give_name"]) == \
-            ("pending", "x1", "Радуга")
+        assert row["state"] == "pending"
+        assert row["give_items"] == [{"card_id": "", "craft_id": "x1", "name": "Радуга"}]
         assert _accept(client, "dev-a", oid).status_code == 200
         assert _owners(s) == {"c1": "dev-b", "x1": "dev-a", "c9": "dev-b"}
         hist = client.get("/api/trade/list",
                           params={"device_id": "dev-b"}).json()["history"][0]
-        assert hist["id"] == oid and hist["give_craft_id"] == "x1"
-        assert hist["give_name"] == "Радуга", "имя у текущего носителя, не у maker'а"
-        # карту вида сервер не называет никогда: экземпляр для неё выбрал accept,
-        # и ни в одной строке он не записан.
-        assert hist["want_card_id"] == "spark" and hist["want_name"] == ""
+        assert hist["id"] == oid and hist["give_items"][0]["craft_id"] == "x1"
+        assert hist["give_items"][0]["name"] == "Радуга", "имя у текущего носителя, не у maker'а"
+        # карту вида сервер называет каталогом (NM §2.2), экземпляр для неё
+        # выбрал accept и в строке оффера он не записан — имя берётся из вида.
+        assert hist["want_items"][0]["card_id"] == "spark" and \
+            hist["want_items"][0]["name"] == "Spark"
 
     def test_expired_pending_is_hidden_but_row_survives(self, tmp_path, monkeypatch):
         """Ленивая TTL (§6.1): list не отдаёт, accept отказывает, строка живёт."""
@@ -2086,3 +2088,128 @@ class TestListAndBadge:
         assert _gift(client, "dev-a", "dev-b", give=[{"card_id": "coal"}]).status_code == 200
         assert claim("dev-a", 3)["ok"] is False
         assert mine("dev-a") == [3], "забранное не отнимается"
+
+
+class TestListNM:
+    """NM §2.2: строки трёх среди несут give_items/want_items с серверными
+    именами; одиночные S2-ключи исчезли из ответа."""
+
+    def test_list_rows_carry_items_and_names(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        _seed(s, "dev-b", [("x1", "", "Радуга", "2026-01-05T00:00:00")])
+        oid = _offer(client, "dev-a", "dev-b",
+                     give=[{"card_id": "spark"}], want=[{"craft_id": "x1"}]).json()["id"]
+        body = client.get("/api/trade/list", params={"device_id": "dev-b"}).json()
+        row = [r for r in body["incoming"] if r["id"] == oid][0]
+        # Имя карты вида — fallback_name каталога фикстуры (не выдуманное:
+        # TRADE_CATALOG задаёт "Spark"/"Ice"…); хроматика — llm_name экземпляра.
+        assert row["give_items"] == [{"card_id": "spark", "craft_id": "", "name": "Spark"}]
+        assert row["want_items"] == [{"card_id": "", "craft_id": "x1", "name": "Радуга"}]
+        assert "give_card_id" not in row and "want_name" not in row
+
+    def test_list_rows_items_ordered_by_pos_and_want_empty(self, tmp_path, monkeypatch):
+        """Позиции идут в порядке хранения pos, want-пустой оффер — пустой массив."""
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        _seed(s, "dev-a", [("c5", "coal", "Уголь", "2026-01-03T00:00:00")])
+        oid = _offer(client, "dev-a", "dev-b",
+                     give=[{"card_id": "coal"}, {"card_id": "spark"}], want=[]).json()["id"]
+        row = [r for r in client.get("/api/trade/list",
+                                     params={"device_id": "dev-b"}).json()["incoming"]
+               if r["id"] == oid][0]
+        assert row["give_items"] == [
+            {"card_id": "coal", "craft_id": "", "name": "Coal"},
+            {"card_id": "spark", "craft_id": "", "name": "Spark"}]
+        assert row["want_items"] == []
+
+    def test_list_rows_unknown_view_named_by_raw_id(self, tmp_path, monkeypatch):
+        """Каталог не знает вид — имя = сырой card_id (§2.2: история обязана
+        читаться и после смены комплекта). Строка вставлена в обход ручки, как
+        `_order`: отменить оффер неизвестной картой через API нельзя."""
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        conn = sqlite3.connect(s.DB_PATH)
+        cur = conn.execute(
+            "INSERT INTO trade_orders (maker_device, taker_device, state,"
+            " created_at, updated_at) VALUES (?,?,?,?,?)",
+            ("dev-a", "dev-b", "cancelled", "2026-01-06T00:00:00", "2026-01-06T00:00:00"))
+        conn.execute("INSERT INTO trade_items (order_id, side, card_id, craft_id, pos)"
+                     " VALUES (?, 'give', 'mercury', '', 0)", (cur.lastrowid,))
+        conn.execute("INSERT INTO trade_items (order_id, side, card_id, craft_id, pos)"
+                     " VALUES (?, 'want', 'topaz', '', 0)", (cur.lastrowid,))
+        conn.commit()
+        conn.close()
+        body = client.get("/api/trade/list", params={"device_id": "dev-a"}).json()
+        assert [h["id"] for h in body["history"]] == [cur.lastrowid]
+        row = body["history"][0]
+        assert row["give_items"] == [{"card_id": "mercury", "craft_id": "", "name": "mercury"}]
+        assert row["want_items"] == [{"card_id": "topaz", "craft_id": "", "name": "topaz"}]
+
+
+class TestPeerCollectionNM:
+    """NM §2.2: GET /api/trade/peer_collection — состав своей коллекции без
+    майлстоунов, гейт — только принятая дружба (403 not_friends)."""
+
+    def test_peer_collection_matches_own_shape(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-b", [("c9", "ice", "Лёд", "2026-01-01T00:00:00"),
+                           ("x1", "", "Радуга", "2026-01-02T00:00:00")])
+        conn = sqlite3.connect(s.DB_PATH)
+        conn.execute("INSERT INTO sigil_milestones (device_id, set_id, tier, claimed_at)"
+                     " VALUES ('dev-b', 'fire', 1, '2026-01-03T00:00:00')")
+        conn.commit()
+        conn.close()
+        own = client.get("/api/sigil/collection", params={"device_id": "dev-b"}).json()
+        assert own["milestones"] == {"fire": [1]}                     # премиса: веха есть
+        peer = client.get("/api/trade/peer_collection",
+                          params={"device_id": "dev-a", "peer": "dev-b"}).json()
+        assert peer["ok"] is True
+        assert peer["cards"] == own["cards"] and peer["extras"] == own["extras"]
+        assert "milestones" not in peer                               # §2.2: другу не нужен
+
+    def test_peer_collection_requires_accepted_friendship(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _player(client, "Пётр", "dev-c")
+        # Незнакомец, сам себе и непринятый запрос — все 403 not_friends.
+        for peer in ("dev-c", "dev-a"):
+            r = client.get("/api/trade/peer_collection",
+                           params={"device_id": "dev-a", "peer": peer})
+            assert (r.status_code, r.json()["detail"]) == (403, "not_friends"), (peer, r.text)
+        assert client.post("/api/friend/request", json={"device_id": "dev-a",
+                                                        "target_nick": "Пётр"}).status_code == 200
+        r = client.get("/api/trade/peer_collection",
+                       params={"device_id": "dev-a", "peer": "dev-c"})
+        assert (r.status_code, r.json()["detail"]) == (403, "not_friends"), r.text
+        # …а после принятия — 200 (гейт читает именно state ребра).
+        assert client.post("/api/friend/respond", json={"device_id": "dev-c",
+                                                        "requester_device": "dev-a",
+                                                        "accept": True}).status_code == 200
+        r = client.get("/api/trade/peer_collection",
+                       params={"device_id": "dev-a", "peer": "dev-c"})
+        assert r.status_code == 200 and r.json()["ok"] is True
+
+    def test_peer_collection_caller_gates_before_payload(self, tmp_path, monkeypatch):
+        """Порядок гейтов: формальный id звонящего (400) → его профиль (404) →
+        дружба (403). Зарезервированные id в этом прогоне не заведены, поэтому
+        400 вместо 404 доказывает, что `_social_caller` стоит до `_trade_registered`."""
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        for bad, code in (("npc-spirit", "npc"), ("bot-1", "bot"),
+                          ("   ", "bad_device_id"), ("dev-a|dev-b", "bad_device_id")):
+            r = client.get("/api/trade/peer_collection",
+                           params={"device_id": bad, "peer": "dev-b"})
+            assert (r.status_code, r.json()["detail"]) == (400, code), (bad, r.text)
+        r = client.get("/api/trade/peer_collection",
+                       params={"device_id": "dev-ghost", "peer": "dev-b"})
+        assert (r.status_code, r.json()["detail"]) == (404, "not_registered"), r.text

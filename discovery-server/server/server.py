@@ -673,6 +673,14 @@ class TradeGiftResponse(BaseModel):
     remain: int = TRADE_WEEK_LIMIT
 
 
+class TradeItemOut(BaseModel):
+    """Одна позиция строки списка (NM §2.2): селектор экземпляра + имя,
+    которое резолвил сервер (fallback_name вида / llm_name хроматика)."""
+    card_id: str = ""
+    craft_id: str = ""
+    name: str = ""
+
+
 class TradeListItem(BaseModel):
     id: int
     maker_device: str
@@ -681,12 +689,10 @@ class TradeListItem(BaseModel):
     taker_nick: str = ""
     state: str
     created_at: str
-    give_card_id: str = ""
-    give_craft_id: str = ""
-    give_name: str = ""
-    want_card_id: str = ""
-    want_craft_id: str = ""
-    want_name: str = ""
+    # S2-одиночки (give_card_id/give_craft_id/give_name и want_*) удалены:
+    # стороны — списки позиций в порядке pos (§2.2).
+    give_items: list[TradeItemOut] = []
+    want_items: list[TradeItemOut] = []
 
 
 class TradeListResponse(BaseModel):
@@ -1076,6 +1082,14 @@ class SigilCollectionResponse(BaseModel):
     # Комплектные майлстоуны: set_id -> отсортированные клеймнутые тиры.
     milestones: dict[str, list[int]] = {}
     error: str = ""
+
+
+class TradePeerCollectionResponse(BaseModel):
+    """Ответ /api/trade/peer_collection (NM §2.2): состав как у своей
+    коллекции, но майлстоуны отброшены — прогресс комплекта другу не нужен."""
+    ok: bool
+    cards: dict[str, SigilCollectionEntry] = {}
+    extras: list[SigilCollectionExtra] = []
 
 
 class SigilMilestoneRequest(BaseModel):
@@ -6100,37 +6114,63 @@ def trade_gift(payload: TradeGiftPayload):
 def _trade_items(conn: sqlite3.Connection, rows) -> dict:
     """{order_id: TradeListItem} одной сборкой для трёх среди.
 
-    Имя сервер даёт только хроматикам (`*_craft_id` непустой): экземпляр
-    записан в самой строке оффера, а `_trade_give_owner`/`_trade_want_owner`
-    отвечают, кто его носит СЕЙЧАС. Карту вида сервер не называет — её имя
-    клиент берёт из каталога (правило `sigil_ui.gd:1529-1532`), и это честнее
-    любого угаданного llm_name: оффер обещает «одну копию вида», конкретный
-    экземпляр выбирается в accept (§5.1), а для принятой строки вида он вообще
-    нигде не записан.
+    Имена (§2.2, редакция N↔M): сервер называет ВСЕ позиции. Хроматик —
+    llm_name экземпляра у того, кто носит его СЕЙЧАС
+    (`_trade_give_owner`/`_trade_want_owner`); карта вида — `fallback_name`
+    каталога, а если каталог вид не знает — сырой card_id (история обязана
+    читаться и после смены комплекта). Прежнее S2-правило «имя вида берёт из
+    каталога клиент» отменено этой же спекой: клиентские задачи 5–9 рисуют
+    подписи строк по серверным именам. Позиции читаются ПАЧКОЙ для всех
+    строк сразу (`WHERE order_id IN (...)`, плейсхолдеры как в
+    `_trade_name_map`), имена хроматиков — тоже одним вызовом: N+1 здесь
+    запрещён ruling'ами плана.
     """
+    if not rows:
+        return {}
+    ids = [int(o["id"]) for o in rows]
+    ph = ",".join(["?"] * len(ids))
+    sides: dict = {}
+    for r in conn.execute(
+            "SELECT order_id, side, card_id, craft_id, pos FROM trade_items "
+            "WHERE order_id IN (%s) ORDER BY pos ASC, id ASC" % ph, ids).fetchall():
+        sides.setdefault((int(r["order_id"]), r["side"]), []).append(r)
+    owner_by_id = {int(o["id"]): o for o in rows}
     pairs = []
-    for o in rows:
-        for owner_of, key in ((_trade_give_owner, "give_craft_id"),
-                              (_trade_want_owner, "want_craft_id")):
-            craft = str(o[key] or "")
+    for (oid, side), items in sides.items():
+        o = owner_by_id[oid]
+        who = _trade_give_owner(o) if side == "give" else _trade_want_owner(o)
+        for r in items:
+            craft = str(r["craft_id"] or "")
             if craft:
-                pairs.append((owner_of(o), craft))
+                pairs.append((who, craft))
     names = _trade_name_map(conn, pairs)
+    catalog = _sigil_catalog()["by_id"]
+
+    def side_items(o, side):
+        who = _trade_give_owner(o) if side == "give" else _trade_want_owner(o)
+        out = []
+        for r in sides.get((int(o["id"]), side), []):
+            card = str(r["card_id"] or "")
+            craft = str(r["craft_id"] or "")
+            if craft:
+                name = str(names.get((who, craft), "") or "")
+            else:
+                entry = catalog.get(card)
+                name = (str(entry.get("fallback_name") or "") or card) if entry else card
+            out.append(TradeItemOut(card_id=card, craft_id=craft, name=name))
+        return out
+
     nicks = _trade_nick_map(conn, [d for o in rows
                                    for d in (o["maker_device"], o["taker_device"])])
     out = {}
     for o in rows:
-        gc, wc = str(o["give_craft_id"] or ""), str(o["want_craft_id"] or "")
         out[int(o["id"])] = TradeListItem(
             id=int(o["id"]), maker_device=o["maker_device"],
             taker_device=o["taker_device"], state=o["state"],
             created_at=o["created_at"],
             maker_nick=str(nicks.get(o["maker_device"], "") or ""),
             taker_nick=str(nicks.get(o["taker_device"], "") or ""),
-            give_card_id=str(o["give_card_id"] or ""), give_craft_id=gc,
-            give_name=str(names.get((_trade_give_owner(o), gc), "") or ""),
-            want_card_id=str(o["want_card_id"] or ""), want_craft_id=wc,
-            want_name=str(names.get((_trade_want_owner(o), wc), "") or ""))
+            give_items=side_items(o, "give"), want_items=side_items(o, "want"))
     return out
 
 
@@ -6166,6 +6206,40 @@ def trade_list(device_id: str = Query(..., min_length=1, max_length=128)):
         return TradeListResponse(ok=True, incoming=incoming, outgoing=outgoing,
                                  history=history, week_limit=TRADE_WEEK_LIMIT,
                                  remain=remain)
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.get("/api/trade/peer_collection", response_model=TradePeerCollectionResponse)
+def trade_peer_collection(device_id: str = Query(..., min_length=1, max_length=128),
+                          peer: str = Query("", max_length=128)):
+    """Коллекция друга для окна обмена (§2.2): cards/extras без майлстоунов.
+
+    Гейт-порядок: формальный id звонящего (`_social_caller`, 400) → его профиль
+    (404 `not_registered`) → ПРИНЯТАЯ дружба (403 `not_friends`). Семь S1/S2-
+    гейтов дружбы с 404 не унифицируются: здесь контракт сознательно 403 —
+    чтение чужого инвентаря, ответ «вы не друзья» ничего не выдаёт, а код
+    отличается от «нет такой страницы» клиентского trade_ui. `peer` отдельно
+    не валидируется: ребра «неизвестный peer» в графе не существует, поэтому
+    не-друг (включая `peer == me`) отсекается 403 ниже, а за живым ребром peer
+    по построению зарегистрирован и сборка возвращает его (возможно пустой)
+    состав.
+    """
+    me = _social_caller(device_id)
+    conn = get_db()
+    try:
+        _trade_registered(conn, me)
+        if not _social_accepted(conn, me, peer):
+            raise HTTPException(status_code=403, detail="not_friends")
+        payload = _collection_payload(conn, peer)
+        return TradePeerCollectionResponse(ok=True, cards=payload["cards"],
+                                           extras=payload["extras"])
     except HTTPException:
         conn.rollback()
         raise
@@ -7255,30 +7329,25 @@ def sigil_craft(req: SigilCraftRequest):
         conn.close()
 
 
-@app.get("/api/sigil/collection", response_model=SigilCollectionResponse)
-def sigil_collection(device_id: str = Query("", max_length=128)):
-    """Коллекция игрока: копии карт каталога и внекомплектные (chromatic/legacy).
+def _collection_payload(conn: sqlite3.Connection, device: str) -> dict:
+    """Сборка коллекции: {"cards", "extras", "milestones"} — общий код
+    /api/sigil/collection и /api/trade/peer_collection (NM §2.2).
 
-    Порядок чтения ORDER BY crafted_at ASC обязателен: first_at — самая ранняя
-    копия, а не первая попавшаяся строка.
+    Формат заморожен существующими тестами коллекции: здесь перенос тела
+    route без изменения полей и порядка. Порядок чтения ORDER BY crafted_at
+    ASC обязателен: first_at — самая ранняя копия, а не первая попавшаяся
+    строка.
     """
-    if not device_id:
-        return SigilCollectionResponse(ok=False, error="missing_device_id")
-
-    conn = get_db()
-    try:
-        rows = conn.execute(
-            "SELECT craft_id, rarity, llm_name, card_id, seed, lore, ingredients_json, crafted_at FROM sigil_crafts"
-            " WHERE device_id=? ORDER BY crafted_at ASC, craft_id ASC",
-            (device_id,),
-        ).fetchall()
-        milestone_rows = conn.execute(
-            "SELECT set_id, tier FROM sigil_milestones WHERE device_id=?"
-            " ORDER BY tier ASC",
-            (device_id,),
-        ).fetchall()
-    finally:
-        conn.close()
+    rows = conn.execute(
+        "SELECT craft_id, rarity, llm_name, card_id, seed, lore, ingredients_json, crafted_at FROM sigil_crafts"
+        " WHERE device_id=? ORDER BY crafted_at ASC, craft_id ASC",
+        (device,),
+    ).fetchall()
+    milestone_rows = conn.execute(
+        "SELECT set_id, tier FROM sigil_milestones WHERE device_id=?"
+        " ORDER BY tier ASC",
+        (device,),
+    ).fetchall()
 
     cards: dict = {}
     extras: list = []
@@ -7301,8 +7370,28 @@ def sigil_collection(device_id: str = Query("", max_length=128)):
     milestones: dict = {}
     for row in milestone_rows:
         milestones.setdefault(str(row["set_id"]), []).append(int(row["tier"]))
+    return {"cards": cards, "extras": extras, "milestones": milestones}
+
+
+@app.get("/api/sigil/collection", response_model=SigilCollectionResponse)
+def sigil_collection(device_id: str = Query("", max_length=128)):
+    """Коллекция игрока: копии карт каталога и внекомплектные (chromatic/legacy).
+
+    Сборка — в `_collection_payload` (общая с /api/trade/peer_collection);
+    формат ответа заморожен существующими тестами, response_model тот же.
+    """
+    if not device_id:
+        return SigilCollectionResponse(ok=False, error="missing_device_id")
+
+    conn = get_db()
+    try:
+        payload = _collection_payload(conn, device_id)
+    finally:
+        conn.close()
+
     return SigilCollectionResponse(
-        ok=True, cards=cards, extras=extras, milestones=milestones
+        ok=True, cards=payload["cards"], extras=payload["extras"],
+        milestones=payload["milestones"]
     )
 
 
