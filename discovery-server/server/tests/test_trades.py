@@ -1318,6 +1318,39 @@ class TestListAndBadge:
         assert row["give_craft_id"] == "x1" and row["give_name"] == "Радуга"
         assert row["want_card_id"] == "spark" and row["want_name"] == ""
 
+    def test_accepted_chromatic_give_is_named_by_taker(self, tmp_path, monkeypatch):
+        """Имя give-хроматика после accept берётся у НОВОГО носителя.
+
+        Ветка `state == 'accepted' → taker_device` в `_trade_give_owner` иначе
+        мертва: в `test_list_splits_incoming_outgoing_and_history` единственная
+        принятая строка отдаёт КАРТУ ВИДА (`give_craft_id` пустой), поэтому её
+        `give_name == ""` пусто по другой причине, и замена `_trade_give_owner`
+        на «всегда maker» оставляет весь модуль зелёным (проверено мутацией).
+        Здесь `x1` после accept лежит у taker'а, так что maker-ключ дал бы "" —
+        список выдал бы безымянный экземпляр (§5.1: имя у текущего носителя).
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-b", [("x1", "", "Радуга", "2026-01-01T00:00:00"),
+                           ("c9", "ice", "Лёд", "2026-01-02T00:00:00")])
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-03T00:00:00")])
+        oid = _offer(client, "dev-b", "dev-a",
+                     give=("", "x1"), want=("spark", "")).json()["id"]
+        row = client.get("/api/trade/list",
+                         params={"device_id": "dev-a"}).json()["incoming"][0]
+        assert (row["state"], row["give_craft_id"], row["give_name"]) == \
+            ("pending", "x1", "Радуга")
+        assert _accept(client, "dev-a", oid).status_code == 200
+        assert _owners(s) == {"c1": "dev-b", "x1": "dev-a", "c9": "dev-b"}
+        hist = client.get("/api/trade/list",
+                          params={"device_id": "dev-b"}).json()["history"][0]
+        assert hist["id"] == oid and hist["give_craft_id"] == "x1"
+        assert hist["give_name"] == "Радуга", "имя у текущего носителя, не у maker'а"
+        # карту вида сервер не называет никогда: экземпляр для неё выбрал accept,
+        # и ни в одной строке он не записан.
+        assert hist["want_card_id"] == "spark" and hist["want_name"] == ""
+
     def test_expired_pending_is_hidden_but_row_survives(self, tmp_path, monkeypatch):
         """Ленивая TTL (§6.1): list не отдаёт, accept отказывает, строка живёт."""
         s = _srv(tmp_path, monkeypatch)
