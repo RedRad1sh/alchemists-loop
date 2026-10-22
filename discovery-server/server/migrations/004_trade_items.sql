@@ -5,13 +5,8 @@
 -- вхолостую (IF NOT EXISTS), записывая только строку версии; на живой БД VPS
 -- она — единственный способ таблице появиться.
 --
--- Heal старых строк (INSERT…SELECT из give_*/want_*) и четыре DROP COLUMN
--- ЗДЕСЬ НЕ живут: init_db сначала исполняет schema.sql (уже без колонок), а
--- затем применяет этот файл даже на свежей БД (версия 4 ещё не записана) —
--- SELECT по несуществующей колонке ронял бы каждый прогон. Переезд данных
--- делает Python-шаг _migrate_trade_items под PRAGMA table_info(trade_orders)
--- — та же конвенция heal'ов, что glyph/house/first_nick в init_db; он
--- идемпотентен: после DROP guard ложен.
+-- Heal старых строк (INSERT…SELECT из give_*/want_*) и четыре DROP COLUMN здесь
+-- НЕ живут — причина и детали: docstring `_migrate_trade_items` в server.py.
 
 CREATE TABLE IF NOT EXISTS trade_items (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,

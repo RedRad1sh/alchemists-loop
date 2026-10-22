@@ -206,6 +206,12 @@ class TestSchema:
         try:
             reference = {t: _columns(conn, t) for t in TRADE_TABLES}
             ref_idx = {t: _indexes(conn, t) for t in TRADE_TABLES}
+            # Табличный CHECK (side IN ('give','want')) в PRAGMA table_info /
+            # index_xinfo не виден вовсе, поэтому drift между двумя копиями
+            # DDL ловится только текстом из sqlite_master.
+            ref_ddl = {t: conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                (t,)).fetchone()[0] for t in TRADE_TABLES}
         finally:
             conn.close()
 
@@ -223,6 +229,12 @@ class TestSchema:
             for t in TRADE_TABLES:
                 assert _columns(bare, t) == reference[t], t
                 assert _indexes(bare, t) == ref_idx[t], t
+                assert bare.execute(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                    (t,)).fetchone()[0] == ref_ddl[t], t
+            # Опорный ассерт: равенство текстов гарантирует наличие CHECK в
+            # обеих копиях только если CHECK есть хотя бы в одной из них.
+            assert "CHECK (side IN ('give', 'want'))" in ref_ddl["trade_items"]
         finally:
             bare.close()
 
@@ -238,6 +250,11 @@ class TestSchema:
             conn.close()
         names = [r["name"] for r in rows]
         assert "003_trades.sql" in names, names
+        # Без 004 в реестре trade_items на живой БД не появляется: CREATE в
+        # теле миграции — единственный путь для неё (схема свежа уже с
+        # таблицей), а parity-тест выше дрейфа не видит.
+        assert "004_trade_items.sql" in names, names
+        assert {int(r["version"]) for r in rows if r["name"] == "004_trade_items.sql"} == {4}, rows
         assert len(names) == len(set(names)), ("миграция применена дважды", names)
 
 
@@ -251,11 +268,8 @@ class TestMigration004:
         получила на S2, — и дополняется строками старого формата прямым
         INSERT'ом: ручка offer к этой задаче уже ничего не гарантирует (её
         переписывает Task 2), а heal проверяется на данных, а не на коде.
-        Раннер 004 на такой БД не пропускает версию (её ещё нет), поэтому
-        DDL миграции проходит вхолостую, а heal с DROP выполняется в
-        Python-шаге init_db под PRAGMA-guard'ом (конвенция glyph/house/
-        first_nick): на свежей БД schema.sql уже без колонок, и тот же SQL
-        внутри 004 падал бы «no such column» на каждом тесте.
+        Почему heal — Python-шаг init_db, а не тело 004: docstring
+        `_migrate_trade_items`.
         """
         srv = _srv(tmp_path, monkeypatch)
         mig003 = os.path.join(SERVER_DIR, "migrations", "003_trades.sql")
@@ -294,6 +308,70 @@ class TestMigration004:
                                     " FROM trade_items ORDER BY order_id, side")] == healed
         # DROP COLUMN требует sqlite >= 3.35 — пин версии движка.
         assert sqlite3.sqlite_version_info >= (3, 35)
+
+    def test_migration_004_heals_partial_pair_without_data_loss(self, tmp_path, monkeypatch):
+        """Регресс на асимметричный guard: таблица с ОДНОЙ колонкой пары give_*.
+
+        В e16ae5d копирование было ключено по наличию ПАРЫ ({"give_card_id",
+        "give_craft_id"} <= tcols), а DROP — на пересечении одиночных колонок.
+        Итог: give_card_id без give_craft_id удалялась без INSERT…SELECT, то
+        есть строка теряла позицию молча и инвариант «каждая pre-existing
+        S2-строка = одна give-позиция и одна want-позиция» нарушался.
+        """
+        srv = _srv(tmp_path, monkeypatch)
+        conn = sqlite3.connect(srv.DB_PATH)
+        conn.executescript(
+            "CREATE TABLE trade_orders ("
+            "    id             INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "    maker_device   TEXT NOT NULL,"
+            "    taker_device   TEXT NOT NULL,"
+            "    give_card_id   TEXT NOT NULL DEFAULT '',"
+            "    state          TEXT NOT NULL DEFAULT 'pending',"
+            "    created_at     TEXT NOT NULL,"
+            "    updated_at     TEXT NOT NULL);"
+        )
+        conn.execute("INSERT INTO trade_orders (maker_device, taker_device,"
+                     " give_card_id, state, created_at, updated_at)"
+                     " VALUES ('dev-a', 'dev-b', 'clay', 'pending', 't', 't')")
+        conn.commit()
+        conn.close()
+
+        srv.init_db()  # schema.sql + _apply_migrations (004) + heal-шаг
+
+        assert [(r["order_id"], r["side"], r["card_id"], r["craft_id"], r["pos"])
+                for r in _rows(srv, "SELECT order_id, side, card_id, craft_id, pos"
+                                    " FROM trade_items ORDER BY order_id, side")] == \
+            [(1, "give", "clay", "", 0)], "позиция потеряна при heal"
+        cols = {r["name"] for r in _rows(srv, "PRAGMA table_info(trade_orders)")}
+        assert cols & {"give_card_id", "give_craft_id",
+                       "want_card_id", "want_craft_id"} == set(), cols
+
+    def test_migration_004_heal_skips_legacy_row_without_selectors(self, tmp_path, monkeypatch):
+        """Пустая S2-строка (все четыре колонки '') не рождает позиций.
+
+        Пинует `WHERE <col> != ''` в heal: без предиката в trade_items
+        легли бы пустые позиции (по одной на колонку), и accept прочитал бы их
+        как настоящие карты.
+        """
+        srv = _srv(tmp_path, monkeypatch)
+        mig003 = os.path.join(SERVER_DIR, "migrations", "003_trades.sql")
+        with open(mig003, "r", encoding="utf-8") as f:
+            conn = sqlite3.connect(srv.DB_PATH)
+            conn.executescript(f.read())
+            conn.execute("INSERT INTO trade_orders (maker_device, taker_device,"
+                         " state, created_at, updated_at)"
+                         " VALUES ('dev-a', 'dev-b', 'pending', 't', 't')")
+            conn.commit()
+            conn.close()
+
+        srv.init_db()
+
+        assert _rows(srv, "SELECT * FROM trade_items") == []
+        cols = {r["name"] for r in _rows(srv, "PRAGMA table_info(trade_orders)")}
+        assert cols & {"give_card_id", "give_craft_id",
+                       "want_card_id", "want_craft_id"} == set(), cols
+        # строка оффера при этом жива: heal переносит позиции, а не офферы
+        assert len(_rows(srv, "SELECT id FROM trade_orders")) == 1
 
 
 class TestHelpers:
@@ -664,12 +742,16 @@ class TestOffer:
         # просрочку, потолок не набирается, и кейс краснеет по календарю.
         now = s._now_iso()
         for i in range(s.TRADE_OPEN_MAX - len(TRADE_CARDS)):
-            conn.execute(
+            cur = conn.execute(
                 "INSERT INTO trade_orders (maker_device, taker_device,"
-                " give_card_id, give_craft_id, want_card_id, want_craft_id,"
-                " state, created_at, updated_at) VALUES (?, ?, '', ?, '', ?,"
-                " 'pending', ?, ?)",
-                ("dev-a", "dev-b", "cx%d" % i, "ice", now, now))
+                " state, created_at, updated_at) VALUES (?, ?, 'pending', ?, ?)",
+                ("dev-a", "dev-b", now, now))
+            # прежние литералы старого формата: give — экземпляр cx%d, want —
+            # ice как craft (наполнение потолка, не валидный want)
+            conn.execute("INSERT INTO trade_items (order_id, side, card_id, craft_id, pos)"
+                         " VALUES (?, 'give', '', ?, 0)", (cur.lastrowid, "cx%d" % i))
+            conn.execute("INSERT INTO trade_items (order_id, side, card_id, craft_id, pos)"
+                         " VALUES (?, 'want', '', 'ice', 0)", (cur.lastrowid,))
         conn.commit()
         conn.close()
         assert len(_rows(s, "SELECT * FROM trade_orders WHERE state='pending'")) == s.TRADE_OPEN_MAX
@@ -859,7 +941,7 @@ class TestAccept:
         assert _owners(s) == {"x1": "dev-b", "p1": "dev-a", "c2": "dev-a"}
 
     def test_foreign_craft_id_in_want_dies_at_accept(self, tmp_path, monkeypatch):
-        """Чужой экземпляр в want_craft_id.
+        """Чужой экземпляр в want-позиции (бывший want_craft_id).
 
         Выставить такой оффер через /offer нельзя (у taker его нет), но строка
         в БД — намерение, а device_id ничем не аутентифицирован (§10.1), поэтому
@@ -871,12 +953,15 @@ class TestAccept:
         _both(s)
         _seed(s, "dev-c", [("x2", "", "Спектр", "2026-01-04T00:00:00")])
         conn = sqlite3.connect(s.DB_PATH)
-        conn.execute("INSERT INTO trade_orders (maker_device, taker_device,"
-                     " give_card_id, give_craft_id, want_card_id, want_craft_id,"
-                     " state, created_at, updated_at)"
-                     " VALUES ('dev-a', 'dev-b', 'spark', '', '', 'x2',"
-                     " 'pending', ?, ?)",
-                     (s._now_iso(), s._now_iso()))
+        cur = conn.execute("INSERT INTO trade_orders (maker_device, taker_device,"
+                           " state, created_at, updated_at)"
+                           " VALUES ('dev-a', 'dev-b', 'pending', ?, ?)",
+                           (s._now_iso(), s._now_iso()))
+        # прежняя пара селекторов: give — карта spark, want — чужой экземпляр x2
+        conn.execute("INSERT INTO trade_items (order_id, side, card_id, craft_id, pos)"
+                     " VALUES (?, 'give', 'spark', '', 0)", (cur.lastrowid,))
+        conn.execute("INSERT INTO trade_items (order_id, side, card_id, craft_id, pos)"
+                     " VALUES (?, 'want', '', 'x2', 0)", (cur.lastrowid,))
         conn.commit()
         conn.close()
         oid = _rows(s, "SELECT id FROM trade_orders")[0]["id"]

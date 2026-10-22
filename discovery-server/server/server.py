@@ -1217,31 +1217,49 @@ def _apply_migrations(conn: sqlite3.Connection) -> list[str]:
 def _migrate_trade_items(conn: sqlite3.Connection) -> None:
     """NM §2.1: переезд одиночных колонок trade_orders в trade_items + DROP.
 
+    Копирование и удаление симметричны по построению: один PRAGMA-guard'ный
+    INSERT…SELECT на КАЖДУЮ присутствующую старую колонку (значение пишется в
+    свой столбец, противоположный селектор — ''), и DROP ровно тех колонок,
+    которые скопированы. Исторически INSERT'ы были ключены наличием ПАРЫ
+    колонок, а DROP — одиночного пересечения: в таблице с одной колонкой пары
+    строка терялась молча (give-позиция не создавалась, колонка уезжала).
+
+    На реальной S2-БД поштучный переезд даёт ровно те же строки, что и парный,
+    потому что S2 держал инвариант XOR между *_card_id и *_craft_id в каждой
+    строке (_trade_selector, спека §4): у стороны непустой ровно один селектор,
+    вторая INSERT той же стороны отсекается предикатом != ''. Пустая строка
+    (все четыре колонки '') не рождает позиций — тоже предикатом.
+
     Идемпотентен: PRAGMA-guard ложен после DROP, а на свежей БД (schema.sql
     уже без колонок) функция — no-op. DROP COLUMN требует sqlite >= 3.35
     (пин: tests/test_trades.py::TestMigration004).
 
-    Heal живёт здесь, а НЕ в migrations/004_trade_items.sql, по той же
-    конвенции, что glyph/house/first_nick ниже в init_db: init_db сначала
-    исполняет schema.sql, а раннер не пропускает 004 на свежей БД (версия
-    ещё не записана) — INSERT…SELECT по удалённым колонкам внутри 004 ронял
-    бы каждый прогон с «no such column».
+    Здесь, а НЕ в теле migrations/004_trade_items.sql, — авторитетная причина:
+    init_db сначала исполняет schema.sql (уже без колонок), а раннер на свежей
+    БД не пропускает 004 (версия ещё не записана), поэтому INSERT…SELECT/DROP
+    по несуществующей колонке внутри 004 ронял бы каждый старт с «no such
+    column». Данные переезжают Python-шагом рядом с _apply_migrations под
+    PRAGMA table_info — та же конвенция heal'ов, что glyph/house/first_nick в
+    init_db. В файле 004 поэтому остаётся только DDL, который, как в
+    001/002/003, дублирует schema.sql.
     """
     tcols = {r["name"] for r in conn.execute("PRAGMA table_info(trade_orders)").fetchall()}
-    old = {"give_card_id", "give_craft_id", "want_card_id", "want_craft_id"} & tcols
-    if not old:
+    # (колонка, сторона, в какой столбец trade_items ложится значение) —
+    # литералы модуля, интерполяция в SQL безопасна: имена не из PRAGMA.
+    legacy = (("give_card_id", "give", "card_id"), ("give_craft_id", "give", "craft_id"),
+              ("want_card_id", "want", "card_id"), ("want_craft_id", "want", "craft_id"))
+    present = [t for t in legacy if t[0] in tcols]
+    if not present:
         return
-    if {"give_card_id", "give_craft_id"} <= tcols:
+    for col, side, target in present:
+        # Позиция пишется в свой столбец, противоположный селектор остаётся ''.
+        card_expr = col if target == "card_id" else "''"
+        craft_expr = col if target == "craft_id" else "''"
         conn.execute(
             "INSERT INTO trade_items (order_id, side, card_id, craft_id, pos) "
-            "SELECT id, 'give', give_card_id, give_craft_id, 0 FROM trade_orders "
-            "WHERE give_card_id != '' OR give_craft_id != ''")
-    if {"want_card_id", "want_craft_id"} <= tcols:
-        conn.execute(
-            "INSERT INTO trade_items (order_id, side, card_id, craft_id, pos) "
-            "SELECT id, 'want', want_card_id, want_craft_id, 0 FROM trade_orders "
-            "WHERE want_card_id != '' OR want_craft_id != ''")
-    for col in sorted(old):
+            "SELECT id, '%s', %s, %s, 0 FROM trade_orders WHERE %s != ''"
+            % (side, card_expr, craft_expr, col))
+    for col, _side, _target in present:
         conn.execute("ALTER TABLE trade_orders DROP COLUMN %s" % col)
 
 
@@ -1309,9 +1327,8 @@ def init_db():
         if "first_device" not in ccols:
             conn.execute("ALTER TABLE challenges ADD COLUMN first_device TEXT")
 
-        # NM §2.1: старые строки S2-офферов → trade_items, одиночные колонки
-        # DROP'аются (почему это Python-шаг, а не тело 004_trade_items.sql —
-        # см. docstring _migrate_trade_items)
+        # NM §2.1: heal старых S2-строк в trade_items + DROP колонок (почему
+        # Python-шаг — docstring _migrate_trade_items)
         _migrate_trade_items(conn)
 
         # U6/T05: разнесение challenge/vein-каналов очков.
