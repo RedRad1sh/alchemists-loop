@@ -36,6 +36,7 @@ static func run(g: Game) -> void:
 	_dispatch_routes(g)
 	_entry(g)
 	_constructor(g)
+	_list_actions(g)
 
 
 static func _methods(_g: Game) -> void:
@@ -432,3 +433,180 @@ static func _constructor(g: Game) -> void:
 	sm.set_catalog([], [], "")
 	sm._server_collection = {}
 	sm._server_extras = []
+
+
+static func _rows_of(box) -> int:
+	if box == null:
+		return -1
+	return (box as Control).get_child_count()
+
+
+## Строка опознаётся по имени узла, которое даёт `_offer_row`: `_rows_of == 1`
+## выполняется и на прежних placeholder'ах «—» (по одному Label в каждом боксе).
+static func _row_named(box, want: String) -> bool:
+	if box == null:
+		return false
+	for c in (box as Control).get_children():
+		if String((c as Node).name) == want:
+			return true
+	return false
+
+
+## «Спокойное состояние, а не красный баннер» измеримо только цветом строки:
+## слой рисует отказ янтарным (Color("#e6a84a") — он же у `_note` в конструкторе
+## и у `social_ui.gd:89`), красный этот пин краснит.
+static func _label_is_calm(node: Node, needle: String) -> bool:
+	for c in node.get_children():
+		if c is Label and (c as Label).text.contains(needle):
+			return (c as Label).get_theme_color("font_color") == Color("#e6a84a")
+		if _label_is_calm(c, needle):
+			return true
+	return false
+
+
+static func _list_actions(g: Game) -> void:
+	# Мутации: не взять incoming/outgoing/history из ответа (первый кейс);
+	# нарисовать «Отклонить» у входящего (второй — ручкой отклонения сервер
+	# отвечает 409 not_maker); снять connect/forwarder cancel (третий); не позвать
+	# Net.trade_accept с id из строки (четвёртый); посчитать remain локально или
+	# не показать его (пятый); сдвинуть сброс на воскресенье (шестой); разблокировать
+	# «Дальше» при remain 0 (седьмой); забыть перебор коллекции/inbox после ok
+	# (восьмой); показать card_gone красной ошибкой вместо состояния карточки или
+	# устроить re-pull при отказе (девятый); не сложить trades_pending в total
+	# (десятый).
+	# Диффы к брифу (обоснование — task-10-report.md): строки пинятся ещё и именем
+	# узла; «Дальше» проверяется на заполненном черновике, иначе её глузит пустой
+	# выбор, а не остаток; cancel пинится всем проводом, как требует третий кейс;
+	# вызовы ещё не существующих методов гейтятся has_script_method/has_method —
+	# без гейда отсутствующий вызов обрывает сюжет, и проверки 6–10 не состоятся.
+	var names := ["list rows follow server slices",
+		"incoming row has accept only", "outgoing row has cancel",
+		"accept press sends that order", "header shows server remain",
+		"reset day is next monday", "proceed locked at zero remain",
+		"accept ok re-pulls collection and inbox",
+		"card gone is calm and does not re-pull",
+		"trades pending counts into badge"]
+	var ui = g.get("_social_ui")
+	if ui == null:
+		for n in names:
+			Selftest.check(n, false)
+		return
+	var sm = g._sigil
+	sm._server_collection = {"spark": {"copies": 1, "first_at": ""}}
+	g._social._seed_demo()
+	ui.open(0)
+	var tr = ui.get("_trade")
+	if tr == null:
+		for n in names:
+			Selftest.check(n, false)
+		sm._server_collection = {}
+		return
+	tr.open("dev-b")
+	tr.call("on_list", {"ok": true,
+		"incoming": [{"id": 11, "maker_device": "dev-b", "taker_device": "me",
+			"maker_nick": "Николя", "taker_nick": "Я", "state": "pending",
+			"created_at": "2026-10-20T09:00:00", "give_card_id": "ice",
+			"give_craft_id": "", "give_name": "", "want_card_id": "spark",
+			"want_craft_id": "", "want_name": ""}],
+		"outgoing": [{"id": 12, "maker_device": "me", "taker_device": "dev-b",
+			"maker_nick": "Я", "taker_nick": "Николя", "state": "pending",
+			"created_at": "2026-10-20T09:30:00", "give_card_id": "",
+			"give_craft_id": "x1", "give_name": "Радуга", "want_card_id": "ice",
+			"want_craft_id": "", "want_name": ""}],
+		"history": [{"id": 13, "maker_device": "dev-b", "taker_device": "me",
+			"maker_nick": "Николя", "taker_nick": "Я", "state": "accepted",
+			"created_at": "2026-10-18T09:00:00", "give_card_id": "ember",
+			"give_craft_id": "", "give_name": "", "want_card_id": "spark",
+			"want_craft_id": "", "want_name": ""}],
+		"week_limit": 10, "remain": 7})
+	Selftest.check("list rows follow server slices", _rows_of(tr._incoming) == 1
+		and _rows_of(tr._outgoing) == 1 and _rows_of(tr._history) == 1
+		and _row_named(tr._incoming, "TradeRow_11")
+		and _row_named(tr._outgoing, "TradeRow_12")
+		and _row_named(tr._history, "TradeRow_13")
+		and _label_has(tr._outgoing, "Радуга →"))
+	var in_box: Control = tr._incoming
+	Selftest.check("incoming row has accept only", _button_named(in_box, "Принять") != null
+		and _button_named(in_box, "Отклонить") == null
+		and _button_named(in_box, "Отменить") == null)
+	var out_box: Control = tr._outgoing
+	var cancel_btn := _button_named(out_box, "Отменить")
+	var acc_fired := {"n": 0}
+	var acc_cb := func(_r: Dictionary) -> void: acc_fired["n"] = int(acc_fired["n"]) + 1
+	Net.trade_accept_result.connect(acc_cb)
+	var accept_btn := _button_named(in_box, "Принять")
+	if accept_btn != null:
+		accept_btn.pressed.emit()
+	Selftest.check("accept press sends that order", int(acc_fired["n"]) == 1)
+	if Net.trade_accept_result.is_connected(acc_cb):
+		Net.trade_accept_result.disconnect(acc_cb)
+	var cancel_fired := {"n": 0}
+	var cancel_cb := func(_r: Dictionary) -> void: cancel_fired["n"] = int(cancel_fired["n"]) + 1
+	Net.trade_cancel_result.connect(cancel_cb)
+	if cancel_btn != null:
+		cancel_btn.pressed.emit()
+	if Net.trade_cancel_result.is_connected(cancel_cb):
+		Net.trade_cancel_result.disconnect(cancel_cb)
+	# Третий кейс по комментарию брифа краснеет от снятия connect/forwarder,
+	# поэтому пин — весь провод: нажатие шлёт Net.trade_cancel (счётчик), а отказ
+	# доезжает до слоя через main (emit, а не прямой вызов on_cancel).
+	if cancel_btn != null:
+		Net.trade_cancel_result.emit({"ok": false, "detail": "not_pending"})
+	Selftest.check("outgoing row has cancel", cancel_btn != null
+		and int(cancel_fired["n"]) == 1 and _label_has(tr._body, "уже закрыт"))
+	# Шапка печатает сделанное (`limit - remain` из ответа), а не остаток: строка
+	# «Обменов на этой неделе: 10 из 10» при remain 0 зафиксирована в приёмке
+	# Task 11, поэтому при remain 7 из 10 здесь обязано быть «3 из 10».
+	Selftest.check("header shows server remain", _label_has(tr._body, "3 из 10"))
+	# Чистые даты: 2026-10-21 — среда, следующий понедельник 26-е; с понедельника
+	# на понедельник (delta 0 → 7), иначе «сброс сегодня» ввёл бы в заблуждение.
+	var T = load("res://game/social/trade_ui.gd")
+	var tu = T.new(g)
+	var has_day: bool = T.has_script_method("reset_day") \
+		and T.has_script_method("reset_day_label")
+	Selftest.check("reset day is next monday", has_day
+		and String(tu.reset_day("2026-10-21")) == "2026-10-26"
+		and String(tu.reset_day("2026-10-26")) == "2026-11-02"
+		and String(tu.reset_day_label("2026-10-21")) == "26.10")
+	tr.call("on_list", {"ok": true, "incoming": [], "outgoing": [], "history": [],
+		"week_limit": 10, "remain": 0})
+	tr._offer = {"give": tu.pick("spark", "", 1, "Искра"),
+		"want": tu.pick("ice", "", 3, "Лёд"), "gift": false}
+	tr.open_builder()
+	var next := _button_named(tr._body, "Дальше")
+	Selftest.check("proceed locked at zero remain", next != null
+		and bool(tr.can_confirm()) and next.disabled)
+	var pulls := {"coll": 0, "inbox": 0}
+	var coll_cb := func(_r: Dictionary) -> void: pulls["coll"] = int(pulls["coll"]) + 1
+	var inbox_cb := func(_r: Dictionary) -> void: pulls["inbox"] = int(pulls["inbox"]) + 1
+	Net.sigil_collection_result.connect(coll_cb)
+	Net.social_inbox_result.connect(inbox_cb)
+	var has_accept := g.has_method("_on_trade_accept_result")
+	if has_accept:
+		g.call("_on_trade_accept_result", {"ok": true, "id": 11, "remain": 6,
+			"peer_remain": 8, "moved_in": {"craft_id": "c1", "llm_name": ""},
+			"moved_out": {"craft_id": "c2", "llm_name": ""}})
+	Selftest.check("accept ok re-pulls collection and inbox", has_accept
+		and int(pulls["coll"]) == 1 and int(pulls["inbox"]) == 1)
+	if has_accept:
+		g.call("_on_trade_accept_result", {"ok": false, "detail": "card_gone:maker"})
+	Net.trade_accept_result.emit({"ok": false, "detail": "card_gone:maker"})
+	var repull := int(pulls["coll"]) == 1 and int(pulls["inbox"]) == 1
+	var has_on_accept: bool = T.has_script_method("on_accept")
+	if has_on_accept:
+		tr.call("on_accept", {"ok": false, "detail": "card_gone:maker"})
+	Selftest.check("card gone is calm and does not re-pull", has_on_accept and repull
+		and _label_has(tr._body, "карты больше нет")
+		and _label_is_calm(tr._body, "карты больше нет")
+		and not _label_has(tr._body, "ОШИБКА"))
+	if Net.sigil_collection_result.is_connected(coll_cb):
+		Net.sigil_collection_result.disconnect(coll_cb)
+	if Net.social_inbox_result.is_connected(inbox_cb):
+		Net.social_inbox_result.disconnect(inbox_cb)
+	var s := Social.new(g)
+	s.on_inbox({"ok": true, "friends": [], "incoming": [], "outgoing": [],
+		"unread_total": 1, "requests_total": 0, "trades_pending": 2})
+	Selftest.check("trades pending counts into badge", s.total() == 3
+		and Social.badge_for(s.total()) == "Друзья •3")
+	tr.call("close")
+	sm._server_collection = {}

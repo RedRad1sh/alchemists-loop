@@ -87,7 +87,10 @@ func incoming() -> Array: return cache.get("incoming", [])
 func outgoing() -> Array: return cache.get("outgoing", [])
 func unread_total() -> int: return int(cache.get("unread_total", 0))
 func requests_total() -> int: return int(cache.get("requests_total", 0))
-func total() -> int: return unread_total() + requests_total()
+## Входящие офферы (S2): «партнёр ждёт моего действия». Специально НЕ включает
+## мои исходящие — напоминание о собственном ожидании это шум (спека §8.5).
+func trades_pending() -> int: return int(cache.get("trades_pending", 0))
+func total() -> int: return unread_total() + requests_total() + trades_pending()
 
 func friend_by_device(dev: String) -> Dictionary:
 	for f in friends():

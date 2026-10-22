@@ -692,6 +692,8 @@ func _ready() -> void:
 	Net.trade_list_result.connect(_on_trade_list_result)
 	Net.trade_offer_result.connect(_on_trade_offer_result)
 	Net.trade_gift_result.connect(_on_trade_gift_result)
+	Net.trade_accept_result.connect(_on_trade_accept_result)
+	Net.trade_cancel_result.connect(_on_trade_cancel_result)
 	# Аркан Сигилов
 	Net.sigil_daily_result.connect(_sigil._on_daily_result)
 	Net.sigil_craft_result.connect(_sigil._on_craft_result)
@@ -1076,6 +1078,27 @@ func _on_trade_offer_result(result: Dictionary) -> void:
 func _on_trade_gift_result(result: Dictionary) -> void:
 	if _social_ui != null and _social_ui._trade != null:
 		_social_ui._trade.on_gift(result)
+	if result.get("ok", false) == true:
+		_trades_repull()
+
+func _on_trade_accept_result(result: Dictionary) -> void:
+	if _social_ui != null and _social_ui._trade != null:
+		_social_ui._trade.on_accept(result)
+	if result.get("ok", false) == true:
+		_trades_repull()
+
+func _on_trade_cancel_result(result: Dictionary) -> void:
+	if _social_ui != null and _social_ui._trade != null:
+		_social_ui._trade.on_cancel(result)
+
+## §8.4: после свершившейся переноски карты авторитетны только серверные ответы.
+## Перебираем коллекцию тем же путём, что и обычно (Net.sigil_collection →
+## SigilManager._on_collection_result), и берём inbox — оттуда же приходят
+## trades_pending и остаток лимита. Отдельного polling-таймера нет.
+func _trades_repull() -> void:
+	Net.sigil_collection(_online._device_id)
+	Net.social_inbox(_online._device_id)
+	_engine._refresh_header()
 
 func _on_friend_request_result(result: Dictionary) -> void:
 	# R8 (задача 7): единая точка отказа заявки «в друзья» — глобальный тост.

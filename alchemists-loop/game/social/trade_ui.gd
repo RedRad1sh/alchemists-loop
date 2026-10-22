@@ -138,7 +138,7 @@ func _on_write_result(result: Dictionary, is_offer: bool) -> void:
 	# Офлайн — не «сервер не понял»: запрос не уходил. У Net-слива нет ключа
 	# detail (net.gd:454), поэтому без ветки он падает в `_:` и игрок без сервера
 	# читает «Мир не понял запрос» на каждое действие. Текст совпадает с
-	# social_ui.gd:141 для того же состояния — один код, один текст на весь слой.
+	# social_ui.gd:141 для того же состояния.
 	if result.get("offline", false) == true:
 		_note = "Мир не на связи"
 	else:
@@ -150,11 +150,11 @@ func _on_write_result(result: Dictionary, is_offer: bool) -> void:
 ## разные механизмы.
 static func _detail_text(code: String) -> String:
 	match code:
-		# Код поднимается по обеим сторонам сделки (server.py:5577-5578 — и
+		# Код поднимается по обеим сторонам сделки (server.py:5578-5579 — и
 		# `_trade_registered(conn, me)`, и `(conn, to)`), поэтому копия не должна
 		# указывать на отправителя: «заведись» от пропавшего собеседника звучит как
 		# обвинение игрока. Формулировка совпадает с social_ui.gd:139 для того же
-		# кода — один код, один текст на весь слой.
+		# кода.
 		"not_registered": return "Профиль ещё не зарегистрирован."
 		"not_friends": return "Меняться можно только с друзьями"
 		"not_found": return "Такого обмена уже нет"
@@ -173,6 +173,47 @@ static func _detail_text(code: String) -> String:
 		"card_gone:maker": return "У предложившего карты больше нет"
 		"card_gone:taker": return "У тебя больше нет карты для обмена"
 		_: return "Мир не понял запрос"
+
+## День недели Грегориана, 0=воскресенье … 1=понедельник … 6=суббота
+## (алгоритм Sakamoto). У Time.get_datetime_dict_* поля weekday нет, поэтому
+## считать самому — и ровно здесь, а не в каждом лейбле.
+static func _weekday(y: int, m: int, d: int) -> int:
+	var t := [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4]
+	if m < 3:
+		y -= 1
+	return int((y + int(y / 4.0) - int(y / 100.0) + int(y / 400.0) + t[m - 1] + d) % 7)
+
+## Ближайший понедельник 00:00 после today — день сброса недельного лимита
+## (спека §7.2: «следующий понедельник, локальное время клиента»; серверную
+## ISO-неделю на клиента не переносим). Полдень как опора, чтобы переход
+## летнего времени не сдвинул дату. Метод экземпляра, а не `static`: сьют
+## зовёт его через `tu = T.new(g)` и не ссылается на `class_name TradeUI`.
+## Sakamoto даёт 0=воскресенье, 1=понедельник, поэтому до понедельника
+## остаётся `(8 - wd) % 7` дней, а не `(7 - wd) % 7` — второй вариант на
+## среде (wd=3) даёт воскресенье 25.10 вместо 26.10, а в понедельник и
+## вовсе ноль, то есть «сегодня».
+func reset_day(today: String) -> String:
+	if today.length() < 10:
+		return ""
+	var y := int(today.substr(0, 4))
+	var m := int(today.substr(5, 2))
+	var d := int(today.substr(8, 2))
+	if y < 2000 or m < 1 or m > 12 or d < 1 or d > 31:
+		return ""
+	var delta := (8 - _weekday(y, m, d)) % 7
+	if delta == 0:
+		delta = 7
+	var unix := Time.get_unix_time_from_datetime_dict({
+		"year": y, "month": m, "day": d, "hour": 12, "minute": 0, "second": 0})
+	var out := Time.get_datetime_dict_from_unix_time(int(unix) + delta * 86400)
+	return "%04d-%02d-%02d" % [int(out["year"]), int(out["month"]), int(out["day"])]
+
+## Та же дата для человека: 2026-10-26 -> «26.10».
+func reset_day_label(today: String) -> String:
+	var iso := reset_day(today)
+	if iso == "":
+		return ""
+	return iso.substr(8, 2) + "." + iso.substr(5, 2)
 
 func build() -> void:
 	if _screen != null:
@@ -265,19 +306,124 @@ func _render() -> void:
 
 func _render_list() -> void:
 	_clear(_body)
-	# Заголовок: к кому обращён обмен. Остаток лимита накрутится в Task 10 —
-	# до этого серверные числа в этот слой ещё не приходили.
 	_header.text = "%s · %s" % [TITLE, _nick()]
+	if _list.has("remain"):
+		var remain := int(_list.get("remain", 0))
+		var limit := int(_list.get("week_limit", 0))
+		var line := "Обменов на этой неделе: %d из %d" % [limit - remain, limit]
+		if remain <= 0:
+			line += " · сброс " + reset_day_label(Time.get_date_string_from_system())
+		var sub := g._label(line, 12)
+		sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		sub.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
+		_body.add_child(sub)
 	var new_btn := g._small_button("Предложить обмен", Vector2(180, 40), 0)
 	new_btn.pressed.connect(open_builder)
 	_body.add_child(new_btn)
+	if _note != "":
+		var note := g._label(_note, 12)
+		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		note.add_theme_color_override("font_color", Color("#e6a84a"))
+		_body.add_child(note)
 	_incoming = _section("Мне предлагают")
 	_outgoing = _section("Я предложил")
 	_history = _section("История")
-	for box in [_incoming, _outgoing, _history]:
-		var wait := g._label("—", 12)
-		wait.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
-		box.add_child(wait)
+	for o in _list.get("incoming", []):
+		_offer_row(_incoming, o, 0)
+	for o in _list.get("outgoing", []):
+		_offer_row(_outgoing, o, 1)
+	for o in _list.get("history", []):
+		_offer_row(_history, o, 2)
+	if _list.is_empty():
+		for box in [_incoming, _outgoing, _history]:
+			var wait := g._label("—", 12)
+			wait.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
+			box.add_child(wait)
+
+## Имя карты для строки и слота: сервер подписывает только экземплярные сделки
+## (`*_craft_id` непустой), для карт вида имя берётся из каталога — конкретный
+## экземпляр при этом не обещан и не записан (раллинг 8 плана).
+func _title(card_id: String, craft_id: String, server_name: String) -> String:
+	if server_name != "":
+		return server_name
+	if craft_id != "":
+		return "Внекомплектная"
+	if card_id == "":
+		return "—"
+	var nm := str(g._sigil.card(card_id).get("fallback_name", card_id))
+	return nm
+
+## kind: 0 = входящий (могу принять), 1 = исходящий (могу отменить),
+## 2 = история (без действий).
+func _offer_row(box: VBoxContainer, raw, kind: int) -> void:
+	if not (raw is Dictionary):
+		return
+	var o: Dictionary = raw
+	var id := int(o.get("id", 0))
+	var give := _title(String(o.get("give_card_id", "")),
+		String(o.get("give_craft_id", "")), String(o.get("give_name", "")))
+	var want := _title(String(o.get("want_card_id", "")),
+		String(o.get("want_craft_id", "")), String(o.get("want_name", "")))
+	var text := give
+	if want == "—":
+		text = "Подарок: " + give            # односторонняя передача: want_* пустые
+	else:
+		text = give + " → " + want
+	var row := HBoxContainer.new()
+	row.name = "TradeRow_%d" % id
+	row.add_theme_constant_override("separation", 8)
+	row.custom_minimum_size = Vector2(0, 44)
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_child(g._label(text, 13))
+	var who := String(o.get("maker_nick", ""))
+	if kind == 1:
+		who = String(o.get("taker_nick", ""))
+	if who != "":
+		var dim := g._label(who, 11)
+		dim.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
+		info.add_child(dim)
+	row.add_child(info)
+	box.add_child(row)
+	if kind == 0:
+		# Отдельной кнопки «Отклонить» нет: у не-автора cancel отвечает 409
+		# not_maker, а отказ по модели встречного оффера — это бездействие или
+		# новый оффер (спека §4, §7).
+		var yes := g._small_button("Принять", Vector2(96, 34), 0)
+		yes.pressed.connect(_accept.bind(id))
+		row.add_child(yes)
+	elif kind == 1:
+		var no := g._small_button("Отменить", Vector2(110, 34), 0)
+		no.pressed.connect(_cancel.bind(id))
+		row.add_child(no)
+
+func _accept(id: int) -> void:
+	Net.trade_accept(g._online._device_id, id)
+
+func _cancel(id: int) -> void:
+	Net.trade_cancel(g._online._device_id, id)
+
+func on_accept(result: Dictionary) -> void:
+	if result.get("ok", false) == true:
+		_note = ""
+		_list = {}
+		_mode = 0
+		Net.trade_list(g._online._device_id)
+		_render()
+		return
+	# card_gone — штатный ответ модели «без блокировки карт» (спека §7.2):
+	# спокойная строка в списке, а не красный баннер.
+	_note = _detail_text(String(result.get("detail", "")))
+	_render()
+
+func on_cancel(result: Dictionary) -> void:
+	if result.get("ok", false) == true:
+		_note = ""
+		Net.trade_list(g._online._device_id)
+		return
+	_note = _detail_text(String(result.get("detail", "")))
+	_render()
 
 func _slot_text(e) -> String:
 	if not (e is Dictionary) or (e as Dictionary).is_empty():
@@ -322,7 +468,7 @@ func _render_builder() -> void:
 	row.add_theme_constant_override("separation", 8)
 	_body.add_child(row)
 	var next := g._small_button("Дальше", Vector2(120, 40), 0)
-	next.disabled = not can_confirm()
+	next.disabled = (not can_confirm()) or int(_list.get("remain", 1)) <= 0
 	next.pressed.connect(open_confirm)
 	row.add_child(next)
 	var back := g._small_button("Назад", Vector2(96, 34), 0)
