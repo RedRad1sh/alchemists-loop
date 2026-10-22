@@ -576,14 +576,12 @@ func _render_confirm() -> void:
 func _send() -> void:
 	var dev := g._online._device_id
 	var give: Dictionary = _offer["give"]
+	# Контракт N↔M: Net ждёт списки позиций; пока оффер 1↔1, позиция одна.
 	if bool(_offer["gift"]):
-		Net.trade_gift(dev, _peer, String(give.get("card_id", "")),
-			String(give.get("craft_id", "")))
+		Net.trade_gift(dev, _peer, [give])
 		return
 	var want: Dictionary = _offer["want"]
-	Net.trade_offer(dev, _peer, String(give.get("card_id", "")),
-		String(give.get("craft_id", "")), String(want.get("card_id", "")),
-		String(want.get("craft_id", "")))
+	Net.trade_offer(dev, _peer, [give], [want])
 
 func _nick() -> String:
 	var friend := g._social.friend_by_device(_peer)

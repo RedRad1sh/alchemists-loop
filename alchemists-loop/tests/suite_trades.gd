@@ -41,25 +41,40 @@ static func run(g: Game) -> void:
 
 static func _methods(_g: Game) -> void:
 	var held := HoldingNet.new()
-	for m in ["trade_offer", "trade_accept", "trade_cancel", "trade_gift", "trade_list"]:
+	for m in ["trade_offer", "trade_accept", "trade_cancel", "trade_gift",
+			"trade_list", "trade_peer_collection"]:
 		Selftest.check("net has " + m, held.has_method(m))
 	held.free()
 
 
 static func _shapes(_g: Game) -> void:
 	var held := HoldingNet.new()
-	# Все четыре слота селектора заполнены РАЗНЫМИ значениями намеренно: здесь
+	# N↔M: give/want — массивы позиций Item = {card_id, craft_id} (XOR: заполнен
+	# ровно один ключ). Слоты заполнены РАЗНЫМИ значениями намеренно: здесь
 	# пинится маппинг «аргумент метода → ключ body», а не валидность запроса
-	# (инвариант XOR держит сервер §4, а сторону выбирает пикер Task 9). Пустой
-	# слот не ловит ни перестановку give/want, ни фиксированную пустую строку
+	# (инвариант XOR держит сервер, сторону выбирает пикер Tasks 8–9). Пустой
+	# массив не ловит ни перестановку give/want, ни фиксированную пустую строку
 	# в net.gd.
-	var q := HoldingNet.one(held, "trade_offer",
-		["me", "peer", "spark", "gc1", "ice", "wc1"])
+	var q := HoldingNet.one(held, "trade_offer", ["me", "peer",
+		[{"card_id": "spark", "craft_id": ""}, {"card_id": "", "craft_id": "gc1"}],
+		[{"card_id": "ice", "craft_id": ""}]])
 	Selftest.check("trade offer POST body", q != {}
 		and String(q.get("path", "")) == "/trade/offer"
 		and q.get("body", {}) == {"device_id": "me", "to": "peer",
-			"give_card_id": "spark", "give_craft_id": "gc1",
-			"want_card_id": "ice", "want_craft_id": "wc1"})
+			"give": [{"card_id": "spark", "craft_id": ""},
+				{"card_id": "", "craft_id": "gc1"}],
+			"want": [{"card_id": "ice", "craft_id": ""}]})
+	# Пин брифа: body несёт СПИСКИ позиций ровно заданной длины, а одиночных
+	# ключей прошлой сигнатуры в нём больше нет.
+	q = HoldingNet.one(held, "trade_offer",
+		["dev-a", "dev-b", [{"card_id": "clay"}, {"craft_id": "c-31"}],
+			[{"card_id": "metal"}]])
+	var lists_body: Dictionary = q.get("body", {})
+	Selftest.check("net offer body carries item lists", q != {}
+		and String(q.get("path", "")) == "/trade/offer"
+		and (lists_body.get("give", []) as Array).size() == 2
+		and (lists_body.get("want", []) as Array).size() == 1
+		and not lists_body.has("give_card_id"))
 	q = HoldingNet.one(held, "trade_accept", ["me", 12])
 	Selftest.check("trade accept POST body", q != {}
 		and String(q.get("path", "")) == "/trade/accept"
@@ -68,14 +83,21 @@ static func _shapes(_g: Game) -> void:
 	Selftest.check("trade cancel POST body", q != {}
 		and String(q.get("path", "")) == "/trade/cancel"
 		and q.get("body", {}) == {"device_id": "me", "id": 12})
-	q = HoldingNet.one(held, "trade_gift", ["me", "peer", "spark", "gc1"])
+	q = HoldingNet.one(held, "trade_gift", ["me", "peer",
+		[{"card_id": "spark", "craft_id": ""}, {"card_id": "", "craft_id": "gc1"}]])
 	Selftest.check("trade gift POST body", q != {}
 		and String(q.get("path", "")) == "/trade/gift"
 		and q.get("body", {}) == {"device_id": "me", "to": "peer",
-			"card_id": "spark", "craft_id": "gc1"})
+			"give": [{"card_id": "spark", "craft_id": ""},
+				{"card_id": "", "craft_id": "gc1"}]})
 	q = HoldingNet.one(held, "trade_list", ["dev 1"])
 	Selftest.check("trade list GET path", q != {}
 		and String(q.get("path", "")) == "/trade/list?device_id=dev%201"
+		and not q.has("body"))
+	# GET по образцу trade_list: оба параметра в query, тела нет.
+	q = HoldingNet.one(held, "trade_peer_collection", ["dev 1", "peer 2"])
+	Selftest.check("trade peer collection GET path", q != {}
+		and String(q.get("path", "")) == "/trade/peer_collection?device_id=dev%201&peer=peer%202"
 		and not q.has("body"))
 	held.free()
 
@@ -90,16 +112,19 @@ static func _dispatch_routes(_g: Game) -> void:
 	var want := {}
 	var got := {}
 	var cbs := []
-	for kind in ["trade_offer", "trade_accept", "trade_cancel", "trade_gift", "trade_list"]:
+	for kind in ["trade_offer", "trade_accept", "trade_cancel", "trade_gift",
+			"trade_list", "trade_peer_collection"]:
 		var sig := String(kind) + "_result"
 		want[sig] = {"for": String(kind)}
 		if Net.has_signal(sig):
 			var cb: Callable = func(r: Dictionary) -> void: got[sig] = r
 			cbs.append([sig, cb])
 			Net.connect(StringName(sig), cb)
-	for kind in ["trade_offer", "trade_accept", "trade_cancel", "trade_gift", "trade_list"]:
+	for kind in ["trade_offer", "trade_accept", "trade_cancel", "trade_gift",
+			"trade_list", "trade_peer_collection"]:
 		Net._dispatch({"kind": kind}, want[String(kind) + "_result"])
-	for kind in ["trade_offer", "trade_accept", "trade_cancel", "trade_gift", "trade_list"]:
+	for kind in ["trade_offer", "trade_accept", "trade_cancel", "trade_gift",
+			"trade_list", "trade_peer_collection"]:
 		var sig := String(kind) + "_result"
 		Selftest.check("dispatch emits " + String(kind), got.get(sig, {}) == want[sig])
 	for entry in cbs:

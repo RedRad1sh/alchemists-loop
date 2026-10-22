@@ -76,12 +76,13 @@ signal friend_respond_result(result: Dictionary)
 signal friend_remove_result(result: Dictionary)
 signal friend_block_result(result: Dictionary)
 signal friend_unblock_result(result: Dictionary)
-# S2 «Обмен картами»: пять плоских ответов по образцу friend_* (:74-78).
+# S2 «Обмен картами»: шесть плоских ответов по образцу friend_* (:74-78).
 signal trade_offer_result(result: Dictionary)
 signal trade_accept_result(result: Dictionary)
 signal trade_cancel_result(result: Dictionary)
 signal trade_gift_result(result: Dictionary)
 signal trade_list_result(result: Dictionary)
+signal trade_peer_collection_result(result: Dictionary)
 signal error(message: String)
 
 var base_url := DEFAULT_BASE
@@ -274,14 +275,12 @@ func friend_unblock(device_id: String, target_device: String) -> void:
 	_enqueue({"kind": "friend_unblock", "path": "/friend/unblock",
 		"body": {"device_id": device_id, "target_device": target_device}})
 
-# S2 (спека §8.1): ручки обмена. give/want — XOR-селектор: у карты вида заполнен
-# только *_card_id, у хроматика — только *_craft_id; пустая пара = 422 на сервере.
-func trade_offer(device_id: String, to: String, give_card_id: String,
-		give_craft_id: String, want_card_id: String, want_craft_id: String) -> void:
+# S2 (спека §8.1, N↔M): ручки обмена. give/want — списки позиций
+# Item = {card_id, craft_id}; инвариант XOR (у позиции заполнен ровно один ключ)
+# держит сервер, пустой список — 422.
+func trade_offer(device_id: String, to: String, give: Array, want: Array) -> void:
 	_enqueue({"kind": "trade_offer", "path": "/trade/offer",
-		"body": {"device_id": device_id, "to": to,
-			"give_card_id": give_card_id, "give_craft_id": give_craft_id,
-			"want_card_id": want_card_id, "want_craft_id": want_craft_id}})
+		"body": {"device_id": device_id, "to": to, "give": give, "want": want}})
 
 func trade_accept(device_id: String, order_id: int) -> void:
 	_enqueue({"kind": "trade_accept", "path": "/trade/accept",
@@ -291,14 +290,18 @@ func trade_cancel(device_id: String, order_id: int) -> void:
 	_enqueue({"kind": "trade_cancel", "path": "/trade/cancel",
 		"body": {"device_id": device_id, "id": order_id}})
 
-func trade_gift(device_id: String, to: String, card_id: String, craft_id: String) -> void:
+func trade_gift(device_id: String, to: String, give: Array) -> void:
 	_enqueue({"kind": "trade_gift", "path": "/trade/gift",
-		"body": {"device_id": device_id, "to": to,
-			"card_id": card_id, "craft_id": craft_id}})
+		"body": {"device_id": device_id, "to": to, "give": give}})
 
 func trade_list(device_id: String) -> void:
 	_enqueue({"kind": "trade_list",
 		"path": "/trade/list?device_id=" + device_id.uri_encode()})
+
+func trade_peer_collection(device_id: String, peer: String) -> void:
+	_enqueue({"kind": "trade_peer_collection",
+		"path": "/trade/peer_collection?device_id=" + device_id.uri_encode()
+			+ "&peer=" + peer.uri_encode()})
 
 func fair_brew(device_id: String, a: String, b: String) -> void:
 	_enqueue({
@@ -655,3 +658,5 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 			trade_gift_result.emit(parsed)
 		"trade_list":
 			trade_list_result.emit(parsed)
+		"trade_peer_collection":
+			trade_peer_collection_result.emit(parsed)
