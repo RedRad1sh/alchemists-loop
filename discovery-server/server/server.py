@@ -1213,6 +1213,38 @@ def _apply_migrations(conn: sqlite3.Connection) -> list[str]:
         done.append(name)
     return done
 
+
+def _migrate_trade_items(conn: sqlite3.Connection) -> None:
+    """NM §2.1: переезд одиночных колонок trade_orders в trade_items + DROP.
+
+    Идемпотентен: PRAGMA-guard ложен после DROP, а на свежей БД (schema.sql
+    уже без колонок) функция — no-op. DROP COLUMN требует sqlite >= 3.35
+    (пин: tests/test_trades.py::TestMigration004).
+
+    Heal живёт здесь, а НЕ в migrations/004_trade_items.sql, по той же
+    конвенции, что glyph/house/first_nick ниже в init_db: init_db сначала
+    исполняет schema.sql, а раннер не пропускает 004 на свежей БД (версия
+    ещё не записана) — INSERT…SELECT по удалённым колонкам внутри 004 ронял
+    бы каждый прогон с «no such column».
+    """
+    tcols = {r["name"] for r in conn.execute("PRAGMA table_info(trade_orders)").fetchall()}
+    old = {"give_card_id", "give_craft_id", "want_card_id", "want_craft_id"} & tcols
+    if not old:
+        return
+    if {"give_card_id", "give_craft_id"} <= tcols:
+        conn.execute(
+            "INSERT INTO trade_items (order_id, side, card_id, craft_id, pos) "
+            "SELECT id, 'give', give_card_id, give_craft_id, 0 FROM trade_orders "
+            "WHERE give_card_id != '' OR give_craft_id != ''")
+    if {"want_card_id", "want_craft_id"} <= tcols:
+        conn.execute(
+            "INSERT INTO trade_items (order_id, side, card_id, craft_id, pos) "
+            "SELECT id, 'want', want_card_id, want_craft_id, 0 FROM trade_orders "
+            "WHERE want_card_id != '' OR want_craft_id != ''")
+    for col in sorted(old):
+        conn.execute("ALTER TABLE trade_orders DROP COLUMN %s" % col)
+
+
 def init_db():
     """Инициализация БД: создать таблицы и загрузить стартовый граф веществ."""
     conn = get_db()
@@ -1276,6 +1308,11 @@ def init_db():
             conn.execute("ALTER TABLE challenges ADD COLUMN first_nick TEXT")
         if "first_device" not in ccols:
             conn.execute("ALTER TABLE challenges ADD COLUMN first_device TEXT")
+
+        # NM §2.1: старые строки S2-офферов → trade_items, одиночные колонки
+        # DROP'аются (почему это Python-шаг, а не тело 004_trade_items.sql —
+        # см. docstring _migrate_trade_items)
+        _migrate_trade_items(conn)
 
         # U6/T05: разнесение challenge/vein-каналов очков.
         # 1) challenge_scores.completed_at — явный флаг «цель дня выполнена».

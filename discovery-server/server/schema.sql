@@ -423,14 +423,13 @@ CREATE TABLE IF NOT EXISTS social_state (
 -- S2 обмен картами. trade_orders — НАМЕРЕНИЕ, а не факт владения: единственный
 -- источник факта — sigil_crafts, поэтому copies нельзя накрутить торговлей.
 -- Ни резерва, ни счётчиков копий здесь нет намеренно (спека §3, §5.2).
+-- NM (§2.1): одиночные give_*/want_* колонки убраны, позиция оффера живёт в
+-- trade_items; старые БД переезжают heal-шагом init_db (_migrate_trade_items),
+-- свежая БД создаётся уже без колонок.
 CREATE TABLE IF NOT EXISTS trade_orders (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     maker_device      TEXT NOT NULL,
     taker_device      TEXT NOT NULL,
-    give_card_id      TEXT NOT NULL DEFAULT '',
-    give_craft_id     TEXT NOT NULL DEFAULT '',
-    want_card_id      TEXT NOT NULL DEFAULT '',
-    want_craft_id     TEXT NOT NULL DEFAULT '',
     state             TEXT NOT NULL DEFAULT 'pending',
     created_at        TEXT NOT NULL,
     updated_at        TEXT NOT NULL
@@ -438,6 +437,19 @@ CREATE TABLE IF NOT EXISTS trade_orders (
 -- Оба среза list-а — «чей ящик + state», поэтому индекс с state вторым столбцом.
 CREATE INDEX IF NOT EXISTS ix_trade_taker ON trade_orders(taker_device, state);
 CREATE INDEX IF NOT EXISTS ix_trade_maker ON trade_orders(maker_device, state);
+
+-- Позиции оффера N↔M: одна строка на карту/экземпляр, give и want раздельно.
+-- Инвариант селектора (card_id XOR craft_id) держит код (_trade_selector),
+-- а не CHECK таблицы — heal переносит старые строки как есть.
+CREATE TABLE IF NOT EXISTS trade_items (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id  INTEGER NOT NULL REFERENCES trade_orders(id) ON DELETE CASCADE,
+    side      TEXT NOT NULL CHECK (side IN ('give', 'want')),
+    card_id   TEXT NOT NULL DEFAULT '',
+    craft_id  TEXT NOT NULL DEFAULT '',
+    pos       INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ix_trade_items_order ON trade_items(order_id, side);
 
 -- Недельный счётчик «свершившихся переносов» (TRADE_WEEK_LIMIT). Ключ — ISO-
 -- неделя 'YYYY-Www' (_week_key), поэтому сброс лимита не требует уборки.

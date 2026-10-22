@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 SERVER_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 
-TRADE_TABLES = ("trade_orders", "trade_counts")
+TRADE_TABLES = ("trade_orders", "trade_counts", "trade_items")
 
 
 class _LocalLLM:
@@ -97,12 +97,19 @@ def _seed(s, device_id, rows):
 
 
 def _order(s, maker, taker, state, created_at):
-    """Строка trade_orders в обход ручки (её не будет до Task 3). created_at — ISO."""
+    """Строка trade_orders + позиции trade_items в обход ручки (её не будет до
+    Task 3). created_at — ISO. give=spark / want=ice — прежние литералы S2.
+    """
     conn = sqlite3.connect(s.DB_PATH)
-    conn.execute(
-        "INSERT INTO trade_orders (maker_device, taker_device, give_card_id,"
-        " want_card_id, state, created_at, updated_at) VALUES (?, ?, 'spark', 'ice',"
-        " ?, ?, ?)", (maker, taker, state, created_at, created_at))
+    cur = conn.execute(
+        "INSERT INTO trade_orders (maker_device, taker_device, state,"
+        " created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        (maker, taker, state, created_at, created_at))
+    oid = cur.lastrowid
+    conn.execute("INSERT INTO trade_items (order_id, side, card_id, craft_id, pos)"
+                 " VALUES (?, 'give', 'spark', '', 0)", (oid,))
+    conn.execute("INSERT INTO trade_items (order_id, side, card_id, craft_id, pos)"
+                 " VALUES (?, 'want', 'ice', '', 0)", (oid,))
     conn.commit()
     conn.close()
 
@@ -183,11 +190,15 @@ class TestSchema:
             assert t in have, (t, sorted(have))
 
     def test_migration_file_alone_creates_same_shape(self, tmp_path, monkeypatch):
-        """Свежая БД (init_db) и живая (только 003_trades.sql) совпадают.
+        """Свежая БД (init_db) и живая (003_trades.sql + 004_trade_items.sql +
+        heal-шаг) совпадают.
 
         Дублирование DDL — действующая конвенция (001_social.sql / 002_*.sql):
         без этого копии schema.sql и миграции разъезжаются молча, а живую БД
-        правка schema.sql не касается вовсе.
+        правка schema.sql не касается вовсе. С Task 1 одного 003 мало: он
+        создаёт trade_orders СО старыми колонками, а свежая схема — уже без
+        них, поэтому bare-БД прогоняется и через `_migrate_trade_items` (тот
+        же шаг, что в init_db).
         """
         srv = _srv(tmp_path, monkeypatch)
         srv.init_db()
@@ -198,13 +209,16 @@ class TestSchema:
         finally:
             conn.close()
 
-        mig_path = os.path.join(SERVER_DIR, "migrations", "003_trades.sql")
-        assert os.path.exists(mig_path), mig_path
-        with open(mig_path, "r", encoding="utf-8") as f:
-            ddl = f.read()
-        bare = sqlite3.connect(str(tmp_path / "bare.db"))
+        bare_path = str(tmp_path / "bare.db")
+        bare = sqlite3.connect(bare_path)
         bare.row_factory = sqlite3.Row
-        bare.executescript(ddl)
+        for mig in ("003_trades.sql", "004_trade_items.sql"):
+            mig_path = os.path.join(SERVER_DIR, "migrations", mig)
+            assert os.path.exists(mig_path), mig_path
+            with open(mig_path, "r", encoding="utf-8") as f:
+                bare.executescript(f.read())
+        # heal как на живой БД при апгрейде: колонок нет, строки переехали
+        srv._migrate_trade_items(bare)
         try:
             for t in TRADE_TABLES:
                 assert _columns(bare, t) == reference[t], t
@@ -225,6 +239,61 @@ class TestSchema:
         names = [r["name"] for r in rows]
         assert "003_trades.sql" in names, names
         assert len(names) == len(set(names)), ("миграция применена дважды", names)
+
+
+class TestMigration004:
+    """NM §2.1: одиночные колонки trade_orders → таблица позиций trade_items."""
+
+    def test_migration_004_heals_s2_rows_and_drops_columns(self, tmp_path, monkeypatch):
+        """Живая S2-БД: старые строки становятся позициями, колонки уходят.
+
+        Старая форма собирается из 003_trades.sql — ровно то, что живая БД
+        получила на S2, — и дополняется строками старого формата прямым
+        INSERT'ом: ручка offer к этой задаче уже ничего не гарантирует (её
+        переписывает Task 2), а heal проверяется на данных, а не на коде.
+        Раннер 004 на такой БД не пропускает версию (её ещё нет), поэтому
+        DDL миграции проходит вхолостую, а heal с DROP выполняется в
+        Python-шаге init_db под PRAGMA-guard'ом (конвенция glyph/house/
+        first_nick): на свежей БД schema.sql уже без колонок, и тот же SQL
+        внутри 004 падал бы «no such column» на каждом тесте.
+        """
+        srv = _srv(tmp_path, monkeypatch)
+        mig003 = os.path.join(SERVER_DIR, "migrations", "003_trades.sql")
+        assert os.path.exists(mig003), mig003
+        with open(mig003, "r", encoding="utf-8") as f:
+            ddl = f.read()
+        conn = sqlite3.connect(srv.DB_PATH)
+        conn.executescript(ddl)
+        conn.execute(
+            "INSERT INTO trade_orders (maker_device, taker_device, give_card_id,"
+            " want_craft_id, state, created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
+            ("dev-a", "dev-b", "clay", "c-09", "pending", "t", "t"))
+        conn.execute(
+            "INSERT INTO trade_orders (maker_device, taker_device, give_craft_id,"
+            " state, created_at, updated_at) VALUES (?,?,?,?,?,?)",
+            ("dev-c", "dev-d", "c-31", "accepted", "t", "t"))
+        conn.commit()
+        conn.close()
+
+        srv.init_db()  # schema.sql + _apply_migrations (004) + heal-шаг
+
+        healed = [(r["order_id"], r["side"], r["card_id"], r["craft_id"], r["pos"])
+                  for r in _rows(srv, "SELECT order_id, side, card_id, craft_id, pos"
+                                      " FROM trade_items ORDER BY order_id, side")]
+        assert healed == [
+            (1, "give", "clay", "", 0), (1, "want", "", "c-09", 0),
+            (2, "give", "", "c-31", 0)], healed
+        cols = {r["name"] for r in _rows(srv, "PRAGMA table_info(trade_orders)")}
+        assert cols & {"give_card_id", "give_craft_id",
+                       "want_card_id", "want_craft_id"} == set(), cols
+        # Идемпотентность: второй init_db не падает и не дублирует позиции
+        # (после DROP PRAGMA-guard уже ложен).
+        srv.init_db()
+        assert [(r["order_id"], r["side"], r["card_id"], r["craft_id"], r["pos"])
+                for r in _rows(srv, "SELECT order_id, side, card_id, craft_id, pos"
+                                    " FROM trade_items ORDER BY order_id, side")] == healed
+        # DROP COLUMN требует sqlite >= 3.35 — пин версии движка.
+        assert sqlite3.sqlite_version_info >= (3, 35)
 
 
 class TestHelpers:
