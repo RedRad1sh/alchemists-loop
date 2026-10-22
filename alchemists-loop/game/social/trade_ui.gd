@@ -8,6 +8,11 @@ class_name TradeUI
 
 const TITLE := "Обмен"
 
+## Зеркало серверного env ALCHEMY_TRADE_SIDE_MAX (спека §3): лимит ячеек на
+## сторону. Источник истины — сервер; клиентский гейт только UX, чтобы игрок не
+## собирал заведомо отклоняемый оффер.
+const TRADE_SIDE_MAX := 6
+
 var g: Game
 var _screen: Control = null
 var _body: VBoxContainer = null
@@ -18,11 +23,12 @@ var _history: VBoxContainer = null
 var _peer := ""
 var _mode := 0
 var _list := {}
-var _offer := {"give": {}, "want": {}, "gift": false}
+var _offer := {"give": [], "want": [], "gift": false}   # N↔M: стороны — списки ячеек
 var _picking := ""          # "give" | "want" | "" — идёт ли выбор карты
 var _note := ""             # строка серверного отказа (код → текст через _detail_text)
 var _gone := {}               # id входящих офферов с ушедшей картой (§7.2)
 var _last_id := -1            # id заказа, чей отказ рисовать на строке
+var _peer_coll := {}          # кэш peer_collection друга (§2.2): {cards, extras}
 
 func _init(game: Game) -> void:
 	g = game
@@ -35,7 +41,7 @@ func open(peer: String) -> void:
 		build()
 	_peer = peer
 	_mode = 0
-	_offer = {"give": {}, "want": {}, "gift": false}
+	_offer = {"give": [], "want": [], "gift": false}
 	_picking = ""
 	_note = ""
 	# Отметка «карты больше нет» привязана к офферу конкретного собеседника:
@@ -100,10 +106,99 @@ func entries() -> Array:
 		out.append(pick("", craft, 1, nm))
 	return out
 
-func can_confirm() -> bool:
-	if _offer["give"] == {}:
+## Число копий вида, доступное стороне. give — своя серверная коллекция; want —
+## коллекция друга из _peer_coll. Отрицательный ответ означает «источник
+## недоступен» (want без peer_coll: офлайн/ещё не запрошен) — тогда гейт
+## best-effort не блокирует ячейку: источник истины сервер (§3, он ответит 409
+## peer_lacks), а блокировка сделала бы сборку оффера невозможной офлайн.
+func _copies_for(side: String, cid: String) -> int:
+	if side == "want":
+		if _peer_coll.is_empty():
+			return -1
+		var cards: Dictionary = _peer_coll.get("cards", {})
+		if not cards.has(cid):
+			return 0
+		return int((cards[cid] as Dictionary).get("copies", 0))
+	var coll: Dictionary = g._sigil.server_collection()
+	if not coll.has(cid):
+		return 0
+	return int((coll[cid] as Dictionary).get("copies", 0))
+
+## Кладёт выбранную карту в следующий свободный слот стороны. Отказ (false) —
+## лимит стороны (TRADE_SIDE_MAX) либо дефицит копий: экземпляр хроматика
+## уникален (одна ячейка на craft_id), вид занят ячейками не больше копий (§3).
+func add_slot(side: String, entry: Dictionary) -> bool:
+	if not _offer.has(side):
 		return false
-	return bool(_offer["gift"]) or _offer["want"] != {}
+	var arr: Array = _offer[side]
+	if arr.size() >= TRADE_SIDE_MAX:
+		return false
+	var cid := String(entry.get("card_id", ""))
+	var craft := String(entry.get("craft_id", ""))
+	# Хроматик — один экземпляр: вторая ячейка того же craft_id запрещена.
+	if craft != "":
+		for e in arr:
+			if String((e as Dictionary).get("craft_id", "")) == craft:
+				return false
+		arr.append(entry)
+		return true
+	# Вид: сумма занятых ячеек не больше копий в источнике стороны.
+	var used := 0
+	for e in arr:
+		if String((e as Dictionary).get("card_id", "")) == cid:
+			used += 1
+	var have := _copies_for(side, cid)
+	if have >= 0 and used >= have:
+		return false
+	arr.append(entry)
+	return true
+
+## Снимает ячейку с позиции pos. pos вне диапазона — бездействие (кнопка
+## «убрать» на пустой стороне недостижима, но защита от случайного индекса нужна).
+func remove_slot(side: String, pos: int) -> void:
+	if not _offer.has(side):
+		return
+	var arr: Array = _offer[side]
+	if pos < 0 or pos >= arr.size():
+		return
+	arr.remove_at(pos)
+
+## Всё, что можно попросить у друга прямо сейчас: позиции из кэша peer_collection
+## (спека §4.1 — want берётся из чужой коллекции, а не из своей). При пустом
+## кэше — пусто; панель «Прошу» недоступна, пока ответ не пришёл.
+func peer_entries() -> Array:
+	var out: Array = []
+	if _peer_coll.is_empty():
+		return out
+	var cards: Dictionary = _peer_coll.get("cards", {})
+	for cid in cards:
+		var copies := int((cards[cid] as Dictionary).get("copies", 0))
+		if copies <= 0:
+			continue
+		var nm := str(g._sigil.card(str(cid)).get("fallback_name", cid))
+		if nm == "":
+			nm = str(cid)
+		out.append(pick(str(cid), "", copies, nm))
+	for x in _peer_coll.get("extras", []):
+		if not (x is Dictionary):
+			continue
+		var craft := str((x as Dictionary).get("craft_id", ""))
+		if craft == "":
+			continue
+		var nm := str((x as Dictionary).get("llm_name", ""))
+		if nm == "":
+			nm = "Внекомплектная"
+		out.append(pick("", craft, 1, nm))
+	return out
+
+## Кэш ответа GET /api/trade/peer_collection: {cards, extras} (§2.2).
+func set_peer_coll(coll: Dictionary) -> void:
+	_peer_coll = coll
+
+func can_confirm() -> bool:
+	var give: Array = _offer["give"]
+	var want: Array = _offer["want"]
+	return give.size() >= 1 and (bool(_offer["gift"]) or want.size() >= 1)
 
 func open_builder() -> void:
 	_picking = ""
@@ -129,7 +224,7 @@ func on_gift(result: Dictionary) -> void:
 
 func _on_write_result(result: Dictionary, is_offer: bool) -> void:
 	if result.get("ok", false) == true:
-		_offer = {"give": {}, "want": {}, "gift": false}
+		_offer = {"give": [], "want": [], "gift": false}
 		_picking = ""
 		_note = ""
 		# Оба успеха уходят на список. Оставленный экран подтверждения рисует
@@ -460,16 +555,28 @@ func _slot_text(e) -> String:
 		return "не выбрана"
 	return String((e as Dictionary).get("display_name", ""))
 
+## Подпись slot-кнопки стороны-списка (R14): имя ПЕРВОЙ ячейки, «не выбрана» для
+## пустой стороны, «<имя> +N» если ячеек больше одной. Визуал конструктора —
+## Task 8; здесь прежняя одна кнопка на сторону с прежним name и press.
+func _side_label(side) -> String:
+	if not (side is Array) or (side as Array).is_empty():
+		return "не выбрана"
+	var arr: Array = side
+	var first := String((arr[0] as Dictionary).get("display_name", ""))
+	if arr.size() == 1:
+		return first
+	return "%s +%d" % [first, arr.size() - 1]
+
 func _render_builder() -> void:
 	_clear(_body)
 	_header.text = "%s · %s" % [TITLE, _nick()]
 	_body.add_child(g._label("Что отдаю", 13))
-	var give := g._small_button(_slot_text(_offer["give"]), Vector2(260, 40), 0)
+	var give := g._small_button(_side_label(_offer["give"]), Vector2(260, 40), 0)
 	give.name = "GiveSlot"
 	give.pressed.connect(_pick_for.bind("give"))
 	_body.add_child(give)
 	_body.add_child(g._label("Что прошу взамен", 13))
-	var want := g._small_button(_slot_text(_offer["want"]), Vector2(260, 40), 0)
+	var want := g._small_button(_side_label(_offer["want"]), Vector2(260, 40), 0)
 	want.name = "WantSlot"
 	want.disabled = bool(_offer["gift"])     # подарок = односторонняя передача
 	want.pressed.connect(_pick_for.bind("want"))
@@ -508,7 +615,7 @@ func _render_builder() -> void:
 func _toggle_gift() -> void:
 	_offer["gift"] = not bool(_offer["gift"])
 	if bool(_offer["gift"]):
-		_offer["want"] = {}
+		_offer["want"] = []
 	_render()
 
 func _pick_for(slot: String) -> void:
@@ -522,7 +629,11 @@ func _stop_picking() -> void:
 	_render()
 
 func _choose(e: Dictionary) -> void:
-	_offer[_picking] = e
+	# Пикер (остаётся до Task 8, раллинг R13) кладёт карту через add_slot — тот же
+	# путь, что и будущий клик по сетке: гейты лимита стороны и копий применяются
+	# к реальному выбору игрока, а не обходятся прямой записью в ячейку.
+	if _picking == "give" or _picking == "want":
+		add_slot(_picking, e)
 	_picking = ""
 	_mode = 1
 	_note = ""
@@ -536,20 +647,23 @@ func _back_to_list() -> void:
 func _render_confirm() -> void:
 	_clear(_body)
 	_header.text = "%s · %s" % [TITLE, _nick()]
-	var give: Dictionary = _offer["give"]
-	var want: Dictionary = _offer["want"]
-	_body.add_child(g._label("Ты отдаёшь: %s" % String(give.get("display_name", "")), 14))
+	var give: Array = _offer["give"]
+	var want: Array = _offer["want"]
+	_body.add_child(g._label("Ты отдаёшь: %s" % _side_names(give), 14))
 	if bool(_offer["gift"]):
 		_body.add_child(g._label("Подарок (%s): без встречной карты" % _nick(), 13))
 	else:
-		_body.add_child(g._label("Ты получаешь: %s" % String(want.get("display_name", "")), 14))
-	if bool(give.get("is_last", false)):
-		# Единственная защита «последней копии» (спека §5.3): сервер такую сделку
-		# не блокирует, поэтому название последствия обязано быть на этом экране.
-		# И только про отдаваемую карту: want собирается из той же моей коллекции
-		# (§8.4 — источник данных один), поэтому «последняя копия» на его стороне
-		# описывает карту, которую просят у меня, а не ту, что теряю я. Про свою
-		# потерю игрок читает эту строку и отменяет законную сделку.
+		_body.add_child(g._label("Ты получаешь: %s" % _side_names(want), 14))
+	# Предупреждение — только про отдаваемые карты (спека §5.3): сервер такую
+	# сделку не блокирует, поэтому название последствия обязано быть на экране.
+	# И только по give: want собирается из коллекции друга (§4.1), поэтому
+	# «последняя копия» на его стороне описывает карту, которую просят у него, а
+	# не ту, что теряю я — игрок читал бы неправду про своё необратимое последствие.
+	var any_last := false
+	for e in give:
+		if bool((e as Dictionary).get("is_last", false)):
+			any_last = true
+	if any_last:
 		var warn := g._label(
 			"Это твоя последняя копия вида. Отдав её, теряешь карту из "
 			+ "коллекции: прогресс достижений по сигилам и невыбранные вехи "
@@ -575,13 +689,35 @@ func _render_confirm() -> void:
 
 func _send() -> void:
 	var dev := g._online._device_id
-	var give: Dictionary = _offer["give"]
-	# Контракт N↔M: Net ждёт списки позиций; пока оффер 1↔1, позиция одна.
+	# Контракт N↔M: на сетку уезжают РОВНО {card_id, craft_id} (спека §2.2).
+	# is_last/display_name — клиентский UX-слой, сервер их не ждёт. Новый массив
+	# строится заново, поэтому долговременный _offer не попадает в очередь Net по
+	# ссылке (закрытие hazard Task 5 «Net кладёт массив в очередь по ссылке»).
+	var give := _wire_items(_offer["give"])
 	if bool(_offer["gift"]):
-		Net.trade_gift(dev, _peer, [give])
+		Net.trade_gift(dev, _peer, give)
 		return
-	var want: Dictionary = _offer["want"]
-	Net.trade_offer(dev, _peer, [give], [want])
+	Net.trade_offer(dev, _peer, give, _wire_items(_offer["want"]))
+
+## Позиции стороны в формат отправки: список словарей {card_id, craft_id}.
+static func _wire_items(side) -> Array:
+	var out: Array = []
+	if not (side is Array):
+		return out
+	for e in side:
+		out.append({"card_id": String((e as Dictionary).get("card_id", "")),
+			"craft_id": String((e as Dictionary).get("craft_id", ""))})
+	return out
+
+## Человекочитаемая подпись стороны для экрана подтверждения: имена ячеек через
+## запятую. Только для отрисовки текста — на сетку не уезжает (_wire_items).
+func _side_names(side) -> String:
+	if not (side is Array):
+		return ""
+	var parts: Array = []
+	for e in side:
+		parts.append(String((e as Dictionary).get("display_name", "")))
+	return ", ".join(PackedStringArray(parts))
 
 func _nick() -> String:
 	var friend := g._social.friend_by_device(_peer)

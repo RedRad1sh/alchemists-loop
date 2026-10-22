@@ -37,6 +37,7 @@ static func run(g: Game) -> void:
 	_entry(g)
 	_constructor(g)
 	_list_actions(g)
+	_offer_model(g)
 
 
 static func _methods(_g: Game) -> void:
@@ -350,8 +351,8 @@ static func _constructor(g: Game) -> void:
 
 	tr.open("dev-b")
 	tr.open_builder()
-	tr._offer = {"give": tu.pick("spark", "", 1, "Искра"),
-		"want": tu.pick("ice", "", 3, "Лёд"), "gift": false}
+	tr._offer = {"give": [tu.pick("spark", "", 1, "Искра")],
+		"want": [tu.pick("ice", "", 3, "Лёд")], "gift": false}
 	tr._mode = 1
 	tr.call("_render")
 	var want_btn := _button_named(tr._body, "Лёд")
@@ -363,7 +364,7 @@ static func _constructor(g: Game) -> void:
 	var none_btn := _button_named(tr._body, "не выбрана")
 	Selftest.check("gift mode kills want slot", want_btn != null and none_btn != null
 		and not want_btn.disabled and none_btn.disabled
-		and (tr._offer["want"] as Dictionary).is_empty()
+		and (tr._offer["want"] as Array).is_empty()
 		and bool(tr._offer["gift"]))
 
 	var fired := {"n": 0}
@@ -371,8 +372,8 @@ static func _constructor(g: Game) -> void:
 	Net.trade_offer_result.connect(cb)
 	# _toggle_gift() стёр want — собираем встречный оффер заново, иначе
 	# open_confirm() уйдёт в «Выбери карту» и проверка 7 покраснеет не за то.
-	tr._offer = {"give": tu.pick("spark", "", 1, "Искра"),
-		"want": tu.pick("ice", "", 3, "Лёд"), "gift": false}
+	tr._offer = {"give": [tu.pick("spark", "", 1, "Искра")],
+		"want": [tu.pick("ice", "", 3, "Лёд")], "gift": false}
 	tr.open_confirm()
 	Selftest.check("confirm warns before offer", tr._mode == 2
 		and _label_has(tr._body, "последн") and _label_has(tr._body, "вехи")
@@ -412,8 +413,8 @@ static func _constructor(g: Game) -> void:
 	# поэтому «последняя копия» на стороне want описывает карту, которую просят
 	# у меня. Теряю я другую, и копия «Это твоя последняя копия» поверх want
 	# говорит игроку неправду про необратимое последствие.
-	tr._offer = {"give": tu.pick("ice", "", 3, "Лёд"),
-		"want": tu.pick("spark", "", 1, "Искра"), "gift": false}
+	tr._offer = {"give": [tu.pick("ice", "", 3, "Лёд")],
+		"want": [tu.pick("spark", "", 1, "Искра")], "gift": false}
 	tr.open_confirm()
 	Selftest.check("confirm warns about what you give", tr._mode == 2
 		and not _label_has(tr._body, "последн"))
@@ -421,8 +422,8 @@ static func _constructor(g: Game) -> void:
 	# Прошлый отказ не должен переживать следующее подтверждение: игрок обязан
 	# видеть причину отказа, который он получил сейчас, а не того, что он уже
 	# исправил.
-	tr._offer = {"give": tu.pick("spark", "", 1, "Искра"),
-		"want": tu.pick("ice", "", 3, "Лёд"), "gift": false}
+	tr._offer = {"give": [tu.pick("spark", "", 1, "Искра")],
+		"want": [tu.pick("ice", "", 3, "Лёд")], "gift": false}
 	tr.open_confirm()
 	tr.call("on_offer", {"ok": false, "detail": "week_limit"})
 	var note_shown := _label_has(tr._body, "Недельный")
@@ -434,22 +435,22 @@ static func _constructor(g: Game) -> void:
 	# поэтому единственная живая кнопка «Подарить» через _send() отправила бы
 	# Net.trade_gift(dev, peer, "", "") — серверный 422 bad_selector вместо
 	# подтверждения, и игроку неоткуда узнать, что подарок дошёл.
-	tr._offer = {"give": tu.pick("", "x1", 1, "Радуга"),
-		"want": {}, "gift": true}
+	tr._offer = {"give": [tu.pick("", "x1", 1, "Радуга")],
+		"want": [], "gift": true}
 	tr.open_confirm()
 	tr.call("on_gift", {"ok": true, "craft_id": "x1", "moved_name": "Радуга",
 		"remain": 7})
 	Selftest.check("gift success leaves confirm", tr._mode != 2
-		and (tr._offer["give"] as Dictionary).is_empty())
+		and (tr._offer["give"] as Array).is_empty())
 
 	# Смена собеседника чистит черновик: иначе полусобранный оффер, начатый с
 	# другом A, уходит другу B одним нажатием «Дальше».
 	tr.open("dev-b")
 	tr.open_builder()
-	tr._offer["give"] = tu.pick("spark", "", 1, "Искра")
+	tr._offer["give"] = [tu.pick("spark", "", 1, "Искра")]
 	tr.open("dev-c")
 	Selftest.check("open clears the draft",
-		(tr._offer["give"] as Dictionary).is_empty() and not bool(tr.can_confirm()))
+		(tr._offer["give"] as Array).is_empty() and not bool(tr.can_confirm()))
 	tr.call("close")
 	# Фикстура живёт в общем g._sigil, а после SuiteTrades идут SuiteJuice,
 	# SuiteSaveSync, SuiteSyncPackageNet и SuiteContractBoard
@@ -633,8 +634,8 @@ static func _list_actions(g: Game) -> void:
 		and String(tu.reset_day_label("2026-10-21")) == "26.10")
 	tr.call("on_list", {"ok": true, "incoming": [], "outgoing": [], "history": [],
 		"week_limit": 10, "remain": 0})
-	tr._offer = {"give": tu.pick("spark", "", 1, "Искра"),
-		"want": tu.pick("ice", "", 3, "Лёд"), "gift": false}
+	tr._offer = {"give": [tu.pick("spark", "", 1, "Искра")],
+		"want": [tu.pick("ice", "", 3, "Лёд")], "gift": false}
 	tr.open_builder()
 	var next := _button_named(tr._body, "Дальше")
 	Selftest.check("proceed locked at zero remain", next != null
@@ -779,3 +780,62 @@ static func _list_actions(g: Game) -> void:
 	sm._server_collection = {}
 	g._social.cache = social_cache0
 	g._social.threads = social_threads0
+
+
+## Модель оффера списками (Task 6): гейт лимита стороны, гейт копий вида,
+## уникальность хроматика и панель «Прошу» из коллекции друга. Секция чисто-API:
+## слой-модель живёт на detached-экземпляре T.new(g), экран SocialUI здесь не
+## нужен — own-panel-гейты читают g._sigil напрямую. Вызывается ПОСЛЕДНЕЙ, а
+## фикстура _server_collection обязательно возвращается в покой, иначе красными
+## упадут SuiteJuice/SuiteSaveSync/SuiteSyncPackageNet/SuiteContractBoard.
+static func _offer_model(g: Game) -> void:
+	# Мутации, красящие блок: снять гейт лимита стороны в add_slot (первый кейс
+	# краснеет на 6+1 — седьмая ячейка clay легальна по копиям, но запрещена
+	# капом); обнулить remove_slot (второй); снять гейт копий вида (третий);
+	# читать копии не из живых коллекций, а из словаря ячейки, или не строить
+	# peer_entries из _peer_coll (четвёртый).
+	var T = load("res://game/social/trade_ui.gd")
+	var tu = T.new(g)
+	var sm = g._sigil
+	# Копий вида — 8 (R16): тогда шесть ячеек легальны, а седьмая отказана ИМЕННО
+	# лимитом стороны (6), а не дефицитом копий (8) — иначе кап не отличался бы от
+	# нехватки. metal: одна копия — вторая ячейка того же вида отказана по копиям.
+	sm._server_collection = {"clay": {"copies": 8, "first_at": ""},
+		"metal": {"copies": 1, "first_at": ""}}
+	for i in range(6):
+		tu.add_slot("give", tu.pick("clay", "", 2, "Глина"))
+	Selftest.check("slot cap enforced at six",
+		int(tu._offer["give"].size()) == 6
+		and not tu.add_slot("give", tu.pick("clay", "", 2, "Глина")))
+	tu.remove_slot("give", 0)
+	Selftest.check("slot add and remove roundtrip",
+		int(tu._offer["give"].size()) == 5
+		and tu.add_slot("give", tu.pick("clay", "", 2, "Глина")))
+	# metal в коллекции одна копия: первая ячейка проходит, вторая — отказ по
+	# копиям. first_ok обязан быть истинен, иначе пин краснел бы и на заглушке.
+	tu._offer["give"].clear()
+	var first_ok: bool = tu.add_slot("give", tu.pick("metal", "", 1, "Металл"))
+	Selftest.check("pocket refused when copies spent",
+		first_ok and not tu.add_slot("give", tu.pick("metal", "", 1, "Металл")))
+	# Панель «Прошу» читает коллекцию ДРУГА, а не свою (спека §4.1): без
+	# peer_coll пусто, с ней — позиции друга (хроматик по llm_name, вид по copies).
+	var empty_before: bool = tu.peer_entries().is_empty()
+	tu.set_peer_coll({"cards": {"ice": {"copies": 3, "first_at": ""}},
+		"extras": [{"craft_id": "c-17", "rarity": "chromatic",
+			"llm_name": "Радуга друга"}]})
+	var pe: Array = tu.peer_entries()
+	var chroma := {}
+	var view := {}
+	for e in pe:
+		if String(e.get("craft_id", "")) == "c-17":
+			chroma = e
+		if String(e.get("card_id", "")) == "ice":
+			view = e
+	# Хроматик всегда последний экземпляр; вид с 3 копиями — не последний.
+	Selftest.check("peer pane reads peer collection", empty_before and pe.size() == 2
+		and String(chroma.get("display_name", "")) == "Радуга друга"
+		and bool(chroma.get("is_last", false))
+		and not bool(view.get("is_last", true)))
+	# Возврат общего состояния в покой — до follow-up-сюит (selftest.gd:163-166).
+	sm._server_collection = {}
+
