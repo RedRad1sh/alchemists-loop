@@ -293,6 +293,10 @@ MSG_PREVIEW_LEN = 60           # длина превью в инбоксе
 # регулируемый параметр владельца, он приезжает в каждом ответе, а текст отказа
 # клиент рисует из detail.
 TRADE_WEEK_LIMIT = int(os.environ.get("ALCHEMY_TRADE_WEEK_LIMIT", "10"))
+# NM §3: максимум позиций на одну сторону оффера (give 1..N, want 0..N).
+# Регулируемый параметр владельца — как TRADE_WEEK_LIMIT: серверный гейт является
+# источником истины, клиент держит зеркало только для гейта ячеек конструктора.
+TRADE_SIDE_MAX = int(os.environ.get("ALCHEMY_TRADE_SIDE_MAX", "6"))
 TRADE_OPEN_MAX = 20        # активных pending-офферов на одного как maker (§7.1)
 TRADE_TTL_DAYS = 7         # просрочка оффера; проверяется лениво (§6.1)
 TRADE_HISTORY_MAX = 20     # строк истории в GET /api/trade/list
@@ -601,16 +605,23 @@ class SocialInboxResponse(BaseModel):
     trades_pending: int = 0
 
 
+class TradeItemPayload(BaseModel):
+    """Позиция стороны оффера (NM §2.2): ровно один непустой селектор.
+    Форма — инвариант XOR из S2 §4 — проверяется в ручке (`bad_item`), не в
+    Field: контрактный код обязан отдавать наш валидатор, а не pydantic.
+    128 — тот же запас, что у строковых полей S2 (device_id до 128)."""
+    card_id: str = Field("", max_length=128)
+    craft_id: str = Field("", max_length=128)
+
+
 class TradeOfferPayload(BaseModel):
     device_id: str = Field(..., min_length=1, max_length=128)
     to: str = Field(..., min_length=1, max_length=128)
-    # Пустые обе или непустые обе → 422 bad_selector (инвариант XOR, спека §4).
-    # 128 — с запасом по тем же причинам, что и max_length=2000 у body письма:
-    # контрактный код обязан отдавать наш валидатор, а не pydantic.
-    give_card_id: str = Field("", max_length=128)
-    give_craft_id: str = Field("", max_length=128)
-    want_card_id: str = Field("", max_length=128)
-    want_craft_id: str = Field("", max_length=128)
+    # Списки позиций (NM §2.2). Длина сторон (side_too_long) проверяется в
+    # ручке, а НЕ через max_items в Field: аргументы валидации списков различаются
+    # в pydantic v1/v2, а контракт стабильнее, чем версия либы (§2.3 п.2).
+    give: list[TradeItemPayload] = []
+    want: list[TradeItemPayload] = []
 
 
 class TradeIdPayload(BaseModel):
@@ -621,8 +632,8 @@ class TradeIdPayload(BaseModel):
 class TradeGiftPayload(BaseModel):
     device_id: str = Field(..., min_length=1, max_length=128)
     to: str = Field(..., min_length=1, max_length=128)
-    card_id: str = Field("", max_length=128)
-    craft_id: str = Field("", max_length=128)
+    # Gift = give-список без want (NM §2.2); гейты сторон общие с offer.
+    give: list[TradeItemPayload] = []
 
 
 class TradeMoved(BaseModel):
@@ -634,8 +645,8 @@ class TradeMoved(BaseModel):
 class TradeOfferResponse(BaseModel):
     ok: bool
     id: int = 0
-    # Дубль из §7.1: повторный оффер той же карты тому же игроку не создаёт
-    # вторую строку, а возвращает существующий id.
+    # Дубль из §7.1 (ruling 5): повторный оффер с тем же give-мультимножеством
+    # тому же игроку не создаёт вторую строку, а возвращает существующий id.
     existed: bool = False
 
 
@@ -4600,6 +4611,63 @@ def _trade_pick_row(conn: sqlite3.Connection, owner: str, card_id: str, craft_id
         (owner, card_id)).fetchone()
 
 
+# Машинные коды валидации сторон offer/gift (NM §2.3): длина и форма — 422,
+# дефицит коллекции — 409 (ruling 1: S2 `card_not_owned` 422 — это та же
+# проверка, в новой модели она `not_enough_copies`; `unknown_card` сохранён).
+_TRADE_SIDE_CODES = {"side_too_long": 422, "bad_item": 422, "unknown_card": 422,
+                     "not_enough_copies": 409, "peer_lacks": 409}
+
+
+def _trade_copies_available(conn: sqlite3.Connection, owner: str, card_id: str) -> int:
+    """Сколько копий вида `card_id` лежит у `owner` (ruling 3: тот же счёт,
+    что у `copies` в /api/sigil/collection)."""
+    return int(conn.execute(
+        "SELECT COUNT(*) AS c FROM sigil_crafts WHERE device_id = ? AND card_id = ?",
+        (owner, card_id)).fetchone()["c"])
+
+
+def _trade_side_norm(conn: sqlite3.Connection, owner: str, items, side: str,
+                     want_of_peer: bool):
+    """Нормализация и валидация одной стороны offer/gift (NM §2.3 п.2–5).
+
+    -> (rows, err): rows — [{"card_id", "craft_id", "pos"}, ...] в порядке
+    входа (pos = индекс), err — машинный код из _TRADE_SIDE_CODES или None.
+    Порядок проверок внутри стороны: длина (п.2) → форма элемента (п.3) →
+    экземпляр/копии (п.4–5). give обязан непустым (сторона подарка/оффера),
+    want может быть пустой (0..TRADE_SIDE_MAX).
+    want_of_peer — сторона проверяется против коллекции taker: там нового кода
+    `peer_lacks` (S2 доказывал наличие want только на accept), и там же
+    каталожная проверка вида `unknown_card` (инвариант S2, ruling 1).
+    Ячейка = один экземпляр: вид занят не больше чем копиями, хроматик ровно
+    один раз и не повторяется в стороне (_trade_pick_row его и находит).
+    """
+    if len(items) > TRADE_SIDE_MAX or (side == "give" and not items):
+        return [], "side_too_long"
+    catalog = _sigil_catalog()["by_id"] if want_of_peer else None
+    seen: dict = {}
+    rows = []
+    for pos, it in enumerate(items):
+        try:
+            cid, crid = _trade_selector(it.card_id, it.craft_id)
+        except HTTPException:
+            return [], "bad_item"
+        if catalog is not None and cid and cid not in catalog:
+            return [], "unknown_card"
+        key = cid or crid
+        seen[key] = seen.get(key, 0) + 1
+        available = _trade_copies_available(conn, owner, cid) if cid else 1
+        if _trade_pick_row(conn, owner, cid, crid) is None or seen[key] > available:
+            return [], ("peer_lacks" if want_of_peer else "not_enough_copies")
+        rows.append({"card_id": cid, "craft_id": crid, "pos": pos})
+    return rows, None
+
+
+def _trade_side_fail(err: str):
+    """Единственная точка перевода кода стороны в HTTP-статус (§2.3): ручной
+    raise со словарём — иначе два места с (422/409) разъезжаются молча."""
+    raise HTTPException(status_code=_TRADE_SIDE_CODES[err], detail=err)
+
+
 def _trade_ttl_cutoff() -> str:
     """ISO-момент, раньше которого pending-оффер считается просроченным.
     Уборки нет (спека §6.1): это единственная проверка TTL."""
@@ -5606,24 +5674,21 @@ def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
 
 @app.post("/api/trade/offer", response_model=TradeOfferResponse)
 def trade_offer(payload: TradeOfferPayload):
-    """Выставить встречный оффер другу (спека §7.1).
+    """Выставить другу встречный оффер N↔M (NM §2.2–2.3 поверх S2 §7.1).
 
-    Карты НЕ переносит и недельный лимит НЕ тратит (§5.0). Две проверки
-    обязательны, иначе модель «без блокировки» начинает производить мусор:
-    владение на момент оффера («не ври заранее»; карта остаётся рабочей) и
-    потолок открытых офферов (иначе строки trade_orders плодятся бесконечно,
-    раз лимит их не считает). want_card_id проверяется по каталогу: просить
-    «карту-призрак» бессмысленно; want_craft_id — нет, существование
-    экземпляра докажет accept.
+    Карты НЕ переносит и недельный лимит НЕ тратит (§5.0: действие — перенос,
+    не намерение; peak «оффер+отмена лимит не тратят»). Проверки: регистрация
+    обеих сторон, self-deal, дружба (п.1) → обе стороны через _trade_side_norm
+    (п.2–5: длина, форма, коллекции maker и taker) → потолок открытых офферов →
+    дедуп по give-мультимножеству → одна строка trade_orders + позиции в
+    trade_items. Порядок «потолок до дедупа» закреплён тестом open_offer_cap.
 
-    BEGIN IMMEDIATE здесь нужен не ради CAS, а чтобы «подсчёт потолка → INSERT»
-    и «поиск дубля → INSERT» были атомарны: без него два параллельных оффера
-    от одного maker дали бы и 21-ю строку, и дубль.
+    BEGIN IMMEDIATE здесь нужен не ради CAS, а чтобы «валидация коллекций →
+    подсчёт потолка → поиск дубля → INSERT» были атомарны: без него два
+    параллельных оффера от одного maker дали бы и 21-ю строку, и дубль.
     """
     me = _social_caller(payload.device_id)
     to = _social_id(payload.to)
-    give_card, give_craft = _trade_selector(payload.give_card_id, payload.give_craft_id)
-    want_card, want_craft = _trade_selector(payload.want_card_id, payload.want_craft_id)
     if to == me:
         raise HTTPException(status_code=422, detail="self_deal")
     conn = get_db()
@@ -5633,34 +5698,53 @@ def trade_offer(payload: TradeOfferPayload):
         _trade_registered(conn, to)
         if not _social_accepted(conn, me, to):
             raise HTTPException(status_code=404, detail="not_friends")
-        if want_card and want_card not in _sigil_catalog()["by_id"]:
-            raise HTTPException(status_code=422, detail="unknown_card")
-        if _trade_pick_row(conn, me, give_card, give_craft) is None:
-            raise HTTPException(status_code=422, detail="card_not_owned")
+        give_rows, err = _trade_side_norm(conn, me, payload.give, "give", False)
+        if err:
+            _trade_side_fail(err)
+        want_rows, err = _trade_side_norm(conn, to, payload.want, "want", True)
+        if err:
+            _trade_side_fail(err)
         if _trade_open_count(conn, me) >= TRADE_OPEN_MAX:
             raise HTTPException(status_code=409, detail="too_many_open")
         # Дедуп обязан смотреть тот же TTL, что и `_trade_open_count` (§7.1
         # rule 2): просроченный pending неактивен — его не отдаёт list и
         # отвергает accept (§6.1), поэтому он не «висящий первый оффер» из
         # rule 4 и не имеет права плодить existed:true на мёртвую строку.
-        # Ключ дедупа — maker/taker/state/give: изменённый ask rule 4
-        # намеренно возвращает существующую строку.
-        dup = conn.execute(
+        # Ключ дедупа (ruling 5) — maker/taker/state/МНОЖЕСТВО give-позиций:
+        # изменённый ask rule 4 намеренно возвращает существующую строку.
+        # Позиции кандидатов читаются одним IN-запросом, не на каждый оффер.
+        cand_ids = [int(r["id"]) for r in conn.execute(
             "SELECT id FROM trade_orders WHERE maker_device = ? AND taker_device = ?"
-            " AND state = 'pending' AND give_card_id = ? AND give_craft_id = ?"
-            " AND created_at >= ?",
-            (me, to, give_card, give_craft, _trade_ttl_cutoff())).fetchone()
-        if dup is not None:
-            conn.rollback()
-            return TradeOfferResponse(ok=True, id=int(dup["id"]), existed=True)
+            " AND state = 'pending' AND created_at >= ? ORDER BY id",
+            (me, to, _trade_ttl_cutoff())).fetchall()]
+        if cand_ids:
+            give_key = sorted((r["card_id"], r["craft_id"]) for r in give_rows)
+            ph = ",".join(["?"] * len(cand_ids))
+            per_order: dict = {}
+            for r in conn.execute(
+                    "SELECT order_id, card_id, craft_id FROM trade_items "
+                    "WHERE order_id IN (%s) AND side = 'give'" % ph,
+                    cand_ids).fetchall():
+                per_order.setdefault(int(r["order_id"]), []).append(
+                    (r["card_id"], r["craft_id"]))
+            for oid in cand_ids:
+                if sorted(per_order.get(oid, [])) == give_key:
+                    conn.rollback()
+                    return TradeOfferResponse(ok=True, id=oid, existed=True)
         now = _now_iso()
         cursor = conn.execute(
-            "INSERT INTO trade_orders (maker_device, taker_device, give_card_id,"
-            " give_craft_id, want_card_id, want_craft_id, state, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
-            (me, to, give_card, give_craft, want_card, want_craft, now, now))
+            "INSERT INTO trade_orders (maker_device, taker_device, state,"
+            " created_at, updated_at) VALUES (?, ?, 'pending', ?, ?)",
+            (me, to, now, now))
+        oid = int(cursor.lastrowid)
+        for side, rows in (("give", give_rows), ("want", want_rows)):
+            for it in rows:
+                conn.execute(
+                    "INSERT INTO trade_items (order_id, side, card_id, craft_id, pos)"
+                    " VALUES (?, ?, ?, ?, ?)",
+                    (oid, side, it["card_id"], it["craft_id"], it["pos"]))
         conn.commit()
-        return TradeOfferResponse(ok=True, id=int(cursor.lastrowid))
+        return TradeOfferResponse(ok=True, id=oid)
     except HTTPException:
         conn.rollback()
         raise
@@ -5824,19 +5908,23 @@ def trade_cancel(payload: TradeIdPayload):
 
 @app.post("/api/trade/gift", response_model=TradeGiftResponse)
 def trade_gift(payload: TradeGiftPayload):
-    """Односторонняя передача без согласия получателя (спека §6).
+    """Односторонняя передача без согласия получателя (спека §6 + NM §2.2,
+    ruling 15: подарок НЕ становится pending-оффером).
 
-    Лимит проверяется ДО выбора карты: у подарка счётчик тратит только
-    даритель, поэтому «нет такой карты» и «лимит исчерпан» не соревнуются за
-    код, а порядок фиксирует, что при 409 week_limit в таблицы не попадает
-    ни строки, ни перемещения (test_gift_week_limit_stops_before_any_write).
+    give — список позиций; все они уезжают АТОМАРНО: сначала валидация стороны
+    (§2.3 п.2–4, дефицит любой позиции — 409 not_enough_copies), затем недельный
+    лимит ДО любой записи, затем резолюция каждой позиции в конкретный экземпляр
+    (карта вида — самые старые копии по тому же tie-break, что `_trade_pick_row`,
+    без повтора экземпляра на двух позициях), затем проверка свободного целевого
+    PK у ВСЕХ позиций (раллинг 3d) и только потом переезды. Любая коллизия —
+    409 card_gone с нулём переносов и ни одной строки в trade_orders/trade_items
+    (всё под одним BEGIN IMMEDIATE, отказ откатывает транзакцию).
     Отсутствующий профиль получателя свёрнут в not_friends — как во всём
     S1 (`_social_id`, `friend_remove`): `_social_accepted` на чужом
     device_id вернёт False, отдельного «такого игрока нет» соц-слой не даёт.
     """
     me = _social_caller(payload.device_id)
     to = _social_id(payload.to)
-    card_id, craft_id = _trade_selector(payload.card_id, payload.craft_id)
     if to == me:
         raise HTTPException(status_code=422, detail="self_deal")
     conn = get_db()
@@ -5845,36 +5933,61 @@ def trade_gift(payload: TradeGiftPayload):
         _trade_registered(conn, me)
         if not _social_accepted(conn, me, to):
             raise HTTPException(status_code=404, detail="not_friends")
+        give_rows, err = _trade_side_norm(conn, me, payload.give, "give", False)
+        if err:
+            _trade_side_fail(err)
         week = _week_key()
         if _trade_week_count(conn, week, me) >= TRADE_WEEK_LIMIT:
             raise HTTPException(status_code=409, detail="week_limit")
-        row = _trade_pick_row(conn, me, card_id, craft_id)
-        if row is None:
-            raise HTTPException(status_code=422, detail="card_not_owned")
-        give_craft = str(row["craft_id"])
-        # Раллинг 3d: целевой PK обязан быть свободен до первой записи.
-        if conn.execute("SELECT 1 FROM sigil_crafts"
-                        " WHERE device_id = ? AND craft_id = ?",
-                        (to, give_craft)).fetchone() is not None:
-            raise HTTPException(status_code=409, detail="card_gone")
-        cur = conn.execute(
-            "UPDATE sigil_crafts SET device_id = ? WHERE device_id = ? AND craft_id = ?",
-            (to, me, give_craft))
-        if cur.rowcount != 1:
-            raise HTTPException(status_code=409, detail="card_gone")
+        # Резолюция позиция→экземпляр: хроматик — ровно свой craft_id, карта
+        # вида — очередь старых копий; seen<=copies в _trade_side_norm гарантирует,
+        # что очередь не иссякает и один craft_id не уедет дважды.
+        chosen: list = []
+        by_card: dict = {}
+        for it in give_rows:
+            if it["craft_id"]:
+                chosen.append(it["craft_id"])
+                continue
+            pool = by_card.get(it["card_id"])
+            if pool is None:
+                pool = [r["craft_id"] for r in conn.execute(
+                    "SELECT craft_id FROM sigil_crafts "
+                    "WHERE device_id = ? AND card_id = ? "
+                    "ORDER BY crafted_at, craft_id", (me, it["card_id"])).fetchall()]
+                by_card[it["card_id"]] = pool
+            chosen.append(pool.pop(0))
+        # Порядок существенен: все пробы до первого UPDATE, иначе отказ
+        # перестал бы быть «нулём переносов» (тот же смысл, что в accept).
+        for craft in chosen:
+            if conn.execute("SELECT 1 FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
+                            (to, craft)).fetchone() is not None:
+                raise HTTPException(status_code=409, detail="card_gone")
+        for craft in chosen:
+            cur = conn.execute(
+                "UPDATE sigil_crafts SET device_id = ? WHERE device_id = ? AND craft_id = ?",
+                (to, me, craft))
+            if cur.rowcount != 1:
+                raise HTTPException(status_code=409, detail="card_gone")
         moved = conn.execute(
             "SELECT llm_name FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
-            (to, give_craft)).fetchone()
+            (to, chosen[0])).fetchone()
         _trade_count_up(conn, week, me)
         now = _now_iso()
-        conn.execute(
-            "INSERT INTO trade_orders (maker_device, taker_device, give_card_id,"
-            " give_craft_id, want_card_id, want_craft_id, state, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, '', '', 'accepted', ?, ?)",
-            (me, to, card_id, craft_id, now, now))
+        cursor = conn.execute(
+            "INSERT INTO trade_orders (maker_device, taker_device, state,"
+            " created_at, updated_at) VALUES (?, ?, 'accepted', ?, ?)",
+            (me, to, now, now))
+        oid = int(cursor.lastrowid)
+        for it in give_rows:
+            conn.execute(
+                "INSERT INTO trade_items (order_id, side, card_id, craft_id, pos)"
+                " VALUES (?, 'give', ?, ?, ?)", (oid, it["card_id"], it["craft_id"],
+                                                 it["pos"]))
         remain = max(0, TRADE_WEEK_LIMIT - _trade_week_count(conn, week, me))
         conn.commit()
-        return TradeGiftResponse(ok=True, craft_id=give_craft,
+        # S2-совместимые поля ответа: при N>1 craft_id/moved_name — первый
+        # уехавший экземпляр, полный состав читается из истории (Task 4).
+        return TradeGiftResponse(ok=True, craft_id=chosen[0],
                                  moved_name=str(moved["llm_name"] or ""),
                                  remain=remain)
     except HTTPException:
