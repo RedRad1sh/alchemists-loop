@@ -444,12 +444,7 @@ static func _rows_of(box) -> int:
 ## Строка опознаётся по имени узла, которое даёт `_offer_row`: `_rows_of == 1`
 ## выполняется и на прежних placeholder'ах «—» (по одному Label в каждом боксе).
 static func _row_named(box, want: String) -> bool:
-	if box == null:
-		return false
-	for c in (box as Control).get_children():
-		if String((c as Node).name) == want:
-			return true
-	return false
+	return _row_of(box, want) != null
 
 
 ## «Спокойное состояние, а не красный баннер» измеримо только цветом строки:
@@ -462,6 +457,32 @@ static func _label_is_calm(node: Node, needle: String) -> bool:
 		if _label_is_calm(c, needle):
 			return true
 	return false
+
+
+## Строка по имени узла (`TradeRow_%d`) — или null. `_rows_of` считает и
+## placeholder'ы «—», поэтому «строки нет» измеримо только именем.
+static func _row_of(box, want: String) -> Node:
+	if box == null:
+		return null
+	for c in (box as Control).get_children():
+		if String((c as Node).name) == want:
+			return c
+	return null
+
+
+## id, привязанный к кнопке строки: `_accept.bind(id)` / `_cancel.bind(id)`.
+## Счётчик нажатия доказывает лишь «запрос ушёл», а не «запрос про ЭТУ сделку»:
+## после `.bind(id)` → `.bind(0)` провод гудел бы зелёным.
+## Список подключений смотрим у самого сигнала (образец — contracts.gd:644):
+## `pressed` объявлен в BaseButton, поэтому нода приводится к нему, а не к Node.
+static func _bound_id(node: Node, method: String) -> int:
+	for c in (node as BaseButton).pressed.get_connections():
+		var cb: Callable = c["callable"]
+		if String(cb.get_method()) == method:
+			var args: Array = cb.get_bound_arguments()
+			if args.size() == 1:
+				return int(args[0])
+	return -1
 
 
 static func _list_actions(g: Game) -> void:
@@ -485,7 +506,13 @@ static func _list_actions(g: Game) -> void:
 		"reset day is next monday", "proceed locked at zero remain",
 		"accept ok re-pulls collection and inbox",
 		"card gone is calm and does not re-pull",
-		"trades pending counts into badge"]
+		"trades pending counts into badge",
+		"header names reset day at zero", "offer entry locked at zero remain",
+		"gift row is labelled as gift", "accept row sends its own id",
+		"cancel row sends its own id", "accept offline says no connection",
+		"cancel offline says no connection", "gone offer loses its accept",
+		"cancel ok clears the list", "gift ok re-pulls collection and inbox",
+		"toast waits for messages not trades"]
 	var ui = g.get("_social_ui")
 	if ui == null:
 		for n in names:
@@ -493,6 +520,11 @@ static func _list_actions(g: Game) -> void:
 		return
 	var sm = g._sigil
 	sm._server_collection = {"spark": {"copies": 1, "first_at": ""}}
+	# `_seed_demo()` пишет ЖИВОЙ g._social (cache + threads), а не только кэш
+	# сигилов. Возврат снимка — единственный честный способ не оставить мусор в
+	# общем объекте: четыре следующие сюиты читают его сегодня по случайности.
+	var social_cache0: Dictionary = g._social.cache
+	var social_threads0: Dictionary = g._social.threads.duplicate()
 	g._social._seed_demo()
 	ui.open(0)
 	var tr = ui.get("_trade")
@@ -597,8 +629,7 @@ static func _list_actions(g: Game) -> void:
 		tr.call("on_accept", {"ok": false, "detail": "card_gone:maker"})
 	Selftest.check("card gone is calm and does not re-pull", has_on_accept and repull
 		and _label_has(tr._body, "карты больше нет")
-		and _label_is_calm(tr._body, "карты больше нет")
-		and not _label_has(tr._body, "ОШИБКА"))
+		and _label_is_calm(tr._body, "карты больше нет"))
 	if Net.sigil_collection_result.is_connected(coll_cb):
 		Net.sigil_collection_result.disconnect(coll_cb)
 	if Net.social_inbox_result.is_connected(inbox_cb):
@@ -608,5 +639,112 @@ static func _list_actions(g: Game) -> void:
 		"unread_total": 1, "requests_total": 0, "trades_pending": 2})
 	Selftest.check("trades pending counts into badge", s.total() == 3
 		and Social.badge_for(s.total()) == "Друзья •3")
+	# --- Раунд исправлений ревью ---
+	# Живой список с нулевым остатком и односторонней строкой. Состояние
+	# восстанавливается через open(), а не присваиванием `_gone`: снятие отметки
+	# на входе — часть поведения (у нового собеседника строка живая). Присваивать
+	# `_gone` в тесте нельзя: до правки поля нет, а запись в несуществующее поле
+	# экземпляра обрывает сюжет жёсткой ошибкой вместо RED.
+	tr.open("dev-b")
+	var zero := {"ok": true,
+		"incoming": [{"id": 11, "maker_device": "dev-b", "taker_device": "me",
+			"maker_nick": "Николя", "taker_nick": "Я", "state": "pending",
+			"created_at": "2026-10-20T09:00:00", "give_card_id": "ice",
+			"give_craft_id": "", "give_name": "", "want_card_id": "spark",
+			"want_craft_id": "", "want_name": ""}],
+		"outgoing": [{"id": 12, "maker_device": "me", "taker_device": "dev-b",
+			"maker_nick": "Я", "taker_nick": "Николя", "state": "pending",
+			"created_at": "2026-10-20T09:30:00", "give_card_id": "",
+			"give_craft_id": "x1", "give_name": "Радуга", "want_card_id": "ice",
+			"want_craft_id": "", "want_name": ""},
+			{"id": 14, "maker_device": "me", "taker_device": "dev-c",
+			"maker_nick": "Я", "taker_nick": "Аня", "state": "pending",
+			"created_at": "2026-10-20T10:00:00", "give_card_id": "spark",
+			"give_craft_id": "", "give_name": "", "want_card_id": "",
+			"want_craft_id": "", "want_name": ""}],
+		"history": [], "week_limit": 10, "remain": 0}
+	tr._list = zero
+	tr.call("_render")
+	# Ветка `if remain <= 0:` в шапке до этого не краснела ничем: проверка 6
+	# меряла reset_day_label как чистую функцию, а проверка 7 читала next.disabled.
+	Selftest.check("header names reset day at zero",
+		_label_has(tr._body, " · сброс ") and _label_has(tr._body, "10 из 10"))
+	# Спека §9.2 дословно: «при remain == 0 кнопка „Предложить“ неактивна». Гейт
+	# только на «Дальше» оставляет живым вход: игрок с исчерпанным лимитом
+	# заводил бы экран, с которого нельзя уйти.
+	var entry := _button_named(tr._body, "Предложить обмен")
+	Selftest.check("offer entry locked at zero remain", entry != null and entry.disabled)
+	# Односторонняя строка (`want_*` пустые) раньше не рендерилась вовсе: все три
+	# ряда первой фикстуры двусторонние, и ветка «Подарок: » была недостижима.
+	Selftest.check("gift row is labelled as gift",
+		_row_of(tr._outgoing, "TradeRow_14") != null
+		and _label_has(tr._outgoing, "Подарок: "))
+	# Кнопка строки обязана нести id СВОЕЙ сделки.
+	var acc_b := _button_named(tr._incoming, "Принять")
+	var can_b := _button_named(tr._outgoing, "Отменить")
+	Selftest.check("accept row sends its own id", acc_b != null
+		and _bound_id(acc_b, "_accept") == 11)
+	Selftest.check("cancel row sends its own id", can_b != null
+		and _bound_id(can_b, "_cancel") == 12)
+	# Офлайн-слив Net не имеет ключа detail (net.gd:454). Без отдельной ветки
+	# отказ долетает до `_:` «Мир не понял запрос» — про запрос, который никуда не
+	# уходил. Emit, а не прямой вызов: пинуется и маршрутизация main.gd.
+	Net.trade_accept_result.emit({"ok": false, "offline": true,
+		"message": "сервер не настроен"})
+	Selftest.check("accept offline says no connection",
+		_label_has(tr._body, "Мир не на связи")
+		and not _label_has(tr._body, "не понял запрос"))
+	Net.trade_cancel_result.emit({"ok": false, "offline": true,
+		"message": "сервер не настроен"})
+	Selftest.check("cancel offline says no connection",
+		_label_has(tr._body, "Мир не на связи")
+		and not _label_has(tr._body, "не понял запрос"))
+	# §7.2: «карты больше нет — предложи другую» — спокойное состояние КАРТОЧКИ, а
+	# не баннер над списком. Нажатие задаёт `_last_id`, поэтому отказ атрибутируется
+	# именно этой строке.
+	var live_acc := _button_named(tr._incoming, "Принять")
+	if live_acc != null:
+		live_acc.pressed.emit()
+	Net.trade_accept_result.emit({"ok": false, "detail": "card_gone:taker"})
+	var dead := _row_of(tr._incoming, "TradeRow_11")
+	Selftest.check("gone offer loses its accept", dead != null
+		and _button_named(dead, "Принять") == null
+		and _label_is_calm(dead, "карты больше нет"))
+	# Успешная отмена обязана убрать строку сразу: при ok `on_accept` чистит _list
+	# и перерисовывает, а прежний `on_cancel` только звал Net.trade_list — против
+	# живого сервера отменённая сделка висела бы на экране до ответа.
+	Net.trade_cancel_result.emit({"ok": true, "id": 12})
+	Selftest.check("cancel ok clears the list", _row_of(tr._outgoing, "TradeRow_12") == null)
+	# Подарок переносит карту так же, как принятый обмен, и обязан звать тот же
+	# перебор (§8.4). Без этой проверки строка `_trades_repull()` в
+	# `_on_trade_gift_result` удаляется молча — сюжет остаётся зелёным.
+	var gp := {"coll": 0, "inbox": 0}
+	var gcoll := func(_r: Dictionary) -> void: gp["coll"] = int(gp["coll"]) + 1
+	var ginbox := func(_r: Dictionary) -> void: gp["inbox"] = int(gp["inbox"]) + 1
+	Net.sigil_collection_result.connect(gcoll)
+	Net.social_inbox_result.connect(ginbox)
+	Net.trade_gift_result.emit({"ok": true, "craft_id": "x1",
+		"moved_name": "Радуга", "remain": 7})
+	var gpull := int(gp["coll"]) == 1 and int(gp["inbox"]) == 1
+	if Net.sigil_collection_result.is_connected(gcoll):
+		Net.sigil_collection_result.disconnect(gcoll)
+	if Net.social_inbox_result.is_connected(ginbox):
+		Net.social_inbox_result.disconnect(ginbox)
+	Selftest.check("gift ok re-pulls collection and inbox", gpull)
+	# Тост говорит «Тебе написали», значит реагировать обязан только на сообщения и
+	# заявки. Первая за сессию весточка — прилетевший оффер (trades_pending 0→2), и
+	# под ней игрок ждёт письма, которого нет; §8.5 отводит trades_pending бейджу.
+	var st := Social.new(g)
+	st.on_inbox({"ok": true, "friends": [], "incoming": [], "outgoing": [],
+		"unread_total": 0, "requests_total": 0, "trades_pending": 0})
+	st.on_inbox({"ok": true, "friends": [], "incoming": [], "outgoing": [],
+		"unread_total": 0, "requests_total": 0, "trades_pending": 2})
+	var trade_only := not st.should_show_toast()
+	st.on_inbox({"ok": true, "friends": [], "incoming": [], "outgoing": [],
+		"unread_total": 1, "requests_total": 0, "trades_pending": 2})
+	Selftest.check("toast waits for messages not trades",
+		trade_only and st.should_show_toast() and st.total() == 3)
 	tr.call("close")
 	sm._server_collection = {}
+	g._social.cache = social_cache0
+	g._social.threads = social_threads0

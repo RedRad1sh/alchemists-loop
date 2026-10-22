@@ -21,6 +21,8 @@ var _list := {}
 var _offer := {"give": {}, "want": {}, "gift": false}
 var _picking := ""          # "give" | "want" | "" — идёт ли выбор карты
 var _note := ""             # строка серверного отказа (код → текст через _detail_text)
+var _gone := {}               # id входящих офферов с ушедшей картой (§7.2)
+var _last_id := -1            # id заказа, чей отказ рисовать на строке
 
 func _init(game: Game) -> void:
 	g = game
@@ -36,6 +38,9 @@ func open(peer: String) -> void:
 	_offer = {"give": {}, "want": {}, "gift": false}
 	_picking = ""
 	_note = ""
+	# Отметка «карты больше нет» привязана к офферу конкретного собеседника:
+	# у нового peer'а чужая мёртвая строка не имеет права пережить смену окна.
+	_gone = {}
 	_screen.visible = true
 	Net.trade_list(g._online._device_id)
 	_render()
@@ -135,14 +140,7 @@ func _on_write_result(result: Dictionary, is_offer: bool) -> void:
 			Net.trade_list(g._online._device_id)   # re-pull списка офферов
 		_render()
 		return
-	# Офлайн — не «сервер не понял»: запрос не уходил. У Net-слива нет ключа
-	# detail (net.gd:454), поэтому без ветки он падает в `_:` и игрок без сервера
-	# читает «Мир не понял запрос» на каждое действие. Текст совпадает с
-	# social_ui.gd:141 для того же состояния.
-	if result.get("offline", false) == true:
-		_note = "Мир не на связи"
-	else:
-		_note = _detail_text(String(result.get("detail", "")))
+	_note = _refusal_text(result)
 	_render()
 
 ## Коды сервера (§7) → текст. Единая таблица на весь слой: отказ offer и отказ
@@ -173,6 +171,15 @@ static func _detail_text(code: String) -> String:
 		"card_gone:maker": return "У предложившего карты больше нет"
 		"card_gone:taker": return "У тебя больше нет карты для обмена"
 		_: return "Мир не понял запрос"
+
+## Копия отказа для всех четырёх действий слоя. Офлайн обязан быть отдельной
+## веткой: у Net-слива нет ключа detail (net.gd:454), поэтому без неё запрос,
+## который никуда не ушёл, читается как сбой мира. Текст совпадает с
+## social_ui.gd:141 для того же состояния.
+static func _refusal_text(result: Dictionary) -> String:
+	if result.get("offline", false) == true:
+		return "Мир не на связи"
+	return _detail_text(String(result.get("detail", "")))
 
 ## День недели Грегориана, 0=воскресенье … 1=понедельник … 6=суббота
 ## (алгоритм Sakamoto). У Time.get_datetime_dict_* поля weekday нет, поэтому
@@ -307,17 +314,22 @@ func _render() -> void:
 func _render_list() -> void:
 	_clear(_body)
 	_header.text = "%s · %s" % [TITLE, _nick()]
+	var at_zero := false
 	if _list.has("remain"):
 		var remain := int(_list.get("remain", 0))
 		var limit := int(_list.get("week_limit", 0))
 		var line := "Обменов на этой неделе: %d из %d" % [limit - remain, limit]
 		if remain <= 0:
 			line += " · сброс " + reset_day_label(Time.get_date_string_from_system())
+			at_zero = true
 		var sub := g._label(line, 12)
 		sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		sub.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 		_body.add_child(sub)
 	var new_btn := g._small_button("Предложить обмен", Vector2(180, 40), 0)
+	# Спека §9.2: при remain == 0 кнопка «Предложить» неактивна. Держать её живой
+	# и глушить только «Дальше» — значит водить игрока в конструктор-тупик.
+	new_btn.disabled = at_zero
 	new_btn.pressed.connect(open_builder)
 	_body.add_child(new_btn)
 	if _note != "":
@@ -390,15 +402,24 @@ func _offer_row(box: VBoxContainer, raw, kind: int) -> void:
 		# Отдельной кнопки «Отклонить» нет: у не-автора cancel отвечает 409
 		# not_maker, а отказ по модели встречного оффера — это бездействие или
 		# новый оффер (спека §4, §7).
-		var yes := g._small_button("Принять", Vector2(96, 34), 0)
-		yes.pressed.connect(_accept.bind(id))
-		row.add_child(yes)
+		if _gone.has(id):
+			# §7.2 — «спокойное состояние карточки оффера»: строка остаётся на
+			# месте (оффер висит pending, пока его не закрыли), мёртвая ручка с
+			# неё снимается, копия берётся дословно из спеки.
+			var dead := g._label("карты больше нет — предложи другую", 11)
+			dead.add_theme_color_override("font_color", Color("#e6a84a"))
+			info.add_child(dead)
+		else:
+			var yes := g._small_button("Принять", Vector2(96, 34), 0)
+			yes.pressed.connect(_accept.bind(id))
+			row.add_child(yes)
 	elif kind == 1:
 		var no := g._small_button("Отменить", Vector2(110, 34), 0)
 		no.pressed.connect(_cancel.bind(id))
 		row.add_child(no)
 
 func _accept(id: int) -> void:
+	_last_id = id           # отказ приходит без id, строку надо опознать
 	Net.trade_accept(g._online._device_id, id)
 
 func _cancel(id: int) -> void:
@@ -409,20 +430,29 @@ func on_accept(result: Dictionary) -> void:
 		_note = ""
 		_list = {}
 		_mode = 0
+		_gone = {}
 		Net.trade_list(g._online._device_id)
 		_render()
 		return
-	# card_gone — штатный ответ модели «без блокировки карт» (спека §7.2):
-	# спокойная строка в списке, а не красный баннер.
-	_note = _detail_text(String(result.get("detail", "")))
+	var code := String(result.get("detail", ""))
+	# card_gone — штатный ответ модели «без блокировки карт» (спека §7.2). Так
+	# проверяются обе стороны сделки (server.py:5663-5670: give у maker и want у
+	# taker), и оба кода значат одно: принять эту сделку уже нельзя. Значит
+	# состояние надевается на строку, а не только на строку отказа сверху.
+	if code == "card_gone:maker" or code == "card_gone:taker":
+		_gone[_last_id] = true
+	_note = _refusal_text(result)
 	_render()
 
 func on_cancel(result: Dictionary) -> void:
 	if result.get("ok", false) == true:
 		_note = ""
+		_list = {}        # симметрия с on_accept: без re-render'а отменённая
+		_mode = 0         # строка висела бы до ответа trade_list
 		Net.trade_list(g._online._device_id)
+		_render()
 		return
-	_note = _detail_text(String(result.get("detail", "")))
+	_note = _refusal_text(result)
 	_render()
 
 func _slot_text(e) -> String:

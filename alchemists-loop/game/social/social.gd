@@ -13,8 +13,8 @@ var cache := {}                       # снапшот inbox
 var threads := {}                     # peer_device -> Array[Dictionary]
 var last_read_id := {}                # peer_device -> int (для since_id)
 var optimistic := {}                  # peer_device -> Array pending-письмо
-var prev_total := -1                  # до последнего inbox: СУММА unread+requests
-                                      # (спека 542/575: бейдж и тост считают сумму)
+var prev_msgs := -1                   # до последнего inbox: СУММА unread+requests
+                                      # (только тост)
 var _awaiting_peer := ""              # R3: контекст для messages_result
 var _session_toast_shown := false     # R4
 
@@ -79,7 +79,7 @@ func refresh() -> void:
 func on_inbox(result: Dictionary) -> void:
 	if result.get("ok", false) != true:
 		return
-	prev_total = total()
+	prev_msgs = msgs_total()
 	cache = result
 
 func friends() -> Array: return cache.get("friends", [])
@@ -91,6 +91,13 @@ func requests_total() -> int: return int(cache.get("requests_total", 0))
 ## мои исходящие — напоминание о собственном ожидании это шум (спека §8.5).
 func trades_pending() -> int: return int(cache.get("trades_pending", 0))
 func total() -> int: return unread_total() + requests_total() + trades_pending()
+
+## Основание для тоста: письма и заявки. trades_pending в него не входит —
+## «Тебе написали» под прилетевшим оффером обещает письмо, которого нет (§8.5
+## отводит ему бейдж). total() остаётся трёхсоставным: бейдж обязан показывать
+## всё, что ждёт действия.
+func msgs_total() -> int:
+	return unread_total() + requests_total()
 
 func friend_by_device(dev: String) -> Dictionary:
 	for f in friends():
@@ -185,9 +192,9 @@ func send_message(peer: String, body: String) -> void:
 
 func should_show_toast() -> bool:
 	# FIX-C (спека 542): тост при росте СУММЫ unread+requests, не одного unread.
-	if _session_toast_shown or total() <= 0:
+	if _session_toast_shown or msgs_total() <= 0:
 		return false
-	return prev_total != total()
+	return prev_msgs != msgs_total()
 
 func mark_toast_shown() -> void:
 	_session_toast_shown = true
