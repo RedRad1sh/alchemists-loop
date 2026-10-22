@@ -296,6 +296,7 @@ TRADE_WEEK_LIMIT = int(os.environ.get("ALCHEMY_TRADE_WEEK_LIMIT", "10"))
 TRADE_OPEN_MAX = 20        # активных pending-офферов на одного как maker (§7.1)
 TRADE_TTL_DAYS = 7         # просрочка оффера; проверяется лениво (§6.1)
 TRADE_HISTORY_MAX = 20     # строк истории в GET /api/trade/list
+TRADE_LIST_MAX = 200       # строк активных среди в GET /api/trade/list
 # Верхняя граница `TradeIdPayload.id`: это НЕ настраиваемый параметр, а предел
 # SQLite INTEGER. id в контракте — неограниченный int (pydantic принимает и
 # 10**30), а bind значения вне int64 бросает OverflowError из sqlite3 уже
@@ -593,6 +594,11 @@ class SocialInboxResponse(BaseModel):
     # Дефолт вычисляется в момент создания класса, поэтому FRIEND_MAX обязан
     # быть объявлен выше моделей (он стоит в блоке констант после ECHO_CAP).
     friend_limit: int = FRIEND_MAX
+    # Входящие pending-офферы: «партнёр ждёт моего действия». Свои исходящие
+    # сознательно НЕ входят (§8.5) — напоминание о собственном ожидании это шум.
+    # Дефолт 0 обязателен: поле появилось позже клиентов S1, и любой ответ,
+    # собранный без него, обязан оставаться валидным.
+    trades_pending: int = 0
 
 
 class TradeOfferPayload(BaseModel):
@@ -5520,12 +5526,20 @@ def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
         incoming.sort(key=lambda r: r.requested_at, reverse=True)
         outgoing.sort(key=lambda o: o.requested_at, reverse=True)
 
+        # Бейдж S2 (спека §8.5): тем же транзакционным срезом, что и список
+        # друзей. Индекс ix_trade_taker(taker_device, state) покрывает оба
+        # условия, поэтому это поиск по индексу, а не SCAN таблицы.
+        trades_pending = int(conn.execute(
+            "SELECT COUNT(*) AS c FROM trade_orders "
+            "WHERE taker_device = ? AND state = 'pending' AND created_at >= ?",
+            (me, _trade_ttl_cutoff())).fetchone()["c"])
+
         _social_mark_seen(conn, me, today)
         conn.commit()
         return SocialInboxResponse(
             ok=True, friends=friends, incoming=incoming, outgoing=outgoing,
             unread_total=unread_total, requests_total=len(incoming),
-            friend_limit=FRIEND_MAX)
+            friend_limit=FRIEND_MAX, trades_pending=trades_pending)
     except HTTPException:
         conn.rollback()
         raise
@@ -5808,6 +5822,85 @@ def trade_gift(payload: TradeGiftPayload):
         conn.commit()
         return TradeGiftResponse(ok=True, craft_id=give_craft,
                                  moved_name=str(moved["llm_name"] or ""),
+                                 remain=remain)
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _trade_items(conn: sqlite3.Connection, rows) -> dict:
+    """{order_id: TradeListItem} одной сборкой для трёх среди.
+
+    Имя сервер даёт только хроматикам (`*_craft_id` непустой): экземпляр
+    записан в самой строке оффера, а `_trade_give_owner`/`_trade_want_owner`
+    отвечают, кто его носит СЕЙЧАС. Карту вида сервер не называет — её имя
+    клиент берёт из каталога (правило `sigil_ui.gd:1529-1532`), и это честнее
+    любого угаданного llm_name: оффер обещает «одну копию вида», конкретный
+    экземпляр выбирается в accept (§5.1), а для принятой строки вида он вообще
+    нигде не записан.
+    """
+    pairs = []
+    for o in rows:
+        for owner_of, key in ((_trade_give_owner, "give_craft_id"),
+                              (_trade_want_owner, "want_craft_id")):
+            craft = str(o[key] or "")
+            if craft:
+                pairs.append((owner_of(o), craft))
+    names = _trade_name_map(conn, pairs)
+    nicks = _trade_nick_map(conn, [d for o in rows
+                                   for d in (o["maker_device"], o["taker_device"])])
+    out = {}
+    for o in rows:
+        gc, wc = str(o["give_craft_id"] or ""), str(o["want_craft_id"] or "")
+        out[int(o["id"])] = TradeListItem(
+            id=int(o["id"]), maker_device=o["maker_device"],
+            taker_device=o["taker_device"], state=o["state"],
+            created_at=o["created_at"],
+            maker_nick=str(nicks.get(o["maker_device"], "") or ""),
+            taker_nick=str(nicks.get(o["taker_device"], "") or ""),
+            give_card_id=str(o["give_card_id"] or ""), give_craft_id=gc,
+            give_name=str(names.get((_trade_give_owner(o), gc), "") or ""),
+            want_card_id=str(o["want_card_id"] or ""), want_craft_id=wc,
+            want_name=str(names.get((_trade_want_owner(o), wc), "") or ""))
+    return out
+
+
+@app.get("/api/trade/list", response_model=TradeListResponse)
+def trade_list(device_id: str = Query(..., min_length=1, max_length=128)):
+    """Три активных среза + история. Никаких записей, никаких блокировок.
+
+    Один запрос на активные pending (me с любой стороны) и один на историю:
+    классификация incoming/outgoing идёт в Python по taker_device, потому что
+    строка с me в обеих колонках невозможна (422 self_deal на offer), а
+    разводить два SQL-запроса на одно и то же множество — плодить рассылания.
+    """
+    me = _social_caller(device_id)
+    conn = get_db()
+    try:
+        _trade_registered(conn, me)
+        active = conn.execute(
+            "SELECT * FROM trade_orders "
+            "WHERE (maker_device = ? OR taker_device = ?)"
+            " AND state = 'pending' AND created_at >= ?"
+            " ORDER BY created_at DESC, id DESC LIMIT %d" % TRADE_LIST_MAX,
+            (me, me, _trade_ttl_cutoff())).fetchall()
+        hist = conn.execute(
+            "SELECT * FROM trade_orders "
+            "WHERE (maker_device = ? OR taker_device = ?) AND state != 'pending' "
+            "ORDER BY updated_at DESC, id DESC LIMIT ?",
+            (me, me, TRADE_HISTORY_MAX)).fetchall()
+        items = _trade_items(conn, list(active) + list(hist))
+        incoming = [items[o["id"]] for o in active if o["taker_device"] == me]
+        outgoing = [items[o["id"]] for o in active if o["maker_device"] == me]
+        history = [items[o["id"]] for o in hist]
+        remain = max(0, TRADE_WEEK_LIMIT - _trade_week_count(conn, _week_key(), me))
+        return TradeListResponse(ok=True, incoming=incoming, outgoing=outgoing,
+                                 history=history, week_limit=TRADE_WEEK_LIMIT,
                                  remain=remain)
     except HTTPException:
         conn.rollback()

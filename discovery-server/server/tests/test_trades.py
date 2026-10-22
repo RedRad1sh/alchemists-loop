@@ -1271,3 +1271,189 @@ class TestCancelGift:
         assert _owners(s) == {"c1": "dev-b"}
         counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
         assert counts == {"dev-a": 1, "dev-b": 10}, counts
+
+
+class TestListAndBadge:
+    def test_list_splits_incoming_outgoing_and_history(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        _seed(s, "dev-b", [("x1", "", "Радуга", "2026-01-03T00:00:00")])
+        out_oid = _offer(client, "dev-a", "dev-b",
+                         give=("spark", ""), want=("", "x1")).json()["id"]
+        in_oid = _offer(client, "dev-b", "dev-a",
+                        give=("ice", ""), want=("spark", "")).json()["id"]
+        body = client.get("/api/trade/list", params={"device_id": "dev-a"}).json()
+        assert [o["id"] for o in body["outgoing"]] == [out_oid]
+        assert [o["id"] for o in body["incoming"]] == [in_oid]
+        assert body["history"] == []
+        assert body["week_limit"] == 10 and body["remain"] == 10      # кейс 13
+        row = body["outgoing"][0]
+        assert row["maker_device"] == "dev-a" and row["taker_device"] == "dev-b"
+        assert row["maker_nick"] == "Аня" and row["taker_nick"] == "Николя"
+        assert row["state"] == "pending"
+        # карта вида сервер именем не называет: обещан «одна копия spark»,
+        # какая именно уедет — решает accept (§5.1). Имя рисует каталог.
+        assert row["give_card_id"] == "spark" and row["give_name"] == ""
+        assert row["want_craft_id"] == "x1" and row["want_name"] == "Радуга"
+        assert _accept(client, "dev-b", out_oid).status_code == 200
+        body = client.get("/api/trade/list", params={"device_id": "dev-a"}).json()
+        assert [h["id"] for h in body["history"]] == [out_oid]
+        assert [o["id"] for o in body["outgoing"]] == []
+        assert body["remain"] == 9                                    # кейс 13
+        # после accepted экземпляр носит уже не maker: имя взято у текущего
+        assert body["history"][0]["want_name"] == "Радуга"
+        assert body["history"][0]["give_name"] == ""
+
+    def test_incoming_chromatic_is_named_by_makers_instance(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-b", [("x1", "", "Радуга", "2026-01-01T00:00:00")])
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-02T00:00:00")])
+        _offer(client, "dev-b", "dev-a", give=("", "x1"), want=("spark", ""))
+        row = client.get("/api/trade/list",
+                         params={"device_id": "dev-a"}).json()["incoming"][0]
+        assert row["give_craft_id"] == "x1" and row["give_name"] == "Радуга"
+        assert row["want_card_id"] == "spark" and row["want_name"] == ""
+
+    def test_expired_pending_is_hidden_but_row_survives(self, tmp_path, monkeypatch):
+        """Ленивая TTL (§6.1): list не отдаёт, accept отказывает, строка живёт."""
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        stale = _stale_iso(s)
+        conn = sqlite3.connect(s.DB_PATH)
+        conn.execute("UPDATE trade_orders SET created_at = ? WHERE id = ?",
+                     (stale, oid))
+        conn.commit()
+        conn.close()
+        # премиса, а не удача по календарю (тот же идиом, что в
+        # test_expired_offer_is_409): дата-литерал проверял бы TTL-настройку
+        # прогона, а не правило.
+        assert stale < s._trade_ttl_cutoff(), (stale, s._trade_ttl_cutoff())
+        for dev in ("dev-a", "dev-b"):
+            body = client.get("/api/trade/list", params={"device_id": dev}).json()
+            assert body["incoming"] == [] and body["outgoing"] == []
+            assert body["history"] == []
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "pending"
+
+    def test_list_rejects_reserved_caller_ids(self, tmp_path, monkeypatch):
+        """§7 строка `list`: 400 от `_social_caller`, и раньше SELECT'а профиля.
+
+        Список — чтение чужого графа обмена, ровно как лента со Светиком, и
+        кейс 6 требует тот же гейт здесь. `npc-spirit` и `bot-1` в этом прогоне
+        НЕ заведены, поэтому 400 вместо 404 `not_registered` — это заодно и
+        доказательство порядка: гейт вызывающего стоит до `_trade_registered`.
+        Мутант — убрать `me = _social_caller(device_id)`: оба зарезервированных
+        id станут 404, а `"   "` — 500 (пустой id дойдёт до SQL).
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        for bad, code in (("npc-spirit", "npc"), ("bot-1", "bot"),
+                          ("   ", "bad_device_id"), ("dev-a|dev-b", "bad_device_id")):
+            r = client.get("/api/trade/list", params={"device_id": bad})
+            assert (r.status_code, r.json()["detail"]) == (400, code), (bad, r.text)
+
+    def test_list_without_profile_is_not_registered(self, tmp_path, monkeypatch):
+        """§7 строка `list`: 404 `not_registered`, а не 200 с тремя пустыми списками.
+
+        Мутант — убрать `_trade_registered(conn, me)`: хендлер вернёт 200 и
+        пустые среди, а соседний тест этого не заметит, потому что его dev-a и
+        dev-b как раз зарегистрированы. Тихий пустой ответ для аккаунта без
+        профиля — сломанный клиент (Task 10 по такому ответу рисует пустую
+        вкладку вместо «заведите профиль»).
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        r = client.get("/api/trade/list", params={"device_id": "dev-ghost"})
+        assert (r.status_code, r.json()["detail"]) == (404, "not_registered"), r.text
+
+    def test_inbox_badge_counts_incoming_pending_only(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+
+        def badge(dev):
+            r = client.get("/api/social/inbox", params={"device_id": dev})
+            assert r.status_code == 200, r.text
+            return r.json()["trades_pending"]
+
+        assert badge("dev-a") == 0 and badge("dev-b") == 0
+        oid = _offer(client, "dev-a", "dev-b").json()["id"]
+        assert badge("dev-b") == 1                                    # кейс 19
+        assert badge("dev-a") == 0          # свои исходящие в бейдж не входят (§8.5)
+        _accept(client, "dev-b", oid)
+        assert badge("dev-a") == 0 and badge("dev-b") == 0
+        # просроченный входящий не бейджит: тот же cutoff, что у list. Второй
+        # оффер — coal, а не spark: spark уехал принатым оффером выше, а `_both(s)`
+        # даёт dev-a ровно одну карту, поэтому здесь нужна вторая строка коллекции.
+        _seed(s, "dev-a", [("c5", "coal", "Уголь", "2026-01-03T00:00:00")])
+        oid2 = _offer(client, "dev-a", "dev-b", give=("coal", "")).json()["id"]
+        stale = _stale_iso(s)
+        conn = sqlite3.connect(s.DB_PATH)
+        conn.execute("UPDATE trade_orders SET created_at = ? WHERE id = ?",
+                     (stale, oid2))
+        conn.commit()
+        conn.close()
+        assert stale < s._trade_ttl_cutoff(), (stale, s._trade_ttl_cutoff())
+        assert badge("dev-b") == 0
+
+    def test_milestones_are_not_minted_by_trades(self, tmp_path, monkeypatch):
+        """Кейс 14: порог сверяется с КОЛЛЕКЦИЕЙ В МОМЕНТ КЛЕЙМА, обмен не минтит вехи.
+
+        Три шага — три разных мутанта:
+        1. ember/coal уходит принатым оффером → клейм tier 3 отказывает. Краснеет
+           на «историческом» множестве card_id (сервер считал бы когда-либо
+           приобретённые, а не текущие) — единственном способе пройти порог после
+           потери карты.
+        2. карта возвращается подарком → клейм проходит и пишет РОВНО одну строку.
+           Второй клейм идемпотентен (claimed=false, строка одна).
+        3. карта уходит снова → `sigil_milestones` всё ещё [3]. Краснеет на любом
+           отзыве вехи и на начислении вехи самим обменом (пустые проверки между
+           шагами ловят «трейд дописал строку»).
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00"),
+                           ("c2", "coal", "Уголь", "2026-01-02T00:00:00"),
+                           ("c3", "ember", "Уголек", "2026-01-03T00:00:00")])
+        _seed(s, "dev-b", [("c9", "ice", "Лёд", "2026-01-04T00:00:00")])
+
+        def claim(dev, tier):
+            r = client.post("/api/sigil/milestone",
+                            json={"device_id": dev, "set": "fire", "tier": tier})
+            assert r.status_code == 200, r.text
+            return r.json()
+
+        def mine(dev):
+            return [r["tier"] for r in _rows(
+                s, "SELECT tier FROM sigil_milestones WHERE device_id = ?", (dev,))]
+
+        # шаг 1: у dev-a остаётся 2 карты из 3 (в фикстуре у сета fire ровно 3
+        # card_ids, поэтому tier 3 = «весь сет»). Порог меряется по текущему.
+        oid = _offer(client, "dev-a", "dev-b",
+                     give=("coal", ""), want=("ice", "")).json()["id"]
+        assert _accept(client, "dev-b", oid).status_code == 200
+        assert _owners(s) == {"c1": "dev-a", "c2": "dev-b", "c3": "dev-a", "c9": "dev-a"}
+        dead = claim("dev-a", 3)
+        assert (dead["ok"], dead["error"]) == (False, "not_enough_cards")        # §5.3
+        assert mine("dev-a") == [] and mine("dev-b") == []
+        # шаг 2: комплект вернулся (подарок, а не оффер: у dev-b больше нет ice)
+        assert _gift(client, "dev-b", "dev-a", card="coal").status_code == 200
+        got = claim("dev-a", 3)
+        assert (got["ok"], got["claimed"], got["set"]) == (True, True, "fire")
+        again = claim("dev-a", 3)
+        assert (again["ok"], again["claimed"]) == (True, False)
+        assert mine("dev-a") == [3], "повторный клейм не пишет вторую строку"
+        # шаг 3: карта снова ушла — забранное не отнимается, а обмен не дописал
+        assert _gift(client, "dev-a", "dev-b", card="coal").status_code == 200
+        assert claim("dev-a", 3)["ok"] is False
+        assert mine("dev-a") == [3], "забранное не отнимается"
