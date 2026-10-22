@@ -4716,6 +4716,60 @@ def _trade_side_fail(err: str):
     raise HTTPException(status_code=_TRADE_SIDE_CODES[err], detail=err)
 
 
+def _trade_resolve_instances(conn: sqlite3.Connection, owner: str, rows):
+    """Позиции строк → экземпляры для атомарного переноса (общий шаг gift и
+    accept, спека §2.4).
+
+    rows — провалидированные коллекции-стадией позиции [{"card_id", "craft_id"},
+    ...] в порядке своей стороны. Хроматик — ровно свой craft_id (карту вида
+    взять вместо него нельзя — `_trade_pick_row` тот же инвариант). Карта вида
+    — очередь старых копий владельца с тем же `ORDER BY crafted_at, craft_id`,
+    что у `_trade_pick_row`: вид на двух позициях обязан уехать ДВУМЯ разными
+    экземплярами, а не одним craft_id дважды. Неисчерпание очереди гарантирует
+    стадия коллекции (`seen <= copies`), до этого вызова отказ уже поднялся.
+    """
+    chosen: list = []
+    by_card: dict = {}
+    for it in rows:
+        if it["craft_id"]:
+            chosen.append(it["craft_id"])
+            continue
+        pool = by_card.get(it["card_id"])
+        if pool is None:
+            pool = [r["craft_id"] for r in conn.execute(
+                "SELECT craft_id FROM sigil_crafts "
+                "WHERE device_id = ? AND card_id = ? "
+                "ORDER BY crafted_at, craft_id", (owner, it["card_id"])).fetchall()]
+            by_card[it["card_id"]] = pool
+        chosen.append(pool.pop(0))
+    return chosen
+
+
+def _trade_transfer_crafts(conn: sqlite3.Connection, moves):
+    """Цепочка переносов экземпляров: СНАЧАЛА все пробы свободного целевого PK,
+    ПОТОМ все UPDATE (раллинг 3d; порядок существенен — иначе отказ перестал
+    бы быть «нулём переносов»).
+
+    moves = [(src, dst, craft, probe_detail, cas_detail), ...]:
+    probe_detail — машинный код, когда целевой PK уже занят получателем
+    (craft_id строится по device_id[:8], коллизия легальна, а §7 запрещает 500
+    без кода); cas_detail — код инварианта при rowcount != 1 (что-то пошло не
+    так превращается в отказ, а не в половину сделанный перенос). Gift передаёт
+    обоим кодам «card_gone», accept — S2-суффиксы стороны. Отказ поднимает
+    HTTPException, транзакция вызывающего под одним BEGIN IMMEDIATE откатывает
+    уже сделанные переносы целиком."""
+    for _src, dst, craft, probe_detail, _cas in moves:
+        if conn.execute("SELECT 1 FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
+                        (dst, craft)).fetchone() is not None:
+            raise HTTPException(status_code=409, detail=probe_detail)
+    for src, dst, craft, _probe, cas_detail in moves:
+        cur = conn.execute(
+            "UPDATE sigil_crafts SET device_id = ? WHERE device_id = ? AND craft_id = ?",
+            (dst, src, craft))
+        if cur.rowcount != 1:
+            raise HTTPException(status_code=409, detail=cas_detail)
+
+
 def _trade_ttl_cutoff() -> str:
     """ISO-момент, раньше которого pending-оффер считается просроченным.
     Уборки нет (спека §6.1): это единственная проверка TTL."""
@@ -5804,22 +5858,26 @@ def trade_offer(payload: TradeOfferPayload):
 
 @app.post("/api/trade/accept", response_model=TradeAcceptResponse)
 def trade_accept(payload: TradeIdPayload):
-    """Принять встречный оффер 1↔1 (спека §5.2: десять шагов под одним
-    BEGIN IMMEDIATE).
+    """Принять оффер N↔M (спека §2.4: позиции читаются из trade_items,
+    обе стороны перевалидуются по текущим коллекциям, перенос — цикл по
+    позициям под одним BEGIN IMMEDIATE).
 
     Карты не блокируются, поэтому настоящая гонка — не между двумя сделками, а
     между оффером и любой другой рукой, тронувшей ту же карту (эфир, реагент,
     другой обмен, админ-сброс DELETE FROM sigil_crafts WHERE device_id=?).
-    Разрешает её шаг 4/5: _trade_pick_row вернул None → честный 409 card_gone.
-    rowcount != 1 на шагах 6/7 под write-локом формально недостижим и является
-    инвариантом: он превращает «что-то пошло не так» в отказ, а не в половину
-    сделанное перемещение. Тот же смысл у AND state = 'pending' на шаге 8.
+    Разрешает её перевалидация: `_trade_side_collections` вернул дефицит любой
+    позиции → честный 409 card_gone с суффиксом стороны, НОЛЬ переносов,
+    pending на месте. Резолюция позиция→экземпляр и перенос — общие хелперы
+    с gift (`_trade_resolve_instances`, `_trade_transfer_crafts`): все пробы
+    занятого целевого PK до первого UPDATE, rowcount == 1 как инвариант — он
+    превращает «что-то пошло не так» в отказ, а не в половину сделанное
+    перемещение. Тот же смысл у AND state = 'pending' на шаге состояния.
 
     Порядок шагов — единственный защитник инвариантов trade_orders: у таблицы
-    нет ни CHECK на state, ни XOR на селекторы (§4), поэтому «не тот taker»,
-    «не pending», «просрочен» и «карты больше нет» проверяются здесь, а
-    отклонённая сделка откатывается целиком — ни одна карта не сдвинута,
-    trade_counts не тронут, state остался pending.
+    нет ни CHECK на state, ни связей с trade_items (§4), поэтому «не тот taker»,
+    «не pending», «просрочен», «нет копий» и «карты больше нет» проверяются
+    здесь, а отклонённая сделка откатывается целиком — ни одна карта не
+    сдвинута, trade_counts не тронут, state остался pending.
     """
     me = _social_caller(payload.device_id)
     # Форма идентификатора проверяется до соединения: значение вне int64 дошло
@@ -5845,37 +5903,41 @@ def trade_accept(payload: TradeIdPayload):
         for dev in (me, maker):
             if _trade_week_count(conn, week, dev) >= TRADE_WEEK_LIMIT:
                 raise HTTPException(status_code=409, detail="week_limit")
-        maker_row = _trade_pick_row(conn, maker, order["give_card_id"],
-                                    order["give_craft_id"])
-        if maker_row is None:
+        # Позиции оффера из trade_items: give и want отдельно, в сохранённом
+        # порядке pos — перевалидация не имеет права переставлять индексы.
+        give_sels = [(r["card_id"], r["craft_id"]) for r in conn.execute(
+            "SELECT card_id, craft_id FROM trade_items"
+            " WHERE order_id = ? AND side = 'give' ORDER BY pos", (payload.id,))]
+        want_sels = [(r["card_id"], r["craft_id"]) for r in conn.execute(
+            "SELECT card_id, craft_id FROM trade_items"
+            " WHERE order_id = ? AND side = 'want' ORDER BY pos", (payload.id,))]
+        # Перевалидация обеих сторон по ТЕКУЩИМ коллекциям — те же стадии и тот
+        # же порядок §2.3 (сначала give против maker, затем want против taker).
+        # Стадии длины и формы НЕ перепрогоняются: сохранённые строки уже
+        # нормализованы на offer (§2.3 п.2–3), между оффером и accept мог
+        # измениться только факт владения копиями. Машинные коды сохраняют
+        # S2-суффиксы сторон (client map в trade_ui.gd читает ровно эти
+        # строки): дефицит give — card_gone:maker, дефицит want — card_gone:taker.
+        # Каталогный призрак в want (каталог сменился, пока оффер висел
+        # pending) — дефицит той же стороны, тоже card_gone:taker.
+        give_rows, err = _trade_side_collections(conn, maker, give_sels, False)
+        if err:
             raise HTTPException(status_code=409, detail="card_gone:maker")
-        taker_row = _trade_pick_row(conn, me, order["want_card_id"],
-                                    order["want_craft_id"])
-        if taker_row is None:
+        want_rows, err = _trade_side_collections(conn, me, want_sels, True)
+        if err:
             raise HTTPException(status_code=409, detail="card_gone:taker")
-        give_craft = str(maker_row["craft_id"])
-        want_craft = str(taker_row["craft_id"])
+        give_crafts = _trade_resolve_instances(conn, maker, give_rows)
+        want_crafts = _trade_resolve_instances(conn, me, want_rows)
         # Коллизия легальна: craft_id строится по device_id[:8], поэтому целевой
-        # PK бывает занят второй половиной этого же обмена, и UPDATE №6/№7 на
-        # таком PK бросил бы IntegrityError → 500 без машинного кода (§7).
-        # Порядок существенен: обе проверки обязаны стоять до первого UPDATE,
-        # иначе отказ перестал бы быть «нулём записей».
-        if conn.execute("SELECT 1 FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
-                        (me, give_craft)).fetchone() is not None:
-            raise HTTPException(status_code=409, detail="card_gone:taker")
-        if conn.execute("SELECT 1 FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
-                        (maker, want_craft)).fetchone() is not None:
-            raise HTTPException(status_code=409, detail="card_gone:maker")
-        cur = conn.execute(
-            "UPDATE sigil_crafts SET device_id = ? WHERE device_id = ? AND craft_id = ?",
-            (me, maker, give_craft))
-        if cur.rowcount != 1:
-            raise HTTPException(status_code=409, detail="card_gone:maker")
-        cur = conn.execute(
-            "UPDATE sigil_crafts SET device_id = ? WHERE device_id = ? AND craft_id = ?",
-            (maker, me, want_craft))
-        if cur.rowcount != 1:
-            raise HTTPException(status_code=409, detail="card_gone:taker")
+        # PK бывает занят второй половиной этого же обмена, и UPDATE на таком
+        # PK бросил бы IntegrityError → 500 без машинного кода (§7). Порядок
+        # существенен: все пробы обеих сторон до первого UPDATE, иначе отказ
+        # перестал бы быть «нулём переносов» (раллинг 3d).
+        _trade_transfer_crafts(conn,
+                               [(maker, me, craft, "card_gone:taker", "card_gone:maker")
+                                for craft in give_crafts]
+                               + [(me, maker, craft, "card_gone:maker", "card_gone:taker")
+                                  for craft in want_crafts])
         cur = conn.execute(
             "UPDATE trade_orders SET state = 'accepted', updated_at = ?"
             " WHERE id = ? AND state = 'pending'", (_now_iso(), payload.id))
@@ -5883,21 +5945,28 @@ def trade_accept(payload: TradeIdPayload):
             raise HTTPException(status_code=409, detail="not_pending")
         _trade_count_up(conn, week, me)
         _trade_count_up(conn, week, maker)
-        moved_in = conn.execute(
+        # S2-совместимые поля ответа: одиночные moved_in/moved_out описывают
+        # ПЕРВУЮ (min pos) позицию каждой стороны, полный состав — из list
+        # (Task 4). Тот же прецедент, что в ответе gift.
+        moved_in_row = conn.execute(
             "SELECT llm_name FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
-            (me, give_craft)).fetchone()
-        moved_out = conn.execute(
+            (me, give_crafts[0])).fetchone() if give_crafts else None
+        moved_out_row = conn.execute(
             "SELECT llm_name FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
-            (maker, want_craft)).fetchone()
+            (maker, want_crafts[0])).fetchone() if want_crafts else None
         remain = max(0, TRADE_WEEK_LIMIT - _trade_week_count(conn, week, me))
         peer_remain = max(0, TRADE_WEEK_LIMIT - _trade_week_count(conn, week, maker))
         conn.commit()
         return TradeAcceptResponse(
             ok=True, id=int(payload.id),
-            moved_out=TradeMoved(craft_id=want_craft, card_id=order["want_card_id"],
-                                 llm_name=str(moved_out["llm_name"] or "")),
-            moved_in=TradeMoved(craft_id=give_craft, card_id=order["give_card_id"],
-                                llm_name=str(moved_in["llm_name"] or "")),
+            moved_out=TradeMoved(
+                craft_id=want_crafts[0] if want_crafts else "",
+                card_id=want_rows[0]["card_id"] if want_rows else "",
+                llm_name=str(moved_out_row["llm_name"] or "") if moved_out_row else ""),
+            moved_in=TradeMoved(
+                craft_id=give_crafts[0] if give_crafts else "",
+                card_id=give_rows[0]["card_id"] if give_rows else "",
+                llm_name=str(moved_in_row["llm_name"] or "") if moved_in_row else ""),
             remain=remain, peer_remain=peer_remain)
     except HTTPException:
         conn.rollback()
@@ -5987,35 +6056,15 @@ def trade_gift(payload: TradeGiftPayload):
         week = _week_key()
         if _trade_week_count(conn, week, me) >= TRADE_WEEK_LIMIT:
             raise HTTPException(status_code=409, detail="week_limit")
-        # Резолюция позиция→экземпляр: хроматик — ровно свой craft_id, карта
-        # вида — очередь старых копий; seen<=copies в _trade_sides_norm гарантирует,
-        # что очередь не иссякает и один craft_id не уедет дважды.
-        chosen: list = []
-        by_card: dict = {}
-        for it in give_rows:
-            if it["craft_id"]:
-                chosen.append(it["craft_id"])
-                continue
-            pool = by_card.get(it["card_id"])
-            if pool is None:
-                pool = [r["craft_id"] for r in conn.execute(
-                    "SELECT craft_id FROM sigil_crafts "
-                    "WHERE device_id = ? AND card_id = ? "
-                    "ORDER BY crafted_at, craft_id", (me, it["card_id"])).fetchall()]
-                by_card[it["card_id"]] = pool
-            chosen.append(pool.pop(0))
-        # Порядок существенен: все пробы до первого UPDATE, иначе отказ
-        # перестал бы быть «нулём переносов» (тот же смысл, что в accept).
-        for craft in chosen:
-            if conn.execute("SELECT 1 FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
-                            (to, craft)).fetchone() is not None:
-                raise HTTPException(status_code=409, detail="card_gone")
-        for craft in chosen:
-            cur = conn.execute(
-                "UPDATE sigil_crafts SET device_id = ? WHERE device_id = ? AND craft_id = ?",
-                (to, me, craft))
-            if cur.rowcount != 1:
-                raise HTTPException(status_code=409, detail="card_gone")
+        # Резолюция позиция→экземпляр и перенос — общие хелперы с accept
+        # (§2.4, логика не дублируется между роутами): хроматик — ровно свой
+        # craft_id, карта вида — очередь старых копий; seen<=copies в стадии
+        # коллекции гарантирует, что очередь не иссякает и один craft_id не
+        # уедет дважды. Все пробы целевых PK — до первого UPDATE (раллинг 3d),
+        # коллизия любой позиции — 409 card_gone с нулём переносов.
+        chosen = _trade_resolve_instances(conn, me, give_rows)
+        _trade_transfer_crafts(conn, [(me, to, craft, "card_gone", "card_gone")
+                                      for craft in chosen])
         moved = conn.execute(
             "SELECT llm_name FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
             (to, chosen[0])).fetchone()

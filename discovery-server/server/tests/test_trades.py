@@ -1048,8 +1048,12 @@ class TestAccept:
         assert counts == {"dev-a": 1, "dev-b": 1}, counts        # ровно один перенос
         # maker не может принять свой же оффер (шаг 1: taker_device != me).
         # Отдельный оффер, а не повтор spark: дубль вернул бы тот же id.
+        # want=[] (NM §2.2): после первого обмена ice лежит у maker'а, и
+        # дефолтный want=[ice] краснел бы в peer_lacks ещё на offer — а тест
+        # ровно про очерёдность accept-проверок, asserted-строки не тронуты.
         _seed(s, "dev-a", [("c3", "coal", "Уголь", "2026-01-03T00:00:00")])
-        oid2 = _offer(client, "dev-a", "dev-b", give=[{"card_id": "coal"}]).json()["id"]
+        oid2 = _offer(client, "dev-a", "dev-b", give=[{"card_id": "coal"}],
+                      want=[]).json()["id"]
         r = _accept(client, "dev-a", oid2)
         assert (r.status_code, r.json()["detail"]) == (404, "not_found")
 
@@ -1453,6 +1457,123 @@ class TestAccept:
         assert _owners(s) == {"c1": "dev-b", "c2": "dev-a"}
         counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
         assert counts == {"dev-a": 1, "dev-b": 4}, counts
+
+class TestAcceptNM:
+    """Спека §2.4: accept читает позиции из trade_items, перевалидует обе
+    стороны по ТЕКУЩИМ коллекциям и переносит все позиции атомарно.
+    Дефицит любой позиции — 409 card_gone с S2-суффиксом стороны
+    (client-маппинг trade_ui.gd не должен сломаться), ноль переносов,
+    state остаётся pending, trade_counts не тронуты."""
+
+    def test_accept_atomic_no_partial_transfer(self, tmp_path, monkeypatch):
+        """Сторонний accept снял вторую give-копию maker'а до нашего accept.
+
+        give = [coal, ember] (по одной копии каждого), между оффером и
+        принятием maker отдаёт ember стороннему офферу (второй оффер тому же
+        taker'у, want пуст — подарочная форма легальна §2.2). Наш accept обязан
+        увидеть дефицит на второй give-позиции: 409 card_gone:maker, и НЕ
+        сдвинуть первую позицию ни на вершок: coal остаётся у maker'а, ice —
+        у taker'а (тот же инвариант, что в S2 `..._leaves_everything_untouched`,
+        но мульти-позиционный).
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c3", "coal", "Уголь", "2026-01-01T00:00:00"),
+                           ("c4", "ember", "Тлеющий", "2026-01-02T00:00:00")])
+        _seed(s, "dev-b", [("c2", "ice", "Лёд", "2026-01-03T00:00:00")])
+        oid = _offer(client, "dev-a", "dev-b",
+                     give=[{"card_id": "coal"}, {"card_id": "ember"}],
+                     want=[{"card_id": "ice"}]).json()["id"]
+        oid2 = _offer(client, "dev-a", "dev-b",
+                      give=[{"card_id": "ember"}], want=[]).json()["id"]
+        assert _accept(client, "dev-b", oid2).status_code == 200
+        before = _owners(s)
+        assert before["c4"] == "dev-b", "сторонний accept унёс ember"
+        r = _accept(client, "dev-b", oid)
+        assert (r.status_code, r.json()["detail"]) == (409, "card_gone:maker")
+        assert _owners(s) == before, "ни одна позиция не сдвинута"
+        assert before["c3"] == "dev-a" and before["c2"] == "dev-b"
+        assert _rows(s, "SELECT state FROM trade_orders WHERE id = ?",
+                    (oid,))[0]["state"] == "pending"
+        counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
+        assert counts == {"dev-a": 1, "dev-b": 1}, counts   # только от oid2
+
+    def test_accept_want_deficit_is_card_gone_taker(self, tmp_path, monkeypatch):
+        """Симметричный отказ: дефицит на второй WANT-позиции — card_gone:taker.
+
+        taker сам дарит stone maker'у между оффером и accept — его коллекция
+        изменилась, а want валидился по ней на момент оффера. Отказ так же
+        атомен: обе give-позиции остаются у maker'а.
+        """
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00"),
+                           ("c3", "coal", "Уголь", "2026-01-02T00:00:00")])
+        _seed(s, "dev-b", [("c2", "ice", "Лёд", "2026-01-03T00:00:00"),
+                           ("c9", "stone", "Камень", "2026-01-04T00:00:00")])
+        oid = _offer(client, "dev-a", "dev-b",
+                     give=[{"card_id": "spark"}, {"card_id": "coal"}],
+                     want=[{"card_id": "ice"}, {"card_id": "stone"}]).json()["id"]
+        assert _gift(client, "dev-b", "dev-a",
+                     give=[{"card_id": "stone"}]).status_code == 200
+        before = _owners(s)
+        assert before["c9"] == "dev-a", "подарок унёс stone у taker'а"
+        r = _accept(client, "dev-b", oid)
+        assert (r.status_code, r.json()["detail"]) == (409, "card_gone:taker")
+        assert _owners(s) == before, "первая want-позиция не поехала встречно"
+        assert _rows(s, "SELECT state FROM trade_orders WHERE id = ?",
+                    (oid,))[0]["state"] == "pending"
+        counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
+        assert counts == {"dev-b": 1}, counts               # только за подарок
+
+    def test_accept_nm_moves_all_positions_to_right_owners(self, tmp_path, monkeypatch):
+        """Счастливый путь 2×1: уехали ВСЕ позиции, правами сторонами, без
+        частичных переносов; moved_in/moved_out (S2-совместимые поля) — первые
+        (min pos) позиции каждой стороны, полный состав — из list (Task 4)."""
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00"),
+                           ("c3", "coal", "Уголь", "2026-01-02T00:00:00")])
+        _seed(s, "dev-b", [("c2", "ice", "Лёд", "2026-01-03T00:00:00")])
+        oid = _offer(client, "dev-a", "dev-b",
+                     give=[{"card_id": "spark"}, {"card_id": "coal"}],
+                     want=[{"card_id": "ice"}]).json()["id"]
+        r = _accept(client, "dev-b", oid)
+        assert r.status_code == 200, r.text
+        assert _owners(s) == {"c1": "dev-b", "c3": "dev-b", "c2": "dev-a"}
+        body = r.json()
+        assert body["moved_in"] == {"craft_id": "c1", "card_id": "spark",
+                                    "llm_name": "Искра"}, body
+        assert body["moved_out"] == {"craft_id": "c2", "card_id": "ice",
+                                     "llm_name": "Лёд"}, body
+        assert body["remain"] == 9 and body["peer_remain"] == 9
+        assert _rows(s, "SELECT state FROM trade_orders")[0]["state"] == "accepted"
+        counts = {x["device_id"]: x["count"] for x in _rows(s, "SELECT * FROM trade_counts")}
+        assert counts == {"dev-a": 1, "dev-b": 1}, counts   # одно действие, не три
+
+    def test_accept_two_copies_of_view_move_distinct_instances(self, tmp_path,
+                                                               monkeypatch):
+        """Две give-позиции одного вида уезжают ДВУМЯ разными экземплярами
+        (старший первым), а не дважды одним craft_id — тот же инвариант,
+        что у gift (`test_gift_two_copies_move_distinct_instances`)."""
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _seed(s, "dev-a", [("c1", "spark", "Искра", "2026-01-01T00:00:00"),
+                           ("c8", "spark", "Искра вторая", "2026-01-02T00:00:00")])
+        _seed(s, "dev-b", [("c2", "ice", "Лёд", "2026-01-03T00:00:00")])
+        oid = _offer(client, "dev-a", "dev-b",
+                     give=[{"card_id": "spark"}, {"card_id": "spark"}],
+                     want=[{"card_id": "ice"}]).json()["id"]
+        r = _accept(client, "dev-b", oid)
+        assert r.status_code == 200, r.text
+        assert _owners(s) == {"c1": "dev-b", "c8": "dev-b", "c2": "dev-a"}
+        col = client.get("/api/sigil/collection",
+                         params={"device_id": "dev-b"}).json()
+        assert col["cards"]["spark"]["copies"] == 2
 
 
 def _cancel(client, device_id, order_id):
@@ -1898,8 +2019,12 @@ class TestListAndBadge:
         # просроченный входящий не бейджит: тот же cutoff, что у list. Второй
         # оффер — coal, а не spark: spark уехал принатым оффером выше, а `_both(s)`
         # даёт dev-a ровно одну карту, поэтому здесь нужна вторая строка коллекции.
+        # want=[] (NM §2.2): после обмена ice лежит у maker'а, и дефолтный
+        # want=[ice] краснел бы в peer_lacks на offer; бейдж и TTL от этого
+        # не меняются — asserted-строки прежние.
         _seed(s, "dev-a", [("c5", "coal", "Уголь", "2026-01-03T00:00:00")])
-        oid2 = _offer(client, "dev-a", "dev-b", give=[{"card_id": "coal"}]).json()["id"]
+        oid2 = _offer(client, "dev-a", "dev-b", give=[{"card_id": "coal"}],
+                      want=[]).json()["id"]
         stale = _stale_iso(s)
         conn = sqlite3.connect(s.DB_PATH)
         conn.execute("UPDATE trade_orders SET created_at = ? WHERE id = ?",
