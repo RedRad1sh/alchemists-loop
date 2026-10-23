@@ -702,6 +702,9 @@ func _ready() -> void:
 	Net.trade_gift_result.connect(_on_trade_gift_result)
 	Net.trade_accept_result.connect(_on_trade_accept_result)
 	Net.trade_cancel_result.connect(_on_trade_cancel_result)
+	# Коллекция друга — тот же провод, что и остальные trade-ответов: панель
+	# «Прошу» строится из ответа, а не из догадок клиента (§4.1).
+	Net.trade_peer_collection_result.connect(_on_trade_peer_collection_result)
 	# Аркан Сигилов
 	Net.sigil_daily_result.connect(_sigil._on_daily_result)
 	Net.sigil_craft_result.connect(_sigil._on_craft_result)
@@ -1105,6 +1108,13 @@ func _on_trade_accept_result(result: Dictionary) -> void:
 func _on_trade_cancel_result(result: Dictionary) -> void:
 	if _social_ui != null and _social_ui._trade != null:
 		_social_ui._trade.on_cancel(result)
+
+## Ответ GET /api/trade/peer_collection: только в слой. Гейд на null обязателен
+## как у остальных forwarder'ов: сигнал живёт на автозагрузке Net, а _social_ui
+## строится позже, и selftest эмитит этот результат напрямую.
+func _on_trade_peer_collection_result(result: Dictionary) -> void:
+	if _social_ui != null and _social_ui._trade != null:
+		_social_ui._trade.on_peer_collection(result)
 
 ## §8.4: после свершившейся переноски карты авторитетны только серверные ответы.
 ## Перебираем коллекцию тем же путём, что и обычно (Net.sigil_collection →
@@ -2354,7 +2364,7 @@ func _demo_seed_trades() -> void:
 			{"id": 98, "maker_device": "dev-b", "taker_device": _online._device_id,
 				"maker_nick": "Николя", "taker_nick": "", "state": "accepted",
 				"created_at": "2026-10-14T08:00:00",
-				"give_card_id": "sand", "give_craft_id": "", "give_name": "",
+				"give_card_id": "mountain", "give_craft_id": "", "give_name": "",
 				"want_card_id": "", "want_craft_id": "c-09",
 				"want_name": "Кобальтовая тропа"},
 			{"id": 97, "maker_device": _online._device_id, "taker_device": "dev-c",
@@ -2366,23 +2376,26 @@ func _demo_seed_trades() -> void:
 			{"id": 96, "maker_device": "dev-c", "taker_device": _online._device_id,
 				"maker_nick": "Аня", "taker_nick": "", "state": "cancelled",
 				"created_at": "2026-10-10T07:15:00",
-				"give_card_id": "stone", "give_craft_id": "", "give_name": "",
+				"give_card_id": "metal", "give_craft_id": "", "give_name": "",
 				"want_card_id": "clay", "want_craft_id": "", "want_name": ""}]}
 	if _demo_harness._action_trade_gift:
 		tr.open_builder()
-		tr._offer = {"give": tr.pick("", "c-31", 1, "Пепельный язык"),
-			"want": {}, "gift": true}
+		tr._offer = {"give": [tr.pick("", "c-31", 1, "Пепельный язык")],
+			"want": [], "gift": true}
 		tr._render()
 	elif _demo_harness._action_trade_confirm:
 		tr.open_builder()
-		tr._offer = {"give": tr.pick("metal", "", 1, "Металл"),
-			"want": tr.pick("", "c-17", 1, "Серный круг"), "gift": false}
+		tr._offer = {"give": [tr.pick("metal", "", 1, "Металл")],
+			"want": [tr.pick("", "c-17", 1, "Серный круг")], "gift": false}
 		tr._render()
 		tr.open_confirm()
 	elif _demo_harness._action_trade_build:
 		tr.open_builder()
-		tr._offer = {"give": tr.pick("clay", "", 2, "Глина"),
-			"want": tr.pick("", "c-17", 1, "Серный круг"), "gift": false}
+		# Две ячейки одного вида — ровно то, чего прежняя форма «одна карта на
+		# сторону» выразить не могла: N↔M показывает их двумя карманами ряда.
+		tr._offer = {"give": [tr.pick("clay", "", 2, "Глина"),
+			tr.pick("clay", "", 2, "Глина")],
+			"want": [tr.pick("", "c-17", 1, "Серный круг")], "gift": false}
 		tr._render()
 	else:
 		tr._render()

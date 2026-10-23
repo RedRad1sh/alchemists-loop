@@ -13,6 +13,35 @@ const TITLE := "Обмен"
 ## собирал заведомо отклоняемый оффер.
 const TRADE_SIDE_MAX := 6
 
+## Комплект окна обмена (спека §5): планшет, карман и сургуч — из assets/trades/,
+## доски, рейка, уголок, заклёпка и бумага кнопок переиспользуются из
+## assets/contracts/. Никаких ColorRect и плоских StyleBoxFlat в видимом слое.
+const TRADE_DIR := "res://assets/trades/"
+const BOARD_DIR := "res://assets/contracts/"
+const FADE_SHADER := "res://assets/contracts/paper_fade.gdshader"
+
+const PANE := Vector2(252, 316)      # два планшета рядом: 2×252 + 8 ≤ 516
+const PANE_PAD := 6.0
+const CELL := Vector2(76, 96)        # pocket 80×100 логических, минус поле
+const ART := 60.0
+const SEAL := 60.0
+const GRID_COLS := 3
+const GRID_GAP := 6.0               # 3×76 + 2×6 = 240 = 252 − 2×6
+const SLOT_GAP := 4.0               # 6×76 + 5×4 = 476 ≤ 516
+const SHEET := Vector2(112, 76)
+const CAP := Vector2(56, 56)
+const NAIL := Vector2(48, 48)
+const FOOT_H := 80.0
+const HEAD_H := 52.0
+## Два градуса затемнения, а не один: 0.55 — «копии кончились / нельзя положить»,
+## 0.62 — «целика недоступна» (офлайн-планшет друга, locked кнопка, подарок).
+const FADE_SPENT := 0.55
+const FADE_OUT := 0.62
+const PAPER_INK := Color(0.16, 0.11, 0.07)
+const BOARD_INK := Color(0.93, 0.86, 0.70)
+const AMBER := Color("#e6a84a")
+const TILT_MAX := 1.2
+
 var g: Game
 var _screen: Control = null
 var _body: VBoxContainer = null
@@ -24,14 +53,59 @@ var _peer := ""
 var _mode := 0
 var _list := {}
 var _offer := {"give": [], "want": [], "gift": false}   # N↔M: стороны — списки ячеек
-var _picking := ""          # "give" | "want" | "" — идёт ли выбор карты
 var _note := ""             # строка серверного отказа (код → текст через _detail_text)
 var _gone := {}               # id входящих офферов с ушедшей картой (§7.2)
 var _last_id := -1            # id заказа, чей отказ рисовать на строке
 var _peer_coll := {}          # кэш peer_collection друга (§2.2): {cards, extras}
+## amount -> ShaderMaterial. Один материал на все затемнённые узлы перерисовки:
+## на каждом кадре конструктора плодить ShaderMaterial под каждый карман —
+## утечка GPU-памяти на слое, который игрок открывает десятки раз за заход.
+var _fade_cache := {}
+## Поколение перерисовки: недочитанные миниатюры прошлой сборки не имеют права
+## лечь на уже освобождённый карман (тот же приём, что `_sigil_tab_seq`).
+var _art_seq := 0
 
 func _init(game: Game) -> void:
 	g = game
+
+static func tex(fname: String) -> Texture2D:
+	return load(TRADE_DIR + fname) as Texture2D
+
+static func board_tex(fname: String) -> Texture2D:
+	return load(BOARD_DIR + fname) as Texture2D
+
+## Наклон планшета задан от peer, а не `randf()` (спека §5): два захода в окно
+## к одному другу обязаны рисовать одинаковую раскладку. FNV-1a, а не
+## `String.hash()` — тот же приём, что у ContractCard.rot_deg: хеш строк у
+## движка меняется между сборками, а доски — нет.
+static func _tilt(seed_str: String) -> float:
+	var h := 2166136261
+	for byte in seed_str.to_utf8_buffer():
+		h = ((h ^ int(byte)) * 16777619) & 0x7FFFFFFF
+	return TILT_MAX * (2.0 * float(h % 1001) / 1000.0 - 1.0)
+
+## Материал затемнения по силе. Кэшируется: узел с тем же amount получает тот же
+## ShaderMaterial, поэтому перерисовка конструктора не создаёт новый материал на
+## каждый карман.
+func _fade_mat(amount: float) -> ShaderMaterial:
+	var key := int(amount * 100.0)
+	var cached: ShaderMaterial = _fade_cache.get(key) as ShaderMaterial
+	if cached != null:
+		return cached
+	var m := ShaderMaterial.new()
+	m.shader = load(FADE_SHADER) as Shader
+	m.set_shader_parameter("amount", amount)
+	_fade_cache[key] = m
+	return m
+
+## Fade надевается на каждый рисуемый узел ветки, а не только на подложку: Godot не
+## наследует `material` детям, поэтому миниатюра в недоступном кармане осталась бы
+## яркой цветной картинкой поверх «серой» ячейки.
+func _fade_tree(node: Node, mat: ShaderMaterial) -> void:
+	if node is CanvasItem:
+		(node as CanvasItem).material = mat
+	for c in node.get_children():
+		_fade_tree(c, mat)
 
 func is_open() -> bool:
 	return _screen != null and _screen.visible
@@ -42,8 +116,10 @@ func open(peer: String) -> void:
 	_peer = peer
 	_mode = 0
 	_offer = {"give": [], "want": [], "gift": false}
-	_picking = ""
 	_note = ""
+	# Коллекция друга привязана к peer: оставить её между заходами значило бы
+	# предлагать «Прошу: <карта Николя>» собеседнику, у которого её нет.
+	_peer_coll = {}
 	# Отметка «карты больше нет» привязана к офферу конкретного собеседника:
 	# у нового peer'а чужая мёртвая строка не имеет права пережить смену окна.
 	_gone = {}
@@ -124,14 +200,18 @@ func _copies_for(side: String, cid: String) -> int:
 		return 0
 	return int((coll[cid] as Dictionary).get("copies", 0))
 
-## Кладёт выбранную карту в следующий свободный слот стороны. Отказ (false) —
-## лимит стороны (TRADE_SIDE_MAX) либо дефицит копий: экземпляр хроматика
-## уникален (одна ячейка на craft_id), вид занят ячейками не больше копий (§3).
-func add_slot(side: String, entry: Dictionary) -> bool:
+## Единственный предикат доступности ячейки: по нему кладётся карта, по нему же
+## рисуются `disabled` и fade кармана. Если бы гейты жили в двух местах, «серый»
+## и «некликабельный» разъехались бы, а игрок кликал бы по карману, который
+## прикидывается живым.
+func can_add(side: String, entry: Dictionary) -> bool:
 	if not _offer.has(side):
 		return false
 	var arr: Array = _offer[side]
 	if arr.size() >= TRADE_SIDE_MAX:
+		return false
+	# Подарок — односторонняя передача: встречную карту просить не у кого (§4.1).
+	if side == "want" and bool(_offer["gift"]):
 		return false
 	var cid := String(entry.get("card_id", ""))
 	var craft := String(entry.get("craft_id", ""))
@@ -140,7 +220,6 @@ func add_slot(side: String, entry: Dictionary) -> bool:
 		for e in arr:
 			if String((e as Dictionary).get("craft_id", "")) == craft:
 				return false
-		arr.append(entry)
 		return true
 	# Вид: сумма занятых ячеек не больше копий в источнике стороны.
 	var used := 0
@@ -148,8 +227,15 @@ func add_slot(side: String, entry: Dictionary) -> bool:
 		if String((e as Dictionary).get("card_id", "")) == cid:
 			used += 1
 	var have := _copies_for(side, cid)
-	if have >= 0 and used >= have:
+	return not (have >= 0 and used >= have)
+
+## Кладёт выбранную карту в следующий свободный слот стороны. Отказ (false) —
+## лимит стороны (TRADE_SIDE_MAX), подарок с пустым «Прошу», дефицит копий или
+## уже занятый экземпляр: всё это считает can_add.
+func add_slot(side: String, entry: Dictionary) -> bool:
+	if not can_add(side, entry):
 		return false
+	var arr: Array = _offer[side]
 	arr.append(entry)
 	return true
 
@@ -195,16 +281,33 @@ func peer_entries() -> Array:
 func set_peer_coll(coll: Dictionary) -> void:
 	_peer_coll = coll
 
+## Ответ коллекции друга по проводам main.gd (не присваивание из тестов):
+## panel «Прошу» строится только из него. Пустой/не-ok ответ оставляет прошлый
+## кэш как есть — §4.4 рисует по нему «Мир не на связи», а не вымышленную
+## пустую коллекцию друга.
+func on_peer_collection(result: Dictionary) -> void:
+	if result.get("ok", false) != true:
+		return
+	_peer_coll = {"cards": result.get("cards", {}), "extras": result.get("extras", [])}
+	# Перерисовка только на конструкторе: на списке и подтверждении планшета нет,
+	# а сброс невысказанного экрана посреди чтения оффера — худшее, что можно
+	# сделать с интерфейсом.
+	if _mode == 1:
+		_render()
+
 func can_confirm() -> bool:
 	var give: Array = _offer["give"]
 	var want: Array = _offer["want"]
 	return give.size() >= 1 and (bool(_offer["gift"]) or want.size() >= 1)
 
 func open_builder() -> void:
-	_picking = ""
 	_note = ""
 	_mode = 1
 	_render()
+	# §4.1: панель друга — часть конструктора, поэтому её тянет сам
+	# конструктор. Ждать, пока игрок «сам куда-то нажмёт», нечего: без ответа
+	# сторона «Прошу» остаётся затемнённой (§4.4).
+	Net.trade_peer_collection(g._online._device_id, _peer)
 
 func open_confirm() -> void:
 	if not can_confirm():
@@ -225,7 +328,6 @@ func on_gift(result: Dictionary) -> void:
 func _on_write_result(result: Dictionary, is_offer: bool) -> void:
 	if result.get("ok", false) == true:
 		_offer = {"give": [], "want": [], "gift": false}
-		_picking = ""
 		_note = ""
 		# Оба успеха уходят на список. Оставленный экран подтверждения рисует
 		# «Ты отдаёшь: » с пустым именем и живой кнопкой, нажатие которой шлёт
@@ -333,8 +435,13 @@ func build() -> void:
 	g._social_ui._screen.add_child(root)
 	_screen = root
 
-	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.9)
+	# Затемнение — тёмная ткань тайлом на весь экран: ColorRect-заливка (§5 и
+	# AGENTS.md §27) читалась бы как чёрный прямоугольник поверх игры, а не как
+	# сукно, на котором лежит окно.
+	var dim := TextureRect.new()
+	dim.name = "Dim"
+	dim.texture = tex("cloth_dark.png")
+	dim.stretch_mode = TextureRect.STRETCH_TILE
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	dim.gui_input.connect(func(ev: InputEvent) -> void:
@@ -350,24 +457,43 @@ func build() -> void:
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(margin)
 
-	var card := PanelContainer.new()
-	card.mouse_filter = Control.MOUSE_FILTER_STOP
-	margin.add_child(card)
-
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	card.add_child(box)
+	box.add_theme_constant_override("separation", 6)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_child(box)
 
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
+	# Шапка — рейка досок с гвоздём вместо кнопки «Назад»: закрытие окна должно
+	# быть частью рамы, а не подписью под ней.
+	var head := MarginContainer.new()
+	head.name = "Head"
+	head.custom_minimum_size = Vector2(0, HEAD_H)
 	box.add_child(head)
+	var head_plate := TextureRect.new()
+	head_plate.name = "Plate"
+	head_plate.texture = board_tex("board_planks.png")
+	head_plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	head_plate.stretch_mode = TextureRect.STRETCH_SCALE
+	head_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(head_plate)
+	var head_row := HBoxContainer.new()
+	head_row.name = "Row"
+	head_row.add_theme_constant_override("separation", 8)
+	head.add_child(head_row)
 	_header = g._label(TITLE, 17)
 	_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_header.autowrap_mode = TextServer.AUTOWRAP_OFF
-	head.add_child(_header)
-	var back := g._small_button("Назад", Vector2(84, 34), 0)
-	back.pressed.connect(close)
-	head.add_child(back)
+	_header.add_theme_color_override("font_color", BOARD_INK)
+	head_row.add_child(_header)
+	var nail := TextureButton.new()
+	nail.name = "BtnClose"
+	nail.texture_normal = board_tex("nail_brass.png")
+	nail.texture_disabled = nail.texture_normal
+	nail.ignore_texture_size = true
+	nail.stretch_mode = TextureButton.STRETCH_SCALE
+	nail.custom_minimum_size = NAIL
+	nail.tooltip_text = "Закрыть"
+	nail.pressed.connect(close)
+	head_row.add_child(nail)
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -401,8 +527,6 @@ func _render() -> void:
 			_render_builder()
 		2:
 			_render_confirm()
-		3:
-			_render_builder()
 		_:
 			_render_list()
 
@@ -550,62 +674,359 @@ func on_cancel(result: Dictionary) -> void:
 	_note = _refusal_text(result)
 	_render()
 
-## Подпись slot-кнопки стороны-списка (R14): имя ПЕРВОЙ ячейки, «не выбрана» для
-## пустой стороны, «<имя> +N» если ячеек больше одной. Визуал конструктора —
-## Task 8; здесь прежняя одна кнопка на сторону с прежним name и press.
-func _side_label(side) -> String:
-	if not (side is Array) or (side as Array).is_empty():
-		return "не выбрана"
-	var arr: Array = side
-	var first := String((arr[0] as Dictionary).get("display_name", ""))
-	if arr.size() == 1:
-		return first
-	return "%s +%d" % [first, arr.size() - 1]
-
+## Конструктор N↔M (спека §4.1): два планшета инвентаря рядом — своя коллекция и
+## коллекция друга — и два ряда ячеек под ними. Тап по карману кладёт карту в
+## первый свободный слот стороны, тап по занятой ячейке убирает. Недоступное
+## затемняется fade-шейдером, а не прячется: игрок обязан видеть, ЧТО он не может
+## положить и почему ряд не набирается.
 func _render_builder() -> void:
 	_clear(_body)
 	_header.text = "%s · %s" % [TITLE, _nick()]
-	_body.add_child(g._label("Что отдаю", 13))
-	var give := g._small_button(_side_label(_offer["give"]), Vector2(260, 40), 0)
-	give.name = "GiveSlot"
-	give.pressed.connect(_pick_for.bind("give"))
-	_body.add_child(give)
-	_body.add_child(g._label("Что прошу взамен", 13))
-	var want := g._small_button(_side_label(_offer["want"]), Vector2(260, 40), 0)
-	want.name = "WantSlot"
-	want.disabled = bool(_offer["gift"])     # подарок = односторонняя передача
-	want.pressed.connect(_pick_for.bind("want"))
-	_body.add_child(want)
-	var gift_btn := g._small_button(
-		"Подарить" if not bool(_offer["gift"]) else "Подарок: да", Vector2(140, 34), 0)
-	gift_btn.pressed.connect(_toggle_gift)
-	_body.add_child(gift_btn)
+	_art_seq += 1
+	var seq := _art_seq
+	var pending: Array = []
+
+	var panes := HBoxContainer.new()
+	panes.name = "Panes"
+	# 8 px между планшетами — не косметика: наклон ±1.2° раздвигает охватывающий
+	# прямоугольник доски на 316·sin(1.2°) ≈ 7 px, и при меньшем зазоре края двух
+	# планшетов перекрывались бы.
+	panes.add_theme_constant_override("separation", 8)
+	_body.add_child(panes)
+	var mine := _pane(panes, "PaneMine", "Мои карты", entries(), "give",
+		pending, -_tilt(_peer))
+	var peer := _pane(panes, "PanePeer", "Карты: %s" % _nick(), peer_entries(),
+		"want", pending, _tilt(_peer))
+	# §4.4: ответ коллекции ещё не пришёл (или не придёт — друг офлайн). Панель не
+	# пустая и не молчаливая: на ней написано, почему она не заполнена, а не
+	# выдуманное «у друга нет карт».
+	if _peer_coll.is_empty():
+		var inner: VBoxContainer = peer.get_meta("inner")
+		var off := Label.new()
+		off.name = "Offline"
+		off.text = "Мир не на связи\nколлекция друга недоступна"
+		off.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		off.add_theme_font_size_override("font_size", 12)
+		off.add_theme_color_override("font_color", PAPER_INK)
+		off.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		inner.add_child(off)
+		_fade_tree(peer, _fade_mat(FADE_OUT))
+
+	var slots := VBoxContainer.new()
+	slots.name = "Slots"
+	slots.add_theme_constant_override("separation", 4)
+	_body.add_child(slots)
+	_side_row(slots, "give", _offer["give"], pending)
+	_side_row(slots, "want", _offer["want"], pending)
+
 	if _note != "":
 		var note := g._label(_note, 12)
-		note.add_theme_color_override("font_color", Color("#e6a84a"))
+		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		note.add_theme_color_override("font_color", AMBER)
 		_body.add_child(note)
-	if _picking != "":
-		_body.add_child(g._label("Выбери карту", 13))
-		for e in entries():
-			var nm := String(e["display_name"])
-			if bool(e["is_last"]):
-				nm += " — последняя"
-			var b := g._small_button(nm, Vector2(260, 40), 0)
-			b.pressed.connect(_choose.bind(e))
-			_body.add_child(b)
-		var cancel := g._small_button("Отменить выбор", Vector2(150, 34), 0)
-		cancel.pressed.connect(_stop_picking)
-		_body.add_child(cancel)
+	_footer()
+	_fill_arts(seq, pending)
+
+## Планшет инвентаря: подложка pane_tablet.png + сетка 3 колонки внутри.
+## MarginContainer кладёт ВСЕХ детей в один и тот же прямоугольник — так текстура
+## лежит под контентом без PanelContainer и без плоского стиля.
+func _pane(parent: Control, nm: String, title: String, items: Array,
+		side: String, pending: Array, tilt: float) -> MarginContainer:
+	var mc := MarginContainer.new()
+	mc.name = nm
+	mc.custom_minimum_size = PANE
+	parent.add_child(mc)
+	var plate := TextureRect.new()
+	plate.name = "Plate"
+	plate.texture = tex("pane_tablet.png")
+	plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	plate.stretch_mode = TextureRect.STRETCH_SCALE
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.rotation_degrees = tilt
+	plate.pivot_offset = PANE / 2.0
+	mc.add_child(plate)
+	var pad := MarginContainer.new()
+	pad.name = "Pad"
+	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for s in ["margin_left", "margin_top", "margin_right", "margin_bottom"]:
+		pad.add_theme_constant_override(s, int(PANE_PAD))
+	mc.add_child(pad)
+	var inner := VBoxContainer.new()
+	inner.name = "Inner"
+	inner.add_theme_constant_override("separation", 4)
+	pad.add_child(inner)
+	mc.set_meta("inner", inner)
+	var cap := Label.new()
+	cap.name = "Caption"
+	cap.text = title
+	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cap.add_theme_font_size_override("font_size", 12)
+	cap.add_theme_color_override("font_color", PAPER_INK)
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	inner.add_child(cap)
+	var scroll := ScrollContainer.new()
+	scroll.name = "GridScroll"
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	inner.add_child(scroll)
+	var grid := GridContainer.new()
+	grid.name = "Grid"
+	grid.columns = GRID_COLS
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	grid.add_theme_constant_override("h_separation", int(GRID_GAP))
+	grid.add_theme_constant_override("v_separation", 8)
+	scroll.add_child(grid)
+	for e in items:
+		grid.add_child(_cell(side, e as Dictionary, pending))
+	return mc
+
+## Карман ячейки: настоящая кожаная подложка pocket.png, миниатюра поверх, имя и
+## счётчик копий. `texture_disabled` — та же текстура: без неё TextureButton в
+## disabled не рисует ничего, а серость делает fade-материал, а не отсутствие
+## картинки.
+func _cell(side: String, e: Dictionary, pending: Array) -> TextureButton:
+	var cid := String(e.get("card_id", ""))
+	var key := cid if cid != "" else String(e.get("craft_id", ""))
+	var b := TextureButton.new()
+	b.name = "Cell%s_%s" % ["Mine" if side == "give" else "Peer", key]
+	b.texture_normal = tex("pocket.png")
+	b.texture_disabled = b.texture_normal
+	b.ignore_texture_size = true
+	b.stretch_mode = TextureButton.STRETCH_SCALE
+	b.custom_minimum_size = CELL
+	b.mouse_filter = Control.MOUSE_FILTER_STOP
+	b.tooltip_text = "%s\n%s" % [String(e.get("display_name", "")), _copies_hint(side, e)]
+
+	var art := TextureRect.new()
+	art.name = "Art"
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_SCALE
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.position = Vector2((CELL.x - ART) / 2.0, 8.0)
+	art.size = Vector2(ART, ART)
+	b.add_child(art)
+	pending.append([art, _preview_arg(side, e)])
+
+	var nm := _ink_label("Name", String(e.get("display_name", "")), 9,
+		Vector2(2.0, 66.0), Vector2(CELL.x - 4.0, 16.0))
+	nm.clip_text = true
+	b.add_child(nm)
+	var cp := _ink_label("Copies", _copies_label(side, e), 9,
+		Vector2(2.0, 82.0), Vector2(CELL.x - 4.0, 12.0))
+	b.add_child(cp)
+	if not can_add(side, e):
+		b.disabled = true
+		_fade_tree(b, _fade_mat(FADE_SPENT))
+	b.pressed.connect(_on_cell.bind(side, e))
+	return b
+
+## Подпись + ряд из TRADE_SIDE_MAX ячеек стороны. Ряд рисуется целиком даже при
+## пустом оффере: пустые ячейки под сургучом и есть обещание «сюда можно положить
+## ещё N», без них игрок не видит потолок стороны.
+func _side_row(parent: Control, side: String, arr, pending: Array) -> void:
+	var col := VBoxContainer.new()
+	col.name = "ColGive" if side == "give" else "ColWant"
+	col.add_theme_constant_override("separation", 2)
+	parent.add_child(col)
+	var list: Array = arr if arr is Array else []
+	var cap := Label.new()
+	cap.name = "SideCaption"
+	cap.text = "%s (%d/%d)" % ["Отдаёшь" if side == "give" else "Прошу взамен",
+		list.size(), TRADE_SIDE_MAX]
+	cap.add_theme_font_size_override("font_size", 11)
+	cap.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
+	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(cap)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	_body.add_child(row)
-	var next := g._small_button("Дальше", Vector2(120, 40), 0)
-	next.disabled = (not can_confirm()) or int(_list.get("remain", 1)) <= 0
-	next.pressed.connect(open_confirm)
-	row.add_child(next)
-	var back := g._small_button("Назад", Vector2(96, 34), 0)
+	row.name = "RowGive" if side == "give" else "RowWant"
+	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	row.add_theme_constant_override("separation", int(SLOT_GAP))
+	col.add_child(row)
+	for i in TRADE_SIDE_MAX:
+		row.add_child(_slot(side, i, list, pending))
+
+func _slot(side: String, pos: int, arr: Array, pending: Array) -> TextureButton:
+	var b := TextureButton.new()
+	b.name = "Slot%s_%d" % ["Give" if side == "give" else "Want", pos]
+	b.texture_normal = tex("pocket.png")
+	b.texture_disabled = b.texture_normal
+	b.ignore_texture_size = true
+	b.stretch_mode = TextureButton.STRETCH_SCALE
+	b.custom_minimum_size = CELL
+	b.mouse_filter = Control.MOUSE_FILTER_STOP
+	if pos < arr.size():
+		var e: Dictionary = arr[pos]
+		var art := TextureRect.new()
+		art.name = "Art"
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_SCALE
+		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		art.position = Vector2((CELL.x - ART) / 2.0, 8.0)
+		art.size = Vector2(ART, ART)
+		b.add_child(art)
+		pending.append([art, _preview_arg(side, e)])
+		b.add_child(_ink_label("Name", String(e.get("display_name", "")), 9,
+			Vector2(2.0, 66.0), Vector2(CELL.x - 4.0, 16.0)))
+		b.tooltip_text = String(e.get("display_name", ""))
+		b.pressed.connect(_on_slot_pressed.bind(side, pos))
+	else:
+		# Пустая ячейка — сургуч: «сюда ещё ничего не положили». В занятой сургуча
+		# быть не должно, иначе проверка «slot seal fills empty cells» превращается
+		# в «на ряду есть хоть один сургуч».
+		var seal := TextureRect.new()
+		seal.name = "Seal"
+		seal.texture = tex("slot_seal.png")
+		seal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		seal.stretch_mode = TextureRect.STRETCH_SCALE
+		seal.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		seal.position = Vector2((CELL.x - SEAL) / 2.0, (CELL.y - SEAL) / 2.0)
+		seal.size = Vector2(SEAL, SEAL)
+		b.add_child(seal)
+		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if side == "want" and bool(_offer["gift"]):
+		b.disabled = true
+		_fade_tree(b, _fade_mat(FADE_OUT))
+	return b
+
+## Бумажная кнопка нижнего ряда: подложка paper_note.png с текстом-лейблом.
+## Обычная Button с StyleBoxFlat сюда не годится — §5 требует, чтобы кнопки окна
+## были вырезаны из той же бумаги, что и карманы.
+func _sheet_button(nm: String, text: String) -> TextureButton:
+	var b := TextureButton.new()
+	b.name = nm
+	b.texture_normal = board_tex("paper_note.png")
+	b.texture_disabled = b.texture_normal
+	b.ignore_texture_size = true
+	b.stretch_mode = TextureButton.STRETCH_SCALE
+	b.custom_minimum_size = SHEET
+	b.mouse_filter = Control.MOUSE_FILTER_STOP
+	var cap := _ink_label("Text", text, 13, Vector2(4.0, 8.0),
+		Vector2(SHEET.x - 8.0, SHEET.y - 16.0))
+	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cap.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	b.add_child(cap)
+	return b
+
+func _footer() -> void:
+	var foot := MarginContainer.new()
+	foot.name = "Footer"
+	foot.custom_minimum_size = Vector2(0, FOOT_H)
+	_body.add_child(foot)
+	var plate := TextureRect.new()
+	plate.name = "Rail"
+	plate.texture = board_tex("frame_h.png")
+	plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	plate.stretch_mode = TextureRect.STRETCH_SCALE
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	foot.add_child(plate)
+	var row := HBoxContainer.new()
+	row.name = "Row"
+	row.add_theme_constant_override("separation", 6)
+	foot.add_child(row)
+	row.add_child(_corner("CapL"))
+	var offer := _sheet_button("BtnOffer", "Предложить")
+	# Гейт §9.2 живёт и здесь: остаток недели считает сервер, поэтому «Предложить»
+	# глушится по remain, а не по локальному подсчёту.
+	offer.disabled = (not can_confirm()) or int(_list.get("remain", 1)) <= 0
+	offer.pressed.connect(open_confirm)
+	row.add_child(offer)
+	var gift := _sheet_button("BtnGift",
+		"Подарок: да" if bool(_offer["gift"]) else "Подарить")
+	gift.pressed.connect(_toggle_gift)
+	row.add_child(gift)
+	var back := _sheet_button("BtnBack", "К списку")
 	back.pressed.connect(_back_to_list)
 	row.add_child(back)
+	row.add_child(_corner("CapR"))
+
+## Уголок рейки — декор, а не кнопка: пин «builder buttons declare tappable
+## sizes» читает все BaseButton ряда, и превращать украшение в недоступную кнопку
+## незачем.
+func _corner(nm: String) -> TextureRect:
+	var c := TextureRect.new()
+	c.name = nm
+	c.texture = board_tex("corner_iron.png")
+	c.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	c.stretch_mode = TextureRect.STRETCH_SCALE
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.custom_minimum_size = CAP
+	return c
+
+func _ink_label(nm: String, text: String, font_size: int,
+		pos: Vector2, size: Vector2) -> Label:
+	var l := Label.new()
+	l.name = nm
+	l.text = text
+	l.position = pos
+	l.size = size
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	l.add_theme_font_size_override("font_size", font_size)
+	l.add_theme_color_override("font_color", PAPER_INK)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
+
+func _copies_label(side: String, e: Dictionary) -> String:
+	if String(e.get("card_id", "")) == "":
+		return "×1"
+	var have := _copies_for(side, String(e.get("card_id", "")))
+	if have < 0:
+		return ""
+	return "×%d" % have
+
+## Причина, по которой карман недоступна, — в тултипе, а не на самой ячейке: 76 px
+## не выносят второй строки, а «почему не кладётся» игрок спрашивает глазами, а не
+## тапом (спека §4.1).
+func _copies_hint(side: String, e: Dictionary) -> String:
+	var cid := String(e.get("card_id", ""))
+	if cid == "":
+		return "Единственный экземпляр"
+	var have := _copies_for(side, cid)
+	if have < 0:
+		return "Коллекция недоступна"
+	if side == "give":
+		return "Копий в коллекции: %d" % have
+	return "У друга копий: %d" % have
+
+## Аргумент preview_texture: вид — по card_id (ключ кэша — карточка каталога),
+## экземпляр — копией серверной extra с `id = craft_id`: без этого ключом станет
+## пустой card_id и превью хроматика не найдётся (§4.1, sigil_manager:487).
+func _preview_arg(side: String, e: Dictionary) -> Dictionary:
+	var cid := String(e.get("card_id", ""))
+	if cid != "":
+		return {"card_id": cid, "id": cid}
+	var craft := String(e.get("craft_id", ""))
+	var src: Array = g._sigil.server_extras() if side == "give" \
+		else (_peer_coll.get("extras", []) as Array)
+	for x in src:
+		if x is Dictionary and String((x as Dictionary).get("craft_id", "")) == craft:
+			var d: Dictionary = (x as Dictionary).duplicate()
+			d["id"] = craft
+			return d
+	return {"id": craft, "card_id": "", "rarity": "chromatic"}
+
+## Миниатюры дорисовываются после сборки дерева (тот же приём, что sigil_ui:335):
+## карманы, имена и счётники видны сразу, картинки приходят позже. Попадание в
+## кэш превью возвращает синхронно, поэтому в selftest и в прогретой сессии арт
+## стоит на месте в том же кадре.
+func _fill_arts(seq: int, pending: Array) -> void:
+	for p in pending:
+		var art: TextureRect = p[0] as TextureRect
+		if seq != _art_seq or art == null or not is_instance_valid(art):
+			return
+		var preview: ImageTexture = await g._sigil.preview_texture(p[1] as Dictionary)
+		if seq != _art_seq or art == null or not is_instance_valid(art) or preview == null:
+			continue
+		art.texture = preview
+
+func _on_cell(side: String, e: Dictionary) -> void:
+	if add_slot(side, e):
+		_render()
+
+func _on_slot_pressed(side: String, pos: int) -> void:
+	remove_slot(side, pos)
+	_render()
 
 func _toggle_gift() -> void:
 	_offer["gift"] = not bool(_offer["gift"])
@@ -613,29 +1034,7 @@ func _toggle_gift() -> void:
 		_offer["want"] = []
 	_render()
 
-func _pick_for(slot: String) -> void:
-	_picking = slot
-	_mode = 3
-	_render()
-
-func _stop_picking() -> void:
-	_picking = ""
-	_mode = 1
-	_render()
-
-func _choose(e: Dictionary) -> void:
-	# Пикер (остаётся до Task 8, раллинг R13) кладёт карту через add_slot — тот же
-	# путь, что и будущий клик по сетке: гейты лимита стороны и копий применяются
-	# к реальному выбору игрока, а не обходятся прямой записью в ячейку.
-	if _picking == "give" or _picking == "want":
-		add_slot(_picking, e)
-	_picking = ""
-	_mode = 1
-	_note = ""
-	_render()
-
 func _back_to_list() -> void:
-	_picking = ""
 	_mode = 0
 	_render()
 

@@ -41,6 +41,7 @@ static func run(g: Game) -> void:
 	_constructor(g)
 	_list_actions(g)
 	_textures(g)
+	_builder(g)
 	_offer_model(g)
 
 
@@ -341,6 +342,10 @@ static func _constructor(g: Game) -> void:
 	sm._server_extras = [{"craft_id": "x1", "rarity": "chromatic",
 		"llm_name": "Радуга", "crafted_at": "", "seed": 7, "lore": "",
 		"ingredients": []}]
+	# Снимок ДО прогрева: _preview_cache — тот же объект Dictionary, поэтому
+	# prev0 обязан быть копией, иначе «восстановление» вернула бы прогретое.
+	var prev0: Dictionary = (sm._preview_cache as Dictionary).duplicate()
+	_warm_previews(sm, ["spark", "ice", "dust", "x1"])
 	var list: Array = tr.entries()
 	var by_card := {}
 	for e in list:
@@ -359,15 +364,23 @@ static func _constructor(g: Game) -> void:
 		"want": [tu.pick("ice", "", 3, "Лёд")], "gift": false}
 	tr._mode = 1
 	tr.call("_render")
-	var want_btn := _button_named(tr._body, "Лёд")
+	var slot_want := _node(tr._body, "SlotWant_0")
+	var wn := _node(slot_want, "Name")
 	# Подарок включает _toggle_gift(), он же и обнуляет want. Присваивать
 	# _offer["gift"] = true напрямую нельзя: проверка описывала бы состояние,
-	# которого игрок не может получить, а настоящий путь (слот «не выбрана» и
-	# disabled) оставался бы без покрытия.
+	# которого игрок не может получить, а настоящий путь (живая ячейка с именем
+	# карты, после — пустая ячейка под сургучом и disabled) оставался бы без
+	# покрытия.
+	var want_live := slot_want is TextureButton \
+		and not (slot_want as TextureButton).disabled \
+		and wn is Label and String((wn as Label).text) == "Лёд"
 	tr.call("_toggle_gift")
-	var none_btn := _button_named(tr._body, "не выбрана")
-	Selftest.check("gift mode kills want slot", want_btn != null and none_btn != null
-		and not want_btn.disabled and none_btn.disabled
+	var slot_gift := _node(tr._body, "SlotWant_0")
+	var gift_seal := _node(slot_gift, "Seal")
+	Selftest.check("gift mode kills want slot", want_live
+		and slot_gift is TextureButton and (slot_gift as TextureButton).disabled
+		and gift_seal is TextureRect and _tex_name(gift_seal) == "slot_seal.png"
+		and _node(slot_gift, "Name") == null
 		and (tr._offer["want"] as Array).is_empty()
 		and bool(tr._offer["gift"]))
 
@@ -448,7 +461,7 @@ static func _constructor(g: Game) -> void:
 		and (tr._offer["give"] as Array).is_empty())
 
 	# Смена собеседника чистит черновик: иначе полусобранный оффер, начатый с
-	# другом A, уходит другу B одним нажатием «Дальше».
+	# другом A, уходит другу B одним нажатием «Предложить» в конструкторе.
 	tr.open("dev-b")
 	tr.open_builder()
 	tr._offer["give"] = [tu.pick("spark", "", 1, "Искра")]
@@ -463,6 +476,7 @@ static func _constructor(g: Game) -> void:
 	sm.set_catalog([], [], "")
 	sm._server_collection = {}
 	sm._server_extras = []
+	sm._preview_cache = prev0
 
 
 static func _rows_of(box) -> int:
@@ -551,6 +565,8 @@ static func _list_actions(g: Game) -> void:
 		return
 	var sm = g._sigil
 	sm._server_collection = {"spark": {"copies": 1, "first_at": ""}}
+	var prev0: Dictionary = (sm._preview_cache as Dictionary).duplicate()
+	_warm_previews(sm, ["spark", "ice", "dust", "x1", "c-17", "ember"])
 	# `_seed_demo()` пишет ЖИВОЙ g._social (cache + threads), а не только кэш
 	# сигилов. Возврат снимка — единственный честный способ не оставить мусор в
 	# общем объекте: четыре следующие сюиты читают его сегодня по случайности.
@@ -563,6 +579,7 @@ static func _list_actions(g: Game) -> void:
 		for n in names:
 			Selftest.check(n, false)
 		sm._server_collection = {}
+		sm._preview_cache = prev0
 		return
 	tr.open("dev-b")
 	tr.call("on_list", {"ok": true,
@@ -641,7 +658,7 @@ static func _list_actions(g: Game) -> void:
 	tr._offer = {"give": [tu.pick("spark", "", 1, "Искра")],
 		"want": [tu.pick("ice", "", 3, "Лёд")], "gift": false}
 	tr.open_builder()
-	var next := _button_named(tr._body, "Дальше")
+	var next := _btn(tr._body, "Footer/BtnOffer")
 	Selftest.check("proceed locked at zero remain", next != null
 		and bool(tr.can_confirm()) and next.disabled)
 	var pulls := {"coll": 0, "inbox": 0}
@@ -782,6 +799,7 @@ static func _list_actions(g: Game) -> void:
 		trade_only and st.should_show_toast() and st.total() == 3)
 	tr.call("close")
 	sm._server_collection = {}
+	sm._preview_cache = prev0
 	g._social.cache = social_cache0
 	g._social.threads = social_threads0
 
@@ -881,7 +899,350 @@ static func _distinct(img: Image) -> int:
 	return seen.size()
 
 
-## Модель оффера списками (Task 6): гейт лимита стороны, гейт копий вида,
+## Узел по пути, где каждый сегмент — ИМЯ в поддереве предыдущего сегмента.
+## Буквальный `get_node("Slots/SlotGive_5/Seal")` не годится: раскладка обязана
+## содержать ScrollContainer в планшете и ряд-обёртку в доске оффера (план
+## Task 8, Interfaces), поэтому между «Slots» и «SlotGive_5» есть уровень.
+static func _node(root: Node, path: String) -> Node:
+	var cur: Node = root
+	for seg in path.split("/"):
+		if cur == null:
+			return null
+		cur = _desc(cur, String(seg))
+	return cur
+
+
+## Поиск по имени: сначала прямые дети, потом глубина — чтобы «Plate» планшета
+## не спутать с «Plate» шапки окна.
+static func _desc(root: Node, nm: String) -> Node:
+	for c in root.get_children():
+		if String(c.name) == nm:
+			return c
+	for c in root.get_children():
+		var deep := _desc(c, nm)
+		if deep != null:
+			return deep
+	return null
+
+
+static func _btn(node: Node, path: String) -> TextureButton:
+	return _node(node, path) as TextureButton
+
+
+## Имя PNG под контролом. Пины сверяют КОНКРЕТНУЮ текстуру: «TextureRect вообще
+## чем-то залит» прошла бы и с заглушкой, а §5 требует конкретный комплект.
+static func _tex_name(node: Node) -> String:
+	var t: Texture2D = null
+	if node is TextureRect:
+		t = (node as TextureRect).texture
+	elif node is TextureButton:
+		t = (node as TextureButton).texture_normal
+	if t == null:
+		return ""
+	return String(t.resource_path).get_file()
+
+
+## Сколько fade-шейдер глушит карман: 0 = живой, 1 = недоступен. -1 означает
+## «материала нет вообще» — это тоже отказ проверки, потому что недоступная
+## ячейка обязана выглядеть недоступной, а не просто не отвечать на тап.
+static func _fade_amount(node: Node) -> float:
+	if node == null:
+		return -1.0
+	var m: Material = (node as CanvasItem).material
+	if not (m is ShaderMaterial):
+		return -1.0
+	return float((m as ShaderMaterial).get_shader_parameter("amount"))
+
+
+## Плоские заливки в поддереве: ColorRect и Panel с StyleBoxFlat (§5: «никаких
+## ColorRect/плоских StyleBoxFlat в видимом слое окна обмена»).
+static func _flat_in(node: Node) -> Array:
+	var out: Array = []
+	if node == null:
+		return out
+	for c in node.get_children():
+		if c is ColorRect:
+			out.append(String(c.name) + " ColorRect")
+		elif c is Panel:
+			if (c as Control).get_theme_stylebox("panel") is StyleBoxFlat:
+				out.append(String(c.name) + " StyleBoxFlat")
+		out.append_array(_flat_in(c))
+	return out
+
+
+static func _buttons_in(node: Node) -> Array:
+	var out: Array = []
+	if node == null:
+		return out
+	for c in node.get_children():
+		if c is BaseButton:
+			out.append(c)
+		out.append_array(_buttons_in(c))
+	return out
+
+
+## Тёплый кэш миниатюр: preview_texture отдаёт ImageTexture по попаду в кэш, не
+## заводя настоящий SubViewport-рендер. Без этого каждая перерисовка
+## конструктора в headless стояла бы по кадру на клетку (тот же приём, что
+## suite_sigil_cards.gd:360, только сидировается память, а не PNG на диске).
+static func _warm_previews(sm, ids: Array) -> void:
+	var img := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+	for i in ids:
+		sm._preview_cache[String(i)] = ImageTexture.create_from_image(img)
+
+
+## Конструктор N↔M (Task 8, спека §4.1): два планшета инвентаря на текстуре,
+## сетки 3 колонки, тап по клетке = ячейка стороны, недоступное — fade, а не
+## скрытие. Секция идёт ПОСЛЕ _textures (пинит конкретные PNG комплекта) и
+## ПЕРЕД _offer_model (тот обязан оставаться последним: он чистит g._sigil).
+static func _builder(g: Game) -> void:
+	# Мутации, красящие блок: построить панель друга из entries() вместо
+	# peer_entries() (пин 4); снять бейдж копий (5); перепутать стороны тапа —
+	# клетка друга кладёт в give (6/7); забыть remove_slot по тапу по полной
+	# ячейке (8); рисовать сургуч и в занятой ячейке (9); глушить карман только
+	# флагом disabled без fade-материала (10/11/12) или наоборот; не позвать
+	# Net.trade_peer_collection из open_builder() (13); снять маршрутизацию
+	# trade_peer_collection_result в main (14); звать Net.trade_offer из
+	# кнопки конструктора вместо перехода к подтверждению (15); задать ячейке
+	# размер 24 px (16, AGENTS.md §12); вернуть ColorRect затемнения или
+	# PanelContainer с плоским StyleBoxFlat (17, 18).
+	var names := ["builder shows two inventory panes",
+		"builder panes are textured tablets", "own grid lists own cards",
+		"peer grid lists peer cards not own",
+		"grid cell is a pocket with name and copies",
+		"tap on own cell adds give slot", "tap on peer cell adds want slot",
+		"tap on filled slot removes it", "slot seal fills empty cells",
+		"pocket greys out when copies are spent",
+		"side cap greys out remaining cells",
+		"peer pane fades without collection",
+		"builder asks for peer collection",
+		"peer collection result fills peer pane",
+		"proceed opens confirm from a full draft",
+		"builder buttons declare tappable sizes",
+		"builder visible layer has no flat controls",
+		"window chrome is planks cloth and nail",
+		"window chrome closes on the nail"]
+	var T = load("res://game/social/trade_ui.gd")
+	var ui = g.get("_social_ui")
+	if ui == null:
+		for n in names:
+			Selftest.check(n, false)
+		return
+	ui.open(0)
+	var tr = ui.get("_trade")
+	if tr == null:
+		for n in names:
+			Selftest.check(n, false)
+		return
+	var sm = g._sigil
+	var coll0: Dictionary = sm._server_collection
+	var extras0: Array = sm._server_extras
+	var prev0: Dictionary = (sm._preview_cache as Dictionary).duplicate()
+	var cache0 = g._social.cache
+	var threads0 = g._social.threads.duplicate()
+	sm.set_catalog([
+		{"id": "spark", "set": "fire", "rarity": "common", "ether_cost": 100,
+			"recipe": [], "process": "sublimatio", "stage": "albedo",
+			"fallback_name": "Искра", "object_type": "object", "seed": 1},
+		{"id": "ice", "set": "water", "rarity": "rare", "ether_cost": 150,
+			"recipe": [], "process": "sublimatio", "stage": "albedo",
+			"fallback_name": "Лёд", "object_type": "object", "seed": 2},
+		{"id": "dust", "set": "earth", "rarity": "common", "ether_cost": 50,
+			"recipe": [], "process": "calcinatio", "stage": "nigredo",
+			"fallback_name": "Пыль", "object_type": "object", "seed": 3},
+	], [], "unit-builder")
+	# Копий ровно 1 + 3 + 2 = 6: тогда полную сторону можно набрать ЛЕГАЛЬНЫМИ
+	# тапами и проверить кап без прямой записи в _offer (пин 11).
+	sm._server_collection = {"spark": {"copies": 1, "first_at": ""},
+		"ice": {"copies": 3, "first_at": ""},
+		"dust": {"copies": 2, "first_at": ""}}
+	sm._server_extras = [{"craft_id": "x1", "rarity": "chromatic",
+		"llm_name": "Радуга", "crafted_at": "", "seed": 7, "lore": "",
+		"ingredients": []}]
+	g._social._seed_demo()
+	_warm_previews(sm, ["spark", "ice", "dust", "x1", "c-17"])
+	tr.call("set_peer_coll", {})
+	# Остаток лимита фикстурируем явно: `_list` живёт на слое и после
+	# _list_actions содержит remain 0, а гейт §9.2 глушил бы «Предложить» на
+	# legitimately собранном черновике (пин 15 краснел бы не за то).
+	# base_url гасим ДО open(): enqueue trade_list сливает очередь синхронно
+	# (net.gd:460) и уносит из неё запросы коллекции, нашедшие её в _queue из
+	# _constructor/_list_actions. Иначе spy посчитал бы чужой слив и пин 13
+	# прошёл бы без вызова Net.trade_peer_collection.
+	var base0 := String(Net.base_url)
+	Net.base_url = ""
+	tr.open("dev-b")
+	tr._list = {"ok": true, "week_limit": 10, "remain": 7,
+		"incoming": [], "outgoing": [], "history": []}
+
+	# Запрос коллекции друга — первая половина провода §4.1: конструктор тянет
+	# её сам, игрок не ждёт «пока сам не нажмёт» (шаблон :200).
+	var pulls := {"n": 0}
+	var spy := func(_r: Dictionary) -> void: pulls["n"] = int(pulls["n"]) + 1
+	var pending_before := _pending("trade_peer_collection")
+	Net.trade_peer_collection_result.connect(spy)
+	tr.open_builder()
+	Net.trade_peer_collection_result.disconnect(spy)
+	Net.base_url = base0
+	var b: Node = tr._body
+	var mine := _node(b, "PaneMine")
+	var peer := _node(b, "PanePeer")
+	Selftest.check("builder shows two inventory panes", mine != null and peer != null
+		and _label_has(mine, "Мои карты") and _label_has(peer, "Карты: Николя"))
+	Selftest.check("builder panes are textured tablets",
+		_node(mine, "Plate") is TextureRect
+		and _tex_name(_node(mine, "Plate")) == "pane_tablet.png"
+		and _tex_name(_node(peer, "Plate")) == "pane_tablet.png")
+	Selftest.check("builder asks for peer collection", not pending_before
+		and (int(pulls["n"]) >= 1 or _pending("trade_peer_collection")))
+	# §4.4: коллекция друга ещё не пришла — планшет не пустой и не молчаливый,
+	# он затемнён и говорит про связь. Живая панель при этом обязана остаться
+	# яркой, иначе «затемнить всё» тоже прошла бы проверку.
+	Selftest.check("peer pane fades without collection",
+		_fade_amount(_node(peer, "Plate")) > 0.5
+		and _label_has(peer, "не на связи")
+		and _fade_amount(_node(mine, "Plate")) < 0.5)
+
+	# Коллекция друга приходит по проводам main.gd, а не присваиванием
+	# _peer_coll: проверка 14 пинит и сигнал, и forwarder, и слой.
+	var routed: bool = bool(T.has_script_method("on_peer_collection")) \
+		and g.has_method("_on_trade_peer_collection_result")
+	if routed:
+		Net.trade_peer_collection_result.emit({"ok": true,
+			"cards": {"ice": {"copies": 2, "first_at": ""}},
+			"extras": [{"craft_id": "c-17", "rarity": "chromatic",
+				"llm_name": "Радуга друга"}]})
+	Selftest.check("peer collection result fills peer pane", routed
+		and not (tr._peer_coll as Dictionary).is_empty())
+	Selftest.check("own grid lists own cards",
+		_node(b, "CellMine_spark") != null and _node(b, "CellMine_ice") != null
+		and _node(b, "CellMine_dust") != null and _node(b, "CellMine_x1") != null)
+	# Панель друга — из его коллекции: ice там есть, а spark/dust/x1 (мои) быть
+	# не должно. Именно этот пин краснеет, если want-сторону собрать из entries().
+	Selftest.check("peer grid lists peer cards not own",
+		_node(b, "CellPeer_ice") != null and _node(b, "CellPeer_c-17") != null
+		and _node(b, "CellPeer_spark") == null
+		and _node(b, "CellPeer_dust") == null)
+	var ice := _node(b, "CellMine_ice")
+	var ice_nm := _node(ice, "Name")
+	var ice_cp := _node(ice, "Copies")
+	Selftest.check("grid cell is a pocket with name and copies",
+		_tex_name(ice) == "pocket.png" and _node(ice, "Art") is TextureRect
+		and ice_nm is Label and (ice_nm as Label).text == "Лёд"
+		and ice_cp is Label and (ice_cp as Label).text == "×3")
+
+	var give_n: Callable = func() -> int: return (tr._offer["give"] as Array).size()
+	var want_n: Callable = func() -> int: return (tr._offer["want"] as Array).size()
+	var was_give: int = give_n.call()
+	if ice != null:
+		(ice as TextureButton).pressed.emit()
+	var g0: Dictionary = ((tr._offer["give"] as Array) as Array)[0] \
+		if give_n.call() > 0 else {}
+	Selftest.check("tap on own cell adds give slot", was_give == 0
+		and give_n.call() == 1 and String(g0.get("card_id", "")) == "ice")
+	var was_want: int = want_n.call()
+	var peer_c := _node(b, "CellPeer_c-17")
+	if peer_c != null:
+		(peer_c as TextureButton).pressed.emit()
+	var w0: Dictionary = ((tr._offer["want"] as Array) as Array)[0] \
+		if want_n.call() > 0 else {}
+	Selftest.check("tap on peer cell adds want slot", was_want == 0
+		and want_n.call() == 1 and String(w0.get("craft_id", "")) == "c-17"
+		and String(w0.get("card_id", "")) == "")
+	# Тап по занятой ячейке убирает карту обратно (§4.1) — иначе игрок,
+	# положивший не ту карту, не сможет её снять без закрытия окна.
+	var slot0 := _node(b, "SlotGive_0")
+	if slot0 != null:
+		(slot0 as TextureButton).pressed.emit()
+	Selftest.check("tap on filled slot removes it", slot0 != null
+		and give_n.call() == 0)
+
+	# Пустая ячейка — сургуч, занятая — миниатюра без сургуча.
+	var s5 := _node(b, "Slots/SlotGive_5")
+	var s5_seal := _node(s5, "Seal")
+	var dust := _node(b, "CellMine_dust")
+	if dust != null:
+		(dust as TextureButton).pressed.emit()
+	var s0 := _node(b, "SlotGive_0")
+	Selftest.check("slot seal fills empty cells", s5 != null
+		and s5_seal is TextureRect and _tex_name(s5_seal) == "slot_seal.png"
+		and s0 != null and _node(s0, "Seal") == null
+		and _node(s0, "Art") is TextureRect)
+
+	# Вторая копия Пыли легальна (copies 2) и исчерпывает вид: карман глушится
+	# fade-ом, а живой карман Льда обязан остаться ярным.
+	dust = _node(b, "CellMine_dust")
+	if dust != null:
+		(dust as TextureButton).pressed.emit()
+	var spent := _node(b, "CellMine_dust")
+	Selftest.check("pocket greys out when copies are spent",
+		give_n.call() == 2 and _fade_amount(spent) > 0.5
+		and _fade_amount(_node(spent, "Art")) > 0.5
+		and _fade_amount(_node(b, "CellMine_ice")) < 0.5)
+
+	# Полная сторона (лимит 6) — глушится ВЕСЯ своя панель, включая хроматик:
+	# у него копии не кончались, отказывает именно лимит ряда.
+	for cid in ["spark", "ice", "ice", "ice"]:
+		var c := _node(b, "CellMine_" + String(cid))
+		if c != null:
+			(c as TextureButton).pressed.emit()
+	var faded_all: bool = give_n.call() == 6
+	for cid in ["spark", "ice", "dust", "x1"]:
+		var cc := _node(b, "CellMine_" + String(cid))
+		faded_all = faded_all and cc != null and _fade_amount(cc) > 0.5
+	Selftest.check("side cap greys out remaining cells", faded_all)
+
+	tr._offer = {"give": [tr.pick("spark", "", 1, "Искра")],
+		"want": [tr.pick("ice", "", 2, "Лёд")], "gift": false}
+	tr.call("_render")
+	# «Предложить» в конструкторе переводит на подтверждение, а НЕ отправляет:
+	# отправка — одна кнопка экрана подтверждения (пин «offer sends only on
+	# proceed» в _constructor). Остаток в фикстуре ненулевой (remain 7), значит
+	# пин краснеет только от «кнопка шлёт Net.trade_offer».
+	var offer := _btn(b, "Footer/BtnOffer")
+	var offer_live := offer != null and not offer.disabled and int(tr._mode) == 1
+	if offer_live:
+		offer.pressed.emit()
+	Selftest.check("proceed opens confirm from a full draft", offer_live
+		and int(tr._mode) == 2)
+	tr.call("open_builder")
+	b = tr._body
+	# §12 AGENTS.md: ни одной кнопки шириной ~24 px. Меряем custom_minimum_size,
+	# а не size: в selftest кадр ещё не разложен, and size был бы нулевым всегда.
+	var too_small := []
+	for n in _buttons_in(b):
+		var ms: Vector2 = (n as Control).custom_minimum_size
+		if ms.x < 48.0 or ms.y < 40.0:
+			too_small.append(String(n.name))
+	Selftest.check("builder buttons declare tappable sizes", too_small.is_empty())
+	Selftest.check("builder visible layer has no flat controls",
+		_flat_in(b).is_empty())
+	# Шапка и затемнение окна: ткань вместо ColorRect, доски вместо плоской
+	# панели, заклёпка-кнопка вместо «Назад». Пишется по всему экрану: снимает
+	# и ColorRect затемнения, и PanelContainer с темой-стилем. `dim` вынесен в
+	# переменную и проверен на null: прямой каст при ещё плоском окне уронил бы
+	# всю сюиту ошибкой вместо чистой RED-падения проверки.
+	var screen: Control = tr.get("_screen")
+	var pre_open: bool = tr.is_open()
+	var close_btn := _btn(screen, "Head/BtnClose")
+	var dim := _node(screen, "Dim") as TextureRect
+	Selftest.check("window chrome is planks cloth and nail",
+		_tex_name(_node(screen, "Head/Plate")) == "board_planks.png"
+		and _tex_name(close_btn) == "nail_brass.png"
+		and _tex_name(dim) == "cloth_dark.png"
+		and dim != null and dim.stretch_mode == TextureRect.STRETCH_TILE
+		and _flat_in(screen).is_empty())
+	if close_btn != null:
+		close_btn.pressed.emit()
+	Selftest.check("window chrome closes on the nail", pre_open and not tr.is_open())
+	tr.call("close")
+	sm.set_catalog([], [], "")
+	sm._server_collection = coll0
+	sm._server_extras = extras0
+	sm._preview_cache = prev0
+	g._social.cache = cache0
+	g._social.threads = threads0
+
 ## уникальность хроматика и панель «Прошу» из коллекции друга. Секция чисто-API:
 ## слой-модель живёт на detached-экземпляре T.new(g), экран SocialUI здесь не
 ## нужен — own-panel-гейты читают g._sigil напрямую. Вызывается ПОСЛЕДНЕЙ, а
