@@ -137,10 +137,19 @@ static func _dispatch_routes(_g: Game) -> void:
 		Net.disconnect(StringName(entry[0]), entry[1])
 
 
-static func _button_named(node: Node, text: String) -> Button:
+## Кнопка по надписи. `Button` опознаётся по своему `text`, бумажная
+## `TextureButton` — по подписи `Text`: окно обмена рисует кнопки вырезанными из
+## бумаги, и пины S2 («Принять», «Предложить обмен», «Обменять») обязаны смотреть
+## на надпись, а не на класс. Возвращает BaseButton: пины меряют `disabled` и
+## жмут `pressed`, а это права BaseButton.
+static func _button_named(node: Node, text: String) -> BaseButton:
 	for c in node.get_children():
 		if c is Button and (c as Button).text == text:
 			return c as Button
+		if c is TextureButton:
+			var cap := _node(c, "Text")
+			if cap is Label and (cap as Label).text == text:
+				return c as TextureButton
 		var deep := _button_named(c, text)
 		if deep != null:
 			return deep
@@ -271,7 +280,10 @@ static func _constructor(g: Game) -> void:
 	var names := ["pick contract is four fields", "pick single copy is last",
 		"pick third copy is not last", "pick chromatic is always last",
 		"entries list owned cards and extras", "gift mode kills want slot",
-		"confirm warns before offer", "offer sends only on proceed",
+		"confirm warns before offer",
+		"confirm sheet lists both sides as thumbnails",
+		"confirm sheet is paper with no flat fills",
+		"offer sends only on proceed",
 		"offer failure shows server copy", "offline refusal says no connection",
 		"confirm warns about what you give", "confirm drops the stale refusal",
 		"gift success leaves confirm", "open clears the draft"]
@@ -395,6 +407,15 @@ static func _constructor(g: Game) -> void:
 	Selftest.check("confirm warns before offer", tr._mode == 2
 		and _label_has(tr._body, "последн") and _label_has(tr._body, "вехи")
 		and int(fired["n"]) == 0)
+	# Подтверждение — бумажный лист с двумя колонками миниатюр (§5): игрок сверяет
+	# стороны глазами, а не списком названий. Плоских заливок на видимом слое быть
+	# не должно — StyleBoxFlat/ColorRect под миниатюрами читаются как схема.
+	Selftest.check("confirm sheet lists both sides as thumbnails",
+		_node(tr._body, "ConfirmSheet/Give/Thumb_0") is TextureRect
+		and _node(tr._body, "ConfirmSheet/Want/Thumb_0") is TextureRect)
+	Selftest.check("confirm sheet is paper with no flat fills",
+		_tex_name(_node(tr._body, "ConfirmSheet/Plate")) == "paper_note.png"
+		and _flat_in(tr._body).is_empty())
 	var proceed := _button_named(tr._body, "Предложить")
 	# Offer обязан уходить по нажатию кнопки, а не из open_confirm(). Сигнал
 	# ждём детерминированно: гасим base_url на время нажатия (шаблон
@@ -485,7 +506,7 @@ static func _rows_of(box) -> int:
 	return (box as Control).get_child_count()
 
 
-## Строка опознаётся по имени узла, которое даёт `_offer_row`: `_rows_of == 1`
+## Строка опознаётся по имени узла, которое даёт `_offer_note`: `_rows_of == 1`
 ## выполняется и на прежних placeholder'ах «—» (по одному Label в каждом боксе).
 static func _row_named(box, want: String) -> bool:
 	return _row_of(box, want) != null
@@ -503,7 +524,7 @@ static func _label_is_calm(node: Node, needle: String) -> bool:
 	return false
 
 
-## Строка по имени узла (`TradeRow_%d`) — или null. `_rows_of` считает и
+## Строка по имени узла (`TradeNote_%d`) — или null. `_rows_of` считает и
 ## placeholder'ы «—», поэтому «строки нет» измеримо только именем.
 static func _row_of(box, want: String) -> Node:
 	if box == null:
@@ -545,6 +566,8 @@ static func _list_actions(g: Game) -> void:
 	# вызовы ещё не существующих методов гейтятся has_script_method/has_method —
 	# без гейда отсутствующий вызов обрывает сюжет, и проверки 6–10 не состоятся.
 	var names := ["list rows follow server slices",
+		"list note is paper with a mini pair",
+		"list visible layer has no flat controls",
 		"incoming row has accept only", "outgoing row has cancel",
 		"accept press sends that order", "header shows server remain",
 		"offer entry live while remain remains",
@@ -585,26 +608,40 @@ static func _list_actions(g: Game) -> void:
 	tr.call("on_list", {"ok": true,
 		"incoming": [{"id": 11, "maker_device": "dev-b", "taker_device": "me",
 			"maker_nick": "Николя", "taker_nick": "Я", "state": "pending",
-			"created_at": "2026-10-20T09:00:00", "give_card_id": "ice",
-			"give_craft_id": "", "give_name": "", "want_card_id": "spark",
-			"want_craft_id": "", "want_name": ""}],
+			"created_at": "2026-10-20T09:00:00",
+			"give_items": [{"card_id": "ice", "craft_id": "", "name": "Лёд"},
+				{"card_id": "dust", "craft_id": "", "name": "Пыль"}],
+			"want_items": [{"card_id": "spark", "craft_id": "", "name": "Искра"}]}],
 		"outgoing": [{"id": 12, "maker_device": "me", "taker_device": "dev-b",
 			"maker_nick": "Я", "taker_nick": "Николя", "state": "pending",
-			"created_at": "2026-10-20T09:30:00", "give_card_id": "",
-			"give_craft_id": "x1", "give_name": "Радуга", "want_card_id": "ice",
-			"want_craft_id": "", "want_name": ""}],
+			"created_at": "2026-10-20T09:30:00",
+			"give_items": [{"card_id": "", "craft_id": "x1", "name": "Радуга"}],
+			"want_items": [{"card_id": "ice", "craft_id": "", "name": "Лёд"}]}],
 		"history": [{"id": 13, "maker_device": "dev-b", "taker_device": "me",
 			"maker_nick": "Николя", "taker_nick": "Я", "state": "accepted",
-			"created_at": "2026-10-18T09:00:00", "give_card_id": "ember",
-			"give_craft_id": "", "give_name": "", "want_card_id": "spark",
-			"want_craft_id": "", "want_name": ""}],
+			"created_at": "2026-10-18T09:00:00",
+			"give_items": [{"card_id": "ember", "craft_id": "", "name": "Уголь"}],
+			"want_items": [{"card_id": "spark", "craft_id": "", "name": "Искра"}]}],
 		"week_limit": 10, "remain": 7})
 	Selftest.check("list rows follow server slices", _rows_of(tr._incoming) == 1
 		and _rows_of(tr._outgoing) == 1 and _rows_of(tr._history) == 1
-		and _row_named(tr._incoming, "TradeRow_11")
-		and _row_named(tr._outgoing, "TradeRow_12")
-		and _row_named(tr._history, "TradeRow_13")
+		and _row_named(tr._incoming, "TradeNote_11")
+		and _row_named(tr._outgoing, "TradeNote_12")
+		and _row_named(tr._history, "TradeNote_13")
 		and _label_has(tr._outgoing, "Радуга →"))
+	# Записка списка — бумага на доске, а не строка текста: §5 требует, чтобы и
+	# список выглядел как пробковые пробки на доске, и M-сторона была видна
+	# миниатюрами, а не только подписью «две карты → одна».
+	var note11 := _row_of(tr._incoming, "TradeNote_11")
+	Selftest.check("list note is paper with a mini pair",
+		note11 != null
+		and _tex_name(_node(note11, "Plate")) == "paper_note.png"
+		and _node(note11, "Give/Thumb_0") is TextureRect
+		and _node(note11, "Give/Thumb_1") is TextureRect
+		and _node(note11, "Want/Thumb_0") is TextureRect
+		and _label_has(note11, "Лёд, Пыль"))
+	Selftest.check("list visible layer has no flat controls",
+		_flat_in(tr._body).is_empty())
 	var in_box: Control = tr._incoming
 	Selftest.check("incoming row has accept only", _button_named(in_box, "Принять") != null
 		and _button_named(in_box, "Отклонить") == null
@@ -702,19 +739,19 @@ static func _list_actions(g: Game) -> void:
 	var zero := {"ok": true,
 		"incoming": [{"id": 11, "maker_device": "dev-b", "taker_device": "me",
 			"maker_nick": "Николя", "taker_nick": "Я", "state": "pending",
-			"created_at": "2026-10-20T09:00:00", "give_card_id": "ice",
-			"give_craft_id": "", "give_name": "", "want_card_id": "spark",
-			"want_craft_id": "", "want_name": ""}],
+			"created_at": "2026-10-20T09:00:00",
+			"give_items": [{"card_id": "ice", "craft_id": "", "name": "Лёд"}],
+			"want_items": [{"card_id": "spark", "craft_id": "", "name": "Искра"}]}],
 		"outgoing": [{"id": 12, "maker_device": "me", "taker_device": "dev-b",
 			"maker_nick": "Я", "taker_nick": "Николя", "state": "pending",
-			"created_at": "2026-10-20T09:30:00", "give_card_id": "",
-			"give_craft_id": "x1", "give_name": "Радуга", "want_card_id": "ice",
-			"want_craft_id": "", "want_name": ""},
+			"created_at": "2026-10-20T09:30:00",
+			"give_items": [{"card_id": "", "craft_id": "x1", "name": "Радуга"}],
+			"want_items": [{"card_id": "ice", "craft_id": "", "name": "Лёд"}]},
 			{"id": 14, "maker_device": "me", "taker_device": "dev-c",
 			"maker_nick": "Я", "taker_nick": "Аня", "state": "pending",
-			"created_at": "2026-10-20T10:00:00", "give_card_id": "spark",
-			"give_craft_id": "", "give_name": "", "want_card_id": "",
-			"want_craft_id": "", "want_name": ""}],
+			"created_at": "2026-10-20T10:00:00",
+			"give_items": [{"card_id": "spark", "craft_id": "", "name": "Искра"}],
+			"want_items": []}],
 		"history": [], "week_limit": 10, "remain": 0}
 	tr._list = zero
 	tr.call("_render")
@@ -730,7 +767,7 @@ static func _list_actions(g: Game) -> void:
 	# Односторонняя строка (`want_*` пустые) раньше не рендерилась вовсе: все три
 	# ряда первой фикстуры двусторонние, и ветка «Подарок: » была недостижима.
 	Selftest.check("gift row is labelled as gift",
-		_row_of(tr._outgoing, "TradeRow_14") != null
+		_row_of(tr._outgoing, "TradeNote_14") != null
 		and _label_has(tr._outgoing, "Подарок: "))
 	# Кнопка строки обязана нести id СВОЕЙ сделки.
 	var acc_b := _button_named(tr._incoming, "Принять")
@@ -759,7 +796,7 @@ static func _list_actions(g: Game) -> void:
 	if live_acc != null:
 		live_acc.pressed.emit()
 	Net.trade_accept_result.emit({"ok": false, "detail": "card_gone:taker"})
-	var dead := _row_of(tr._incoming, "TradeRow_11")
+	var dead := _row_of(tr._incoming, "TradeNote_11")
 	Selftest.check("gone offer loses its accept", dead != null
 		and _button_named(dead, "Принять") == null
 		and _label_is_calm(dead, "карты больше нет"))
@@ -767,7 +804,7 @@ static func _list_actions(g: Game) -> void:
 	# и перерисовывает, а прежний `on_cancel` только звал Net.trade_list — против
 	# живого сервера отменённая сделка висела бы на экране до ответа.
 	Net.trade_cancel_result.emit({"ok": true, "id": 12})
-	Selftest.check("cancel ok clears the list", _row_of(tr._outgoing, "TradeRow_12") == null)
+	Selftest.check("cancel ok clears the list", _row_of(tr._outgoing, "TradeNote_12") == null)
 	# Подарок переносит карту так же, как принятый обмен, и обязан звать тот же
 	# перебор (§8.4). Без этой проверки строка `_trades_repull()` в
 	# `_on_trade_gift_result` удаляется молча — сюжет остаётся зелёным.

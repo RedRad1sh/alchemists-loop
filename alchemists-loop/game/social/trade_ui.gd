@@ -29,6 +29,22 @@ const GRID_COLS := 3
 const GRID_GAP := 6.0               # 3×76 + 2×6 = 240 = 252 − 2×6
 const SLOT_GAP := 4.0               # 6×76 + 5×4 = 476 ≤ 516
 const SHEET := Vector2(112, 76)
+## Записка оффера в списке: бумага paper_note.png (264×176) в соотношении, близком
+## к исходному, — растягивать лист до 500 px в ширину нельзя, края рвутся и
+## бумага читается как полоса. 3 колонки миниатюр по 40 px на сторону вносят
+## M-сторону целиком (6 ячеек = 2 ряда), стрелка и два ряда действий влезают в
+## 304 px внутреннего поля.
+const NOTE := Vector2(320, 200)
+const NOTE_PAD := 8.0
+const MINI := 40.0
+## Наклон записки заметно меньше наклона планшета: 320 px при 1.2° дали бы +6.7 px
+## по высоте строки, и соседние записки в секции перекрывались бы.
+const NOTE_TILT := 0.6
+## Лист подтверждения — тот же класс бумаги, но крупнее: две колонки по 3 ячейки
+## 56 px плюс предупреждение и две кнопки.
+const CONFIRM := Vector2(420, 372)
+const CONFIRM_PAD := 12.0
+const CELL_BIG := 56.0
 const CAP := Vector2(56, 56)
 const NAIL := Vector2(48, 48)
 const FOOT_H := 80.0
@@ -40,6 +56,11 @@ const FADE_OUT := 0.62
 const PAPER_INK := Color(0.16, 0.11, 0.07)
 const BOARD_INK := Color(0.93, 0.86, 0.70)
 const AMBER := Color("#e6a84a")
+## Янтарь для надписей ПОВЕРХ бумаги: paper_note.png в верхней части — светлый
+## крем, и #e6a84a на нём тонет (контраст ~1.6:1). Жжёный янтарь остаётся тем же
+## акцентом и читается, поэтому пометка «последняя копия» на листе подтверждения
+## им и рисуется, а AMBER живёт на тёмной ткани окна.
+const AMBER_INK := Color("#9a5a12")
 const TILT_MAX := 1.2
 
 var g: Game
@@ -511,6 +532,10 @@ func _section(title: String) -> VBoxContainer:
 	var body := VBoxContainer.new()
 	body.name = title
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# 10 px: наклон записки ±0.6° раздвигает охватывающий прямоугольник листа
+	# 320×200 на 320·sin(0.6°) ≈ 3 px сверху и снизу, и при меньшем зазоре
+	# верхние края соседних записок лежали бы друг на друге.
+	body.add_theme_constant_override("separation", 10)
 	_body.add_child(body)
 	return body
 
@@ -532,6 +557,9 @@ func _render() -> void:
 
 func _render_list() -> void:
 	_clear(_body)
+	_art_seq += 1
+	var seq := _art_seq
+	var pending: Array = []
 	_header.text = "%s · %s" % [TITLE, _nick()]
 	var at_zero := false
 	if _list.has("remain"):
@@ -545,10 +573,13 @@ func _render_list() -> void:
 		sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		sub.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 		_body.add_child(sub)
-	var new_btn := g._small_button("Предложить обмен", Vector2(180, 40), 0)
+	var new_btn := _sheet_button("BtnNewOffer", "Предложить обмен",
+		Vector2(150, SHEET.y))
 	# Спека §9.2: при remain == 0 кнопка «Предложить» неактивна. Держать её живой
 	# и глушить только «Дальше» — значит водить игрока в конструктор-тупик.
 	new_btn.disabled = at_zero
+	if at_zero:
+		_fade_tree(new_btn, _fade_mat(FADE_SPENT))
 	new_btn.pressed.connect(open_builder)
 	_body.add_child(new_btn)
 	if _note != "":
@@ -560,16 +591,17 @@ func _render_list() -> void:
 	_outgoing = _section("Я предложил")
 	_history = _section("История")
 	for o in _list.get("incoming", []):
-		_offer_row(_incoming, o, 0)
+		_offer_note(_incoming, o, 0, pending)
 	for o in _list.get("outgoing", []):
-		_offer_row(_outgoing, o, 1)
+		_offer_note(_outgoing, o, 1, pending)
 	for o in _list.get("history", []):
-		_offer_row(_history, o, 2)
+		_offer_note(_history, o, 2, pending)
 	if _list.is_empty():
 		for box in [_incoming, _outgoing, _history]:
 			var wait := g._label("—", 12)
 			wait.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 			box.add_child(wait)
+	_fill_arts(seq, pending)
 
 ## Имя карты для строки и слота: сервер подписывает только экземплярные сделки
 ## (`*_craft_id` непустой), для карт вида имя берётся из каталога — конкретный
@@ -586,37 +618,103 @@ func _title(card_id: String, craft_id: String, server_name: String) -> String:
 
 ## kind: 0 = входящий (могу принять), 1 = исходящий (могу отменить),
 ## 2 = история (без действий).
-func _offer_row(box: VBoxContainer, raw, kind: int) -> void:
+##
+## Записка лежит на бумаге, а не в строке текста, потому что сторона теперь
+## список: «Уголь → Искра» способна показать только первую карту из шести, и
+## игрок принимал бы оффер, не видя его половины. Мини-пара сторон — сетка
+## миниатюр, подпись именами остаётся рядом для читаемости.
+func _offer_note(box: VBoxContainer, raw, kind: int, pending: Array) -> void:
 	if not (raw is Dictionary):
 		return
 	var o: Dictionary = raw
 	var id := int(o.get("id", 0))
-	var give := _title(String(o.get("give_card_id", "")),
-		String(o.get("give_craft_id", "")), String(o.get("give_name", "")))
-	var want := _title(String(o.get("want_card_id", "")),
-		String(o.get("want_craft_id", "")), String(o.get("want_name", "")))
-	var text := give
-	if want == "—":
-		text = "Подарок: " + give            # односторонняя передача: want_* пустые
+	var give: Array = _items_of(o, "give_items")
+	var want: Array = _items_of(o, "want_items")
+	var mc := MarginContainer.new()
+	mc.name = "TradeNote_%d" % id
+	mc.custom_minimum_size = NOTE
+	mc.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(mc)
+	var plate := TextureRect.new()
+	plate.name = "Plate"
+	plate.texture = board_tex("paper_note.png")
+	plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	plate.stretch_mode = TextureRect.STRETCH_SCALE
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.pivot_offset = NOTE / 2.0
+	plate.rotation_degrees = _tilt("note-%d" % id) * (NOTE_TILT / TILT_MAX)
+	mc.add_child(plate)
+	var pad := MarginContainer.new()
+	pad.name = "Pad"
+	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for s in ["margin_left", "margin_top", "margin_right", "margin_bottom"]:
+		pad.add_theme_constant_override(s, int(NOTE_PAD))
+	mc.add_child(pad)
+	var inner := VBoxContainer.new()
+	inner.name = "Inner"
+	inner.add_theme_constant_override("separation", 3)
+	pad.add_child(inner)
+
+	var sides := HBoxContainer.new()
+	sides.name = "Sides"
+	sides.add_theme_constant_override("separation", 6)
+	sides.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	inner.add_child(sides)
+	sides.add_child(_thumb_grid("Give", give, pending))
+	if want.is_empty():
+		# Подарок: встречной стороны нет, и пустая сетка читалась бы как «у друга
+		# нечего отдать». Сургуч говорит «сюда ничего не просят».
+		var seal := TextureRect.new()
+		seal.name = "Seal"
+		seal.texture = tex("slot_seal.png")
+		seal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		seal.stretch_mode = TextureRect.STRETCH_SCALE
+		seal.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		seal.custom_minimum_size = Vector2(MINI, MINI)
+		sides.add_child(seal)
 	else:
-		text = give + " → " + want
-	var row := HBoxContainer.new()
-	row.name = "TradeRow_%d" % id
-	row.add_theme_constant_override("separation", 8)
-	row.custom_minimum_size = Vector2(0, 44)
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	var info := VBoxContainer.new()
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info.add_child(g._label(text, 13))
+		var arrow := _ink_label("Arrow", "→", 13, Vector2.ZERO, Vector2(14, MINI))
+		arrow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		arrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sides.add_child(arrow)
+		sides.add_child(_thumb_grid("Want", want, pending))
+
+	var meta := HBoxContainer.new()
+	meta.name = "Meta"
+	meta.add_theme_constant_override("separation", 6)
+	inner.add_child(meta)
+	var sum := Label.new()
+	sum.name = "Summary"
+	sum.text = _items_line(give, want)
+	sum.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sum.add_theme_font_size_override("font_size", 12)
+	sum.add_theme_color_override("font_color", PAPER_INK)
+	sum.autowrap_mode = TextServer.AUTOWRAP_OFF
+	sum.clip_text = true
+	sum.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	sum.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	meta.add_child(sum)
 	var who := String(o.get("maker_nick", ""))
 	if kind == 1:
 		who = String(o.get("taker_nick", ""))
-	if who != "":
-		var dim := g._label(who, 11)
-		dim.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
-		info.add_child(dim)
-	row.add_child(info)
-	box.add_child(row)
+	var tail := who
+	if kind == 2:
+		tail = _state_word(String(o.get("state", "")))
+	if tail != "":
+		var dim := Label.new()
+		dim.name = "Who"
+		dim.text = tail
+		dim.add_theme_font_size_override("font_size", 10)
+		dim.add_theme_color_override("font_color", PAPER_INK)
+		dim.modulate = Color(1, 1, 1, 0.62)
+		dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		meta.add_child(dim)
+
+	var acts := HBoxContainer.new()
+	acts.name = "Acts"
+	acts.add_theme_constant_override("separation", 6)
+	acts.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	inner.add_child(acts)
 	if kind == 0:
 		# Отдельной кнопки «Отклонить» нет: у не-автора cancel отвечает 409
 		# not_maker, а отказ по модели встречного оффера — это бездействие или
@@ -625,17 +723,103 @@ func _offer_row(box: VBoxContainer, raw, kind: int) -> void:
 			# §7.2 — «спокойное состояние карточки оффера»: строка остаётся на
 			# месте (оффер висит pending, пока его не закрыли), мёртвая ручка с
 			# неё снимается, копия берётся дословно из спеки.
-			var dead := g._label("карты больше нет — предложи другую", 11)
-			dead.add_theme_color_override("font_color", Color("#e6a84a"))
-			info.add_child(dead)
+			var dead := Label.new()
+			dead.name = "Gone"
+			dead.text = "карты больше нет — предложи другую"
+			dead.add_theme_font_size_override("font_size", 11)
+			dead.add_theme_color_override("font_color", AMBER)
+			dead.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			acts.add_child(dead)
 		else:
-			var yes := g._small_button("Принять", Vector2(96, 34), 0)
+			var yes := _sheet_button("BtnAccept", "Принять")
 			yes.pressed.connect(_accept.bind(id))
-			row.add_child(yes)
+			acts.add_child(yes)
 	elif kind == 1:
-		var no := g._small_button("Отменить", Vector2(110, 34), 0)
+		var no := _sheet_button("BtnCancel", "Отменить")
 		no.pressed.connect(_cancel.bind(id))
-		row.add_child(no)
+		acts.add_child(no)
+
+## Позиции стороны ответа сервера: N↔M живёт в give_items/want_items, плоские
+## give_card_id/give_craft_id/give_name с Task 1 ветки удалены из TradeItemOut.
+static func _items_of(o: Dictionary, key: String) -> Array:
+	var raw = o.get(key, [])
+	return raw if raw is Array else []
+
+## Подпись сторон для записки: имена через запятую, стрелка между сторонами,
+## «Подарок: » при пустой встречной стороне (§4.2).
+func _items_line(give: Array, want: Array) -> String:
+	var parts: Array = []
+	for it in give:
+		parts.append(_item_name(it))
+	var left := ", ".join(PackedStringArray(parts))
+	if want.is_empty():
+		return "Подарок: " + left
+	var rparts: Array = []
+	for it in want:
+		rparts.append(_item_name(it))
+	return left + " → " + ", ".join(PackedStringArray(rparts))
+
+func _item_name(raw) -> String:
+	if not (raw is Dictionary):
+		return "—"
+	var it: Dictionary = raw
+	return _title(String(it.get("card_id", "")),
+		String(it.get("craft_id", "")), String(it.get("name", "")))
+
+## Состояние закрытой сделки одним словом — история без подписи выглядела бы
+## списком висящих офферов.
+static func _state_word(state: String) -> String:
+	match state:
+		"accepted":
+			return "принят"
+		"cancelled":
+			return "отменён"
+		"rejected":
+			return "отклонён"
+		_:
+			return ""
+
+## Сетка миниатюр стороны записки: до 6 позиций в 3 колонки. Ячейки — статичные
+## TextureRect (не кнопки): в списке оффер игрок ничего не выбирает, а тап по
+## бумажной записке должен попадать в её кнопки, а не в картинку.
+func _thumb_grid(nm: String, items: Array, pending: Array) -> GridContainer:
+	var grid := GridContainer.new()
+	grid.name = nm
+	grid.columns = GRID_COLS
+	grid.add_theme_constant_override("h_separation", 2)
+	grid.add_theme_constant_override("v_separation", 2)
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	grid.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	for i in items.size():
+		var it: Dictionary = items[i] if items[i] is Dictionary else {}
+		var t := TextureRect.new()
+		t.name = "Thumb_%d" % i
+		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		t.stretch_mode = TextureRect.STRETCH_SCALE
+		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		t.custom_minimum_size = Vector2(MINI, MINI)
+		t.tooltip_text = _item_name(it)
+		grid.add_child(t)
+		pending.append([t, _item_preview_arg(it)])
+	return grid
+
+## Аргумент превью для позиции ответа сервера: вид — по card_id, экземпляр —
+## копией extra (своей или из коллекции друга), иначе ключом кэша станет пустой
+## card_id и миниатюра хроматика не найдётся (тот же приём, что `_preview_arg`).
+func _item_preview_arg(it: Dictionary) -> Dictionary:
+	var cid := String(it.get("card_id", ""))
+	if cid != "":
+		return {"card_id": cid, "id": cid}
+	var craft := String(it.get("craft_id", ""))
+	var srcs: Array = [g._sigil.server_extras(), _peer_coll.get("extras", [])]
+	for src in srcs:
+		for x in src:
+			if x is Dictionary \
+					and String((x as Dictionary).get("craft_id", "")) == craft:
+				var d: Dictionary = (x as Dictionary).duplicate()
+				d["id"] = craft
+				return d
+	return {"id": craft, "card_id": "", "rarity": "chromatic"}
 
 func _accept(id: int) -> void:
 	_last_id = id           # отказ приходит без id, строку надо опознать
@@ -893,17 +1077,18 @@ func _slot(side: String, pos: int, arr: Array, pending: Array) -> TextureButton:
 ## Бумажная кнопка нижнего ряда: подложка paper_note.png с текстом-лейблом.
 ## Обычная Button с StyleBoxFlat сюда не годится — §5 требует, чтобы кнопки окна
 ## были вырезаны из той же бумаги, что и карманы.
-func _sheet_button(nm: String, text: String) -> TextureButton:
+func _sheet_button(nm: String, text: String,
+		size: Vector2 = SHEET) -> TextureButton:
 	var b := TextureButton.new()
 	b.name = nm
 	b.texture_normal = board_tex("paper_note.png")
 	b.texture_disabled = b.texture_normal
 	b.ignore_texture_size = true
 	b.stretch_mode = TextureButton.STRETCH_SCALE
-	b.custom_minimum_size = SHEET
+	b.custom_minimum_size = size
 	b.mouse_filter = Control.MOUSE_FILTER_STOP
-	var cap := _ink_label("Text", text, 13, Vector2(4.0, 8.0),
-		Vector2(SHEET.x - 8.0, SHEET.y - 16.0))
+	var cap := _ink_label("Text", text, 13, Vector2(4.0, 4.0),
+		size - Vector2(8.0, 8.0))
 	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cap.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	b.add_child(cap)
@@ -1038,21 +1223,74 @@ func _back_to_list() -> void:
 	_mode = 0
 	_render()
 
+## Лист подтверждения: стороны глазами, а не подписью первой карты. Список N↔M
+## в строке «Ты отдаёшь: A, B, …» ломается на длинных именах и прячет половину
+## сделки под переносом, поэтому каждая ячейка — миниатюра с именем, а янтарём
+## помечена именно последняя копия (спека §5.3: сервер такую сделку не блокирует,
+## значит название последствия обязан видеть игрок).
 func _render_confirm() -> void:
 	_clear(_body)
+	_art_seq += 1
+	var seq := _art_seq
+	var pending: Array = []
 	_header.text = "%s · %s" % [TITLE, _nick()]
 	var give: Array = _offer["give"]
 	var want: Array = _offer["want"]
-	_body.add_child(g._label("Ты отдаёшь: %s" % _side_names(give), 14))
+	var sheet := MarginContainer.new()
+	sheet.name = "ConfirmSheet"
+	sheet.custom_minimum_size = CONFIRM
+	sheet.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_body.add_child(sheet)
+	var plate := TextureRect.new()
+	plate.name = "Plate"
+	plate.texture = board_tex("paper_note.png")
+	plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	plate.stretch_mode = TextureRect.STRETCH_SCALE
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.pivot_offset = CONFIRM / 2.0
+	plate.rotation_degrees = _tilt(_peer) * 0.5
+	sheet.add_child(plate)
+	var pad := MarginContainer.new()
+	pad.name = "Pad"
+	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for s in ["margin_left", "margin_top", "margin_right", "margin_bottom"]:
+		pad.add_theme_constant_override(s, int(CONFIRM_PAD))
+	sheet.add_child(pad)
+	var inner := VBoxContainer.new()
+	inner.name = "Inner"
+	inner.add_theme_constant_override("separation", 6)
+	pad.add_child(inner)
+
+	var cols := HBoxContainer.new()
+	cols.name = "Cols"
+	cols.add_theme_constant_override("separation", 6)
+	cols.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	inner.add_child(cols)
+	cols.add_child(_confirm_col("GiveCol", "Give", "Отдаёшь", give, "give", pending))
 	if bool(_offer["gift"]):
-		_body.add_child(g._label("Подарок (%s): без встречной карты" % _nick(), 13))
+		var seal := TextureRect.new()
+		seal.name = "GiftSeal"
+		seal.texture = tex("slot_seal.png")
+		seal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		seal.stretch_mode = TextureRect.STRETCH_SCALE
+		seal.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		seal.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		seal.custom_minimum_size = Vector2(CELL_BIG, CELL_BIG)
+		seal.tooltip_text = "Подарок (%s): без встречной карты" % _nick()
+		cols.add_child(seal)
 	else:
-		_body.add_child(g._label("Ты получаешь: %s" % _side_names(want), 14))
-	# Предупреждение — только про отдаваемые карты (спека §5.3): сервер такую
-	# сделку не блокирует, поэтому название последствия обязано быть на экране.
-	# И только по give: want собирается из коллекции друга (§4.1), поэтому
-	# «последняя копия» на его стороне описывает карту, которую просят у него, а
-	# не ту, что теряю я — игрок читал бы неправду про своё необратимое последствие.
+		var arrow := _ink_label("Arrow", "→", 15, Vector2.ZERO,
+			Vector2(16, CELL_BIG * 2.0))
+		arrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		arrow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		cols.add_child(arrow)
+		cols.add_child(_confirm_col("WantCol", "Want", "Прошу взамен", want,
+			"want", pending))
+
+	# Предупреждение — только про отдаваемые карты (спека §5.3): want собирается
+	# из коллекции друга (§4.1), поэтому «последняя копия» на его стороне описывает
+	# карту, которую просят у него, а не ту, что теряю я — игрок читал бы неправду
+	# про своё необратимое последствие.
 	var any_last := false
 	for e in give:
 		if bool((e as Dictionary).get("is_last", false)):
@@ -1070,16 +1308,71 @@ func _render_confirm() -> void:
 		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		note.add_theme_color_override("font_color", Color("#e6a84a"))
 		_body.add_child(note)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	_body.add_child(row)
-	var go := g._small_button("Подарить" if bool(_offer["gift"]) else "Предложить",
-		Vector2(150, 40), 0)
+	var acts := HBoxContainer.new()
+	acts.name = "Acts"
+	acts.add_theme_constant_override("separation", 8)
+	acts.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_body.add_child(acts)
+	var go := _sheet_button("BtnConfirm",
+		"Подарить" if bool(_offer["gift"]) else "Предложить")
 	go.pressed.connect(_send)
-	row.add_child(go)
-	var edit := g._small_button("Изменить", Vector2(110, 34), 0)
+	acts.add_child(go)
+	var edit := _sheet_button("BtnBack", "Изменить")
 	edit.pressed.connect(open_builder)
-	row.add_child(edit)
+	acts.add_child(edit)
+	_fill_arts(seq, pending)
+
+## Колонка листа подтверждения: подпись стороны и сетка миниатюр.
+func _confirm_col(col_nm: String, grid_nm: String, cap: String, side: Array,
+		side_key: String, pending: Array) -> VBoxContainer:
+	var col := VBoxContainer.new()
+	col.name = col_nm
+	col.add_theme_constant_override("separation", 4)
+	col.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var head := Label.new()
+	head.name = "Cap"
+	head.text = "%s (%d/%d)" % [cap, side.size(), TRADE_SIDE_MAX]
+	head.add_theme_font_size_override("font_size", 12)
+	head.add_theme_color_override("font_color", PAPER_INK)
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(head)
+	col.add_child(_confirm_grid(grid_nm, side, side_key, pending))
+	return col
+
+func _confirm_grid(nm: String, side: Array, side_key: String,
+		pending: Array) -> GridContainer:
+	var grid := GridContainer.new()
+	grid.name = nm
+	grid.columns = GRID_COLS
+	grid.add_theme_constant_override("h_separation", 2)
+	# 16 px между рядами — место под подпись имени: она лежит вне прямоугольника
+	# миниатюры (у TextureRect нет встроенной подписи), и без зазора имена ряда
+	# легли бы на картинки следующего.
+	grid.add_theme_constant_override("v_separation", 16)
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	grid.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	for i in side.size():
+		var e: Dictionary = side[i]
+		var t := TextureRect.new()
+		t.name = "Thumb_%d" % i
+		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		t.stretch_mode = TextureRect.STRETCH_SCALE
+		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		t.custom_minimum_size = Vector2(CELL_BIG, CELL_BIG)
+		t.tooltip_text = String(e.get("display_name", ""))
+		grid.add_child(t)
+		pending.append([t, _preview_arg(side_key, e)])
+		var nm_lbl := _ink_label("Name", String(e.get("display_name", "")), 9,
+			Vector2(0.0, CELL_BIG + 1.0), Vector2(CELL_BIG, 13.0))
+		nm_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nm_lbl.clip_text = true
+		# Янтарь — единственный признак «это последняя копия»: плашка поверх
+		# миниатюры закрыла бы саму карту (§5).
+		if bool(e.get("is_last", false)):
+			nm_lbl.add_theme_color_override("font_color", AMBER_INK)
+		t.add_child(nm_lbl)
+	return grid
 
 func _send() -> void:
 	var dev := g._online._device_id
@@ -1102,16 +1395,6 @@ static func _wire_items(side) -> Array:
 		out.append({"card_id": String((e as Dictionary).get("card_id", "")),
 			"craft_id": String((e as Dictionary).get("craft_id", ""))})
 	return out
-
-## Человекочитаемая подпись стороны для экрана подтверждения: имена ячеек через
-## запятую. Только для отрисовки текста — на сетку не уезжает (_wire_items).
-func _side_names(side) -> String:
-	if not (side is Array):
-		return ""
-	var parts: Array = []
-	for e in side:
-		parts.append(String((e as Dictionary).get("display_name", "")))
-	return ", ".join(PackedStringArray(parts))
 
 func _nick() -> String:
 	var friend := g._social.friend_by_device(_peer)
