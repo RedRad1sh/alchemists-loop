@@ -2336,9 +2336,21 @@ func _demo_seed_trades() -> void:
 		"milestones": {"earth": [3]}})
 	_social_ui._open_trade("dev-b")
 	var tr = _social_ui._trade
+	# Коллекция друга — то же поле, которое наполняет ответ
+	# GET /api/trade/peer_collection (§2.2). Без него панель «Прошу» на
+	# конструкторе была бы затемнена, а миниатюры чужих карт в списке — пусты:
+	# кадр принимался бы по нарисованному «недоступно».
+	tr.set_peer_coll({"cards": {
+		"clay": {"copies": 2, "first_at": "2026-10-05T12:00:00"},
+		"mountain": {"copies": 1, "first_at": "2026-10-06T08:20:00"}},
+		"extras": [{"craft_id": "c-17", "rarity": "chromatic",
+			"llm_name": "Серный круг", "crafted_at": "2026-10-04T21:10:00"}]})
 	# remain=0 на кадре списка: только при нуле строка лимита показывает дату
 	# сброса (§7.2), а на конструкторе нужен ненулевой остаток — иначе гейт
 	# кнопки «Далее» законно серой, и кадр не докажет проходимый путь.
+	#
+	# Позиции живут в give_items/want_items: плоские S2-колонки удалены с сервера
+	# (миграция 004), а имя подписывает сервер — и для вида, и для экземпляра.
 	tr._list = {
 		"ok": true, "week_limit": 10,
 		"remain": 0 if _demo_harness._action_trade_list else 7,
@@ -2346,38 +2358,39 @@ func _demo_seed_trades() -> void:
 			{"id": 101, "maker_device": "dev-b", "taker_device": _online._device_id,
 				"maker_nick": "Николя", "taker_nick": "", "state": "pending",
 				"created_at": "2026-10-20T09:12:00",
-				"give_card_id": "", "give_craft_id": "c-17", "give_name": "Серный круг",
-				"want_card_id": "clay", "want_craft_id": "", "want_name": ""},
+				"give_items": [{"card_id": "", "craft_id": "c-17", "name": "Серный круг"},
+					{"card_id": "mountain", "craft_id": "", "name": "Гора"}],
+				"want_items": [{"card_id": "clay", "craft_id": "", "name": "Глина"}]},
 			{"id": 102, "maker_device": "dev-c", "taker_device": _online._device_id,
 				"maker_nick": "Аня", "taker_nick": "", "state": "pending",
 				"created_at": "2026-10-19T18:40:00",
-				"give_card_id": "mountain", "give_craft_id": "", "give_name": "",
-				"want_card_id": "metal", "want_craft_id": "", "want_name": ""}],
+				"give_items": [{"card_id": "mountain", "craft_id": "", "name": "Гора"}],
+				"want_items": [{"card_id": "metal", "craft_id": "", "name": "Металл"}]}],
 		"outgoing": [
 			{"id": 103, "maker_device": _online._device_id, "taker_device": "dev-b",
 				"maker_nick": "", "taker_nick": "Николя", "state": "pending",
 				"created_at": "2026-10-20T11:05:00",
-				"give_card_id": "clay", "give_craft_id": "", "give_name": "",
-				"want_card_id": "", "want_craft_id": "c-23",
-				"want_name": "Лазурный виток"}],
+				"give_items": [{"card_id": "clay", "craft_id": "", "name": "Глина"}],
+				"want_items": [{"card_id": "", "craft_id": "c-23",
+					"name": "Лазурный виток"}]}],
 		"history": [
 			{"id": 98, "maker_device": "dev-b", "taker_device": _online._device_id,
 				"maker_nick": "Николя", "taker_nick": "", "state": "accepted",
 				"created_at": "2026-10-14T08:00:00",
-				"give_card_id": "mountain", "give_craft_id": "", "give_name": "",
-				"want_card_id": "", "want_craft_id": "c-09",
-				"want_name": "Кобальтовая тропа"},
+				"give_items": [{"card_id": "mountain", "craft_id": "", "name": "Гора"}],
+				"want_items": [{"card_id": "", "craft_id": "c-09",
+					"name": "Кобальтовая тропа"}]},
 			{"id": 97, "maker_device": _online._device_id, "taker_device": "dev-c",
 				"maker_nick": "", "taker_nick": "Аня", "state": "accepted",
 				"created_at": "2026-10-12T20:30:00",
-				"give_card_id": "", "give_craft_id": "c-31",
-				"give_name": "Пепельный язык",
-				"want_card_id": "", "want_craft_id": "", "want_name": ""},
+				"give_items": [{"card_id": "", "craft_id": "c-31",
+					"name": "Пепельный язык"}],
+				"want_items": []},
 			{"id": 96, "maker_device": "dev-c", "taker_device": _online._device_id,
 				"maker_nick": "Аня", "taker_nick": "", "state": "cancelled",
 				"created_at": "2026-10-10T07:15:00",
-				"give_card_id": "metal", "give_craft_id": "", "give_name": "",
-				"want_card_id": "clay", "want_craft_id": "", "want_name": ""}]}
+				"give_items": [{"card_id": "metal", "craft_id": "", "name": "Металл"}],
+				"want_items": [{"card_id": "clay", "craft_id": "", "name": "Глина"}]}]}
 	if _demo_harness._action_trade_gift:
 		tr.open_builder()
 		tr._offer = {"give": [tr.pick("", "c-31", 1, "Пепельный язык")],

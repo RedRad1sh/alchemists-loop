@@ -21,30 +21,43 @@ const BOARD_DIR := "res://assets/contracts/"
 const FADE_SHADER := "res://assets/contracts/paper_fade.gdshader"
 
 const PANE := Vector2(252, 316)      # два планшета рядом: 2×252 + 8 ≤ 516
-const PANE_PAD := 6.0
-const CELL := Vector2(76, 96)        # pocket 80×100 логических, минус поле
-const ART := 60.0
-const SEAL := 60.0
+## 18 px, не 6: деревянная рамка pane_tablet.png — 33 px нативных из 512, то есть
+## 16 px при ширине 252. С полем 6 подпись планшета и первый ряд карманов лежали
+## на дереве, а третья колонка залезала за правый край (кадр trade_build).
+const PANE_PAD := 18.0
+## pocket.png 160×200 (0.8) в масштабе 0.4. 64, а не 76: три колонки обязаны
+## влезть в 252 − 2×18 = 216 ПОСЛЕ вертикального скроллбара GridScroll (12 px),
+## иначе третья колонка режется: 3×64 + 2×6 = 204 = 216 − 12.
+const CELL := Vector2(64, 80)
+const ART := 50.0
+const SEAL := 50.0
 const GRID_COLS := 3
-const GRID_GAP := 6.0               # 3×76 + 2×6 = 240 = 252 − 2×6
-const SLOT_GAP := 4.0               # 6×76 + 5×4 = 476 ≤ 516
+const GRID_GAP := 6.0
+const SLOT_GAP := 4.0               # 6×64 + 5×4 = 404 ≤ 516
 const SHEET := Vector2(112, 76)
 ## Записка оффера в списке: бумага paper_note.png (264×176) в соотношении, близком
 ## к исходному, — растягивать лист до 500 px в ширину нельзя, края рвутся и
 ## бумага читается как полоса. 3 колонки миниатюр по 40 px на сторону вносят
 ## M-сторону целиком (6 ячеек = 2 ряда), стрелка и два ряда действий влезают в
-## 304 px внутреннего поля.
+## внутреннего поля листа.
 const NOTE := Vector2(320, 200)
-const NOTE_PAD := 8.0
+## 14 px: рваный край paper_note.png — ~12 px нативных из 264, при 320 это 14 px.
+## С полем 8 первая буква подписи сторон и «Николя» справа садились на край.
+const NOTE_PAD := 14.0
 const MINI := 40.0
 ## Наклон записки заметно меньше наклона планшета: 320 px при 1.2° дали бы +6.7 px
 ## по высоте строки, и соседние записки в секции перекрывались бы.
 const NOTE_TILT := 0.6
-## Лист подтверждения — тот же класс бумаги, но крупнее: две колонки по 3 ячейки
-## 56 px плюс предупреждение и две кнопки.
-const CONFIRM := Vector2(420, 372)
-const CONFIRM_PAD := 12.0
+## Лист подтверждения — нижняя граница, а не фиксированный размер: MarginContainer
+## растёт по содержимому, поэтому при 1+1 карты лист обнимает её (270×160), а не
+## остаётся пустой простынёй 420×372, как было в кадре trade_confirm.
+const CONFIRM := Vector2(240, 160)
+const CONFIRM_PAD := 16.0
 const CELL_BIG := 56.0
+## 2 колонки на сторону (а не GRID_COLS=3): сторона из 6 позиций даёт лист
+## 288×263 вместо 404×195 — ближе к соотношению бумаги 1.5, и подписи сторон
+## перестают спорить с шириной колонки.
+const CONFIRM_COLS := 2
 const CAP := Vector2(56, 56)
 const NAIL := Vector2(48, 48)
 const FOOT_H := 80.0
@@ -575,6 +588,9 @@ func _render_list() -> void:
 		_body.add_child(sub)
 	var new_btn := _sheet_button("BtnNewOffer", "Предложить обмен",
 		Vector2(150, SHEET.y))
+	# Без SHRINK_CENTER VBox растягивает бумажную подложку на все 516 px, и лист
+	# paper_note.png с соотношением 1.5 превращается в полосу 6.8:1 (кадр списка).
+	new_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	# Спека §9.2: при remain == 0 кнопка «Предложить» неактивна. Держать её живой
 	# и глушить только «Дальше» — значит водить игрока в конструктор-тупик.
 	new_btn.disabled = at_zero
@@ -986,17 +1002,19 @@ func _cell(side: String, e: Dictionary, pending: Array) -> TextureButton:
 	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	art.stretch_mode = TextureRect.STRETCH_SCALE
 	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	art.position = Vector2((CELL.x - ART) / 2.0, 8.0)
+	art.position = Vector2((CELL.x - ART) / 2.0, 5.0)
 	art.size = Vector2(ART, ART)
 	b.add_child(art)
 	pending.append([art, _preview_arg(side, e)])
 
-	var nm := _ink_label("Name", String(e.get("display_name", "")), 9,
-		Vector2(2.0, 66.0), Vector2(CELL.x - 4.0, 16.0))
+	var nm := _ink_label("Name", String(e.get("display_name", "")),
+		_name_size(String(e.get("display_name", "")), CELL.x - 4.0),
+		Vector2(2.0, 56.0), Vector2(CELL.x - 4.0, 13.0))
 	nm.clip_text = true
+	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	b.add_child(nm)
 	var cp := _ink_label("Copies", _copies_label(side, e), 9,
-		Vector2(2.0, 82.0), Vector2(CELL.x - 4.0, 12.0))
+		Vector2(2.0, 69.0), Vector2(CELL.x - 4.0, 11.0))
 	b.add_child(cp)
 	if not can_add(side, e):
 		b.disabled = true
@@ -1047,12 +1065,13 @@ func _slot(side: String, pos: int, arr: Array, pending: Array) -> TextureButton:
 		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		art.stretch_mode = TextureRect.STRETCH_SCALE
 		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		art.position = Vector2((CELL.x - ART) / 2.0, 8.0)
+		art.position = Vector2((CELL.x - ART) / 2.0, 5.0)
 		art.size = Vector2(ART, ART)
 		b.add_child(art)
 		pending.append([art, _preview_arg(side, e)])
-		b.add_child(_ink_label("Name", String(e.get("display_name", "")), 9,
-			Vector2(2.0, 66.0), Vector2(CELL.x - 4.0, 16.0)))
+		b.add_child(_ink_label("Name", String(e.get("display_name", "")),
+			_name_size(String(e.get("display_name", "")), CELL.x - 4.0),
+			Vector2(2.0, 56.0), Vector2(CELL.x - 4.0, 13.0)))
 		b.tooltip_text = String(e.get("display_name", ""))
 		b.pressed.connect(_on_slot_pressed.bind(side, pos))
 	else:
@@ -1151,6 +1170,16 @@ func _ink_label(nm: String, text: String, font_size: int,
 	l.add_theme_color_override("font_color", PAPER_INK)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
+
+## Подпись кармана: 9 px, а если имя не влезает — 8, потом 7. Хроматические имена
+## («Пепельный язык», «Кобальтовая тропа») в 14–17 знаков на 9 px выходили за
+## карман и обрезались посреди слова (кадр trade_gift).
+func _name_size(text: String, w: float) -> int:
+	var f := g.get_theme_default_font()
+	for s in [9, 8]:
+		if f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, s).x <= w:
+			return s
+	return 7
 
 func _copies_label(side: String, e: Dictionary) -> String:
 	if String(e.get("card_id", "")) == "":
@@ -1344,7 +1373,7 @@ func _confirm_grid(nm: String, side: Array, side_key: String,
 		pending: Array) -> GridContainer:
 	var grid := GridContainer.new()
 	grid.name = nm
-	grid.columns = GRID_COLS
+	grid.columns = CONFIRM_COLS
 	grid.add_theme_constant_override("h_separation", 2)
 	# 16 px между рядами — место под подпись имени: она лежит вне прямоугольника
 	# миниатюры (у TextureRect нет встроенной подписи), и без зазора имена ряда
