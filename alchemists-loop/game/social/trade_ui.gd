@@ -550,11 +550,6 @@ func on_cancel(result: Dictionary) -> void:
 	_note = _refusal_text(result)
 	_render()
 
-func _slot_text(e) -> String:
-	if not (e is Dictionary) or (e as Dictionary).is_empty():
-		return "не выбрана"
-	return String((e as Dictionary).get("display_name", ""))
-
 ## Подпись slot-кнопки стороны-списка (R14): имя ПЕРВОЙ ячейки, «не выбрана» для
 ## пустой стороны, «<имя> +N» если ячеек больше одной. Визуал конструктора —
 ## Task 8; здесь прежняя одна кнопка на сторону с прежним name и press.

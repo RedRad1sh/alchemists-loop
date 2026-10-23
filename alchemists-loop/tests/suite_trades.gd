@@ -836,6 +836,29 @@ static func _offer_model(g: Game) -> void:
 		and String(chroma.get("display_name", "")) == "Радуга друга"
 		and bool(chroma.get("is_last", false))
 		and not bool(view.get("is_last", true)))
+	# want-гейт читает копии ИЗ КОЛЛЕКЦИИ ДРУГА (не из своей и не из словаря
+	# ячейки): у друга одна копия ice — вторая ячейка запрещена.
+	tu._offer["give"].clear()
+	tu.set_peer_coll({"cards": {"ice": {"copies": 1, "first_at": ""}}, "extras": []})
+	var w_first: bool = tu.add_slot("want", tu.pick("ice", "", 1, "Лёд"))
+	Selftest.check("want gate uses peer copies",
+		w_first and not tu.add_slot("want", tu.pick("ice", "", 1, "Лёд")))
+	# При пустом кэше гейт best-effort: источник истины сервер (§3, он ответит 409
+	# peer_lacks), а блокировка запрещала бы собирать оффер офлайн. Мутация
+	# «возвращать 0 вместо -1» краснит ровно эту проверку.
+	tu._offer["want"].clear()
+	tu.set_peer_coll({})
+	Selftest.check("want gate best-effort without peer collection",
+		tu.add_slot("want", tu.pick("ice", "", 1, "Лёд")))
+	# На сетку уезжают РОВНО селекторы: is_last/display_name — клиентский UX-слой,
+	# сервер их не ждёт (§2.2). keys().size() == 2 ловит и просковзание записи
+	# pick() целиком, и лишнюю пару ключей.
+	var wire: Array = T._wire_items([tu.pick("clay", "", 8, "Глина")])
+	Selftest.check("wire items carry only selectors", wire.size() == 1
+		and (wire[0] as Dictionary).keys().size() == 2
+		and String(wire[0].get("card_id", "")) == "clay"
+		and String(wire[0].get("craft_id", "")) == ""
+		and not wire[0].has("is_last") and not wire[0].has("display_name"))
 	# Возврат общего состояния в покой — до follow-up-сюит (selftest.gd:163-166).
 	sm._server_collection = {}
 
