@@ -4324,12 +4324,21 @@ def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
                      (device_id, device_id))
         conn.execute("DELETE FROM spirit_messages WHERE device_id = ?", (device_id,))
         conn.execute("DELETE FROM social_state WHERE device_id = ?", (device_id,))
+        # Тот же приватный инвариант, что и у переписки: удаление профиля не
+        # должно оставлять следов у собеседника. trade_orders не связан с players
+        # внешним ключом (schema.sql:429-439), поэтому осиротевший pending-оффер
+        # переживал бы аккаунт и висел во «входящих» у второго конца. Позиции
+        # (trade_items) уходят каскадом от родителя (schema.sql:446 при
+        # `PRAGMA foreign_keys=ON` из get_db), отдельным DELETE не дублируем.
+        conn.execute("DELETE FROM trade_orders WHERE maker_device = ? OR taker_device = ?",
+                     (device_id, device_id))
         for table in [
             "echoes", "letters", "challenge_scores", "vein_points", "atlas_solves",
             "fair_pairs", "fair_contrib", "fair_claims", "vein_hits", "legacy_vein_hits",
             # F3 (приватность): цикл-модель жилы добавила свои таблицы —
             # личные находки, прожилки и журнал вливаний тоже чистим.
             "personal_discoveries", "vein_streaks", "vein_pour_log",
+            "trade_counts",
         ]:
             conn.execute(f"DELETE FROM {table} WHERE device_id = ?", (device_id,))
         conn.execute("DELETE FROM players WHERE device_id = ?", (device_id,))

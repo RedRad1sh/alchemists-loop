@@ -1226,7 +1226,7 @@ class TestAccept:
         `craft_id = f"{day}_{device_id[:8]}_{index}"` (`grep -n 'device_id\\[:8\\]'
         server.py`: каталог и хроматик строятся в двух местах) берёт только ПЕРВЫЕ 8 символов
         клиентского и не аутентифицированного `device_id`, а ключ у sigil_crafts
-        — пара `(device_id, craft_id)` (server.py:1332-1338). Значит два
+        — пара `(device_id, craft_id)` (DDL таблицы: server.py:1417). Значит два
         аккаунта, заведённых одним клиентом через POST /api/me, законно владеют
         строками с ОДИНАКОВЫМ craft_id, и перенос такой строки UPDATE'ом №6
         попадает в занятый PK: `sqlite3.IntegrityError` → 500 без машинного кода,
@@ -1370,9 +1370,9 @@ class TestAccept:
         """`_trade_registered(conn, me)` на accept пинит код, а не декорацию.
 
         Строка trade_orders переживает удаление аккаунта: `DELETE /api/account`
-        (server.py:4188) чистит social и per-device таблицы, а trade_orders и
-        trade_counts — нет. Так что «taker без players-строки» собирается честно:
-        оффер выставлен, а из players удалён только сам профиль. Ребро дружбы
+        (server.py:4272) чистит и торговый слой (TestAccountPurge), но здесь
+        профиль из players вырезан прямым SQL без каскада — так «taker без
+        players-строки» собирается честно, не завися от эндпоинта. Ребро дружбы
         при этом на месте, поэтому без проверки регистрации accept дошёл бы до
         переноса и ответил 200 — именно это на тесте и краснеет.
         """
@@ -2168,6 +2168,10 @@ class TestPeerCollectionNM:
         conn.commit()
         conn.close()
         own = client.get("/api/sigil/collection", params={"device_id": "dev-b"}).json()
+        # Премиса неразрывности равенства: оба списка непустые. Без неё `peer == own`
+        # прошла бы и на двух пустых payload'ах — тест не отличил бы сломанный сбор
+        # коллекции от «просто нет данных».
+        assert own["cards"] and own["extras"]
         assert own["milestones"] == {"fire": [1]}                     # премиса: веха есть
         peer = client.get("/api/trade/peer_collection",
                           params={"device_id": "dev-a", "peer": "dev-b"}).json()
@@ -2213,3 +2217,45 @@ class TestPeerCollectionNM:
         r = client.get("/api/trade/peer_collection",
                        params={"device_id": "dev-ghost", "peer": "dev-b"})
         assert (r.status_code, r.json()["detail"]) == (404, "not_registered"), r.text
+
+
+class TestAccountPurge:
+    """`DELETE /api/account` чистит и торговый слой (приватность S1 §7 в той же
+    формулировке, что и переписка): «удаление профиля не оставляет следов у
+    собеседника». Торговые таблицы в purge'-list не входили."""
+
+    def test_deleting_a_peer_clears_orders_items_and_counts(self, tmp_path, monkeypatch):
+        s = _srv(tmp_path, monkeypatch)
+        client = _trade_client(s, tmp_path, monkeypatch)
+        _friends(client)
+        _both(s)
+        # Висящий оффер dev-a → dev-b (trade_orders + trade_items) и принятый
+        # dev-b → dev-a (trade_counts у обоих, строка в истории у dev-b).
+        pend = _offer(client, "dev-a", "dev-b").json()["id"]
+        assert _items_of(s, pend)
+        done = _offer(client, "dev-b", "dev-a",
+                      give=[{"card_id": "ice"}], want=[{"card_id": "spark"}]).json()["id"]
+        assert _accept(client, "dev-a", done).status_code == 200
+        assert _rows(s, "SELECT * FROM trade_counts") != []
+        before = client.get("/api/trade/list", params={"device_id": "dev-b"}).json()
+        assert [o["id"] for o in before["incoming"]] == [pend]
+        assert [h["id"] for h in before["history"]] == [done]
+
+        assert client.request("DELETE", "/api/account",
+                              params={"device_id": "dev-a"}).status_code == 200
+
+        # Собеседник не должен видеть ни висящей сделки от удалённого профиля,
+        # ни записи о закрытой — иначе история выдаёт, с кем и что менялись.
+        body = client.get("/api/trade/list", params={"device_id": "dev-b"}).json()
+        assert body["incoming"] == [] and body["outgoing"] == []
+        assert body["history"] == []
+        assert _rows(s, "SELECT * FROM trade_orders") == []
+        # trade_items висит на order_id: каскад сработает только если его
+        # родитель удалён, поэтому проверяем таблицу отдельно — мёртвые позиции
+        # остались бы в БД навсегда.
+        assert _rows(s, "SELECT * FROM trade_items") == []
+        # Недельный счётчик чистится ТОЛЬКО за удалённым профилем: счётчик
+        # собеседника — его собственное право на сделки, и тотальный DELETE по
+        # неделе отнял бы его.
+        assert _rows(s, "SELECT * FROM trade_counts WHERE device_id = 'dev-a'") == []
+        assert [r["device_id"] for r in _rows(s, "SELECT * FROM trade_counts")] == ["dev-b"]

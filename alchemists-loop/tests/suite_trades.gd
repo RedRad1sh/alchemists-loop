@@ -342,7 +342,7 @@ static func _constructor(g: Game) -> void:
 			"recipe": [], "process": "sublimatio", "stage": "albedo",
 			"fallback_name": "Лёд", "object_type": "object", "seed": 2},
 		# fallback_name пустой — ровно так поле приходит для вида без имени
-		# (SigilCatalogCard.fallback_name = "", server.py:1097). Пикер обязан
+		# (SigilCatalogCard.fallback_name = "", server.py:1122). Пикер обязан
 		# показать id, иначе кнопка «— последняя» без названия недостижима глазами.
 		{"id": "dust", "set": "earth", "rarity": "common", "ether_cost": 50,
 			"recipe": [], "process": "calcinatio", "stage": "nigredo",
@@ -476,6 +476,16 @@ static func _constructor(g: Game) -> void:
 	tr._offer = {"give": [tu.pick("", "x1", 1, "Радуга")],
 		"want": [], "gift": true}
 	tr.open_confirm()
+	# §5.3: у подарка нет встречной стороны, поэтому подтверждение рисует сургуч
+	# вместо WantCol и CTA «Подарить». Без пина ветка могла молча съехать на
+	# обменную раскладку — стрелка, пустая колонка «Прошу взамен (0/6)» и кнопка
+	# «Предложить», из которой _send() отправил бы offer, а не gift.
+	var c_seal := _node(tr._body, "GiftSeal")
+	Selftest.check("confirm gift shows seal and gift CTA",
+		c_seal is TextureRect and _tex_name(c_seal) == "slot_seal.png"
+		and _node(tr._body, "WantCol") == null
+		and _button_named(tr._body, "Подарить") != null
+		and _button_named(tr._body, "Предложить") == null)
 	tr.call("on_gift", {"ok": true, "craft_id": "x1", "moved_name": "Радуга",
 		"remain": 7})
 	Selftest.check("gift success leaves confirm", tr._mode != 2
@@ -789,6 +799,24 @@ static func _list_actions(g: Game) -> void:
 	Selftest.check("cancel offline says no connection",
 		_label_has(tr._body, "Мир не на связи")
 		and not _label_has(tr._body, "не понял запрос"))
+	# NM §2.3 переименовал S2-коды сторон: `card_not_owned` → `not_enough_copies`
+	# (дефицит give), добавил `peer_lacks` (дефицит want), `side_too_long`
+	# (длина) и `bad_item` (форма позиции). Таблица клиента обязана знать все
+	# четыре: иначе отказ, который сервер сформулировал конкретно, игрок читает
+	# как «Мир не понял запрос» (server.py:4640-4641).
+	Selftest.check("not_enough_copies copy", TradeUI._detail_text("not_enough_copies")
+		== "На своей стороне ты отдаёшь больше копий, чем есть")
+	Selftest.check("peer_lacks copy", TradeUI._detail_text("peer_lacks")
+		== "У собеседника столько копий не найдётся")
+	Selftest.check("side_too_long copy", TradeUI._detail_text("side_too_long")
+		== "На одной стороне не больше шести карт")
+	Selftest.check("bad_item copy", TradeUI._detail_text("bad_item")
+		== "В ячейке не выбрана ровно одна карта")
+	# Обещанный ещё в Tasks 8-9 сквозной пин: слой «Друзей» и торговый слой
+	# отдают один и тот же код для одного и того же отказа (server.py:5826,
+	# :5924, :6075, :6248), и игрок обязан читать одну формулировку.
+	Selftest.check("not_friends copy", TradeUI._detail_text("not_friends")
+		== "Меняться можно только с друзьями")
 	# §7.2: «карты больше нет — предложи другую» — спокойное состояние КАРТОЧКИ, а
 	# не баннер над списком. Нажатие задаёт `_last_id`, поэтому отказ атрибутируется
 	# именно этой строке.
