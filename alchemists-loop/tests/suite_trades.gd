@@ -11,6 +11,9 @@ class_name SuiteTrades
 
 const NetBase := preload("res://autoload/net.gd")
 
+## Текстурный комплект окна обмена (спека §5): PNG @2x из SVG-генератора ВНЕ репо.
+const TA_DIR := "res://assets/trades/"
+
 # HoldingNet: _send_next погашен, значит _enqueue накапливает запросы в _queue,
 # и мы видим РОВНО ТО, что поставил в очередь вызываемый метод (а не словарь,
 # переписанный руками в тесте).
@@ -37,6 +40,7 @@ static func run(g: Game) -> void:
 	_entry(g)
 	_constructor(g)
 	_list_actions(g)
+	_textures(g)
 	_offer_model(g)
 
 
@@ -780,6 +784,101 @@ static func _list_actions(g: Game) -> void:
 	sm._server_collection = {}
 	g._social.cache = social_cache0
 	g._social.threads = social_threads0
+
+
+## Текстурный комплект (Task 7, спека §5 + AGENTS.md §27): планшет панели, карман
+## ячейки, сургуч пустого слота и ткань затемнения. Пины читают ПИКСЕЛИ, а не только
+## факт загрузки: «не плоская заливка» и «рваный край = альфа» — условия приёмки §5,
+## existence-проверка их не доказывает (PNG, залитый одним цветом, прошёл бы её).
+## Хелперы дельты/шва переиспользованы из SuiteContractBoard (:3123+) — тот же
+## QC-язык, что уже приняли для доски, а не новый вариант того же кода.
+## Мутации, красящие блок: залить PNG одним цветом; сделать угол бумаги непрозрачным;
+## разорвать шов тканевого тайла; удалить `.import`; отдать PNG другого размера.
+static func _textures(_g: Game) -> void:
+	# Декларируемые размеры @2x — контракт, который читает раскладка Task 8
+	# (спека §4.1: панель 256×320, карман 80×100, печать 60×60, тайл ткани 128×128).
+	var sizes := {
+		"pane_tablet.png": Vector2i(512, 640),
+		"pocket.png": Vector2i(160, 200),
+		"slot_seal.png": Vector2i(120, 120),
+		"cloth_dark.png": Vector2i(256, 256),
+	}
+	var loaded := true
+	for f in sizes:
+		var t := load(TA_DIR + String(f)) as Texture2D
+		loaded = loaded and t != null and t.get_width() > 0
+	Selftest.check("trade textures load from assets", loaded)
+	# Без `.import` свежий worktree физически не видит текстуру: `--import` обязан
+	# быть прогнан, а его результат — закоммичен (тот же контракт, что у доски).
+	var sidecars := []
+	for f in sizes:
+		if not FileAccess.file_exists(TA_DIR + String(f) + ".import"):
+			sidecars.append(String(f))
+	Selftest.check("trade textures ship .import sidecars", sidecars.is_empty())
+	var imgs := {}
+	var sizes_ok := true
+	for f in sizes:
+		var img := SuiteContractBoard._ca_img(TA_DIR + String(f))
+		sizes_ok = sizes_ok and img != null and img.get_size() == (sizes[f] as Vector2i)
+		if img != null:
+			imgs[String(f)] = img
+	Selftest.check("trade textures exported at declared sizes", sizes_ok)
+	# Разнообразие цвета + высокочастотная деталь (волокна/потёртости), иначе
+	# гладкий градиент считался бы «текстурой» при одном тоне на всём листе.
+	var varied := true
+	for f in ["pane_tablet.png", "pocket.png", "slot_seal.png", "cloth_dark.png"]:
+		var img: Image = imgs.get(String(f), null)
+		if img == null:
+			varied = false
+			continue
+		varied = varied and _distinct(img) >= 24
+		varied = varied and SuiteContractBoard._ca_inner(img, "x") > 0.02
+	Selftest.check("trade textures are not flat fills", varied)
+	# Рваный край бумаги — это альфа-канал, а не нарисованная рамка: 2 px у углов
+	# прозрачны, вертикальная полоса тела непрозрачна (§5.3 язык доски).
+	var torn := true
+	for f in ["pane_tablet.png", "pocket.png"]:
+		var img: Image = imgs.get(String(f), null)
+		if img == null:
+			torn = false
+			continue
+		var w := img.get_width()
+		var h := img.get_height()
+		var clean := img.get_pixel(1, 1).a < 0.05 and img.get_pixel(w - 2, 1).a < 0.05
+		clean = clean and img.get_pixel(1, h - 2).a < 0.05
+		clean = clean and img.get_pixel(w - 2, h - 2).a < 0.05
+		var body := true
+		for k in 5:
+			body = body and img.get_pixel(int(w * 0.5), int(h * (0.3 + 0.1 * k))).a > 0.9
+		torn = torn and clean and body
+	Selftest.check("trade paper textures are torn cut-outs", torn)
+	# Ткань затемнения тайлится на весь экран (§5: «не заливка цветом») — шов обязан
+	# не превышать внутренний перепад, иначе на 540×960 видна сетка 256.
+	var cloth: Image = imgs.get("cloth_dark.png", null)
+	var seam_ok := cloth != null
+	if seam_ok:
+		for ax in ["x", "y"]:
+			seam_ok = seam_ok and (SuiteContractBoard._ca_seam(cloth, String(ax))
+				<= SuiteContractBoard._ca_inner(cloth, String(ax)) * 1.6 + 0.02)
+	Selftest.check("trade cloth tile is seamless on both axes", seam_ok)
+
+
+## Число различных цветов на сетке 24×24 с квантом 5 бит на канал: без кванта
+## дизеринг PNG посчитался бы разнообразием и пин краснел бы на плоской залике
+## неверно, а с квантом плоская заливка даёт ровно 1 цвет. Квант — 32 уровня, а
+## не 16: тёмная ткань виньетки (#0d0906…#b3a37c) целиком не влезает в 16
+## коробок по каналу, и проверка требовала бы от затемнения bright-палитры.
+static func _distinct(img: Image) -> int:
+	var seen := {}
+	var w := img.get_width()
+	var h := img.get_height()
+	for i in range(24):
+		for j in range(24):
+			var c := img.get_pixel(int(w * (0.05 + 0.9 * i / 23.0)),
+				int(h * (0.05 + 0.9 * j / 23.0)))
+			seen["%d_%d_%d_%d" % [int(c.r * 31), int(c.g * 31), int(c.b * 31),
+				int(c.a * 31)]] = true
+	return seen.size()
 
 
 ## Модель оффера списками (Task 6): гейт лимита стороны, гейт копий вида,
