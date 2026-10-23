@@ -1756,7 +1756,7 @@ class TestCancelGift:
     def test_gift_limit_ignores_receiver_week_count(self, tmp_path, monkeypatch):
         """Недельный лимит в gift тратит только даритель (спека §6, шаг 3).
 
-        Пинит одиночество `me` в `server.py:5988`
+        Пинит одиночество `me` в `server.py:6080`
         (`if _trade_week_count(conn, week, me) >= TRADE_WEEK_LIMIT`). Мутация
         «считать и получателя», как это делает accept, обязана краснить ровно этот
         тест: dev-b стоит на лимите, а подарок обязан пройти и вырастить только

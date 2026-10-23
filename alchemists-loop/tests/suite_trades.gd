@@ -471,8 +471,8 @@ static func _constructor(g: Game) -> void:
 
 	# Успешный подарок обязан уйти с экрана подтверждения: _offer уже пуст,
 	# поэтому единственная живая кнопка «Подарить» через _send() отправила бы
-	# Net.trade_gift(dev, peer, "", "") — серверный 422 bad_selector вместо
-	# подтверждения, и игроку неоткуда узнать, что подарок дошёл.
+	# пустой список give — серверный 422 side_too_long вместо подтверждения, и
+	# игроку неоткуда узнать, что подарок дошёл.
 	tr._offer = {"give": [tu.pick("", "x1", 1, "Радуга")],
 		"want": [], "gift": true}
 	tr.open_confirm()
@@ -809,7 +809,7 @@ static func _list_actions(g: Game) -> void:
 	Selftest.check("peer_lacks copy", TradeUI._detail_text("peer_lacks")
 		== "У собеседника столько копий не найдётся")
 	Selftest.check("side_too_long copy", TradeUI._detail_text("side_too_long")
-		== "На одной стороне не больше шести карт")
+		== "Сторона обмена не заполнена или слишком длинная")
 	Selftest.check("bad_item copy", TradeUI._detail_text("bad_item")
 		== "В ячейке не выбрана ровно одна карта")
 	# Обещанный ещё в Tasks 8-9 сквозной пин: слой «Друзей» и торговый слой
