@@ -44,11 +44,22 @@ const CAP_HINT := "Склад забит: часть награды не вле�
 const DECOR_MISSING_HINT := "в каталоге пока нет"
 const SIGN_INK := Color(0.93, 0.86, 0.70)
 const NOTE_INK := Color(0.16, 0.11, 0.07)
+# §D: текст не должен касаться кромки текстуры; §C: светлые чернила по латуни.
+const BTN_M := 10.0
+const PLATE_INK := Color(0.95, 0.88, 0.72)
+const PLATE_INK_DIM := Color(0.72, 0.66, 0.53)
+# Невытягиваемые поля plate_brass.png (224x64 @2x): 36 px держат гвоздик вместе
+# с гнездом, 10 px — латунную кромку и запечённую тень под ней.
+const PLATE_SIDE_FIELD := 36.0
+const PLATE_EDGE_FIELD := 10.0
 
 var g: Game
 var _w := 0.0
 var _h := 0.0
 var _bg: TextureRect
+var _strip_bg: TextureRect
+var _strip_shadow: ColorRect
+var _strip_cut: ColorRect
 var _rails: Array = []
 var _corners: Array = []
 var _shelf_daily: TextureRect
@@ -131,6 +142,39 @@ func _layer(fname: String, node_name: String) -> TextureRect:
 	add_child(r)
 	return r
 
+## §C: кнопка доски одевается в латунную плашку, а не перекрашивается глобально.
+## `main.gd::_small_button` общая с Домом, Духом и Лабораторией, поэтому берётся
+## она же (шрифт, размер, минимальная высота) и только подменяются stylebox'ы:
+## жёлтые кнопки темы на доске выглядели чужеродными наклейками поверх дерева.
+## Статическая и с полем `m`: карточка контракта тоже рисует плашку (кнопка
+## «Влить» в ряду жилы), а `ContractBoard._mm` карточка уже зовёт статически.
+static func style_plate(b: Button, m: float = BTN_M) -> void:
+	var sb := StyleBoxTexture.new()
+	sb.texture = ContractCard.tex("plate_brass.png")
+	sb.texture_margin_left = PLATE_SIDE_FIELD
+	sb.texture_margin_right = PLATE_SIDE_FIELD
+	sb.texture_margin_top = PLATE_EDGE_FIELD
+	sb.texture_margin_bottom = PLATE_EDGE_FIELD
+	for k in ["content_margin_left", "content_margin_top",
+			"content_margin_right", "content_margin_bottom"]:
+		sb.set(k, m)
+	var sbh: StyleBoxTexture = sb.duplicate()
+	sbh.modulate_color = Color(1.08, 1.08, 1.08)
+	var sbp: StyleBoxTexture = sb.duplicate()
+	sbp.modulate_color = Color(0.94, 0.94, 0.94)
+	# «1 px вниз» при нажатии: texture_offset в Godot 4 нет, сдвигаем поля контента.
+	sbp.content_margin_top = m - 1.0
+	sbp.content_margin_bottom = m + 1.0
+	var sbd: StyleBoxTexture = sb.duplicate()
+	sbd.modulate_color = Color(0.55, 0.55, 0.55)
+	for pair in [["normal", sb], ["hover", sbh], ["pressed", sbp], ["disabled", sbd]]:
+		b.add_theme_stylebox_override(pair[0], pair[1])
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for c in ["font_color", "font_hover_color", "font_pressed_color",
+			"font_hover_pressed_color"]:
+		b.add_theme_color_override(c, PLATE_INK)
+	b.add_theme_color_override("font_disabled_color", PLATE_INK_DIM)
+
 func _build_layers() -> void:
 	_bg = _layer("board_planks.png", "Planks")
 	# Доска тайлится: один брусок 256 px на весь экран, а не растянутая картинка (§5.2.1).
@@ -209,10 +253,14 @@ func _build_layers() -> void:
 	_shelf_hearth.add_child(_hearth_box)
 	_hearth_btn = g._small_button("", Vector2(168, 40), 2)
 	_hearth_btn.name = "HearthBtn"
+	style_plate(_hearth_btn)
 	_hearth_btn.pressed.connect(_on_hearth_pressed)
 	_hearth_box.add_child(_hearth_btn)
 	_hearth_flame = g._label("", 16)
 	_hearth_flame.name = "HearthFlame"
+	# g._label ставит autowrap: серия «✦✦» переносилась в два ряда и на кадре
+	# выглядела двумя отдельными искрами рядом с кнопкой, а не серией.
+	_hearth_flame.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_hearth_flame.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_hearth_flame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_hearth_flame.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -233,6 +281,28 @@ func _build_layers() -> void:
 	_rank_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_rank_strip.z_index = Z_RANK
 	add_child(_rank_strip)
+	# §A: строка ранга — плашка футера. Непрозрачная доска гасит бумаги, ушедшие
+	# под неё при прокрутке (маска нижнего края ловит только ввод), а 2 px тени
+	# над плашкой и 1 px светлого среза дают ей толщину рейки.
+	_strip_bg = TextureRect.new()
+	_strip_bg.name = "StripBg"
+	_strip_bg.texture = ContractCard.tex("board_planks.png")
+	_strip_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_strip_bg.stretch_mode = TextureRect.STRETCH_TILE
+	_strip_bg.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	_strip_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rank_strip.add_child(_strip_bg)
+	_strip_shadow = ColorRect.new()
+	_strip_shadow.name = "StripShadow"
+	_strip_shadow.color = Color(0.04, 0.02, 0.01, 0.55)
+	_strip_shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_strip_shadow.position = Vector2(0.0, -2.0)
+	_rank_strip.add_child(_strip_shadow)
+	_strip_cut = ColorRect.new()
+	_strip_cut.name = "StripCut"
+	_strip_cut.color = Color(1.0, 0.86, 0.62, 0.16)
+	_strip_cut.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rank_strip.add_child(_strip_cut)
 	_rank_symbol = CircleRankSymbol.new()
 	_rank_symbol.name = "RankSymbol"
 	_rank_symbol.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -266,6 +336,7 @@ func _build_layers() -> void:
 	# кольцо без надписи игрок принимал за декор и не находил выход.
 	_close_btn = g._small_button(CLOSE_TEXT, CLOSE_SIZE, 2)
 	_close_btn.name = "Close"
+	style_plate(_close_btn)
 	_close_btn.tooltip_text = CLOSE_TIP
 	_close_btn.z_index = Z_CLOSE
 	_close_btn.pressed.connect(_on_close)
@@ -343,6 +414,10 @@ func _relayout() -> void:
 	# Строка ранга — над нижним рельсом (спека §5), ниже её только сам рельс.
 	_rank_strip.position = Vector2(RAIL, _h - RAIL - RANK_H)
 	_rank_strip.size = Vector2(inner, RANK_H)
+	_strip_bg.size = Vector2(inner, RANK_H)
+	_strip_shadow.size = Vector2(inner, 2.0)
+	_strip_cut.position = Vector2(0.0, 0.0)
+	_strip_cut.size = Vector2(inner, 1.0)
 	_rank_symbol.position = Vector2(2.0, (RANK_H - 48.0) / 2.0)
 	_rank_symbol.size = Vector2(48.0, 48.0)
 	_mile_pts.position = Vector2(inner - RANK_NOTE.x, (RANK_H - RANK_NOTE.y) / 2.0)
@@ -680,6 +755,7 @@ func _show_reward(result: Dictionary) -> void:
 	pop.add_child(body)
 	var ok := g._small_button("OK", Vector2(120, 44))
 	ok.name = "Ok"
+	style_plate(ok)
 	ok.position = Vector2((POPUP_SIZE.x - 120.0) / 2.0, POPUP_SIZE.y - 58.0)
 	ok.pressed.connect(_on_reward_ok)
 	pop.add_child(ok)
