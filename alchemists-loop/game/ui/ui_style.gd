@@ -1,21 +1,47 @@
 class_name UIStyle
 extends RefCounted
-# Единая визуальная система «ночная лаборатория алхимика».
-# Бирюза = магия/действие, золото = выбор/акцент, тёмно-синий = материя.
-# Всё на StyleBoxFlat: без текстур, тот же вид на любом DPI.
+# Единая визуальная система «мастерская алхимика»: тёплое дерево, латунь,
+# бумага, чугун. Токены §3 спеки 2026-10-25; старые имена сохранены ради
+# 54 вызовов, меняются только значения.
 
-const INK := Color("060a11")
-const NAVY := Color("0b121c")
-const PANEL := Color("111c2a")
-const PANEL_HI := Color("1a2a3c")
-const LINE := Color("2b4254")
-const TEAL := Color("5fe3d6")
-const TEAL_DIM := Color("2c8a86")
-const GOLD := Color("f2c85b")
-const GOLD_DIM := Color("9a7a26")
-const TEXT := Color("e8f2f6")
-const TEXT_DIM := Color("8ea3b1")
-const DANGER := Color("e8695a")
+const INK := Color("14100e")
+const NAVY := Color("1a1210")
+const PANEL := Color("2a1d1e")
+const PANEL_HI := Color("3d2b24")
+const LINE := Color("5a3a25")
+const WOOD_DEEP := Color("241610")
+const WOOD := Color("2e1d15")
+const WOOD_LIGHT := Color("5a3a26")
+const PLASTER := Color("3a2e27")
+const PLASTER_HI := Color("80644f")
+const IRON := Color("2b2320")
+const PAPER_HI := Color("efe0bd")
+const PAPER := Color("c9ad7e")
+const PAPER_LIT := Color("edc17c")
+const PAPER_INK := Color("2a1d16")
+const BRASS_HI := Color("e6b87a")
+const BRASS := Color("c89060")
+const BRASS_DIM := Color("8a5c38")
+const FLAME := Color("f5c378")
+const GLOW := Color("eeb36b")
+const EMBER := Color("f7a76d")
+const HIGHLIGHT := Color("fad69b")
+const CREAM := Color("dabfa6")
+const TEXT_DIM := Color("a98d74")
+const TEXT_MUTED := Color("6e5c50")
+const RUBY := Color("b4553f")
+const LEAF := Color("6f8f5a")
+const ARCANA := Color("8b6fa8")
+const MAGIC := Color("7fa89a")
+
+# Совместимость имён (§3): TEAL→GLOW, TEAL_DIM→BRASS_DIM, GOLD→BRASS_HI,
+# GOLD_DIM→BRASS_DIM, TEXT→CREAM, DANGER→RUBY. TEAL в хроме больше не цвет.
+const TEAL := GLOW
+const TEAL_DIM := BRASS_DIM
+const GOLD := BRASS_HI
+const GOLD_DIM := BRASS_DIM
+const TEXT := CREAM
+const DANGER := RUBY
 
 # Рунический display-шрифт (заголовок игры и названия карточек сигилов).
 const RUNIC_PATH := "res://assets/fonts/Alchemist-Runic.ttf"

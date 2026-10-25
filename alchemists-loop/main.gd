@@ -1436,7 +1436,7 @@ func _build_ui() -> void:
 		title.add_theme_font_override("font", _font_runic)
 	elif _font_xbold != null:
 		title.add_theme_font_override("font", _font_xbold)
-	title.add_theme_color_override("font_color", Color(0.94, 0.97, 1.0))
+	title.add_theme_color_override("font_color", UIStyle.CREAM)
 	head.add_child(title)
 	# Ряд шапки — одинаковые квадраты 46×46 с иконками Atheneum 24 px. Размер
 	# задала таро-кнопка Аркана (спека: строго квадратная 46×46); остальные были
@@ -1444,7 +1444,7 @@ func _build_ui() -> void:
 	# текстуре вместо общего UIStyle-хрома.
 	var quests_btn := _header_button(2)
 	# На золотой кнопке белая база иконки не читается — тёмные чернила.
-	UIIcon.into_button(quests_btn, "star", 24, Color("2a1d05"))
+	UIIcon.into_button(quests_btn, "star", 24, UIStyle.PAPER_INK)
 	quests_btn.tooltip_text = "Задания Светика, достижения, комплекты, заказы"
 	quests_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	quests_btn.pressed.connect(_progress_ui._open_progress_popup)
@@ -1927,7 +1927,7 @@ func _build_popup() -> void:
 	_popup_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if _font_bold != null:
 		_popup_title.add_theme_font_override("font", _font_bold)
-	_popup_title.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
+	_popup_title.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	col.add_child(_popup_title)
 
 	_popup_orb = ElementOrb.new()

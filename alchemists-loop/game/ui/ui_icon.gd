@@ -33,7 +33,7 @@ static func make(icon: String, size_px: int = 20, color: Color = Color.WHITE) ->
 ## Иконка по центру кнопки: текст-глиф убирается, тач-зона не меняется.
 ## Если SVG ещё не импортирован (текстуры нет), текст остаётся как есть.
 static func into_button(btn: Button, icon: String, size_px: int = 20,
-		color: Color = UIStyle.TEXT) -> void:
+		color: Color = UIStyle.BRASS_HI) -> void:
 	if btn == null:
 		return
 	var tex := texture(icon)

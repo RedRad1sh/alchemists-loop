@@ -243,7 +243,7 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 
 	_experiment_status = g._label("Выбери вещество: окно выбора останется прозрачным, чтобы видеть поле.", 13)
 	_experiment_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_experiment_status.add_theme_color_override("font_color", Color(0.68, 0.82, 0.88))
+	_experiment_status.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 	page.add_child(_experiment_status)
 
 	var arena := PanelContainer.new()
@@ -262,13 +262,13 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 	field_title.name = "ExperimentFieldTitle"
 	field_title.position = Vector2(18, 14)
 	field_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	field_title.add_theme_color_override("font_color", Color(0.45, 0.72, 0.78))
+	field_title.add_theme_color_override("font_color", UIStyle.BRASS)
 	_experiment_field.add_child(field_title)
 	var field_hint := g._label("Котёл — место для смешения. Нажатие на ячейку сразу кладёт вещество на поле.", 12)
 	field_hint.name = "ExperimentFieldHint"
 	field_hint.position = Vector2(18, 38)
 	field_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	field_hint.add_theme_color_override("font_color", Color(0.48, 0.56, 0.64))
+	field_hint.add_theme_color_override("font_color", UIStyle.TEXT_MUTED)
 	_experiment_field.add_child(field_hint)
 
 	var center := CenterContainer.new()
