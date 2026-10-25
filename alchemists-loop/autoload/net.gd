@@ -66,6 +66,7 @@ signal sigil_admin_reset_result(result: Dictionary)
 signal sigil_admin_rotate_result(result: Dictionary)
 signal sigil_admin_chromatic_result(result: Dictionary)
 signal sigil_admin_chroma_slot_result(result: Dictionary)
+signal sync_package_result(result: Dictionary)
 # S1 социалка (плоские сигналы по образцу sigil_*)
 signal social_inbox_result(result: Dictionary)
 signal messages_result(result: Dictionary)
@@ -75,6 +76,13 @@ signal friend_respond_result(result: Dictionary)
 signal friend_remove_result(result: Dictionary)
 signal friend_block_result(result: Dictionary)
 signal friend_unblock_result(result: Dictionary)
+# S2 «Обмен картами»: шесть плоских ответов по образцу friend_* (:74-78).
+signal trade_offer_result(result: Dictionary)
+signal trade_accept_result(result: Dictionary)
+signal trade_cancel_result(result: Dictionary)
+signal trade_gift_result(result: Dictionary)
+signal trade_list_result(result: Dictionary)
+signal trade_peer_collection_result(result: Dictionary)
 signal error(message: String)
 
 var base_url := DEFAULT_BASE
@@ -267,6 +275,34 @@ func friend_unblock(device_id: String, target_device: String) -> void:
 	_enqueue({"kind": "friend_unblock", "path": "/friend/unblock",
 		"body": {"device_id": device_id, "target_device": target_device}})
 
+# S2 (спека §8.1, N↔M): ручки обмена. give/want — списки позиций
+# Item = {card_id, craft_id}; инвариант XOR (у позиции заполнен ровно один ключ)
+# держит сервер, пустой список — 422.
+func trade_offer(device_id: String, to: String, give: Array, want: Array) -> void:
+	_enqueue({"kind": "trade_offer", "path": "/trade/offer",
+		"body": {"device_id": device_id, "to": to, "give": give, "want": want}})
+
+func trade_accept(device_id: String, order_id: int) -> void:
+	_enqueue({"kind": "trade_accept", "path": "/trade/accept",
+		"body": {"device_id": device_id, "id": order_id}})
+
+func trade_cancel(device_id: String, order_id: int) -> void:
+	_enqueue({"kind": "trade_cancel", "path": "/trade/cancel",
+		"body": {"device_id": device_id, "id": order_id}})
+
+func trade_gift(device_id: String, to: String, give: Array) -> void:
+	_enqueue({"kind": "trade_gift", "path": "/trade/gift",
+		"body": {"device_id": device_id, "to": to, "give": give}})
+
+func trade_list(device_id: String) -> void:
+	_enqueue({"kind": "trade_list",
+		"path": "/trade/list?device_id=" + device_id.uri_encode()})
+
+func trade_peer_collection(device_id: String, peer: String) -> void:
+	_enqueue({"kind": "trade_peer_collection",
+		"path": "/trade/peer_collection?device_id=" + device_id.uri_encode()
+			+ "&peer=" + peer.uri_encode()})
+
 func fair_brew(device_id: String, a: String, b: String) -> void:
 	_enqueue({
 		"kind": "fair_brew", "path": "/fair/brew",
@@ -329,6 +365,12 @@ func sigil_milestone(device_id: String, set_id: String, tier: int) -> void:
 		"kind": "sigil_milestone", "path": "/sigil/milestone",
 		"body": {"device_id": device_id, "set": set_id, "tier": tier},
 	})
+
+# Единая точка синхронизации сейва: POST /api/sync/package, тело = весь пакет
+# (device_id уже в конверте, отдельный параметр не нужен в URL). Ответ → сигнал
+# sync_package_result, который Sync.apply_reconcile разбирает (A/B/C).
+func sync_package(pkg: Dictionary) -> void:
+	_enqueue({"kind": "sync_package", "path": "/sync/package", "body": pkg})
 
 # T22: серверная проверка платёжного чека (POST /api/receipt/verify). Ответ —
 # сигнал receipt_verify_result: {"ok", "verified", "status", "reason",
@@ -588,6 +630,8 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 			sigil_admin_chromatic_result.emit(parsed)
 		"sigil_admin_chroma_slot":
 			sigil_admin_chromatic_result.emit(parsed)
+		"sync_package":
+			sync_package_result.emit(parsed)
 		"social_inbox":
 			social_inbox_result.emit(parsed)
 		"messages":
@@ -604,3 +648,15 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 			friend_block_result.emit(parsed)
 		"friend_unblock":
 			friend_unblock_result.emit(parsed)
+		"trade_offer":
+			trade_offer_result.emit(parsed)
+		"trade_accept":
+			trade_accept_result.emit(parsed)
+		"trade_cancel":
+			trade_cancel_result.emit(parsed)
+		"trade_gift":
+			trade_gift_result.emit(parsed)
+		"trade_list":
+			trade_list_result.emit(parsed)
+		"trade_peer_collection":
+			trade_peer_collection_result.emit(parsed)

@@ -8,7 +8,7 @@ class_name Game
 var SAVE_PATH := "user://alchemy_save.json"
 var TEMP_PATH := "user://alchemy_save.tmp"
 var BACKUP_PATH := "user://alchemy_save.bak"
-const SAVE_VERSION := 3
+const SAVE_VERSION := 5
 
 # ---------- индексы вкладок нижней навигации ----------
 # Дом — не вкладка, а полноэкранный экран (Home._build_house_screen), поэтому
@@ -51,8 +51,6 @@ const LETTER_PENDING_MAX := Balance.LETTER_PENDING_MAX
 const ATLAS_MILE_EVERY := Balance.ATLAS_MILE_EVERY
 const ATLAS_CAP_EACH := Balance.ATLAS_CAP_EACH
 const ATLAS_PENDING_MAX := Balance.ATLAS_PENDING_MAX
-const CIRCLE_DISC_GOAL := Balance.CIRCLE_DISC_GOAL
-const CIRCLE_REWARD := Balance.CIRCLE_REWARD
 const HEARTH_BASE := Balance.HEARTH_BASE
 const CIRCLE_DAY_MILES := Balance.CIRCLE_DAY_MILES
 const CIRCLE_DAY_CAP := Balance.CIRCLE_DAY_CAP
@@ -65,7 +63,6 @@ const FAIR_REGEN_CAP := Balance.FAIR_REGEN_CAP
 const FAIR_OFFLINE_GOAL := Balance.FAIR_OFFLINE_GOAL
 const FAIR_OFFLINE_FACTOR := Balance.FAIR_OFFLINE_FACTOR
 const RETURN_GAP := Balance.RETURN_GAP
-const SPRING_OFFLINE_MAX := Balance.SPRING_OFFLINE_MAX
 const SPRING_INTERVAL := Balance.SPRING_INTERVAL
 const BENCH_INTERVAL := Balance.BENCH_INTERVAL
 const BENCH_OFFLINE_FACTOR := Balance.BENCH_OFFLINE_FACTOR
@@ -94,11 +91,9 @@ const CANDIDATE_CHANCE := Balance.CANDIDATE_CHANCE
 const CANDIDATE_COOLDOWN := Balance.CANDIDATE_COOLDOWN
 const NET_NICK := Balance.NET_NICK
 const CHALLENGE_REWARD := Balance.CHALLENGE_REWARD
-const CIRCLE_LOCAL_POINTS := Balance.CIRCLE_LOCAL_POINTS
 const VEIN_STREAK_CAP := Balance.VEIN_STREAK_CAP
 const VEIN_STREAK_REWARD := Balance.VEIN_STREAK_REWARD
 const VEIN_POINTS_WORLD := Balance.VEIN_POINTS_WORLD
-const CIRCLE_GOALS := Balance.CIRCLE_GOALS
 const CIRCLE_RANKS := Balance.CIRCLE_RANKS
 const CIRCLE_DECOR_REWARDS := Balance.CIRCLE_DECOR_REWARDS
 const WORLD_PAGE_SIZE := Balance.WORLD_PAGE_SIZE
@@ -400,12 +395,14 @@ var _hub: Hub  # попапы: профиль/крафт/настройки/жу
 var _item_colors: Dictionary = {}  # кэш цветов веществ (ядро)
 var _online: Online  # рейтинг + сервер + мир (R8)
 var _brew_bar: PanelContainer
+var _spring_screen: Control
 # резонанс 2.0: отголоски (баланс/вечный счётчик с сервера + вехи в сейве)
 var _resonance: Resonance  # отголоски + родословная (R5)
 # ночная реторта: 3 слота {sub, name, started, dur} + коллекция эссенций {slug: имя}
 var _retort: Retort  # ночная реторта (R6)
 var _riddles: Riddles  # письма Светика + Атлас (оп B2)
-var _retention: Retention  # дневной круг + недельный слой (R2)
+var _sync: Sync  # единый sync-пакет: reconcile-хост (Task 9/10)
+var _contracts: Contracts  # контрактная доска (§8.3): дневные/недельные цели
 var _demo_harness: Demo  # флаги --action/--shot/--geom + тик съёмки (R14)
 var _demo_flip_timer: Dictionary = {}  # {card, at} — авто-флип для GIF
 # сводка возврата: что случилось, пока игрока не было
@@ -450,6 +447,7 @@ var _sigil: SigilManager  # Аркан Сигилов: карточки реце
 var _live_card_node: SigilCard = null
 var _sigil_ui: SigilUI = null  # вынесенный сигильный UI (game/sigil/sigil_ui.gd)
 var _sigil_header_btn: Button  ## кнопка Аркана Сигилов в шапке (иконка-таро)
+var _contracts_header_btn: Button  # контрактная доска (§8.3)
 var _inv_grid: GridContainer = null
 
 func _boot_snapshot_text(path: String) -> String:
@@ -474,10 +472,11 @@ func _ready() -> void:
 	# снята: вызываемый демо-обходом Analytics.track пишет в ST-двойник очереди.
 	var args := OS.get_cmdline_user_args()
 	_selftest = SelftestMode.enabled()
+	Juice.enabled = not _selftest
 	_analytics_text_at_boot = _boot_snapshot_text(Analytics.REAL_QUEUE_PATH)
 	_user_data_text_at_boot = _boot_snapshot_text(UserData.REAL_SAVE_PATH)
 	_riddles = Riddles.new(self)
-	_retention = Retention.new(self)
+	_contracts = Contracts.new(self)
 	_guild = Guild.new(self)
 	_progress_ui = Progress.new(self)
 	_resonance = Resonance.new(self)
@@ -487,6 +486,9 @@ func _ready() -> void:
 	_shop = Shop.new(self)
 	_online = Online.new(self)
 	_spirit = Spirit.new(self)
+	_sync = Sync.new()
+	_sync.name = "Sync"
+	add_child(_sync)
 	if OS.has_feature("editor"):
 		_admin = AdminConsole.new(self)
 	_saves = Saves.new(self)
@@ -494,6 +496,8 @@ func _ready() -> void:
 	_sigil.name = "SigilManager"
 	add_child(_sigil)
 	_sigil.set_player_salt(OS.get_unique_id())
+	# §1.1: доска подписывается на крафт Аркана (единственный подписочный шов).
+	_contracts.connect_signals()
 	_sigil_ui = SigilUI.new()
 	_sigil_ui.main = self
 	add_child(_sigil_ui)
@@ -586,16 +590,28 @@ func _ready() -> void:
 			_demo_harness._action_social_rating = true
 		elif a == "--action=social_guest":
 			_demo_harness._action_social_guest = true
+		elif a == "--action=trade_list":
+			_demo_harness._action_trade_list = true
+		elif a == "--action=trade_build":
+			_demo_harness._action_trade_build = true
+		elif a == "--action=trade_confirm":
+			_demo_harness._action_trade_confirm = true
+		elif a == "--action=trade_gift":
+			_demo_harness._action_trade_gift = true
 		elif a == "--action=circle":
-			_demo_harness._action_circle = true
+			# доска v2 Task 5: вкладка «Круг» снята — алас ведёт на доску контрактов
+			_demo_harness._action_contracts = true
 		elif a == "--action=sigilcoll":
 			_demo_harness._action_sigilcoll = true
 		elif a == "--action=week":
-			_demo_harness._action_week = true
+			# доска v2 Task 5: вкладка «Неделя» снята — алас ведёт на доску контрактов
+			_demo_harness._action_contracts = true
 		elif a == "--action=goal":
 			_demo_harness._action_goal = true
 		elif a == "--action=goals":
 			_demo_harness._action_goals = true
+		elif a == "--action=contracts":
+			_demo_harness._action_contracts = true
 	for a in args:
 		if a.begins_with("--gif="):
 			_demo_harness._gif_dir = a.substr("--gif=".length())
@@ -605,6 +621,10 @@ func _ready() -> void:
 			_demo_harness._shot_tab = a.substr("--tab=".length()).to_int()
 		elif a.begins_with("--scroll="):
 			_demo_harness._shot_scroll = a.substr("--scroll=".length()).to_int()
+		elif a.begins_with("--shot-node="):
+			# Task 8: кроп кадра-приёмки по global-прямоугольникам нод
+			# ("A,B" — объединение), доска целиком при этом не скроллится.
+			_demo_harness._shot_node = a.substr("--shot-node=".length())
 		elif a.begins_with("--netbrew="):
 			_online._netbrew_pair = a.substr("--netbrew=".length())
 		elif a.begins_with("--netexperiment="):
@@ -613,6 +633,8 @@ func _ready() -> void:
 			_demo_harness._decor_demo_cat = a.substr("--decor=".length())
 		elif a.begins_with("--sigiltab="):
 			_demo_harness._sigil_tab = a.substr("--sigiltab=".length())
+		elif a.begins_with("--contractstate="):
+			_demo_harness._contract_state = a.substr("--contractstate=".length())
 	_online._net_enabled = not _selftest
 	if _online._net_enabled:
 		_online._device_id = _online._load_device_id()
@@ -636,9 +658,9 @@ func _ready() -> void:
 		Net.atlas_result.connect(_riddles._on_net_atlas_result)
 		Net.atlas_solve_result.connect(_riddles._on_net_atlas_solve_result)
 		Net.atlas_today(_online._device_id)
-		Net.week_result.connect(_retention._on_net_week_result)
-		Net.fair_brew_result.connect(_retention._on_net_fair_brew_result)
-		Net.fair_claim_result.connect(_retention._on_net_fair_claim_result)
+		Net.week_result.connect(_contracts._on_net_week_result)
+		Net.fair_brew_result.connect(_contracts._on_net_fair_brew_result)
+		Net.fair_claim_result.connect(_contracts._on_net_fair_claim_result)
 		Net.week_status(_online._device_id)
 		Net.cycle_status(_online._device_id)
 		# #8: доводка удаления аккаунта. Хендлер чистит маркер при ok; ретрай
@@ -646,6 +668,12 @@ func _ready() -> void:
 		# вайп). В селфтесте блок не выполняется: _net_enabled = not _selftest.
 		Net.account_delete_result.connect(_online._on_account_delete_result)
 		_online._retry_pending_account_delete()
+		# Единый синк сейва (sync/package envelope). Хендлер гейтит ok, а
+		# request_sync сам fail-open при недоступности Net. Триггеры: ответ
+		# /discover (грязь → троттл-флэш), boot-пакет и возврат из фона.
+		_sync.g = self
+		Net.sync_package_result.connect(_sync._on_sync_result)
+		App.application_resumed.connect(_sync.request_sync.bind(self))
 		# S1 социалка: результаты Net маршрутизируем в Social; social_inbox_result
 		# дополнительно идёт в хук шапки/тоста (оба коннекта на один сигнал).
 		Net.social_inbox_result.connect(_social.on_inbox)
@@ -657,14 +685,26 @@ func _ready() -> void:
 		Net.friend_block_result.connect(_on_social_action_result)
 	# План 2 (жила/круг): connects вне _net_enabled-блока — хендлеры сами
 	# гейтят offline/ok, а ST эмитит сигналы напрямую (suite_vein_circle).
-	Net.cycle_result.connect(_retention._on_net_cycle_result)
-	Net.vein_find_result.connect(_retention._on_net_vein_find_result)
-	Net.vein_pour_result.connect(_retention._on_net_vein_pour_result)
+	# Доска v2 (Task 3): жила живёт на доске, поэтому хендлеры — из Contracts,
+	# а не из удалённого Retention.
+	Net.cycle_result.connect(_contracts._on_net_cycle_result)
+	Net.vein_find_result.connect(_contracts._on_net_vein_find_result)
+	Net.vein_pour_result.connect(_contracts._on_net_vein_pour_result)
 	# S1/R8 (задача 7): коннект вне _net_enabled-гейта — хендлер сам
 	# разбирает offline/отсутствие detail, а selftest эмитит
 	# friend_request_result напрямую. Под гейтом связки в ST не было бы, и
 	# удаление строки connect не краснило бы ничего (FIX-2 ревьюера).
 	Net.friend_request_result.connect(_on_friend_request_result)
+	# S2 обмен: тот же мотив, что у friend_request выше — хендлер сам решает,
+	# что делать с offline/не-ok, а selftest эмитит trade_list_result напрямую.
+	Net.trade_list_result.connect(_on_trade_list_result)
+	Net.trade_offer_result.connect(_on_trade_offer_result)
+	Net.trade_gift_result.connect(_on_trade_gift_result)
+	Net.trade_accept_result.connect(_on_trade_accept_result)
+	Net.trade_cancel_result.connect(_on_trade_cancel_result)
+	# Коллекция друга — тот же провод, что и остальные trade-ответов: панель
+	# «Прошу» строится из ответа, а не из догадок клиента (§4.1).
+	Net.trade_peer_collection_result.connect(_on_trade_peer_collection_result)
 	# Аркан Сигилов
 	Net.sigil_daily_result.connect(_sigil._on_daily_result)
 	Net.sigil_craft_result.connect(_sigil._on_craft_result)
@@ -693,7 +733,9 @@ func _ready() -> void:
 	if _demo_harness._demo and (_demo_harness._action_social or _demo_harness._action_social_requests
 			or _demo_harness._action_social_thread or _demo_harness._action_social_confirm
 			or _demo_harness._action_social_search or _demo_harness._action_social_badge
-			or _demo_harness._action_social_rating or _demo_harness._action_social_guest):
+			or _demo_harness._action_social_rating or _demo_harness._action_social_guest
+			or _demo_harness._action_trade_list or _demo_harness._action_trade_build
+			or _demo_harness._action_trade_confirm or _demo_harness._action_trade_gift):
 		_social._seed_demo()
 		if _demo_harness._action_social_search:
 			# R1: карточка поиска строится из уже кэшированных строк рейтинга —
@@ -724,16 +766,23 @@ func _ready() -> void:
 			elif _demo_harness._action_social_search:
 				# приёмка задачи 7: карточка с кнопкой состояния из кэша друзей
 				_social_ui._search("Николя")
+	if _demo_harness._demo and (_demo_harness._action_trade_list
+			or _demo_harness._action_trade_build
+			or _demo_harness._action_trade_confirm
+			or _demo_harness._action_trade_gift):
+		_demo_seed_trades()
 	_engine._refresh()
 	if not _selftest and _engine._experiment_pending_pair.size() == 2:
 		_online._resume_pending_experiment.call_deferred()
-	if not _selftest and not _demo_harness._demo:
-		_retention._circle_track_visit()
+	# доска v2 Task 4: запусковый «визит при открытии приложения» удалён —
+	# визит-днём теперь считается день, в который закрыт дневной контракт
+	# (Contracts.claim → track_visit).
 	if not _selftest and _online._net_enabled:
 		Net.me(_online._net_nick, _online._device_id)
-	if not _selftest and _online._net_enabled:
 		# S1: пулл инбокса при входе — сразу после me; до ответа шапку держит кэш.
 		Net.social_inbox(_online._device_id)
+		# boot-пакет: первый sync после загрузки сейва (union-рековери грантов).
+		_sync.request_sync(self)
 	if not _selftest:
 		_spirit._companion_hello.call_deferred()
 	if _demo_harness._shot_tab >= 0:
@@ -896,36 +945,8 @@ func _ready() -> void:
 		_pages._select_mode("atlas")
 		_riddles._refresh_atlas_page()
 		_engine._refresh()
-	if _demo_harness._demo and _demo_harness._action_circle:
-		_retention._inject_circle_demo()
-		# страница «Круг» открывается с 20 веществ — демо-доливка до гейта
-		for cid in ITEMS.keys():
-			if _engine.inventory.size() >= 22:
-				break
-			if not _engine.inventory.has(String(cid)):
-				_engine.inventory[String(cid)] = 1
-		if _tabs_ref != null:
-			_tabs_ref.current_tab = TAB_TOOLS
-		_pages._ensure_modes()
-		_pages._select_mode("circle")
-		_retention._refresh_circle_page()
-		_engine._refresh()
 	if _demo_harness._demo and _demo_harness._action_sigilcoll:
 		_demo_seed_sigil_coll()
-	if _demo_harness._demo and _demo_harness._action_week:
-		_retention._inject_week_demo()
-		# страница «Неделя» открывается с 30 веществ — демо-доливка до гейта
-		for wid in ITEMS.keys():
-			if _engine.inventory.size() >= 32:
-				break
-			if not _engine.inventory.has(String(wid)):
-				_engine.inventory[String(wid)] = 1
-		if _tabs_ref != null:
-			_tabs_ref.current_tab = TAB_TOOLS
-		_pages._ensure_modes()
-		_pages._select_mode("week")
-		_retention._refresh_week_page()
-		_engine._refresh()
 	if _demo_harness._demo and _demo_harness._action_goal:
 		# кадр модалки выбора цели: собираем пару и открываем режимный экран
 		if _tabs_ref != null:
@@ -945,6 +966,37 @@ func _ready() -> void:
 		_sigil_ui._on_brew_btn_pressed()
 	if _demo_harness._demo and _demo_harness._action_settings:
 		_hub._open_settings()
+	if _demo_harness._demo and _demo_harness._action_contracts:
+		# Кадр приёмки §7: три дневные бумаги (одна уже получена, одна готова),
+		# одна недельная готовая и две живые записки баффов.
+		var daily := _contracts.daily()
+		for raw in daily:
+			var contract := raw as Dictionary
+			_contracts._set_progress(String(contract["id"]),
+				int(float(contract["goal"]) * 0.6))
+		var weekly := _contracts.weekly()
+		if not weekly.is_empty():
+			# Финал-фикс I-2: недельная готовая бумага — vein, но raw-запись
+			# прогресса затирается синком weekly()→_sync_vein (в демо-сейве
+			# находок нет → «incomplete», и pop-кадр без попапа). Посев
+			# sync-stable: инъектор кладёт цикл + registered-капли, поверх
+			# которого любой синк даёт готовность.
+			_contracts._inject_vein_ready()
+			if not daily.is_empty():
+				_contracts._done_dict("daily")[String((daily[0] as Dictionary)["id"])] = true
+		_contracts.grant_buff("brew_speed", 7200, 0.25, -1)
+		_contracts.grant_buff("spring_yield", 1800, 1.0, -1)
+		if _demo_harness._contract_state == "boardfull":
+			# Task 8 (спека §8): полный борт — очаг/ранг/вехи и живые вена+котёл
+			# поверх базового состояния блока. Инъекция до открытия: доска
+			# строится уже в этом состоянии.
+			_contracts._inject_board_demo()
+		_open_contract_board()
+		if _demo_harness._contract_state == "pop":
+			# Второй кадр: попап награды поверх доски, с уже выданной недельной наградой.
+			var board := get_node_or_null("ContractBoard") as ContractBoard
+			if board != null and not weekly.is_empty():
+				board._on_claim(String((weekly[0] as Dictionary)["id"]))
 	if _demo_harness._demo and _demo_harness._action_journal:
 		_hub._log_event("Открыто вещество «Стекло»")
 		_hub._log_event("Достижение: Первооткрыватель")
@@ -953,7 +1005,7 @@ func _ready() -> void:
 		_hub._log_event("Перегонка: +2 Золота мудрецов")
 		_hub._open_journal()
 	if _demo_harness._demo and _demo_harness._action_rarity:
-		_engine.known_recipes[_pair_key("glass", "glass")] = true
+		_engine.learn_recipe("glass", "glass", "crystal")
 		_engine._layer_cache.clear()
 		_show_discovery_popup("crystal", "glass", "glass")
 	if _demo_harness._demo and _demo_harness._action_profile:
@@ -1029,6 +1081,49 @@ func _on_friend_respond(result: Dictionary) -> void:
 func _on_social_action_result(result: Dictionary) -> void:
 	if _social_ui != null:
 		_social_ui._on_friend_action_result(result)
+
+func _on_trade_list_result(result: Dictionary) -> void:
+	# Guard обязателен: _social_ui создаётся в _build_ui, а этот коннект живёт в
+	# сетевом блоке _ready — то есть раньше построения UI. Сигнал может прийти
+	# первым: offline-слив очереди эмитит результаты синхронно.
+	if _social_ui != null and _social_ui._trade != null:
+		_social_ui._trade.on_list(result)
+
+func _on_trade_offer_result(result: Dictionary) -> void:
+	if _social_ui != null and _social_ui._trade != null:
+		_social_ui._trade.on_offer(result)
+
+func _on_trade_gift_result(result: Dictionary) -> void:
+	if _social_ui != null and _social_ui._trade != null:
+		_social_ui._trade.on_gift(result)
+	if result.get("ok", false) == true:
+		_trades_repull()
+
+func _on_trade_accept_result(result: Dictionary) -> void:
+	if _social_ui != null and _social_ui._trade != null:
+		_social_ui._trade.on_accept(result)
+	if result.get("ok", false) == true:
+		_trades_repull()
+
+func _on_trade_cancel_result(result: Dictionary) -> void:
+	if _social_ui != null and _social_ui._trade != null:
+		_social_ui._trade.on_cancel(result)
+
+## Ответ GET /api/trade/peer_collection: только в слой. Гейд на null обязателен
+## как у остальных forwarder'ов: сигнал живёт на автозагрузке Net, а _social_ui
+## строится позже, и selftest эмитит этот результат напрямую.
+func _on_trade_peer_collection_result(result: Dictionary) -> void:
+	if _social_ui != null and _social_ui._trade != null:
+		_social_ui._trade.on_peer_collection(result)
+
+## §8.4: после свершившейся переноски карты авторитетны только серверные ответы.
+## Перебираем коллекцию тем же путём, что и обычно (Net.sigil_collection →
+## SigilManager._on_collection_result), и берём inbox — оттуда же приходят
+## trades_pending и остаток лимита. Отдельного polling-таймера нет.
+func _trades_repull() -> void:
+	Net.sigil_collection(_online._device_id)
+	Net.social_inbox(_online._device_id)
+	_engine._refresh_header()
 
 func _on_friend_request_result(result: Dictionary) -> void:
 	# R8 (задача 7): единая точка отказа заявки «в друзья» — глобальный тост.
@@ -1196,10 +1291,15 @@ func _init_new_game() -> bool:
 	_engine.brew_epoch += 1
 	_engine.inventory.clear()
 	_engine.known_recipes.clear()
+	_engine.known_recipe_defs.clear()
 	_engine.selected.clear()
 	_engine.upgrades.clear()
 	_engine.spring_on = false
+	_engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	_engine.spring_buffer = {}
+	_engine.spring_sources = ["water"]
 	_pages._spring_clock = 0.0
+	_contracts.reset_new_game()
 	_pages._bench_target = ""
 	_pages._bench_on = false
 	_pages._bench_clock = 0.0
@@ -1207,8 +1307,8 @@ func _init_new_game() -> bool:
 	_engine._source_taps = 0
 	for item_id in BASE_IDS:
 		_engine.inventory[item_id] = 5
-	_engine.known_recipes[_pair_key("fire", "water")] = true
-	_engine.known_recipes[_pair_key("earth", "fire")] = true
+	_engine.learn_recipe("fire", "water")
+	_engine.learn_recipe("earth", "fire")
 	_engine.ether = START_ETHER
 	_engine.ether_overflow = 0
 	_engine.mastery_rank = 0
@@ -1328,7 +1428,9 @@ func _build_ui() -> void:
 	# раздела. 19 px, а не 22-24: при ширине 540 px ряд из шести кнопок 46×46
 	# оставляет заголовку ~216 px, а рунический в 22 px требует 235 px и при
 	# AUTOWRAP_WORD_SMART уезжает на две строки; в 19 px это 203 px.
-	var title := _label("ПЕТЛЯ АЛХИМИКА", 19)
+	var title := _label("ПЕТЛЯ АЛХИМИКА", 15)
+	title.autowrap_mode = TextServer.AUTOWRAP_OFF
+	title.clip_text = true
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if _font_runic != null:
 		title.add_theme_font_override("font", _font_runic)
@@ -1390,6 +1492,7 @@ func _build_ui() -> void:
 	head.add_child(me_btn)
 
 	var ether_row := HBoxContainer.new()
+	ether_row.name = "EtherRow"
 	ether_row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	ether_row.add_theme_constant_override("separation", 8)
 	root.add_child(ether_row)
@@ -1406,6 +1509,15 @@ func _build_ui() -> void:
 	market_btn.tooltip_text = "Покупки, награды за просмотр и приватность"
 	market_btn.pressed.connect(_shop.open)
 	ether_row.add_child(market_btn)
+	# Доска живёт в нижнем ряду, а не в шапке: вход в неё — не счётчик и не
+	# настройки, а «дело дня», рядом с Домом и Лавкой.
+	var contracts_btn := _small_button("", Vector2(46, 34), 0)
+	contracts_btn.name = "ContractsBtn"
+	_contracts_header_btn = contracts_btn
+	UIIcon.into_button(contracts_btn, "board", 20)
+	contracts_btn.tooltip_text = "Контрактная доска: дневные и недельные задания"
+	contracts_btn.pressed.connect(_open_contract_board)
+	ether_row.add_child(contracts_btn)
 	var friends_btn := _small_button("Друзья", Vector2(96, 34), 2)
 	friends_btn.tooltip_text = "Друзья, заявки и личные сообщения"
 	friends_btn.pressed.connect(_open_social)
@@ -1851,11 +1963,7 @@ func _show_challenge_win_popup(item_id: String, target_name: String, a: String, 
 	var head := "Ты первым в мире получил вещество из «%s»!" if first else "Цель дня выполнена: вещество из «%s»!"
 	_popup_sub.text = head + "\n%s + %s → %s\n+%d эфира" % [
 		target_name, _online._item_name(a), _online._item_name(b), _online._item_name(item_id), CHALLENGE_REWARD]
-	_popup_dim.visible = true
-	_popup.visible = true
-	_popup.scale = Vector2(0.7, 0.7)
-	var tw := create_tween()
-	tw.tween_property(_popup, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
+	Juice.open(_popup_dim, _popup)
 	Sfx.legendary()
 
 func _show_discovery_popup(item_id: String, a: String, b: String, milestones: Array = []) -> void:
@@ -1891,16 +1999,11 @@ func _present_popup(item_id: String, subtext: String, title: String = "", title_
 	_popup_title.add_theme_color_override("font_color", title_color)
 	_popup_orb.setup(item_id, _item_colors.get(item_id, Color(0.7, 0.8, 0.9)), true, _online._item_glyph(item_id))
 	_popup_sub.text = subtext
-	_popup_dim.visible = true
-	_popup.visible = true
-	_popup.scale = Vector2(0.7, 0.7)
-	var tw := create_tween()
-	tw.tween_property(_popup, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
+	Juice.open(_popup_dim, _popup)
 	Sfx.brew_discover()
 
 func _hide_popup() -> void:
-	_popup_dim.visible = false
-	_popup.visible = false
+	Juice.close(_popup_dim, _popup)
 	Sfx.click()
 
 func _show_sigil_card(tex: ImageTexture, item_id: String, display_name: String, rarity: String) -> void:
@@ -2201,6 +2304,115 @@ func _demo_seed_sigil_coll() -> void:
 		_:
 			pass
 
+func _demo_seed_trades() -> void:
+	# Кадры приёмки §12.2. Живого сервера нет, поэтому список и коллекция
+	# подставляются в те же поля, которые наполняет net-ответ (образец —
+	# _demo_seed_sigil_coll). Экран открывается настоящей кнопкой «Обменять»
+	# (_open_trade), а не прямым TradeUI.new(): иначе кадр не доказывал бы
+	# вход, который рисует игрок.
+	_sigil.set_catalog([
+		{"id": "clay", "set": "earth", "rarity": "common", "ether_cost": 50,
+			"recipe": [{"item_id": "clay", "qty": 12}, {"item_id": "water", "qty": 20}],
+			"process": "осадок и прессовка", "stage": "nigredo",
+			"fallback_name": "Глина", "object_type": "object", "seed": 90210},
+		{"id": "metal", "set": "earth", "rarity": "epic", "ether_cost": 400,
+			"recipe": [{"item_id": "metal", "qty": 30}, {"item_id": "fire", "qty": 45}],
+			"process": "плавка и закалка", "stage": "albedo",
+			"fallback_name": "Металл", "object_type": "relic", "seed": 90211},
+		{"id": "mountain", "set": "earth", "rarity": "legendary", "ether_cost": 800,
+			"recipe": [{"item_id": "mountain", "qty": 60}, {"item_id": "cloud", "qty": 80}],
+			"process": "горный венец", "stage": "rubedo",
+			"fallback_name": "Гора", "object_type": "planet", "seed": 90212}],
+		[{"id": "earth", "title": "Стихия Земли",
+			"card_ids": ["clay", "metal", "mountain"]}], "demo-trades")
+	# clay — 2 копии (не последняя), metal — 1 (последняя: именно она даёт
+	# is_last-предупреждение на кадре подтверждения).
+	_sigil._on_collection_result({"ok": true, "cards": {
+		"clay": {"copies": 2, "first_at": "2026-09-28T10:00:00"},
+		"metal": {"copies": 1, "first_at": "2026-09-30T18:30:00"},
+		"mountain": {"copies": 1, "first_at": "2026-10-01T09:15:00"}},
+		"extras": [{"craft_id": "c-17", "rarity": "chromatic",
+			"llm_name": "Серный круг", "crafted_at": "2026-10-01T09:00:00"}],
+		"milestones": {"earth": [3]}})
+	_social_ui._open_trade("dev-b")
+	var tr = _social_ui._trade
+	# Коллекция друга — то же поле, которое наполняет ответ
+	# GET /api/trade/peer_collection (§2.2). Без него панель «Прошу» на
+	# конструкторе была бы затемнена, а миниатюры чужих карт в списке — пусты:
+	# кадр принимался бы по нарисованному «недоступно».
+	tr.set_peer_coll({"cards": {
+		"clay": {"copies": 2, "first_at": "2026-10-05T12:00:00"},
+		"mountain": {"copies": 1, "first_at": "2026-10-06T08:20:00"}},
+		"extras": [{"craft_id": "c-17", "rarity": "chromatic",
+			"llm_name": "Серный круг", "crafted_at": "2026-10-04T21:10:00"}]})
+	# remain=0 на кадре списка: только при нуле строка лимита показывает дату
+	# сброса (§7.2), а на конструкторе нужен ненулевой остаток — иначе гейт
+	# кнопки «Далее» законно серой, и кадр не докажет проходимый путь.
+	#
+	# Позиции живут в give_items/want_items: плоские S2-колонки удалены с сервера
+	# (миграция 004), а имя подписывает сервер — и для вида, и для экземпляра.
+	tr._list = {
+		"ok": true, "week_limit": 10,
+		"remain": 0 if _demo_harness._action_trade_list else 7,
+		"incoming": [
+			{"id": 101, "maker_device": "dev-b", "taker_device": _online._device_id,
+				"maker_nick": "Николя", "taker_nick": "", "state": "pending",
+				"created_at": "2026-10-20T09:12:00",
+				"give_items": [{"card_id": "", "craft_id": "c-17", "name": "Серный круг"},
+					{"card_id": "mountain", "craft_id": "", "name": "Гора"}],
+				"want_items": [{"card_id": "clay", "craft_id": "", "name": "Глина"}]},
+			{"id": 102, "maker_device": "dev-c", "taker_device": _online._device_id,
+				"maker_nick": "Аня", "taker_nick": "", "state": "pending",
+				"created_at": "2026-10-19T18:40:00",
+				"give_items": [{"card_id": "mountain", "craft_id": "", "name": "Гора"}],
+				"want_items": [{"card_id": "metal", "craft_id": "", "name": "Металл"}]}],
+		"outgoing": [
+			{"id": 103, "maker_device": _online._device_id, "taker_device": "dev-b",
+				"maker_nick": "", "taker_nick": "Николя", "state": "pending",
+				"created_at": "2026-10-20T11:05:00",
+				"give_items": [{"card_id": "clay", "craft_id": "", "name": "Глина"}],
+				"want_items": [{"card_id": "", "craft_id": "c-23",
+					"name": "Лазурный виток"}]}],
+		"history": [
+			{"id": 98, "maker_device": "dev-b", "taker_device": _online._device_id,
+				"maker_nick": "Николя", "taker_nick": "", "state": "accepted",
+				"created_at": "2026-10-14T08:00:00",
+				"give_items": [{"card_id": "mountain", "craft_id": "", "name": "Гора"}],
+				"want_items": [{"card_id": "", "craft_id": "c-09",
+					"name": "Кобальтовая тропа"}]},
+			{"id": 97, "maker_device": _online._device_id, "taker_device": "dev-c",
+				"maker_nick": "", "taker_nick": "Аня", "state": "accepted",
+				"created_at": "2026-10-12T20:30:00",
+				"give_items": [{"card_id": "", "craft_id": "c-31",
+					"name": "Пепельный язык"}],
+				"want_items": []},
+			{"id": 96, "maker_device": "dev-c", "taker_device": _online._device_id,
+				"maker_nick": "Аня", "taker_nick": "", "state": "cancelled",
+				"created_at": "2026-10-10T07:15:00",
+				"give_items": [{"card_id": "metal", "craft_id": "", "name": "Металл"}],
+				"want_items": [{"card_id": "clay", "craft_id": "", "name": "Глина"}]}]}
+	if _demo_harness._action_trade_gift:
+		tr.open_builder()
+		tr._offer = {"give": [tr.pick("", "c-31", 1, "Пепельный язык")],
+			"want": [], "gift": true}
+		tr._render()
+	elif _demo_harness._action_trade_confirm:
+		tr.open_builder()
+		tr._offer = {"give": [tr.pick("metal", "", 1, "Металл")],
+			"want": [tr.pick("", "c-17", 1, "Серный круг")], "gift": false}
+		tr._render()
+		tr.open_confirm()
+	elif _demo_harness._action_trade_build:
+		tr.open_builder()
+		# Две ячейки одного вида — ровно то, чего прежняя форма «одна карта на
+		# сторону» выразить не могла: N↔M показывает их двумя карманами ряда.
+		tr._offer = {"give": [tr.pick("clay", "", 2, "Глина"),
+			tr.pick("clay", "", 2, "Глина")],
+			"want": [tr.pick("", "c-17", 1, "Серный круг")], "gift": false}
+		tr._render()
+	else:
+		tr._render()
+
 
 ## Наборы демо-каталога: четыре стихии по 25 карт — свои предметы категории
 ## первыми, добивка остальными предметами каталога (CATEGORY_OF) до 25.
@@ -2304,8 +2516,7 @@ func _build_confirm() -> void:
 	btns.add_child(cancel)
 
 func _hide_confirm() -> void:
-	_confirm_dim.visible = false
-	_confirm.visible = false
+	Juice.close(_confirm_dim, _confirm)
 	_engine._pending_item = ""
 	_engine._pending_plan = {}
 	Sfx.click()
@@ -2371,8 +2582,6 @@ func _clean_str(v) -> String:
 
 # ---------- письма Светика + Атлас — в game/riddles.gd (оп B2) ----------
 
-# ---------- дневной круг + недельный слой — в game/retention.gd (R2) ----------
-
 # ---------- R8: см. game/online.gd (4547-4794) ----------
 
 
@@ -2418,6 +2627,8 @@ func _close_sigil_craft_screen() -> void:
 	_sigil_ui._close_sigil_craft_screen()
 func _close_sigil_collection() -> void:
 	_sigil_ui._close_sigil_collection()
+func _open_contract_board() -> void:
+	ContractBoard.open(self)
 func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	_sigil_ui._open_sigil_fullscreen(entry)
 func _close_sigil_fullscreen() -> void:

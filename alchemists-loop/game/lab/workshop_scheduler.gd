@@ -152,8 +152,15 @@ func _manual_active() -> bool:
 	return _offline and _manual_left > 0 and not g._engine._craft_job.is_empty() and not workshop.is_read_only()
 
 func _spring_active() -> bool:
-	return g._engine.spring_on and g._engine._mode_unlocked("spring") \
-		and (not _offline or int(_stats["spring_items"]) < Game.SPRING_OFFLINE_MAX)
+	if not g._engine.spring_on or not g._engine._mode_unlocked("spring"):
+		return false
+	return true
+
+func _line_speed() -> float:
+	# Одно место для множения: _next_event и _elapse обязаны давать одинаковую
+	# скорость, иначе интервал событий и накопление фазы разъедутся.
+	return (Game.BENCH_OFFLINE_FACTOR if _offline else 1.0) \
+		* (1.0 + g._contracts.buff_power("workshop_speed"))
 
 func _next_event(remaining: float) -> float:
 	var dt := remaining
@@ -161,8 +168,8 @@ func _next_event(remaining: float) -> float:
 	if is_finite(rate) and rate > 0.0 and g._engine.ether < g._engine._max_ether():
 		dt = minf(dt, maxf(EPS, (1.0 - g._engine.regen_clock) / rate))
 	if _spring_active():
-		dt = minf(dt, maxf(EPS, Game.SPRING_INTERVAL - g._pages._spring_clock))
-	var speed := Game.BENCH_OFFLINE_FACTOR if _offline else 1.0
+		dt = minf(dt, maxf(EPS, g._engine.spring_interval() - g._pages._spring_clock))
+	var speed: float = _line_speed()
 	for line in workshop.lines:
 		if _timer_active(line):
 			dt = minf(dt, maxf(EPS, (_interval(line) - float(line["phase_seconds"])) / speed))
@@ -182,16 +189,19 @@ func _elapse(dt: float) -> void:
 		if gain > 0: _mutation += 1
 	if _spring_active():
 		g._pages._spring_clock += dt
-		if g._pages._spring_clock >= Game.SPRING_INTERVAL - EPS:
-			g._pages._spring_clock = maxf(0.0, g._pages._spring_clock - Game.SPRING_INTERVAL)
-			var source: String = g._engine.spring_source
-			g._engine.inventory[source] = int(g._engine.inventory.get(source, 0)) + 1
-			_stats["spring_items"] += 1
-			_mutation += 1
+		var interval: float = g._engine.spring_interval()
+		if g._pages._spring_clock >= interval - EPS:
+			g._pages._spring_clock = maxf(0.0, g._pages._spring_clock - interval)
+			var amount := g._contracts.spring_yield()
+			for source in g._engine.spring_sources:
+				var granted: int = g._engine._spring_gain(String(source), amount)
+				if granted > 0:
+					_stats["spring_items"] += granted
+					_mutation += 1
 	elif _offline and g._engine.spring_on and g._engine._mode_unlocked("spring"):
-		# The capped spring keeps a fractional clock, not banked deliveries.
-		g._pages._spring_clock = fposmod(g._pages._spring_clock + dt, Game.SPRING_INTERVAL)
-	var speed := Game.BENCH_OFFLINE_FACTOR if _offline else 1.0
+		var interval: float = g._engine.spring_interval()
+		g._pages._spring_clock = fposmod(g._pages._spring_clock + dt, interval)
+	var speed: float = _line_speed()
 	for line in workshop.lines:
 		if _timer_active(line):
 			line["phase_seconds"] = float(line["phase_seconds"]) + dt * speed

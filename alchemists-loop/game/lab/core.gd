@@ -7,6 +7,16 @@ var g: Game
 
 var inventory: Dictionary = {}
 var known_recipes: Dictionary = {}
+# Самодостаточные определения известных пар: pair_key → {"a","b","out"}.
+# membership known_recipes == known_recipe_defs.keys(); храним в сейве целиком,
+# чтобы загрузка не зависела от пересечения с g.RECIPES (фикс Bug B).
+var known_recipe_defs: Dictionary = {}
+# Envelope-состояние единого sync-пакета: monotonic client_rev (бамп в _save_game,
+# Task 10) и anchor_accrual_ts — момент последнего оффлайн-банка по wall-clock
+# (Task 9/10 clamp'ят Part C). Держим в Engine, чтобы сейв round-trip'ил их как
+# остальные g._engine.* поля.
+var client_rev: int = 0
+var anchor_accrual_ts: float = 0.0
 var selected: Array[String] = []
 var ether: int = Game.START_ETHER
 var attempts: int = 0
@@ -56,6 +66,9 @@ var ether_overflow: int = 0
 var mastery_rank: int = 0
 var spring_source := "water"
 var spring_on := false
+var spring_levels := {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+var spring_buffer := {}  # element_id -> int, сколько Родник произвёл и не потрачено
+var spring_sources := ["water"]  # выбранные источники, длина = 1 + sources
 var _source_taps := 0
 var _collect_all_ms := 0  # антиспам кнопки «Все»
 var _collect_last_gain := 1
@@ -292,16 +305,54 @@ func _sage_multiplier() -> float:
 func _max_ether() -> int:
 	return Game.MAX_ETHER + 50 * _up_lvl("ether_cap") + _collection_cap_bonus() \
 		+ 40 * sage_gold + g._progress_ui._quest_cap_bonus() + g._progress_ui._ach_cap_bonus() + g._resonance._res_cap_bonus() \
-		+ g._retort._essence_cap_bonus() + g._riddles._letter_cap_bonus() + g._riddles._atlas_cap_bonus() + g._retention._circle_cap_bonus() \
-		+ g._retention._vein_cap_total + g._sigil.milestone_cap_bonus()
+		+ g._retort._essence_cap_bonus() + g._riddles._letter_cap_bonus() + g._riddles._atlas_cap_bonus() + g._contracts._mile_cap_bonus() \
+		+ g._contracts._vein_cap_total + g._sigil.milestone_cap_bonus()
+
+func spring_interval() -> float:
+	var speed_lvl: int = spring_levels.get("speed", 0)
+	var interval: float = Game.SPRING_INTERVAL * pow(SpringBalance.SPEED_FACTOR, speed_lvl)
+	return maxf(interval, SpringBalance.MIN_INTERVAL)
+
+func spring_purchase(axis: String) -> Dictionary:
+	var lvl: int = spring_levels.get(axis, 0)
+	var table: Array
+	match axis:
+		"speed": table = SpringBalance.SPEED
+		"volume": table = SpringBalance.VOLUME
+		"sources": table = SpringBalance.SOURCES
+		"offline": table = SpringBalance.OFFLINE
+		_: return {"ok": false, "error": "unknown axis"}
+	if lvl >= table.size():
+		return {"ok": false, "error": "max level"}
+	var price: Dictionary = table[lvl]
+	if price.has("req"):
+		for req_axis in price["req"]:
+			if spring_levels.get(req_axis, 0) < price["req"][req_axis]:
+				return {"ok": false, "error": "requires %s >= %d" % [req_axis, price["req"][req_axis]]}
+	var ether_cost: int = price.get("ether", 0)
+	if ether < ether_cost:
+		return {"ok": false, "error": "insufficient ether"}
+	var materials: Dictionary = price.get("materials", {})
+	for mat in materials:
+		if inventory.get(mat, 0) < materials[mat]:
+			return {"ok": false, "error": "insufficient %s" % mat}
+	ether -= ether_cost
+	for mat in materials:
+		inventory[mat] = int(inventory.get(mat, 0)) - materials[mat]
+	spring_levels[axis] = lvl + 1
+	_refresh()
+	g._contracts.on_upgrade("spring", axis, lvl + 1)
+	return {"ok": true, "error": ""}
 
 func _ether_rate() -> float:
 	return (Game.BASE_ETHER_REGEN + 0.35 * float(_up_lvl("ether_regen")) + _collection_regen_bonus() \
 		+ g._progress_ui._quest_regen_bonus() + g._progress_ui._ach_regen_bonus() + g._resonance._res_regen_bonus() \
-		+ g._retention._circle_regen_bonus() + g._retention._fair_regen_total) * _sage_multiplier()
+		+ g._contracts._mile_regen_bonus() + g._contracts._fair_regen_total) \
+		* _sage_multiplier() * (1.0 + g._contracts.buff_power("ether_regen"))
 
 func _brew_time() -> float:
-	return maxf(0.35, g.BREW_SECONDS * pow(0.90, _up_lvl("brew_speed")))
+	return maxf(0.35, g.BREW_SECONDS * pow(0.90, _up_lvl("brew_speed")) \
+		/ (1.0 + g._contracts.buff_power("brew_speed")))
 
 func _content_layer(item_id: String, trail: Array = []) -> int:
 	# Unlike _layer_of, this is independent of the player's known recipe book;
@@ -384,6 +435,8 @@ func _grant_ether(amount: int, _reason: String = "") -> int:
 	var direct := mini(amount, maxi(0, _max_ether() - ether))
 	ether += direct
 	ether_overflow += amount - direct
+	if direct > 0:
+		_fx_ether_gain()
 	return direct
 
 func _experiment_day_key() -> String:
@@ -465,18 +518,29 @@ func _finish_experiment_inputs(a: String, b: String, full_refund: bool) -> void:
 	_experiment_pending_pair.clear()
 	_refresh()
 
+func learn_recipe(a: String, b: String, out: String = "") -> void:
+	# Единственная точка регистрации известного рецепта: держит инвариант
+	# known_recipes.keys() == known_recipe_defs.keys(). При пустом out определение
+	# берётся из каталога (var "known but not brewable" получает out="").
+	var key := g._pair_key(a, b)
+	known_recipes[key] = true
+	if out == "":
+		out = String(g._online._find_recipe(a, b).get("out", ""))
+	known_recipe_defs[key] = {"a": a, "b": b, "out": out}
+
 func _experiment_succeeded(slug: String, a: String, b: String) -> void:
 	# U9 (T12): зеркальный guard — успех без висящего эксперимента начислять нельзя.
 	if not _resource_mutation_allowed() or not g.ITEMS.has(slug) \
 			or not g._online._experiment_pending_matches(a, b):
 		return
-	known_recipes[g._pair_key(a, b)] = true
+	learn_recipe(a, b, slug)
 	inventory[slug] = int(inventory.get(slug, 0)) + 1
 	successes += 1
 	_experiment_pending_pair.clear()
 	_award_synthesis(slug)
 	status_text = "Эксперимент удался: открыто новое вещество «%s»." % g._online._item_name(slug)
 	Analytics.track("experiment_result", {"left": a, "right": b, "result": "created", "output": slug})
+	g._contracts.on_experiment(a, b, true)
 	_refresh()
 	g._saves._save_game()
 
@@ -489,6 +553,7 @@ func _experiment_failed(a: String, b: String, reason: String = "") -> void:
 	_finish_experiment_inputs(a, b, false)
 	status_text = "Эксперимент не дал результата: %s" % (reason if reason != "" else "эти вещества не сочетаются")
 	Analytics.track("experiment_result", {"left": a, "right": b, "result": "rejected"})
+	g._contracts.on_experiment(a, b, false)
 	Sfx.error()
 	g._saves._save_game()
 
@@ -503,10 +568,25 @@ func _spend_ether(amount: int) -> bool:
 	var rest := amount - from_current
 	if rest > 0:
 		ether_overflow -= rest
+	_fx_ether_spent()
 	return true
 
 func _spend_mastery_ether(amount: int) -> bool:
 	return _resource_mutation_allowed() and _spend_ether(amount)
+
+func _fx_ether_spent() -> void:
+	# Эффект в воронке, а не в местах вызова: все траты получают его бесплатно.
+	# Искры нет (R5): _grant_ether вызывается из событийных мест, где мышь
+	# в произвольной точке экрана.
+	if not is_instance_valid(_ether_label):
+		return
+	Juice.pop(_ether_label, UIStyle.GOLD)
+
+
+func _fx_ether_gain() -> void:
+	if not is_instance_valid(_ether_label):
+		return
+	Juice.pop(_ether_label, UIStyle.TEAL)
 
 func _resource_mutation_allowed() -> bool:
 	return not _resource_commit_busy
@@ -601,14 +681,36 @@ func _mode_unlocked(key: String) -> bool:
 		return inventory.size() >= int(m.get("min_items", 0))
 	return false
 
+func _spring_volume_cap() -> int:
+	return int(SpringBalance.VOLUME_CAP[spring_levels.get("volume", 0)])
+
+func _spring_gain(src: String, amount: int) -> int:
+	# Единая точка начисления родникового выхода: и живой тик, и офлайн-реплей
+	# Мастерской. Буфер никогда не превышает кап, избыток сгорает (как эфир
+	# сверх капа), поэтому возвращаем фактическое зачисленное число.
+	if amount <= 0:
+		return 0
+	var room := maxi(0, _spring_volume_cap() - int(spring_buffer.get(src, 0)))
+	var add := mini(amount, room)
+	if add <= 0:
+		return 0
+	spring_buffer[src] = int(spring_buffer.get(src, 0)) + add
+	inventory[src] = int(inventory.get(src, 0)) + add
+	return add
+
 func _spring_tick(delta: float) -> void:
 	if not _mode_unlocked("spring") or not spring_on:
 		return
 	g._pages._spring_clock += delta
-	if g._pages._spring_clock >= Game.SPRING_INTERVAL:
-		g._pages._spring_clock -= Game.SPRING_INTERVAL
-		inventory[spring_source] = int(inventory.get(spring_source, 0)) + 1
-		_refresh()
+	if g._pages._spring_clock >= spring_interval():
+		g._pages._spring_clock -= spring_interval()
+		var produced := false
+		var amount := g._contracts.spring_yield()
+		for src in spring_sources:
+			if _spring_gain(String(src), amount) > 0:
+				produced = true
+		if produced:
+			_refresh()
 
 func _gift_tick(delta: float) -> void:
 	# улучшение «Дары»: +1 случайное открытое вещество каждые 2 минуты
@@ -1246,8 +1348,7 @@ func _auto_craft(item_id: String) -> void:
 		blueprint_note = "Чертёж: −%d%% · " % [int(round((1.0 - Game.BLUEPRINT_DISCOUNT) * 100.0))]
 	g._confirm_l3.text = "%s%sВарок: %d · всего эфир: %d · сейчас этап: %d ⚡ · можно продолжить позже" % [
 		warning_note, blueprint_note, int(plan["total"]), ether_need, stage_cost]
-	g._confirm_dim.visible = true
-	g._confirm.visible = true
+	Juice.open(g._confirm_dim, g._confirm)
 	Sfx.click()
 
 func _record_blueprint(item_id: String, plan: Dictionary) -> void:
@@ -1587,13 +1688,11 @@ func _commit_brew_locked(a: String, b: String, context: Dictionary) -> Dictionar
 			"ether_spent": brew_cost, "mastery_awarded": 0}
 	var key := g._pair_key(a, b)
 	var newly_learned := not known_recipes.has(key)
-	known_recipes[key] = true
+	learn_recipe(a, b, output)
 	inventory[output] = int(inventory.get(output, 0)) + 1
 	_layer_cache.erase(output)
 	successes += 1
 	var mastery_awarded := _award_synthesis(output)
-	g._retention._circle_on_discovery(first_time)
-	g._retention._circle_on_local_brew(output)
 	var milestones: Array = []
 	if first_time:
 		milestones = _grant_first_open(output)
@@ -1602,15 +1701,14 @@ func _commit_brew_locked(a: String, b: String, context: Dictionary) -> Dictionar
 	if output == "spark":
 		g._spirit._companion_unlock()
 	g._guild._quest_on_brew(output)
-	g._retention._fair_report_brew(a, b)
-	g._retention._fair_on_brew(output)
+	g._contracts._fair_report_brew(a, b)
+	g._contracts._fair_on_brew(output)
 	# план 2 §3.3.1: варка серверно-известной пары = личное открытие (офлайн —
 	# уйдёт в pending_server, онлайн — зарегистрируется сразу).
-	g._retention._vein_report_pair(a, b, output)
-	# §2.4: очки цели — по факту успеха и фактического слоя; заявка снимается
-	# только здесь (отмена/провал не платят и не сгорают молча — она сбросится
-	# следующим успешным путём или новой модалкой).
-	g._retention._circle_on_goal_brew(output)
+	g._contracts._vein_report_pair(a, b, output)
+	# доска v2 Task 4: очки цели по слою выхода (старая §2.4 лестница CIRCLE_GOALS)
+	# удалены — вехи кормятся тирами закрытых контрактов в Contracts.claim().
+	g._contracts.on_brew(output, a, b, newly_learned, source)
 	if source != "offline_workshop":
 		Analytics.track("combine_try", {"left": a, "right": b, "result": "new" if newly_learned else "known", "output": output, "source": source})
 	return {"failed": false, "output": output, "newly_learned": newly_learned,

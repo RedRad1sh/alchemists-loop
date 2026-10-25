@@ -23,7 +23,9 @@ static func run(g: Game) -> void:
 	Selftest.check("context synchronous resource guard exists", g._engine.has_method("_resource_mutation_allowed"))
 	if not has_context:
 		return
-	var objects: Array = [g._engine, g._online, g._retention, g._riddles,
+	# доска v2 Task 5: Retention удалён — его запись в списке была no-op'ом
+	# (страница-виджеты без состояния); последующие индексы сдвигаются на 1.
+	var objects: Array = [g._engine, g._online, g._riddles,
 		g._guild, g._spirit, g._progress_ui, g._hub, g._saves, g._sigil_ui, Net]
 	var workshop = g.get("_workshop")
 	if workshop != null:
@@ -31,6 +33,13 @@ static func run(g: Game) -> void:
 	var snapshots: Array = []
 	for object in objects:
 		snapshots.append(_snapshot(object))
+	# _book_sig — производная от known_recipes.size/inventory.size, но не
+	# перевычисляется при прямых мутациях known_recipes в других сьютах. Если до
+	# нас кто-то съел рецепты без _refresh, снапшот зафиксирует устаревший
+	# _book_sig, а _refresh в конце пересчитает его — и сравнение краснеет.
+	# Перезаписываем снапшотовый _book_sig текущим вычисленным, чтобы он
+	# соответствовал состоянию после финального _refresh.
+	snapshots[0]["_book_sig"] = g._engine.known_recipes.size() * 100000 + g._engine.inventory.size()
 	var processing := g.is_processing()
 	var selftest := g._selftest
 	var recipes := g.RECIPES.duplicate(true)
@@ -55,8 +64,8 @@ static func run(g: Game) -> void:
 	g.set_process(processing)
 	g._engine._refresh()
 	Selftest.check("context fixture restores resource and gameplay snapshots",
-		_snapshot(g._engine) == snapshots[0] and _snapshot(g._retention) == snapshots[2]
-		and _snapshot(g._saves) == snapshots[8] and _snapshot(Net) == snapshots[10])
+		_snapshot(g._engine) == snapshots[0] and _snapshot(g._saves) == snapshots[7]
+		and _snapshot(Net) == snapshots[9])
 
 static func _context(source := "workshop", discount: Variant = 1.0) -> Dictionary:
 	return {"source": source, "production": source != "manual", "discount": discount}
@@ -223,8 +232,10 @@ static func _test_offline(g: Game) -> void:
 	g._riddles._atlas_today = {"solved_by_me": false}
 	g._riddles._letter_pending.clear()
 	g._riddles._atlas_pending.clear()
-	g._retention._circle_disc_day = g._retention._circle_today()
-	g._retention._circle_disc = 0
+	# Доска v2 Task 4: счётчик «Круга» (disc) удалён — офлайн-варки цеха и так
+	# не двигают счётчики доски (спека §6.4). Замена проверки на disc: живой
+	# снимок прогресса дневных контрактов должен остаться нетронутым.
+	var board_prog_before := g._contracts._contracts_daily_prog.duplicate(true)
 	var quest_before := int(g._guild._quest_brew.get("steam", 0))
 	g._selftest = false
 	var first := _commit(g, "fire", "water", _context("offline_workshop"))
@@ -233,8 +244,9 @@ static func _test_offline(g: Game) -> void:
 	Selftest.check("context offline suppresses per-operation HTTP without changing network state",
 		not bool(first.get("failed", true)) and not bool(second.get("failed", true))
 		and Net._queue.is_empty() and g._online._net_enabled)
-	Selftest.check("context offline retains local quests and Circle per real output",
-		int(g._guild._quest_brew.get("steam", 0)) == quest_before + 2 and g._retention._circle_disc == 2)
+	Selftest.check("context offline retains local quests and leaves board counters untouched",
+		int(g._guild._quest_brew.get("steam", 0)) == quest_before + 2
+		and g._contracts._contracts_daily_prog == board_prog_before)
 	Selftest.check("context offline retains deduplicated deferred riddle work",
 		g._riddles._letter_pending == [g._pair_key("fire", "water")]
 		and g._riddles._atlas_pending == [g._pair_key("fire", "water")])

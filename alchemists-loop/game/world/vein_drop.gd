@@ -7,10 +7,12 @@ class_name VeinDrop
 var drop_color := Color(0.6, 0.75, 0.9)
 var status := "registered"
 
-func setup(col: Color, st: String) -> void:
+# sz — размер капли: страница Task 5 жила на 28×34, карточка доски v2 просит
+# мини-каплю (184-широкая бумага не вмещает штатный размер в три ряда).
+func setup(col: Color, st: String, sz: Vector2 = Vector2(28, 34)) -> void:
 	drop_color = col
 	status = st
-	custom_minimum_size = Vector2(28, 34)
+	custom_minimum_size = sz
 	queue_redraw()
 
 func _draw() -> void:

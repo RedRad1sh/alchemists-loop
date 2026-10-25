@@ -20,7 +20,7 @@ func _init(game: Game) -> void:
 	original_orbs = g._engine._item_orbs.duplicate()
 	process_was_on = g.is_processing()
 	for object in [g, g._engine, g._online, g._pages, g._saves, g._guild,
-		g._progress_ui, g._spirit, g._retention, g._resonance, g._retort,
+		g._progress_ui, g._spirit, g._resonance, g._retort,
 		g._riddles, g._home, g._hub, g._sigil, Net, Analytics, UserData, Sfx]:
 		capture(object)
 	capture(g.get("_workshop"))

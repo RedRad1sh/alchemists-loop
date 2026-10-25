@@ -342,16 +342,14 @@ func _build_retort_picker() -> void:
 	var close := g._small_button("Закрыть", Vector2(150, 44))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.pressed.connect(func() -> void:
-		_retort_dim.visible = false
-		_retort_popup.visible = false
+		Juice.close(_retort_dim, _retort_popup)
 		Sfx.click())
 	col.add_child(close)
 
 func _open_retort_picker(slot: int) -> void:
 	_retort_pick_slot = slot
 	_rebuild_retort_rows()
-	_retort_dim.visible = true
-	_retort_popup.visible = true
+	Juice.open(_retort_dim, _retort_popup)
 	Sfx.click()
 
 func _rebuild_retort_rows() -> void:
@@ -403,8 +401,7 @@ func _rebuild_retort_rows() -> void:
 func _on_retort_pick(sub: String) -> void:
 	var slot := _retort_pick_slot
 	_retort_pick_slot = -1
-	_retort_dim.visible = false
-	_retort_popup.visible = false
+	Juice.close(_retort_dim, _retort_popup)
 	if _retort_start(slot, sub):
 		g._engine._refresh()
 	else:

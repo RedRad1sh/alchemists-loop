@@ -106,15 +106,13 @@ func _open_profile() -> void:
 		g._engine.inventory.size(), g.ITEMS.size(), g._engine.known_recipes.size(), g.RECIPES.size(),
 		g._progress_ui._ach_done.size(), Game.ACHIEVEMENTS.size(), g._progress_ui._set_done.size(),
 		g._engine.sage_gold, g._spirit._companion_level_for(g._spirit._companion_affinity), g._progress_ui._ach_world_first,
-		g._retention._circle_rank_title(g._retention._circle_rank_level())]
+		g._contracts.rank_title(g._contracts.rank_level())]
 	_profile_stats.add_theme_color_override("font_color", Color(0.85, 0.9, 0.95))
-	_profile_dim.visible = true
-	_profile_popup.visible = true
+	Juice.open(_profile_dim, _profile_popup)
 	Sfx.click()
 
 func _close_profile() -> void:
-	_profile_dim.visible = false
-	_profile_popup.visible = false
+	Juice.close(_profile_dim, _profile_popup)
 	Sfx.click()
 
 func _clean_player_nick(raw: String) -> String:
@@ -268,15 +266,13 @@ func _build_craftable_popup() -> void:
 	var close := g._small_button("Закрыть", Vector2(150, 44))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.pressed.connect(func() -> void:
-		_craftable_dim.visible = false
-		_craftable_popup.visible = false
+		Juice.close(_craftable_dim, _craftable_popup)
 		Sfx.click())
 	col.add_child(close)
 
 func _open_craftable() -> void:
 	_rebuild_craftable_rows()
-	_craftable_dim.visible = true
-	_craftable_popup.visible = true
+	Juice.open(_craftable_dim, _craftable_popup)
 	Sfx.click()
 
 func _rebuild_craftable_rows() -> void:
@@ -315,8 +311,7 @@ func _rebuild_craftable_rows() -> void:
 		_craftable_list.add_child(btn)
 
 func _try_craftable_pair(a: String, b: String) -> void:
-	_craftable_dim.visible = false
-	_craftable_popup.visible = false
+	Juice.close(_craftable_dim, _craftable_popup)
 	if not g._online._has_ingredients(a, b):
 		g._engine.status_text = "Не хватает ингредиентов: %s + %s." % [g._online._item_name(a), g._online._item_name(b)]
 		Sfx.error()
@@ -388,8 +383,7 @@ func _build_settings_popup() -> void:
 	var close := g._small_button("Закрыть", Vector2(150, 44))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.pressed.connect(func() -> void:
-		_settings_dim.visible = false
-		_settings_popup.visible = false
+		Juice.close(_settings_dim, _settings_popup)
 		Sfx.click())
 	col.add_child(close)
 
@@ -397,8 +391,7 @@ func _open_settings() -> void:
 	_music_toggle.text = "Музыка: вкл" if Sfx.music_on else "Музыка: выкл"
 	_sfx_slider.value = Sfx.sfx_volume
 	_music_slider.value = Sfx.music_volume
-	_settings_dim.visible = true
-	_settings_popup.visible = true
+	Juice.open(_settings_dim, _settings_popup)
 	Sfx.click()
 
 # ---------- О игре / Credits (заглушка) ----------
@@ -461,16 +454,14 @@ func _build_credits_popup() -> void:
 	var close := g._small_button("Закрыть", Vector2(140, 42))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.pressed.connect(func() -> void:
-		_credits_dim.visible = false
-		_credits_popup.visible = false
+		Juice.close(_credits_dim, _credits_popup)
 		Sfx.click())
 	col.add_child(close)
 
 func _open_credits() -> void:
 	if _credits_dim == null:
 		_build_credits_popup()
-	_credits_dim.visible = true
-	_credits_popup.visible = true
+	Juice.open(_credits_dim, _credits_popup)
 	Sfx.click()
 
 # ---------- журнал событий ----------
@@ -517,15 +508,13 @@ func _build_journal_popup() -> void:
 	var close := g._small_button("Закрыть", Vector2(150, 44))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.pressed.connect(func() -> void:
-		_journal_dim.visible = false
-		_journal_popup.visible = false
+		Juice.close(_journal_dim, _journal_popup)
 		Sfx.click())
 	col.add_child(close)
 
 func _open_journal() -> void:
 	_rebuild_journal_rows()
-	_journal_dim.visible = true
-	_journal_popup.visible = true
+	Juice.open(_journal_dim, _journal_popup)
 	Sfx.click()
 
 func _rebuild_journal_rows() -> void:
@@ -602,8 +591,7 @@ func _build_upgrade_popup() -> void:
 	var close := g._small_button("Закрыть", Vector2(150, 44))
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.pressed.connect(func() -> void:
-		_up_dim.visible = false
-		_up_popup.visible = false
+		Juice.close(_up_dim, _up_popup)
 		Sfx.click())
 	col.add_child(close)
 
@@ -646,16 +634,14 @@ func _build_prestige_popup() -> void:
 	btns.add_child(ok)
 	var cancel := g._small_button("Отмена", Vector2(120, 46))
 	cancel.pressed.connect(func() -> void:
-		_prestige_dim.visible = false
-		_prestige_popup.visible = false
+		Juice.close(_prestige_dim, _prestige_popup)
 		Sfx.click())
 	btns.add_child(cancel)
 
 func _open_upgrades() -> void:
 	_rebuild_up_rows()
 	_refresh_prestige_ui()
-	_up_dim.visible = true
-	_up_popup.visible = true
+	Juice.open(_up_dim, _up_popup)
 	Sfx.click()
 
 func _prestige_gain() -> int:
@@ -688,8 +674,7 @@ func _open_prestige_confirm() -> void:
 	if gain <= 0:
 		return
 	_prestige_confirm_label.text = "Котёл перегонит лабораторию в чистое золото мудрецов.\n\nТеряешь: вещества, рецепты, улучшения, текущий эфир и задания линий.\nСохраняешь: мастерство Мастерской, оборудование и автономность, резерв, архивные печати, достижения, комплекты, дружбу Светика, имя.\n\nПолучишь: +%d Золота мудрецов (навсегда)." % gain
-	_prestige_dim.visible = true
-	_prestige_popup.visible = true
+	Juice.open(_prestige_dim, _prestige_popup)
 	Sfx.click()
 
 func _do_prestige() -> void:
@@ -705,13 +690,15 @@ func _do_prestige() -> void:
 	for b in Game.BASE_IDS:
 		g._engine.inventory[b] = 3
 	g._engine.known_recipes.clear()
-	g._engine.known_recipes[g._pair_key("fire", "water")] = true
-	g._engine.known_recipes[g._pair_key("earth", "fire")] = true
+	g._engine.known_recipe_defs.clear()
+	g._engine.learn_recipe("fire", "water")
+	g._engine.learn_recipe("earth", "fire")
 	g._engine.upgrades.clear()
 	g._engine._craft_job.clear()
 	g._engine._blueprints.clear()
 	g._reset_world_clock()
 	g._workshop.reset_prestige()
+	g._contracts.on_prestige()
 	g._engine.ether = Game.START_ETHER
 	g._engine.attempts = 0
 	g._engine.successes = 0
@@ -726,6 +713,10 @@ func _do_prestige() -> void:
 	g._engine._source_taps = 0
 	g._engine.spring_on = false
 	g._engine.spring_source = "water"
+	for axis in g._engine.spring_levels:
+		g._engine.spring_levels[axis] = mini(g._engine.spring_levels[axis], SpringBalance.PRESTIGE_KEEP_LEVEL)
+	g._engine.spring_buffer = {}
+	g._engine.spring_sources = ["water"]
 	g._pages._bench_target = ""
 	g._pages._bench_on = false
 	g._guild._quests_done.clear()
@@ -735,8 +726,7 @@ func _do_prestige() -> void:
 	g._guild._order_done.clear()
 	g._engine._layer_cache.clear()
 	g._engine._cost_cache.clear()
-	_prestige_dim.visible = false
-	_prestige_popup.visible = false
+	Juice.close(_prestige_dim, _prestige_popup)
 	g._saves._save_game()
 	g._engine._refresh()
 	g._pages._ensure_modes()

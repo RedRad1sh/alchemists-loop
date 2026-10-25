@@ -26,9 +26,6 @@ var _bench_toggle_btn: Button
 var _bench_info: Label
 var _bench_page_labels = null
 var _workshop_view: Control = null
-var _spring_toggle_btn: Button
-var _spring_info: Label
-var _spring_pick_btn: Dictionary = {}
 
 # Эксперимент (v1: two reagents; hash/API version leaves room for 3–4).
 var _experiment_a := ""
@@ -1069,10 +1066,6 @@ func _ensure_modes() -> void:
 				g._riddles._build_atlas_page(box)
 			"atlas":
 				g._riddles._build_atlas_page(box)
-			"circle":
-				g._retention._build_circle_page(box)
-			"week":
-				g._retention._build_week_page(box)
 		_tools_sub.add_child(box)
 		box.visible = false
 		_mode_pages[key] = box
@@ -1255,32 +1248,16 @@ func _refresh_experiment_page() -> void:
 		_experiment_button.disabled = not bool(check.get("ok", false)) or g._engine._experiment_pending_pair.size() > 0
 
 func _build_spring_page(container: VBoxContainer) -> void:
-	# Один горизонтальный ряд стихий: орб 56 + подпись, без россыпи панелей.
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 12)
-	container.add_child(row)
-	for item_id in Game.BASE_IDS:
-		var col := VBoxContainer.new()
-		col.add_theme_constant_override("separation", 2)
-		col.alignment = BoxContainer.ALIGNMENT_CENTER
-		var orb := g._make_orb(item_id, 56)
-		orb.tapped.connect(_on_spring_pick.bind(item_id))
-		col.add_child(orb)
-		var mark := g._label("", 13)
-		mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		mark.custom_minimum_size = Vector2(56, 18)
-		mark.add_theme_color_override("font_color", Color(0.45, 0.95, 0.9))
-		col.add_child(mark)
-		row.add_child(col)
-		_spring_pick_btn[item_id] = {"orb": orb, "mark": mark}
-	_spring_toggle_btn = g._round_brew_button("Пустить родник")
-	_spring_toggle_btn.custom_minimum_size = Vector2(184, 42)
-	_spring_toggle_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_spring_toggle_btn.pressed.connect(_toggle_spring)
-	container.add_child(_spring_toggle_btn)
-	_spring_info = g._label("", 13)
-	container.add_child(_spring_info)
+	var btn := Button.new()
+	btn.text = "Родник →"
+	btn.pressed.connect(_open_spring_screen)
+	container.add_child(btn)
+
+func _open_spring_screen() -> void:
+	ContractBoard.close_any(g)
+	g._spring_screen = SpringScreen.new()
+	g._spring_screen._build(g)
+	g.add_child(g._spring_screen)
 
 func _spend_gate(key: String, now_ms: int) -> bool:
 	var last := int(_spend_guard_ms.get(key, -Game.SPEND_GUARD_MSEC))
@@ -1560,38 +1537,11 @@ func _unrevealed_recipe_candidates() -> Array:
 			res.append(r)
 	return res
 
-func _on_spring_pick(_orb: ElementOrb, item_id: String) -> void:
-	g._engine.spring_source = item_id
-	Sfx.click()
-	g._engine._refresh()
-	g._saves._save_game()
-
-func _toggle_spring() -> void:
-	g._engine.spring_on = not g._engine.spring_on
-	_spring_clock = 0.0
-	Sfx.click()
-	g._engine._refresh()
-	g._saves._save_game()
-
 func _refresh_mode_pages() -> void:
 	if is_instance_valid(_experiment_field):
 		_refresh_experiment_location()
 	if is_instance_valid(_experiment_a_pick) and is_instance_valid(_experiment_b_pick):
 		_refresh_experiment_page()
-	if is_instance_valid(_spring_info):
-		var spring_ready := g._engine._mode_unlocked("spring")
-		var base_name := g._online._item_name(g._engine.spring_source)
-		_spring_info.text = ("Каждые %d с: +1 «%s» — базовая стихия, без трат эфира." % [int(Game.SPRING_INTERVAL), base_name]) if spring_ready else "Родник откроется после открытия Ростка."
-		if is_instance_valid(_spring_toggle_btn):
-			_spring_toggle_btn.disabled = not spring_ready
-			_spring_toggle_btn.text = "Остановить родник" if g._engine.spring_on else "Пустить родник"
-	for raw in _spring_pick_btn:
-		var id2 := String(raw)
-		var entry: Dictionary = _spring_pick_btn[id2]
-		if is_instance_valid(entry.get("mark")):
-			(entry["mark"] as Label).text = "▼" if id2 == g._engine.spring_source else ""
-		if is_instance_valid(entry.get("orb")):
-			(entry["orb"] as ElementOrb).queue_redraw()
 	if is_instance_valid(_bench_poster):
 		_bench_poster.text = _bench_poster_text()
 	# WorkshopView already coalesces changed callbacks and polls resource

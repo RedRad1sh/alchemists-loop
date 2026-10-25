@@ -40,6 +40,17 @@ var _save_frozen := false
 func _save_game() -> bool:
 	if _save_frozen:
 		return false
+	# Task 9 (T8 minor A): boardfull-демо не должно записывать инъектированное
+	# состояние в дев-сейв. Гейт — в единственной точке записи (тот же приём,
+	# что с _save_frozen выше), поэтому закрывает ВСЕ пути boardfull-прогона:
+	# Online._on_net_world_result (online.gd:950), автосейв и workshop-сейв
+	# таймера (main.gd:953/964), Contracts-сейвы. Вне boardfull флаг ложен.
+	if g._contracts != null and g._contracts._boardfull_frozen():
+		return false
+	# Ревизия клиента — монотонный счётчик сохранений этого девайса. Часть C
+	# (advisory-потолок оффлайн-эфира)clamp'ит только на client_rev==0, т.е. на
+	# миграционном первом заходе до любого сейва; bump здесь закрывает это окно.
+	g._engine.client_rev += 1
 	# This is the authoritative online boundary, not a timer/frame callback.
 	# Build the watermark with the resources; publish it in memory only after IO.
 	var workshop_state := g._workshop.export_state()
@@ -49,6 +60,9 @@ func _save_game() -> bool:
 		workshop_state["last_simulated_at"] = snapshot_ts
 	var data := {
 		"version": Game.SAVE_VERSION,
+		"device_id": g._online._device_id,
+		"client_rev": g._engine.client_rev,
+		"anchor_accrual_ts": g._engine.anchor_accrual_ts,
 		"ether": g._engine.ether,
 		"ether_overflow": g._engine.ether_overflow,
 		"mastery_rank": g._engine.mastery_rank,
@@ -63,11 +77,16 @@ func _save_game() -> bool:
 		"spring_clock": _clock(g._pages._spring_clock, Game.SPRING_INTERVAL),
 		"inventory": g._engine.inventory,
 		"known_recipes": g._engine.known_recipes.keys(),
+		"known_recipe_defs": g._engine.known_recipe_defs,
 		"attempts": g._engine.attempts,
 		"successes": g._engine.successes,
 		"upgrades": g._engine.upgrades,
 		"spring_source": g._engine.spring_source,
 		"spring_on": g._engine.spring_on,
+		"spring_levels": g._engine.spring_levels.duplicate(true),
+		"spring_buffer": g._engine.spring_buffer.duplicate(true),
+		"spring_sources": g._engine.spring_sources.duplicate(true),
+		"spring_version": SpringBalance.VERSION,
 		"bench_target": g._pages._bench_target,
 		"bench_on": g._pages._bench_on,
 		"spirit_name": g._spirit._spirit_name,
@@ -128,31 +147,11 @@ func _save_game() -> bool:
 		"wall_hex": "#" + g._home._cosmetic_wall.to_html(false),
 		"floor_hex": "#" + g._home._cosmetic_floor.to_html(false),
 		"custom_unlocked": g._home._custom_unlocked,
-		"circle_days": g._retention._circle_days,
-		"circle_run": g._retention._circle_run,
-		"circle_last": g._retention._circle_last,
-		"hearth_claim": g._retention._hearth_claim,
-		"circle_disc_day": g._retention._circle_disc_day,
-		"circle_disc": g._retention._circle_disc,
-		"circle_reward_day": g._retention._circle_reward_day,
-		"circle_pts_total": g._retention._circle_pts_total,
-		"circle_mdays": g._retention._circle_mdays,
-		"circle_mpts": g._retention._circle_mpts,
-		"circle_hint": g._retention._circle_hint,
-		"circle_mine": g._retention._circle_mine,
-		"circle_local_done_day": g._retention._circle_local_done_day,
-		"week_cache": g._retention._week_cache,
-		"vein_cap_total": g._retention._vein_cap_total,
-		"cycle_cache": g._retention._cycle_cache,
-		"vein_pending_finds": g._retention._vein_finds,
-		"unlocked_titles": g._retention._unlocked_titles,
-		"active_title": g._retention._active_title,
-		"circle_intro_shown": g._retention._circle_intro_shown,
+		# Доска v2 (Task 6, спека §6): ключи очага/вех/круга/ярмарки переехали в
+		# блок contracts v2 (save_block) и здесь больше не пишутся. server_tags —
+		# знание Online, остаётся на верхнем уровне.
 		"server_tags": g._online._server_tag,
-		"fair_regen_total": g._retention._fair_regen_total,
-		"fair_local_week": g._retention._fair_local_week,
-		"fair_local_brews": g._retention._fair_local_brews,
-		"fair_off_claim_week": g._retention._fair_off_claim_week
+		"contracts": g._contracts.save_block()
 	}
 	# S1 социалка: ключи social_cache/social_last_read — единый источник формы
 	# (Social.to_save()); плоская сборка, как week_cache/cycle_cache выше.
@@ -201,6 +200,42 @@ static func _timestamp(raw: Variant) -> float:
 		return float(raw)
 	return 0.0
 
+# Доска v2 (Task 6, спека §6): однократная presence-миграция старых retention-
+# ключей сейва в Contracts. Гейт — наличие ключей (не версия): после миграции
+# ключи больше не пишутся, повторный заход на таком файле — no-op. Чистки
+# значений общие с блоком v2 (fail-closed, float-безопасные).
+func _migrate_retention_into_contracts(data: Dictionary) -> void:
+	if not (data.has("circle_days") or data.has("circle_run") \
+			or data.has("vein_pending_finds") or data.has("fair_regen_total")):
+		return
+	var c := g._contracts
+	c._visit_days = Contracts._clean_day_keys(data.get("circle_days", null))
+	c._streak_run = Contracts._clean_whole_int(data.get("circle_run", null))
+	c._hearth_claim = Contracts._clean_plain_string(data.get("hearth_claim", null))
+	c._pts_total = Contracts._clean_whole_int(data.get("circle_pts_total", null))
+	c._mdays = Contracts._clean_milestone(data.get("circle_mdays", null), Game.CIRCLE_DAY_MILES.size())
+	c._mpts = Contracts._clean_milestone(data.get("circle_mpts", null), Game.CIRCLE_PTS_MILES.size())
+	c._day_hint = Contracts._clean_plain_string(data.get("circle_hint", null))
+	c._week_cache = Contracts._clean_plain_dict(data.get("week_cache", null))
+	c._cycle_cache = Contracts._clean_plain_dict(data.get("cycle_cache", null))
+	c._vein_finds = Contracts._clean_vein_finds(data.get("vein_pending_finds", null))
+	c._vein_cap_total = Contracts._clean_whole_int(data.get("vein_cap_total", null))
+	c._unlocked_titles = Contracts._clean_plain_strings(data.get("unlocked_titles", null))
+	c._active_title = Contracts._clean_plain_string(data.get("active_title", null))
+	c._fair_regen_total = Contracts._clean_regen(data.get("fair_regen_total", null))
+	c._fair_local_week = Contracts._clean_plain_string(data.get("fair_local_week", null))
+	c._fair_local_brews = Contracts._clean_plain_strings(data.get("fair_local_brews", null))
+	c._fair_off_claim_week = Contracts._clean_plain_string(data.get("fair_off_claim_week", null))
+	# circle_last не персистится (спека §6): день последнего визита выводится
+	# из visit_days тем же хелпером, что и загрузка блока v2.
+	c._derive_last_visit()
+	# Прежние побочные эффекты читалки: титулы/камины за уже пройденные вехи и
+	# пересчёт вех по свежим счётчикам (ничего не начисляются вторично —
+	# _check_*/migrate только догоняют до текущих чисел).
+	c._migrate_missed_milestones()
+	c._check_day_miles()
+	c._check_pts_miles()
+
 func _load_game() -> void:
 	var data := _read_save(g.SAVE_PATH)
 	if data.is_empty():
@@ -224,6 +259,8 @@ func _load_game() -> void:
 		if ss in Game.BASE_IDS:
 			g._engine.spring_source = ss
 	g._engine.spring_on = bool(data.get("spring_on", false))
+	_restore_spring_state(data)
+	g._contracts.load_block(data.get("contracts", null))
 	if data.get("bench_target") is String:
 		var bt := String(data["bench_target"])
 		if g.ITEMS.has(bt):
@@ -426,53 +463,27 @@ func _load_game() -> void:
 			g._home._custom_unlocked["wall"] = true
 		if String(data.get("floor_hex", "")) != "":
 			g._home._custom_unlocked["floor"] = true
-	g._retention._circle_days.clear()
-	if data.get("circle_days") is Array:
-		for d in data["circle_days"]:
-			g._retention._circle_days.append(String(d))
-	g._retention._circle_run = maxi(0, int(data.get("circle_run", 0)))
-	g._retention._circle_last = String(data.get("circle_last", ""))
-	g._retention._hearth_claim = String(data.get("hearth_claim", ""))
-	g._retention._circle_disc_day = String(data.get("circle_disc_day", ""))
-	g._retention._circle_disc = maxi(0, int(data.get("circle_disc", 0)))
-	g._retention._circle_reward_day = String(data.get("circle_reward_day", ""))
-	g._retention._circle_pts_total = maxi(0, int(data.get("circle_pts_total", 0)))
-	g._retention._circle_mdays = clampi(int(data.get("circle_mdays", 0)), 0, Game.CIRCLE_DAY_MILES.size())
-	g._retention._circle_mpts = clampi(int(data.get("circle_mpts", 0)), 0, Game.CIRCLE_PTS_MILES.size())
-	g._retention._circle_hint = String(data.get("circle_hint", ""))
-	g._retention._circle_mine = maxi(0, int(data.get("circle_mine", 0)))
-	g._retention._circle_local_done_day = String(data.get("circle_local_done_day", ""))
-	g._retention._week_cache = data.get("week_cache", {}) if data.get("week_cache", {}) is Dictionary else {}
-	g._retention._vein_cap_total = maxi(0, int(data.get("vein_cap_total", 0)))
-	g._retention._cycle_cache = data.get("cycle_cache", {}) if data.get("cycle_cache", {}) is Dictionary else {}
+	# Доска v2 (Task 6, спека §6): старые retention-ключи больше не читаются
+	# построчно — при наличии хотя бы одного из них запускается однократная
+	# presence-миграция в Contracts (порядок присваиваний и побочные вызовы —
+	# прежние: вехи, титулы, капы). В v5-сейвах ключей нет, всё несёт блок v2.
+	# Строк мастера с g._retention.* здесь нет намеренно: Retention удалён
+	# доской v2, его состояние живёт в блоке contracts.
+	if data.has("circle_days") or data.has("circle_run") or data.has("vein_pending_finds") \
+			or data.has("fair_regen_total"):
+		_migrate_retention_into_contracts(data)
 	# S1 социалка: type-guard на старые сейвы (без ключей) — внутри from_save.
 	g._social.from_save(data)
-	g._retention._vein_finds.clear()
-	if data.get("vein_pending_finds") is Array:
-		for f in data["vein_pending_finds"]:
-			if typeof(f) == TYPE_DICTIONARY and f.has("id"):
-				g._retention._vein_finds.append(f)
-	g._retention._unlocked_titles.clear()
-	if data.get("unlocked_titles") is Array:
-		for t in data["unlocked_titles"]:
-			g._retention._unlocked_titles.append(String(t))
-	g._retention._active_title = String(data.get("active_title", ""))
-	g._retention._circle_intro_shown = bool(data.get("circle_intro_shown", false))
-	# Migration: grant titles and fireplace rewards for milestones already passed
-	g._retention._circle_migrate_missed_milestones()
 	g._online._server_tag.clear()
 	if data.get("server_tags") is Dictionary:
 		for k in data["server_tags"]:
 			g._online._server_tag[String(k)] = String(data["server_tags"][k])
-	g._retention._fair_regen_total = clampf(float(data.get("fair_regen_total", 0.0)), 0.0, Game.FAIR_REGEN_CAP)
-	g._retention._fair_local_week = String(data.get("fair_local_week", ""))
-	g._retention._fair_local_brews.clear()
-	if data.get("fair_local_brews") is Array:
-		for b in data["fair_local_brews"]:
-			g._retention._fair_local_brews.append(String(b))
-	g._retention._fair_off_claim_week = String(data.get("fair_off_claim_week", ""))
 	g._spirit._companion_apply_level()
 	g._engine.ether_overflow = maxi(0, int(data.get("ether_overflow", 0)))
+	# Состояние конверта синхронизации: ревизия клиента и якорь оффлайн-накопления.
+	# client_rev==0 — миграционный первый заход, на котором разрешён advisory-clamp.
+	g._engine.client_rev = maxi(0, int(data.get("client_rev", 0)))
+	g._engine.anchor_accrual_ts = maxf(0.0, float(data.get("anchor_accrual_ts", 0.0)))
 	g._engine.mastery_rank = maxi(0, int(data.get("mastery_rank", 0)))
 	g._engine._experiment_day = String(data.get("experiment_day", ""))
 	g._engine._experiment_count = clampi(int(data.get("experiment_count", 0)), 0, Game.EXPERIMENT_DAILY_LIMIT)
@@ -508,14 +519,7 @@ func _load_game() -> void:
 	for item_id in Game.BASE_IDS:
 		if not g._engine.inventory.has(item_id):
 			g._engine.inventory[item_id] = 0
-	g._engine.known_recipes.clear()
-	var saved_known: Array = data["known_recipes"]
-	for recipe in g.RECIPES:
-		var key := g._pair_key(String(recipe["a"]), String(recipe["b"]))
-		if saved_known.has(key):
-			g._engine.known_recipes[key] = true
-	g._engine.known_recipes[g._pair_key("fire", "water")] = true
-	g._engine.known_recipes[g._pair_key("earth", "fire")] = true
+	_apply_recipe_knowledge(data)
 	g._workshop.import_state(data.get("workshop"), data)
 	if data.has("companion_unlocked"):
 		g._spirit._companion_unlocked = bool(data["companion_unlocked"])
@@ -558,11 +562,83 @@ func _offline_gain(elapsed: float, rate: float, cur: int, cap: int) -> int:
 		return 0
 	return mini(cap, cur + gain) - cur
 
+static func _json_int(value: Variant, minimum: int, maximum: int) -> int:
+	# Сейв — это JSON, а JSON в Godot отдаёт все числа дробными: записанная 2
+	# приходит как 2.0. Строгая проверка «is int» на этом пути считала бы
+	# корректный файл невалидным и молча обнуляла прогресс Родника при каждой
+	# загрузке, поэтому целые принимаются и в дробной форме — тот же приём, что
+	# Workshop._integer (game/lab/workshop.gd:488). -1 = значение негодно.
+	if value is int:
+		return value if value >= minimum and value <= maximum else -1
+	if value is float and is_finite(value) and value == floor(value) \
+			and value >= minimum and value <= maximum:
+		return int(value)
+	return -1
+
+func _restore_spring_state(data: Dictionary) -> void:
+	# Родник v2: fail-closed восстановление. Неизвестная версия или любое
+	# невалидное значение оставляют нулевой уровень, а не частичный прогресс.
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	g._engine.spring_buffer = {}
+	g._engine.spring_sources = ["water"]
+	if _json_int(data.get("spring_version", 0), 0, 1_000_000) != SpringBalance.VERSION:
+		return
+	var saved_levels = data.get("spring_levels", {})
+	if saved_levels is Dictionary:
+		var parsed := {}
+		var valid := true
+		for axis in ["speed", "volume", "sources", "offline"]:
+			var max_lvl: int
+			match axis:
+				"speed": max_lvl = SpringBalance.SPEED.size()
+				"volume": max_lvl = SpringBalance.VOLUME.size()
+				"sources": max_lvl = SpringBalance.SOURCES.size()
+				"offline": max_lvl = SpringBalance.OFFLINE.size()
+				_: max_lvl = 0
+			var lvl := _json_int(saved_levels.get(axis, 0), 0, max_lvl)
+			if lvl < 0:
+				valid = false
+				break
+			parsed[axis] = lvl
+		if valid:
+			g._engine.spring_levels = parsed
+	var saved_buffer = data.get("spring_buffer", {})
+	if saved_buffer is Dictionary:
+		var parsed_buffer := {}
+		var valid_buffer := true
+		for elem in saved_buffer:
+			var count := _json_int(saved_buffer[elem], 0, 1_000_000_000)
+			if count < 0:
+				valid_buffer = false
+				break
+			parsed_buffer[String(elem)] = count
+		if valid_buffer:
+			g._engine.spring_buffer = parsed_buffer
+	var saved_sources = data.get("spring_sources", [])
+	if saved_sources is Array and saved_sources.size() > 0:
+		var valid_sources := true
+		for source in saved_sources:
+			if not (source is String) or not source in Game.BASE_IDS:
+				valid_sources = false
+				break
+		if valid_sources:
+			g._engine.spring_sources = saved_sources.duplicate(true)
+
 func _spring_offline_gain(elapsed: float) -> int:
-	# сколько Родник накапал бы за отсутствие (то же окно, что у эфира, но срез)
 	if elapsed < Game.OFFLINE_MIN_SEC:
 		return 0
-	return mini(int(minf(elapsed, Game.OFFLINE_CAP_SEC) / Game.SPRING_INTERVAL), Game.SPRING_OFFLINE_MAX)
+	var offline_lvl: int = g._engine.spring_levels.get("offline", 0)
+	var window: float = SpringBalance.OFFLINE_WINDOW_SEC[offline_lvl]
+	var interval: float = g._engine.spring_interval()
+	var sources: int = g._engine.spring_sources.size()
+	var ticks: int = int(floor(minf(elapsed, window) / interval))
+	var granted: int = ticks * sources
+	var volume_cap: int = SpringBalance.VOLUME_CAP[g._engine.spring_levels.get("volume", 0)]
+	var total_free: int = 0
+	for source in g._engine.spring_sources:
+		var current_buffer: int = g._engine.spring_buffer.get(source, 0)
+		total_free += maxi(0, volume_cap - current_buffer)
+	return mini(granted, total_free)
 
 func _bench_offline_ticks(elapsed: float) -> int:
 	# Compatibility estimate only; the scheduler owns real time and execution.
@@ -682,6 +758,44 @@ func _project_workshop(result: Dictionary, before_queues: Dictionary) -> void:
 	if _return_bench_status == "" and _return_bench_steps > 0:
 		_return_bench_status = "complete" # empty queues, not merely processed time
 
+func _apply_recipe_knowledge(data: Dictionary) -> void:
+	# Union-загрузка знания без тихого drop (фикс Bug B). Источник истины —
+	# known_recipe_defs: его ключи всегда остаются в known_recipes, даже если
+	# определения пары нет в текущем каталоге (такое вещество «known but not
+	# currently brewable»: варится только при совпадении с каталогом в workshop). Старый
+	# массив known_recipes дотягивает пары, для которых def не сохранён.
+	var defs: Dictionary = {}
+	var raw_defs: Variant = data.get("known_recipe_defs", {})
+	if raw_defs is Dictionary:
+		for dkey in raw_defs:
+			defs[String(dkey)] = raw_defs[dkey]
+	var raw_keys: Variant = data.get("known_recipes", [])
+	if raw_keys is Array:
+		for rk in raw_keys:
+			var key := String(rk)
+			if not defs.has(key):
+				defs[key] = _def_from_catalog(key)
+	for starter in [["fire", "water"], ["earth", "fire"]]:
+		var skey := g._pair_key(starter[0], starter[1])
+		if not defs.has(skey):
+			defs[skey] = _def_from_catalog(skey)
+	var known: Dictionary = {}
+	for key in defs:
+		known[key] = true
+	g._engine.known_recipe_defs = defs
+	g._engine.known_recipes = known
+
+func _def_from_catalog(key: String) -> Dictionary:
+	var parts := key.split("|")
+	if parts.size() != 2:
+		return {"a": "", "b": "", "out": ""}
+	var out := ""
+	for r in g.RECIPES:
+		if g._pair_key(String(r["a"]), String(r["b"])) == key:
+			out = String(r.get("out", ""))
+			break
+	return {"a": String(parts[0]), "b": String(parts[1]), "out": out}
+
 func _read_save(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {}
@@ -696,12 +810,41 @@ func _read_save(path: String) -> Dictionary:
 	var version := int(data.get("version", 1))
 	if version < 1 or version > Game.SAVE_VERSION:
 		return {}
+	# Envelope fail-closed: чужой device_id → сейв не этого устройства, не читаем
+	# (перенос файла между девайсами не должен затирать local device_grants-знание).
+	# Пустой device_id (старый сейв / оффлайн-установка без id) совместим — чужого
+	# устройства не заявлено, отвергать не за что.
+	var device_v: Variant = data.get("device_id", "")
+	if device_v is String and String(device_v) != "" and String(device_v) != g._online._device_id:
+		return {}
+	# inventory — ядро загрузки (без словаря инвентаря игра не восстанавливается),
+	# потому он остаётся envelope-fail-closed.
 	if not (data.get("inventory") is Dictionary):
 		return {}
+	# Per-Part fail-open: битый Part B (знание) обязан деградировать, а не отменить
+	# весь сейв — Part C (эфир/инвентарь) применяется независимо. known_recipes не
+	# массив → пустое знание (дефолт ниже), а не отказ.
 	if not (data.get("known_recipes") is Array):
-		return {}
+		data["known_recipes"] = []
 	# v1/v2 → v3: добавлены pending Experiment, resumable craft_job и blueprints;
 	# формат игрового сейва совместим, а отсутствующие поля получают defaults.
+	# v3 → v4: раньше хранился только массив ключей пар (known_recipes) — загрузка
+	# резала знание пересечением с каталогом (Bug B). Собираем самодостаточные
+	# определения known_recipe_defs из keys∩каталог; пары вне каталога получают
+	# out="" (= known but not currently brewable), но остаются в знании.
+	if not (data.get("known_recipe_defs") is Dictionary):
+		var out_by_key := {}
+		for recipe in g.RECIPES:
+			out_by_key[g._pair_key(String(recipe["a"]), String(recipe["b"]))] = \
+				String(recipe.get("out", ""))
+		var defs := {}
+		for raw_key in (data["known_recipes"] as Array):
+			var key := String(raw_key)
+			var parts := key.split("|")
+			if parts.size() != 2:
+				continue
+			defs[key] = {"a": parts[0], "b": parts[1], "out": String(out_by_key.get(key, ""))}
+		data["known_recipe_defs"] = defs
 	# Версия фиксируется после успешной валидации, чтобы не отбрасывать прогресс.
 	data["version"] = Game.SAVE_VERSION
 	return data
@@ -758,16 +901,14 @@ func _build_return_popup() -> void:
 
 func _open_return_popup() -> void:
 	_refresh_return_popup()
-	_return_dim.visible = true
-	_return_popup.visible = true
+	Juice.open(_return_dim, _return_popup)
 	_return_open = true
 	_return_shown = true
 	if not g._selftest:
 		Sfx.mystic()
 
 func _close_return_popup() -> void:
-	_return_dim.visible = false
-	_return_popup.visible = false
+	Juice.close(_return_dim, _return_popup)
 	_return_open = false
 	if not g._selftest:
 		Sfx.click()

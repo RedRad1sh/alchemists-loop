@@ -248,13 +248,16 @@ static func run(g: Game) -> void:
 	var u11_pending := g._online._pending_requests.duplicate(true)
 	var u11_exp_pair := g._engine._experiment_pending_pair.duplicate()
 	var u11_first_opens := g._engine._first_open_calls
-	# F3 добавляет _circle_on_discovery в мир-ветки (он НЕ гейтится selftest → мутирует
-	# _circle_disc/_circle_disc_day); возврат при prune (F1) идёт через негейтимый
-	# _grant_ether (полный EXPERIMENT_COST в ether+overflow) — оба восстанавливаем.
+	# Доска v2 Task 4: _circle_on_discovery из мир-веток удалён — круг больше не
+	# мутируется этими путями, снимки диска не нужны; возврат при prune (F1)
+	# идёт через негейтимый _grant_ether (полный EXPERIMENT_COST в ether+
+	# overflow) — его и восстанавливаем.
 	var u11_ether := g._engine.ether
 	var u11_ether_overflow := g._engine.ether_overflow
-	var u11_circle_disc := g._retention._circle_disc
-	var u11_circle_disc_day := g._retention._circle_disc_day
+	# Замена снятого диска (доска v2 Task 4): очаг/вехи Contracts теперь мир-ветки
+	# не трогают вообще — фиксируем это независимым снимком.
+	var u11_cb4_pts := g._contracts._pts_total
+	var u11_cb4_days := g._contracts._visit_days.size()
 	# Попап первооткрытия — тоже затрагиваемое состояние: мир-ветки зовут
 	# main.gd::_show_discovery_popup, и без возврата он висел бы на следующей
 	# сюите (её canary чистого стека модалок ловил именно его).
@@ -384,8 +387,6 @@ static func run(g: Game) -> void:
 	g._engine._first_open_calls = u11_first_opens
 	g._engine.ether = u11_ether
 	g._engine.ether_overflow = u11_ether_overflow
-	g._retention._circle_disc = u11_circle_disc
-	g._retention._circle_disc_day = u11_circle_disc_day
 	# Возврат модалки. Мутация этих двух строк — «esc stack was clean on entry» в
 	# suite_journal_misc: без них открытое «НОВЫЙ РЕЦЕПТ!» доживает до её canary.
 	g._popup.visible = u11_popup
@@ -395,7 +396,7 @@ static func run(g: Game) -> void:
 		g._engine._experiment_pending_pair.append(String(u11_raw_e))
 	# ассерт чувствителен к откату: посаженные slug'ы исчезли из ITEMS/inventory,
 	# known_recipes по использованным парам вернулись к досюжетным значениям, а
-	# ether/overflow/круг восстановлены (сравнение объекта с самим собой ничего бы
+	# ether/overflow/очаг восстановлены (сравнение объекта с самим собой ничего бы
 	# не проверяло — сравниваем независимые снимки).
 	var u11_clean := true
 	for u11_p in ["u11_x_out", "u11_ok", "u15_world", "u14_ghost", "u14_ghost2",
@@ -408,8 +409,8 @@ static func run(g: Game) -> void:
 		and g._engine.known_recipes.has(u11_kz) == u11_kz_before
 		and g._online._pending_requests.is_empty()
 		and g._engine.ether == u11_ether and g._engine.ether_overflow == u11_ether_overflow
-		and g._retention._circle_disc == u11_circle_disc
-		and g._retention._circle_disc_day == u11_circle_disc_day)
+		and g._contracts._pts_total == u11_cb4_pts
+		and g._contracts._visit_days.size() == u11_cb4_days)
 
 	# ============ U13 (T17): окно «claim отголосков в пути» ============
 	# Трата асинхронная, поэтому окно — не кадр, а round-trip до ответа мира.

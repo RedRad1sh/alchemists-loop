@@ -16,6 +16,7 @@ var _saved_scroll := 0
 var _tab := 0
 var _peer := ""
 var _confirm: Control = null
+var _trade: TradeUI = null
 var _err_line: Label = null
 var _search_card: Control = null
 var _pending_search_nick := ""
@@ -97,6 +98,7 @@ func open(tab: int = 0) -> void:
 	_tab = clampi(tab, 0, 1)
 	_peer = ""
 	_confirm_close()
+	_trade_close()
 	_screen.visible = true
 	_refresh_list()
 	if g._social != null:
@@ -104,6 +106,7 @@ func open(tab: int = 0) -> void:
 
 func close() -> void:
 	_confirm_close()
+	_trade_close()
 	_peer = ""
 	if _screen != null:
 		_screen.visible = false
@@ -332,6 +335,10 @@ func _friend_row(friend: Dictionary) -> Control:
 		badge.add_theme_color_override("font_color", UIStyle.GOLD)
 		row.add_child(badge)
 	if dev != Social.SPIRIT_DEVICE:
+		var swap := g._small_button("Обменять", Vector2(110, 34), 0)
+		swap.tooltip_text = "Предложить обмен или подарок"
+		swap.pressed.connect(_open_trade.bind(dev))
+		row.add_child(swap)
 		var more := g._small_button("⋮", Vector2(34, 34), 0)
 		more.tooltip_text = "Удалить или заблокировать"
 		more.pressed.connect(_open_confirm.bind(dev))
@@ -497,6 +504,15 @@ func _close_thread() -> void:
 		# синхронная запись клампится в 0 в живой игре; отложенная приходит после
 		# расклада кадра и ложится в настоящий диапазон.
 		_list_scroll.set_deferred("scroll_vertical", _saved_scroll)
+
+func _open_trade(peer: String) -> void:
+	if _trade == null:
+		_trade = TradeUI.new(g)
+	_trade.open(peer)
+
+func _trade_close() -> void:
+	if _trade != null:
+		_trade.close()
 
 func _open_confirm(peer: String) -> void:
 	var friend := g._social.friend_by_device(peer)

@@ -144,6 +144,9 @@ func buy_rank(next_rank: int) -> Dictionary:
 	if not _spend_recipe(Rules.RANKS[next_rank]):
 		return _failure("ether", "Эфира для оборудования уже недостаточно.")
 	rank = next_rank
+	# Контрактный апгрейд начисляем ДО changed.emit(): экран, перечитавший прогресс
+	# контракта в перерисовке, обязан увидеть уже начисленный пункт.
+	g._contracts.on_upgrade("workshop", "rank", next_rank)
 	while lines.size() < line_count():
 		lines.append(_new_line(_unused_id("line", _line_ids())))
 	changed.emit()
@@ -156,6 +159,7 @@ func buy_autonomy() -> Dictionary:
 	if not _spend_recipe(Rules.AUTONOMY[autonomy_level + 1]):
 		return _failure("ether", "Эфира для автономности уже недостаточно.")
 	autonomy_level += 1
+	g._contracts.on_upgrade("workshop", "autonomy", autonomy_level)
 	changed.emit()
 	return {"ok": true, "reason": "", "autonomy_level": autonomy_level}
 

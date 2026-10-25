@@ -417,11 +417,14 @@ func milestone_cap_bonus() -> int:
 
 ## Награда «6 карт комплекта»: −10% эфира крафтов этого комплекта.
 ## Хроматика (set == "") всегда платит полную цену.
-func craft_ether_cost(craft: Dictionary) -> int:
+## discount — скидка крафта от контрактной доски (§3.3); применяется поверх
+## награды комплекта и ограничен 90 %, чтобы цена не стала нулевой.
+func craft_ether_cost(craft: Dictionary, discount: float = 0.0) -> int:
 	var set_id := str(craft.get("set", ""))
+	var cost := float(int(craft.get("ether_cost", 0)))
 	if set_id != "" and claimed_tiers(set_id).has(6):
-		return int(round(int(craft.get("ether_cost", 0)) * 0.9))
-	return int(craft.get("ether_cost", 0))
+		cost *= 0.9
+	return int(round(cost * (1.0 - clampf(discount, 0.0, 0.9))))
 
 
 ## Награда «13 карт комплекта»: верстак варит элементы категории комплекта
@@ -775,6 +778,18 @@ func _daily_craft_by_id(craft_id: String) -> Dictionary:
 		"lore": "",
 		"card_id": "", "set": "", "process": "", "stage": "",
 		"object_type": "object", "seed": 0, "fallback_name": ""}
+
+
+## Set-идентификатор карточки для крафта. Read-only: ничего не публикует
+## наружу, поэтому связности с контрактами не создаёт (в отличие от прямого
+## вызова из sigil_manager.gd).
+func set_of_craft(craft_id: String) -> String:
+	var card_id := ""
+	if _collection.has(craft_id):
+		card_id = str((_collection[craft_id] as Dictionary).get("card_id", ""))
+	if card_id != "" and _catalog.has(card_id):
+		return str((_catalog[card_id] as Dictionary).get("set", ""))
+	return str(_daily_craft_by_id(craft_id).get("set", ""))
 
 
 ## Кэш ежедневных крафтов на диске (для офлайн-режима).

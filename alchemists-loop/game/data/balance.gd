@@ -2,6 +2,15 @@ extends RefCounted
 class_name Balance
 # Баланс и тюнинг: цены, возвраты, сроки, награды, вехи (бывшие const из main.gd, оп D).
 
+# Единый протокол синхронизации сейва (sync/package envelope). Значение зеркалит
+# серверный SYNC_SCHEMA_VERSION; MAX_ACCRUAL_RATE_PER_SEC — потолок оффлайн-
+# аккумулятора, которым клиент проверяет собственное declared-окно (advisory).
+const SYNC_SCHEMA_VERSION := 4
+const MAX_ACCRUAL_RATE_PER_SEC := 1000.0
+# Троттл фоновой синхронизации:dirty-знание льётся на сервер не чаще этого шага
+# (сек). Boot/resume/after-discover синкаются явно; таймер — лишь backstop.
+const SYNC_THROTTLE_SEC := 60.0
+
 # Economy v2: эфир is a paced research resource, not an unlimited idle faucet.
 const BREW_COST := 12
 const FAILURE_REFUND := 2
@@ -59,10 +68,8 @@ const LETTER_PENDING_MAX := 20 # потолок очереди офлайн-по
 const ATLAS_MILE_EVERY := 10
 const ATLAS_CAP_EACH := 3
 const ATLAS_PENDING_MAX := 20
-# дневной круг (v29): контейнер суточного слоя + мягкий стрик-очаг + вечные вехи
-const CIRCLE_DISC_GOAL := 5    # успешных синтезов/получений за день, включая повторы (имя совместимо)
-const CIRCLE_REWARD := 75      # эфир за закрытый круг (раз в день)
-const CIRCLE_LOCAL_POINTS := 1  # очко вех за локальную цель дня (A3); сервер, когда есть, перебивает
+# дневной круг (v29 → доска v2): контейнер суточного слоя удалён вместе с
+# вкладкой; остались мягкий стрик-очаг и вечные вехи на доске контрактов
 const HEARTH_BASE := 10        # база награды «полешка» (× множитель серии, кап ×2)
 const CIRCLE_DAY_MILES := [7, 30, 100, 365]      # вехи суммарных дней визитов
 const CIRCLE_DAY_CAP := {7: 5, 100: 10}          # +к капу за вехи дней
@@ -74,15 +81,6 @@ const CIRCLE_PTS_REGEN := {150: 0.03}            # +к регену за вех�
 const VEIN_STREAK_CAP := 5
 const VEIN_STREAK_REWARD := 25
 const VEIN_POINTS_WORLD := 2
-# план 2 §2.1: цели варки — фильтр пула известных пар по слою выхода
-const CIRCLE_GOALS := [
-	{"key": "fast",   "title": "Быстрая проба", "layers": [1, 2],  "pts": 1,
-		"desc": "Лёгкая варка, быстрый прогресс"},
-	{"key": "middle", "title": "Средний путь",  "layers": [3, 4],  "pts": 2,
-		"desc": "Баланс скорости и ценности"},
-	{"key": "deep",   "title": "Глубокий синтез", "layers": [5, 99], "pts": 3,
-		"desc": "Медленно, но высоко ценится"},
-]
 # §2.2: объединённая шкала ранга «Огонёк очага» — порог→уровень, титул, символ
 const CIRCLE_RANKS := [
 	{"level": 1, "kind": "дней",  "threshold": 7,   "title": "Искра",    "shape": "dot",      "color": "#ffe08a"},
@@ -101,14 +99,13 @@ const FAIR_OFFLINE_GOAL := 3     # A3: варок разных веществ з
 const FAIR_OFFLINE_FACTOR := 0.5 # без мира реген ярмарки — вполовину, ключ недели тот же
 # сводка возврата: единый экран «пока тебя не было» после долгого отсутствия
 const RETURN_GAP := 1800.0       # 30 минут — порог показа сводки
-const SPRING_OFFLINE_MAX := 50   # потолок офлайн-накопления Родника (шт.)
 const SPRING_INTERVAL := 6.0
 # Производство remains useful, but it is a paced helper rather than a free second cauldron.
 ## Верстак: без потолка накопления, зато медленнее. Длинный idle вместо
 ## короткого клика — игрок не обязан возвращаться каждые 30 секунд.
 const BENCH_INTERVAL := 40.0
 ## Офлайн-верстак идёт вполсилы и не больше 60 тиков за окно (прецедент:
-## SPRING_OFFLINE_MAX = 50). Иначе 8 часов простоя дали бы 720 варок.
+## родник ограничен буфером и окном офлайн-запаса). Иначе 8 часов простоя дали бы 720 варок.
 const BENCH_OFFLINE_FACTOR := 0.5
 const BENCH_OFFLINE_MAX_TICKS := 60
 const GIFT_INTERVAL := 120.0
@@ -148,7 +145,7 @@ const WORLD_PAGE_SIZE := 25  # строк на странице сетки «В�
 
 const PRESTIGE_MIN := 30           # веществ для разблокировки «Перегонки»
 const OFFLINE_MIN_SEC := 60.0       # меньше минуты — не считаем отсутствием
-const OFFLINE_CAP_SEC := 8 * 3600.0 # максимум 8 часов офлайн-накопления
+const OFFLINE_CAP_SEC := 12 * 3600.0 # максимум 12 часов офлайн-накопления
 const MILESTONES := [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 57]
 const MILESTONE_REWARDS := {5: 20, 10: 25, 15: 30, 20: 40, 25: 50, 30: 60,
 	35: 70, 40: 80, 45: 90, 50: 100, 55: 120, 57: 160}

@@ -332,6 +332,24 @@ CREATE TABLE IF NOT EXISTS receipts (
 );
 CREATE INDEX IF NOT EXISTS idx_receipts_device ON receipts(device_id);
 
+-- device_grants: per-device знание (анти-чит-ядро + восстановление Bug B).
+-- Пишутся только корроборированные выдачие пары: базовый сид ∪ материализованные
+-- world-first ∪ собственный /discover device. Скрытые нераскрытые пары не принимаются.
+-- kind='recipe' (ref=pair_key, несёт a/b/out) и kind='element' (ref=slug — варка
+-- рецепта делает выходной элемент легитимным ингредиентом; закрывает гейт Task 5).
+-- kind='decor' — зарезервированная точка расширения, логики нет.
+-- Базовый каталог в журнал не пишется (выдан всем имплицитно) — размер мал на 2GB.
+CREATE TABLE IF NOT EXISTS device_grants (
+    device_id TEXT NOT NULL,
+    kind TEXT NOT NULL,          -- 'element' | 'recipe'
+    ref TEXT NOT NULL,           -- slug (element) | pair_key (recipe)
+    a TEXT, b TEXT, out TEXT,    -- самодостаточное определение для kind='recipe'
+    source TEXT NOT NULL,        -- 'world_first' | 'server_reward' | 'local_learn' | 'account_export'
+    granted_at TEXT NOT NULL,
+    PRIMARY KEY (device_id, kind, ref)
+);
+CREATE INDEX IF NOT EXISTS idx_device_grants_device ON device_grants(device_id);
+
 -- γ «Гостевая книга»: один визит (host, visitor) на день. Ключ дня — ISO-дата
 -- в ЕДИНОЙ серверной шкале (T06), поэтому «окно 7 дней» = day >= _date_minus(6),
 -- а NOT BETWEEN ничего не разворачивается.
@@ -400,4 +418,44 @@ CREATE TABLE IF NOT EXISTS social_state (
     device_id TEXT NOT NULL PRIMARY KEY,
     last_inbox_day TEXT NOT NULL,
     updated_at TEXT NOT NULL
+);
+
+-- S2 обмен картами. trade_orders — НАМЕРЕНИЕ, а не факт владения: единственный
+-- источник факта — sigil_crafts, поэтому copies нельзя накрутить торговлей.
+-- Ни резерва, ни счётчиков копий здесь нет намеренно (спека §3, §5.2).
+-- NM (§2.1): одиночные give_*/want_* колонки убраны, позиция оффера живёт в
+-- trade_items; старые БД переезжают heal-шагом init_db (_migrate_trade_items),
+-- свежая БД создаётся уже без колонок.
+CREATE TABLE IF NOT EXISTS trade_orders (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    maker_device      TEXT NOT NULL,
+    taker_device      TEXT NOT NULL,
+    state             TEXT NOT NULL DEFAULT 'pending',
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+);
+-- Оба среза list-а — «чей ящик + state», поэтому индекс с state вторым столбцом.
+CREATE INDEX IF NOT EXISTS ix_trade_taker ON trade_orders(taker_device, state);
+CREATE INDEX IF NOT EXISTS ix_trade_maker ON trade_orders(maker_device, state);
+
+-- Позиции оффера N↔M: одна строка на карту/экземпляр, give и want раздельно.
+-- Инвариант селектора (card_id XOR craft_id) держит код (_trade_selector),
+-- а не CHECK таблицы — heal переносит старые строки как есть.
+CREATE TABLE IF NOT EXISTS trade_items (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id  INTEGER NOT NULL REFERENCES trade_orders(id) ON DELETE CASCADE,
+    side      TEXT NOT NULL CHECK (side IN ('give', 'want')),
+    card_id   TEXT NOT NULL DEFAULT '',
+    craft_id  TEXT NOT NULL DEFAULT '',
+    pos       INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ix_trade_items_order ON trade_items(order_id, side);
+
+-- Недельный счётчик «свершившихся переносов» (TRADE_WEEK_LIMIT). Ключ — ISO-
+-- неделя 'YYYY-Www' (_week_key), поэтому сброс лимита не требует уборки.
+CREATE TABLE IF NOT EXISTS trade_counts (
+    week      TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    count     INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (week, device_id)
 );

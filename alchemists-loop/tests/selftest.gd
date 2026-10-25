@@ -145,6 +145,7 @@ static func run(g: Game) -> void:
 	await SuiteCoreBrew.run(g)
 	await SuiteLabModes.run(g)
 	await SuiteRetortReturn.run(g)
+	await SuiteSpringV2.run(g)
 	await SuiteResonanceNet.run(g)
 	await SuiteOnlineUx.run(g)
 	await SuiteBenchGifts.run(g)
@@ -158,6 +159,11 @@ static func run(g: Game) -> void:
 	await SuiteSigilCards.run(g)
 	await SuiteSigilLore.run(g)
 	await SuiteSocial.run(g)
+	await SuiteTrades.run(g)
+	await SuiteJuice.run(g)
+	await SuiteSaveSync.run(g)
+	await SuiteSyncPackageNet.run(g)
+	await SuiteContractBoard.run(g)
 	# Dynamic loading permits a behavioral red probe before new modules exist.
 	for workshop_suite in ["mastery", "model", "context", "scheduler", "offline", "ui", "integration", "saves", "pages", "runtime", "acceptance"]:
 		var suite_path := "res://tests/suite_workshop_%s.gd" % workshop_suite

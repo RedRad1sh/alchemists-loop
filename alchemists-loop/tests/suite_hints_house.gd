@@ -607,14 +607,14 @@ static func run(g: Game) -> void:
 	Selftest.check("d no world-firsts means no bottles", g._home._showcase_bottles() == 0)
 	# окно честно: без связи — заглушка, а не вчерашняя цель
 	var u29_nick := g._online._net_nick
-	var u29_hint := g._retention._circle_hint
+	var u29_hint := g._contracts._day_hint
 	g._online._net_nick = ""
-	g._retention._circle_hint = "Лодка"
+	g._contracts._day_hint = "Лодка"
 	Selftest.check("d window says so offline", g._home._showcase_window_caption().contains("после связи"))
 	g._online._net_nick = "Варда"
 	Selftest.check("d window shows the world goal", g._home._showcase_window_caption() == "мир: Лодка")
 	g._online._net_nick = u29_nick
-	g._retention._circle_hint = u29_hint
+	g._contracts._day_hint = u29_hint
 	g._progress_ui._ach_world_first = u29_first
 	g._engine.inventory = u29_inv
 	# вью без display-данных не рисует витрину: key-контракт для гостевых превью

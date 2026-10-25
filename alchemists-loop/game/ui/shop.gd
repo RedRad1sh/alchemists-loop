@@ -35,15 +35,13 @@ func build() -> void:
 
 func open() -> void:
 	_rebuild()
-	_dim.visible = true
-	_popup.visible = true
+	Juice.open(_dim, _popup)
 	Sfx.click()
 	if not App.consent_is_decided():
 		_open_consent()
 
 func close() -> void:
-	_dim.visible = false
-	_popup.visible = false
+	Juice.close(_dim, _popup)
 	Sfx.click()
 
 func _build_shop_popup() -> void:
@@ -145,12 +143,10 @@ func _build_consent_popup() -> void:
 	col.add_child(policy)
 
 func _open_consent() -> void:
-	_consent_dim.visible = true
-	_consent_popup.visible = true
+	Juice.open(_consent_dim, _consent_popup)
 
 func _close_consent() -> void:
-	_consent_dim.visible = false
-	_consent_popup.visible = false
+	Juice.close(_consent_dim, _consent_popup)
 
 func _consent_allow() -> void:
 	App.set_consent(true, true)

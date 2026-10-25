@@ -402,14 +402,14 @@ func _experiment_pending_matches(a: String, b: String) -> bool:
 		and g._pair_key(String(pending[0]), String(pending[1])) == g._pair_key(a, b)
 
 func _grant_local_acquisition(slug: String) -> Array:
-	# единая точка «первое локальное получение вещества из мира»: +1 в инвентарь,
-	# circular-эффект Круга и грант первооткрытия; возвращает новые вехи
+	# единая точка «первое локальное получение вещества из мира»: +1 в инвентарь
+	# и грант первооткрытия; возвращает новые вехи. (Эффект «Круга» удалён:
+	# доска v2 Task 4 — визит-дни и очки вех кормятся закрытыми контрактами.)
 	if not g._engine._resource_mutation_allowed() or not g.ITEMS.has(slug):
 		return []
 	var first_open := not g._engine.inventory.has(slug)
 	g._engine.inventory[slug] = int(g._engine.inventory.get(slug, 0)) + 1
 	g._engine._award_synthesis(slug)
-	g._retention._circle_on_discovery(first_open)
 	if first_open:
 		return g._engine._grant_first_open(slug)
 	return []
@@ -548,18 +548,17 @@ func _experiment_outcome(out: Dictionary, a: String, b: String, created: bool = 
 		_set_status("Мир вернул неполный результат — реагенты восстановлены.")
 		return
 	_register_server_recipe(a, b, slug)
-	var key := g._pair_key(a, b)
-	g._engine.known_recipes[key] = true
-	# first_open — до инкремента; грант и круг — ПОСЛЕ _experiment_succeeded (она
-	# делает inventory[slug]+=1): иначе _check_milestones не учтёт это вещество и
-	# веха на N веществ сработает на одно открытие позже.
+	g._engine.learn_recipe(a, b, slug)
+	g._sync.mark_dirty()
+	# first_open — до инкремента; грант первооткрытия — ПОСЛЕ _experiment_succeeded
+	# (она делает inventory[slug]+=1): иначе _check_milestones не учтёт это вещество
+	# и веха на N веществ сработает на одно открытие позже. (Круг удалён: Task 4.)
 	var first_open := not g._engine.inventory.has(slug)
 	g._engine._experiment_succeeded(slug, a, b)
-	g._retention._circle_on_discovery(first_open)
 	var first_milestones: Array = []
 	if first_open:
 		first_milestones = g._engine._grant_first_open(slug)
-	g._retention._fair_report_brew(a, b)
+	g._contracts._fair_report_brew(a, b)
 	if created:
 		_set_status("ПЕРВОЭКСПЕРИМЕНТ: %s — мир записал тебя первым!" % _item_name(slug))
 		g._spirit._companion_react("world_first", _item_name(slug))
@@ -596,8 +595,9 @@ func _on_net_pair_result(pair_key: String, result: Dictionary) -> void:
 		var slug := _apply_server_element(result.get("out", {}))
 		if slug != "":
 			_register_server_recipe(a, b, slug)
-			g._engine.known_recipes[g._pair_key(a, b)] = true
-			g._retention._fair_report_brew(a, b)
+			g._engine.learn_recipe(a, b, slug)
+			g._sync.mark_dirty()
+			g._contracts._fair_report_brew(a, b)
 			# U11 (T15): первое ЛОКАЛЬНОЕ получение мир-открытого вещества — через
 			# _grant_local_acquisition (+1 в инвентарь, circular-эффект Круга,
 			# _grant_first_open: rarity-пошлина, tier-учёт гильдии, вехи атласа,
@@ -688,8 +688,11 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 		var slug := _apply_server_element(disc)
 		if slug != "":
 			_register_server_recipe(a, b, slug)
-			g._engine.known_recipes[g._pair_key(a, b)] = true
-			g._retention._fair_report_brew(a, b)
+			g._engine.learn_recipe(a, b, slug)
+			# Знание изменилось → пакет синка грязный; троттл-флэш отправит его
+			# на следующем тике (request_sync сам гейтит _net_enabled/Net).
+			g._sync.mark_dirty()
+			g._contracts._fair_report_brew(a, b)
 			# first_open нужен ниже (статус/реакция спутника); хелпер считает его сам
 			# перед тем же инкрементом — значения совпадают.
 			var first_open := not g._engine.inventory.has(slug)
@@ -697,7 +700,7 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 			if status == "known":
 				# §3.3.1: пара известна серверу, но клиент её ещё не регистрировал
 				# как личную — маршрутизируем в /api/vein/find.
-				g._retention._vein_report_pair(a, b, slug)
+				g._contracts._vein_report_pair(a, b, slug)
 			var author := g._clean_str(disc.get("author", _net_nick))
 			_server_authors[slug] = author
 			if status == "created" and not reused:
@@ -742,10 +745,10 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 					sub2 += "\n%s" % g._engine._milestone_text(int(m))
 				g._present_popup(slug, sub2, "НОВЫЙ РЕЦЕПТ!", rr["color"])
 			if status == "created" and not reused:
-				g._retention._discover_vein_bonus(result)
+				g._contracts._discover_vein_bonus(result)
 				var vein_data = result.get("vein")
 				if typeof(vein_data) == TYPE_DICTIONARY:
-					g._retention._vein_add_from_discover(pair_key, slug, vein_data)
+					g._contracts._vein_add_from_discover(pair_key, slug, vein_data)
 	elif status == "not_combinable":
 		if is_experiment:
 			g._engine._experiment_failed(a, b)
@@ -1174,12 +1177,18 @@ func _on_net_challenge_result(result: Dictionary) -> void:
 	else:
 		_challenge_avatar.visible = false
 		_challenge_label.text = "Цель дня: %s · выполнено: %d · твои очки: %d" % [hint, completions, my_points]
-	g._retention._circle_hint = hint
-	g._retention._circle_mine = my_points
-	g._retention._circle_pts_total = maxi(g._retention._circle_pts_total, int(result.get("my_points_total", g._retention._circle_pts_total)))
-	g._retention._circle_check_pts_miles()
+	g._contracts._day_hint = hint
+	# доска v2 Task 4: серверное выполнение цели дня больше не платит особыми
+	# очками — оно закрывает контракт goal_day (mark_day_challenge), а серверный
+	# счёт total перекладывается в вечные очки вех (maxi — только рост).
+	if my_points > 0:
+		g._contracts.mark_day_challenge()
+	g._contracts._pts_total = maxi(g._contracts._pts_total, int(result.get("my_points_total", g._contracts._pts_total)))
+	g._contracts._check_pts_miles()
 	g._saves._save_game()
-	g._retention._refresh_circle_page()
+	# доска v2 Task 5 (закрытие замечания ревью T4): после mark_day_challenge
+	# доска обязана перерисоваться — закрытая цель дня видна на ней сразу.
+	g._contracts.refresh_board()
 
 func _ago_text(sec: int) -> String:
 	if sec < 60:
@@ -1644,7 +1653,7 @@ func _on_event_tap() -> void:
 				var ra := String(recipe["a"])
 				var rb := String(recipe["b"])
 				var rout := String(recipe["out"])
-				g._engine.known_recipes[g._pair_key(ra, rb)] = true
+				g._engine.learn_recipe(ra, rb, rout)
 				_set_status("✧ Озарение: %s + %s → %s!" % [
 					_item_name(ra), _item_name(rb), _item_name(rout)])
 				_toast("Озарение открыло новый рецепт", NoticeKind.SUCCESS)

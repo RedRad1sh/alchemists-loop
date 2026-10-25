@@ -31,6 +31,7 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 	if _sigil_coll != null or main._sigil == null:
 		return
 	Sfx.click()
+	ContractBoard.close_any(main)
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.84)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1203,11 +1204,18 @@ func _await_catalog(timeout: float) -> bool:
 	return main._sigil.catalog_size() > 0
 
 
+## Цена крафта с учётом скидок: награды комплекта — внутри SigilManager,
+## временная скидка контрактной доски (§3.3) — здесь, в единственном месте,
+## где UI Аркана знает про баффы.
+func _sigil_ether_cost(craft: Dictionary) -> int:
+	return main._sigil.craft_ether_cost(craft, main._contracts.buff_power("craft_discount"))
+
+
 ## Строка крафта: слева круг, справа всё, что нужно для решения.
 func _sigil_craft_row(craft: Dictionary) -> Control:
 	var rarity := str(craft.get("rarity", "common"))
 	var is_chromatic := bool(craft.get("is_chromatic", false))
-	var ether_cost: int = main._sigil.craft_ether_cost(craft)
+	var ether_cost: int = _sigil_ether_cost(craft)
 	var rc: Color = main._rarity_color(rarity)
 	var accent: Color = Color(1.0, 0.55, 0.12) if is_chromatic else rc
 	var shortages := _sigil_shortages(craft)
@@ -1612,7 +1620,7 @@ func _on_sigil_board_confirmed(craft: Dictionary) -> void:
 		main._engine._refresh()
 		Sfx.error()
 		return
-	var ether_cost: int = main._sigil.craft_ether_cost(craft)
+	var ether_cost: int = _sigil_ether_cost(craft)
 	if not main._engine._spend_ether(ether_cost):
 		main._engine.status_text = "Не хватает эфира: нужно %d." % ether_cost
 		main._engine._refresh()
@@ -1873,43 +1881,35 @@ func _close_top_modal() -> bool:
 		main._saves._close_return_popup()
 		return true
 	elif main._hub._settings_popup.visible:
-		main._hub._settings_dim.visible = false
-		main._hub._settings_popup.visible = false
+		Juice.close(main._hub._settings_dim, main._hub._settings_popup)
 		Sfx.click()
 		return true
 	elif main._hub._craftable_popup.visible:
-		main._hub._craftable_dim.visible = false
-		main._hub._craftable_popup.visible = false
+		Juice.close(main._hub._craftable_dim, main._hub._craftable_popup)
 		Sfx.click()
 		return true
 	elif main._retort._retort_popup.visible:
-		main._retort._retort_dim.visible = false
-		main._retort._retort_popup.visible = false
+		Juice.close(main._retort._retort_dim, main._retort._retort_popup)
 		Sfx.click()
 		return true
 	elif main._hub._journal_popup.visible:
-		main._hub._journal_dim.visible = false
-		main._hub._journal_popup.visible = false
+		Juice.close(main._hub._journal_dim, main._hub._journal_popup)
 		Sfx.click()
 		return true
 	elif main._hub._prestige_popup.visible:
-		main._hub._prestige_dim.visible = false
-		main._hub._prestige_popup.visible = false
+		Juice.close(main._hub._prestige_dim, main._hub._prestige_popup)
 		Sfx.click()
 		return true
 	elif main._progress_ui._prog_popup.visible:
-		main._progress_ui._prog_dim.visible = false
-		main._progress_ui._prog_popup.visible = false
+		Juice.close(main._progress_ui._prog_dim, main._progress_ui._prog_popup)
 		Sfx.click()
 		return true
 	elif main._hub._profile_popup.visible:
-		main._hub._profile_dim.visible = false
-		main._hub._profile_popup.visible = false
+		Juice.close(main._hub._profile_dim, main._hub._profile_popup)
 		Sfx.click()
 		return true
 	elif main._hub._up_popup.visible:
-		main._hub._up_dim.visible = false
-		main._hub._up_popup.visible = false
+		Juice.close(main._hub._up_dim, main._hub._up_popup)
 		Sfx.click()
 		return true
 	elif main._spirit._companion_dlg != null and main._spirit._companion_dlg.visible:
@@ -1923,6 +1923,15 @@ func _close_top_modal() -> bool:
 		# Палитра и гостевой домик — самые нижние по z и одновременно видны
 		# быть не могут, порядок этих двух веток не важен.
 		main._home._close_house_popup()
+		return true
+	elif main._social_ui != null and main._social_ui._trade != null \
+			and main._social_ui._trade.is_open():
+		# S2 обмен: TradeUI — это z=21 ВНУТРИ SocialUI (z=20). Без этой ветки Esc
+		# гасил весь экран «Друзья», а подслой оставался visible и на следующем
+		# open() показывал чужого _peer. Относительно ветки _confirm порядок тут
+		# страховочный: оба слоя — полноэкранные STOP при равном z, и открыть
+		# второй при видимом первом тапом невозможно.
+		main._social_ui._trade.close()
 		return true
 	elif main._social_ui != null and main._social_ui._confirm != null and main._social_ui._confirm.visible:
 		main._social_ui._confirm_close()
