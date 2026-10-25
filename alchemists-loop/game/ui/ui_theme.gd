@@ -39,8 +39,11 @@ static func nine(name: String, m: Vector4, content: Vector4 = Vector4.ZERO,
 
 ## normal/hover/pressed одной текстуры. Нажатие сдвигает контент на 1 px вниз
 ## (у StyleBoxTexture нет texture_offset); hover светлее, pressed темнее.
+## Нет текстуры — пустой словарь, как null у nine(): вызывающий обязан проверить.
 static func nine_hv(name: String, m: Vector4, content: Vector4,
 		hover: float = 1.10, press: float = 0.88) -> Dictionary:
+	if tex(name) == null:
+		return {}
 	var down := Vector4(content.x, content.y - 1.0, content.z, content.w + 1.0)
 	return {
 		"normal": nine(name, m, content),

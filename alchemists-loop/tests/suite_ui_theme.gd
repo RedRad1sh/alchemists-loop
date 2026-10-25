@@ -147,6 +147,17 @@ static func _theme_cache() -> void:
 	Selftest.check("nine_hv pressed dimmer", hp != null and hp.modulate_color.r < 1.0)
 	Selftest.check("nine_hv pressed 1 px down",
 		hn != null and hp != null and is_equal_approx(hp.content_margin_top, hn.content_margin_top - 1.0))
+	Selftest.check("nine_hv unknown returns empty",
+		UITheme.nine_hv("nope", Vector4(1, 1, 1, 1), Vector4(1, 1, 1, 1)).is_empty())
+	# Промах кэшируется как null; видно только через приватный словарь —
+	# у GDScript нет счётчика load(), а ResourceLoader сам делает REUSE.
+	UITheme.tex("__missing__")
+	UITheme.tex("__missing__")
+	Selftest.check("texture cache memoises misses",
+		UITheme._tex_cache.has("__missing__") and UITheme._tex_cache["__missing__"] == null)
+	Selftest.check("texture cache maps name to file",
+		UITheme.tex("btn_brass") != null
+		and UITheme.tex("btn_brass").resource_path.ends_with("btn_brass.png"))
 
 
 static func _warm_texts(g: Game) -> void:
