@@ -17,3 +17,7 @@ discovery-server/server/tests/*.sqlite
 *.import
 *.uid
 wt/
+
+# tools/shots.py: кадры приёмки и визуальные диффы — локальные артефакты
+alchemists-loop/previews/shots/
+alchemists-loop/previews/shots-diff/
