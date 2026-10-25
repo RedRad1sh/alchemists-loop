@@ -100,14 +100,23 @@ static func _assets() -> void:
 		"backdrop_room": [1080, 1920], "vignette": [1080, 1920],
 	}
 	var raw_bytes := 0
+	var measured := 0
 	for name in want:
 		var why := _asset_state(name, int(want[name][0]), int(want[name][1]))
 		if why != "":
 			print("       | ", why)
 		Selftest.check("theme asset " + name, why == "")
 		if name != "backdrop_room" and name != "vignette":
-			raw_bytes += int(want[name][0]) * int(want[name][1]) * 4
-	Selftest.check("theme 9-slice fits 2 MiB raw", raw_bytes <= 2 * 1024 * 1024)
+			var f := FileAccess.open("res://assets/ui/theme/%s.png" % name, FileAccess.READ)
+			if f != null:
+				raw_bytes += f.get_length()
+				measured += 1
+				f.close()
+			Selftest.check("theme %s uncompressed" % name,
+				_sidecar("res://assets/ui/theme/%s.png.import" % name, "compress/mode") == "0"
+				and _sidecar("res://assets/ui/theme/%s.png.import" % name, "mipmaps/generate") == "false")
+	Selftest.check("theme 9-slice fits 2 MiB raw",
+		measured == 9 and raw_bytes <= 2 * 1024 * 1024)
 	for name in ["backdrop_room", "vignette"]:
 		var mode := _sidecar("res://assets/ui/theme/%s.png.import" % name, "compress/mode")
 		var mips := _sidecar("res://assets/ui/theme/%s.png.import" % name, "mipmaps/generate")
