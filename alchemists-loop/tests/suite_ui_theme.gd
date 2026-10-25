@@ -8,6 +8,7 @@ class_name SuiteUiTheme
 static func run(g: Game) -> void:
 	_tokens()
 	_icon_default()
+	_assets()
 	_warm_texts(g)
 
 
@@ -66,6 +67,51 @@ static func _icon_default() -> void:
 	Selftest.check("icon default is BRASS_HI",
 		icon != null and icon.modulate.is_equal_approx(UIStyle.BRASS_HI))
 	b.free()
+
+
+static func _asset_state(name: String, w: int, h: int) -> String:
+	var path := "res://assets/ui/theme/%s.png" % name
+	if not ResourceLoader.exists(path):
+		return "нет " + name + ".png"
+	var t := load(path) as Texture2D
+	if t == null:
+		return name + ": не текстура"
+	if t.get_width() != w or t.get_height() != h:
+		return "%s: %dx%d вместо %dx%d" % [name, t.get_width(), t.get_height(), w, h]
+	return ""
+
+
+static func _sidecar(path: String, key: String) -> String:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return ""
+	for line in f.get_as_text().split("\n"):
+		if line.begins_with(key + "="):
+			return line.split("=", true, 1)[1].strip_edges()
+	return ""
+
+
+static func _assets() -> void:
+	var want := {
+		"frame_modal": [192, 192], "frame_panel": [128, 128],
+		"plaque_title": [400, 128], "well_slot": [128, 128],
+		"field": [128, 72], "btn_brass": [192, 80], "btn_wood": [192, 80],
+		"tab_active": [192, 88], "tab_rail": [1024, 128],
+		"backdrop_room": [1080, 1920], "vignette": [1080, 1920],
+	}
+	var raw_bytes := 0
+	for name in want:
+		var why := _asset_state(name, int(want[name][0]), int(want[name][1]))
+		if why != "":
+			print("       | ", why)
+		Selftest.check("theme asset " + name, why == "")
+		if name != "backdrop_room" and name != "vignette":
+			raw_bytes += int(want[name][0]) * int(want[name][1]) * 4
+	Selftest.check("theme 9-slice fits 2 MiB raw", raw_bytes <= 2 * 1024 * 1024)
+	for name in ["backdrop_room", "vignette"]:
+		var mode := _sidecar("res://assets/ui/theme/%s.png.import" % name, "compress/mode")
+		var mips := _sidecar("res://assets/ui/theme/%s.png.import" % name, "mipmaps/generate")
+		Selftest.check("theme %s VRAM compressed" % name, mode == "2" and mips == "true")
 
 
 static func _warm_texts(g: Game) -> void:
