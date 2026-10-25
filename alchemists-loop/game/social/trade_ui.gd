@@ -29,21 +29,38 @@ const PANE_PAD := 18.0
 ## влезть в 252 − 2×18 = 216 ПОСЛЕ вертикального скроллбара GridScroll (12 px),
 ## иначе третья колонка режется: 3×64 + 2×6 = 204 = 216 − 12.
 const CELL := Vector2(64, 80)
-const ART := 50.0
+## §D-поле подписи от кромки кармана: ни одна строка не ближе 6 px.
+const CELL_FIELD := 6.0
+## Кегль полос имени/копий и зазор между полосами кармана.
+const INK_FS := 9
+const POCKET_GAP := 3.0
+## Потолок миниатюры: выше — и она лезет в поля pocket.png. Реальный размер
+## берёт остаток высоты (`_pocket_bands`), чтобы подпись физически не могла
+## вылезти за нижний край.
+const ART_MAX := 44.0
 const SEAL := 50.0
 const GRID_COLS := 3
 const GRID_GAP := 6.0
 const SLOT_GAP := 4.0               # 6×64 + 5×4 = 404 ≤ 516
-const SHEET := Vector2(112, 76)
+## Бумажная кнопка: nine-slice от paper_note.png с полем кромки PAPER_FIELD,
+## поэтому плоский центр = размер минус две кромки. «Предложить» — 78 px при
+## кегле 13 (замер Manrope-Regular), значит плоского центра нужно ≥78:
+## 136 − 2×27. Ниже — и подпись лезет на рваный край (кадр trade_list).
+const SHEET := Vector2(136, 78)
 ## Записка оффера в списке: бумага paper_note.png (264×176) в соотношении, близком
 ## к исходному, — растягивать лист до 500 px в ширину нельзя, края рвутся и
 ## бумага читается как полоса. 3 колонки миниатюр по 40 px на сторону вносят
 ## M-сторону целиком (6 ячеек = 2 ряда), стрелка и два ряда действий влезают в
 ## внутреннего поля листа.
-const NOTE := Vector2(320, 200)
-## 14 px: рваный край paper_note.png — ~12 px нативных из 264, при 320 это 14 px.
-## С полем 8 первая буква подписи сторон и «Николя» справа садились на край.
-const NOTE_PAD := 14.0
+const NOTE := Vector2(330, 204)
+## Рваный край paper_note.png — 19 px слева/справа и 21/20 px сверху/снизу
+## непрозрачной бумаги (замер 2026-10-25: `Image.load_from_file` + порог alpha
+## 0.9 по средней строке). Лист лежит на `NinePatchRect`, поэтому край больше не
+## масштабируется вместе с листом (при STRETCH_SCALE на 320 px он съедал 23 px,
+## и подпись «Серный круг…» начиналась левее видимой бумаги). Патч = 21 px,
+## поле §D 6 px ⇒ 27.
+const NOTE_PATCH := 21.0
+const NOTE_PAD := 27.0
 const MINI := 40.0
 ## Наклон записки заметно меньше наклона планшета: 320 px при 1.2° дали бы +6.7 px
 ## по высоте строки, и соседние записки в секции перекрывались бы.
@@ -52,28 +69,40 @@ const NOTE_TILT := 0.6
 ## растёт по содержимому, поэтому при 1+1 карты лист обнимает её (270×160), а не
 ## остаётся пустой простынёй 420×372, как было в кадре trade_confirm.
 const CONFIRM := Vector2(240, 160)
-const CONFIRM_PAD := 16.0
+## Тот же рваный край, что у записки списка: лист подтверждения лежит на
+## NinePatchRect с патчем NOTE_PATCH, поэтому поле не зависит от ширины листа
+## (она растёт по содержимому) — 21 px кромки + 6 px поля §D.
+const CONFIRM_PAD := 27.0
 const CELL_BIG := 56.0
 ## 2 колонки на сторону (а не GRID_COLS=3): сторона из 6 позиций даёт лист
 ## 288×263 вместо 404×195 — ближе к соотношению бумаги 1.5, и подписи сторон
 ## перестают спорить с шириной колонки.
 const CONFIRM_COLS := 2
-const CAP := Vector2(56, 56)
+const CAP := Vector2(40, 40)
 const NAIL := Vector2(48, 48)
 const FOOT_H := 80.0
 const HEAD_H := 52.0
+# Поля текста в текстурных блоках (спека 2026-10-25 §D): подписи не должны
+# касаться кромки бумаги — иначе текст читается напечатанным поверх картинки.
+const PANEL_M := 12.0
+const SLOT_M := 8.0
+const BTN_M := 27.0
+# Рваное поле paper_note.png: 19 px слева/справа и 21/20 px сверху/снизу
+# непрозрачной бумаги (замер alpha>0.9). Nine-slice-поле меньше него — и
+# оборванный край разъедется при растяжении; поле текста = ему + 6 px §D.
+const PAPER_FIELD := 21.0
 ## Два градуса затемнения, а не один: 0.55 — «копии кончились / нельзя положить»,
 ## 0.62 — «целика недоступна» (офлайн-планшет друга, locked кнопка, подарок).
 const FADE_SPENT := 0.55
 const FADE_OUT := 0.62
-const PAPER_INK := Color(0.16, 0.11, 0.07)
-const BOARD_INK := Color(0.93, 0.86, 0.70)
-const AMBER := Color("#e6a84a")
-## Янтарь для надписей ПОВЕРХ бумаги: paper_note.png в верхней части — светлый
-## крем, и #e6a84a на нём тонет (контраст ~1.6:1). Жжёный янтарь остаётся тем же
+const PAPER_INK := Color(0.18, 0.11, 0.06)
+const BOARD_INK := Color(0.95, 0.88, 0.74)
+const AMBER := Color("#c9a061")
+## Латунь для надписей ПОВЕРХ бумаги: pane_tablet.png в верхней части — светлый
+## мёд, и #c9a061 на нём тонет (контраст ~1.9:1). Жжёная охра остаётся тем же
 ## акцентом и читается, поэтому пометка «последняя копия» на листе подтверждения
-## им и рисуется, а AMBER живёт на тёмной ткани окна.
-const AMBER_INK := Color("#9a5a12")
+## ей и рисуется, а AMBER живёт на тёмном бархате окна.
+const AMBER_INK := Color("#7d4f1c")
 const TILT_MAX := 1.2
 
 var g: Game
@@ -506,23 +535,27 @@ func build() -> void:
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(box)
 
-	# Шапка — рейка досок с гвоздём вместо кнопки «Назад»: закрытие окна должно
-	# быть частью рамы, а не подписью под ней.
+	# Шапка — ореховая рейка с двумя латунными гвоздиками: заклёпка справа и
+	# есть кнопка «Назад»: закрытие окна должно быть частью рамы, а не подписью
+	# под ней. Кромки — код-линиями (спека 2026-10-25 §A): тёмная тень под
+	# рейкой и светлый верхний срез сверху.
 	var head := MarginContainer.new()
 	head.name = "Head"
 	head.custom_minimum_size = Vector2(0, HEAD_H)
 	box.add_child(head)
 	var head_plate := TextureRect.new()
 	head_plate.name = "Plate"
-	head_plate.texture = board_tex("board_planks.png")
+	head_plate.texture = board_tex("frame_h.png")
 	head_plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	head_plate.stretch_mode = TextureRect.STRETCH_SCALE
 	head_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	head.add_child(head_plate)
+	_plate_edges(head, HEAD_H)
 	var head_row := HBoxContainer.new()
 	head_row.name = "Row"
 	head_row.add_theme_constant_override("separation", 8)
 	head.add_child(head_row)
+	head_row.add_child(_nail_deco("NailL"))
 	_header = g._label(TITLE, 17)
 	_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_header.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -597,7 +630,7 @@ func _render_list() -> void:
 		sub.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 		_body.add_child(sub)
 	var new_btn := _sheet_button("BtnNewOffer", "Предложить обмен",
-		Vector2(150, SHEET.y))
+		Vector2(180, SHEET.y))
 	# Без SHRINK_CENTER VBox растягивает бумажную подложку на все 516 px, и лист
 	# paper_note.png с соотношением 1.5 превращается в полосу 6.8:1 (кадр списка).
 	new_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -611,7 +644,7 @@ func _render_list() -> void:
 	if _note != "":
 		var note := g._label(_note, 12)
 		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		note.add_theme_color_override("font_color", Color("#e6a84a"))
+		note.add_theme_color_override("font_color", AMBER)
 		_body.add_child(note)
 	_incoming = _section("Мне предлагают")
 	_outgoing = _section("Я предложил")
@@ -649,6 +682,23 @@ func _title(card_id: String, craft_id: String, server_name: String) -> String:
 ## список: «Уголь → Искра» способна показать только первую карту из шести, и
 ## игрок принимал бы оффер, не видя его половины. Мини-пара сторон — сетка
 ## миниатюр, подпись именами остаётся рядом для читаемости.
+## Бумажный лист под содержимое: NinePatchRect, а не TextureRect+STRETCH_SCALE.
+## Рваный край у paper_note.png — 21 px текстуры; при растяжении он масштабировался
+## вместе с листом, и поле текста приходилось пересчитывать под каждый размер
+## (записка 320 px съедала 23 px кромки, лист подтверждения — 17 px). Патч держит
+## кромку постоянные NOTE_PATCH px при любой ширине, углы остаются нерастянутыми.
+func _paper_plate(nm: String, min_size: Vector2, tilt: float) -> NinePatchRect:
+	var p := NinePatchRect.new()
+	p.name = nm
+	p.texture = board_tex("paper_note.png")
+	for m in ["patch_margin_left", "patch_margin_top", "patch_margin_right",
+			"patch_margin_bottom"]:
+		p.set(m, int(NOTE_PATCH))
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.pivot_offset = min_size / 2.0
+	p.rotation_degrees = tilt
+	return p
+
 func _offer_note(box: VBoxContainer, raw, kind: int, pending: Array) -> void:
 	if not (raw is Dictionary):
 		return
@@ -661,14 +711,8 @@ func _offer_note(box: VBoxContainer, raw, kind: int, pending: Array) -> void:
 	mc.custom_minimum_size = NOTE
 	mc.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(mc)
-	var plate := TextureRect.new()
-	plate.name = "Plate"
-	plate.texture = board_tex("paper_note.png")
-	plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	plate.stretch_mode = TextureRect.STRETCH_SCALE
-	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	plate.pivot_offset = NOTE / 2.0
-	plate.rotation_degrees = _tilt("note-%d" % id) * (NOTE_TILT / TILT_MAX)
+	var plate := _paper_plate("Plate", NOTE,
+		_tilt("note-%d" % id) * (NOTE_TILT / TILT_MAX))
 	mc.add_child(plate)
 	var pad := MarginContainer.new()
 	pad.name = "Pad"
@@ -1007,30 +1051,57 @@ func _cell(side: String, e: Dictionary, pending: Array) -> TextureButton:
 	b.mouse_filter = Control.MOUSE_FILTER_STOP
 	b.tooltip_text = "%s\n%s" % [String(e.get("display_name", "")), _copies_hint(side, e)]
 
+	var bands := _pocket_bands()
 	var art := TextureRect.new()
 	art.name = "Art"
 	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	art.stretch_mode = TextureRect.STRETCH_SCALE
 	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	art.position = Vector2((CELL.x - ART) / 2.0, 5.0)
-	art.size = Vector2(ART, ART)
+	art.position = Vector2((CELL.x - float(bands[0])) / 2.0, CELL_FIELD)
+	art.size = Vector2(bands[0], bands[0])
 	b.add_child(art)
 	pending.append([art, _preview_arg(side, e)])
 
-	var nm := _ink_label("Name", String(e.get("display_name", "")),
-		_name_size(String(e.get("display_name", "")), CELL.x - 4.0),
-		Vector2(2.0, 56.0), Vector2(CELL.x - 4.0, 13.0))
-	nm.clip_text = true
-	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	var w := CELL.x - 2.0 * SLOT_M
+	var fit := _fit_name(String(e.get("display_name", "")), w)
+	var nm := _ink_label("Name", String(fit[1]), int(fit[0]),
+		Vector2(SLOT_M, float(bands[1])), Vector2(w, float(bands[3])))
 	b.add_child(nm)
-	var cp := _ink_label("Copies", _copies_label(side, e), 9,
-		Vector2(2.0, 69.0), Vector2(CELL.x - 4.0, 11.0))
+	var cp := _ink_label("Copies", _copies_label(side, e), INK_FS,
+		Vector2(SLOT_M, float(bands[2])), Vector2(w, float(bands[3])))
 	b.add_child(cp)
 	if not can_add(side, e):
 		b.disabled = true
 		_fade_tree(b, _fade_mat(FADE_SPENT))
 	b.pressed.connect(_on_cell.bind(side, e))
 	return b
+
+## Подпись кармана: 9 px, если не влезает — 8, потом 7; и если даже в 7 px имя
+## шире полосы, обрезаем по метрике и ставим «…». Хроматические имена
+## («Кобальтовая тропа») без обрезки раздували rect: Godot клампит `size` к
+## натуральной ширине текста, и подпись в 48-px полосу ложилась на 104 px — за
+## край кожи (кадр trade_build). Возвращает [кегль, строка].
+func _fit_name(text: String, w: float) -> Array:
+	var f := g.get_theme_default_font()
+	for s in [INK_FS, 8, 7]:
+		if f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, s).x <= w:
+			return [s, text]
+	var trimmed := text
+	while trimmed.length() > 1 \
+			and f.get_string_size(trimmed + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, 7).x > w:
+		trimmed = trimmed.substr(0, trimmed.length() - 2)
+	return [7, trimmed + "…"]
+
+## [сторона арте, y имени, y копий, высота строки]. Раскладка выводится из
+## метрики шрифта, а не из литеральных y: карман = поле + арте + два зазора +
+## две строки + поле, и только так подпись не может залезть за нижний край при
+## смене кегля или шрифта темы. При 80 px и строке 13 px арте выходит 40.
+func _pocket_bands() -> Array:
+	var lh := g.get_theme_default_font().get_height(INK_FS)
+	var art := minf(ART_MAX,
+		floorf(CELL.y - 2.0 * CELL_FIELD - 2.0 * lh - 2.0 * POCKET_GAP))
+	var name_y := CELL_FIELD + art + POCKET_GAP
+	return [art, name_y, name_y + lh + POCKET_GAP, lh]
 
 ## Подпись + ряд из TRADE_SIDE_MAX ячеек стороны. Ряд рисуется целиком даже при
 ## пустом оффере: пустые ячейки под сургучом и есть обещание «сюда можно положить
@@ -1070,18 +1141,20 @@ func _slot(side: String, pos: int, arr: Array, pending: Array) -> TextureButton:
 	b.mouse_filter = Control.MOUSE_FILTER_STOP
 	if pos < arr.size():
 		var e: Dictionary = arr[pos]
+		var bands := _pocket_bands()
 		var art := TextureRect.new()
 		art.name = "Art"
 		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		art.stretch_mode = TextureRect.STRETCH_SCALE
 		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		art.position = Vector2((CELL.x - ART) / 2.0, 5.0)
-		art.size = Vector2(ART, ART)
+		art.position = Vector2((CELL.x - float(bands[0])) / 2.0, CELL_FIELD)
+		art.size = Vector2(bands[0], bands[0])
 		b.add_child(art)
 		pending.append([art, _preview_arg(side, e)])
-		b.add_child(_ink_label("Name", String(e.get("display_name", "")),
-			_name_size(String(e.get("display_name", "")), CELL.x - 4.0),
-			Vector2(2.0, 56.0), Vector2(CELL.x - 4.0, 13.0)))
+		var w := CELL.x - 2.0 * SLOT_M
+		var fit := _fit_name(String(e.get("display_name", "")), w)
+		b.add_child(_ink_label("Name", String(fit[1]), int(fit[0]),
+			Vector2(SLOT_M, float(bands[1])), Vector2(w, float(bands[3]))))
 		b.tooltip_text = String(e.get("display_name", ""))
 		b.pressed.connect(_on_slot_pressed.bind(side, pos))
 	else:
@@ -1103,30 +1176,54 @@ func _slot(side: String, pos: int, arr: Array, pending: Array) -> TextureButton:
 		_fade_tree(b, _fade_mat(FADE_OUT))
 	return b
 
-## Бумажная кнопка нижнего ряда: подложка paper_note.png с текстом-лейблом.
-## Обычная Button с StyleBoxFlat сюда не годится — §5 требует, чтобы кнопки окна
-## были вырезаны из той же бумаги, что и карманы.
+## Бумажная кнопка: та же бумага, что и карманы, но nine-slice (спека §A) —
+## TextureButton+STRETCH_SCALE растягивал запечённую тень и кромку вдоль всей
+## плашки, и кнопка выглядела наклеенной картинкой. Стиль — `Button` +
+## `StyleBoxTexture` с полями 8 лог. px (16 исходных, текстура @2x) под тень и
+## кромку; hover +8% яркости, pressed −6% и сдвиг текстуры на 1 px вниз.
 func _sheet_button(nm: String, text: String,
-		size: Vector2 = SHEET) -> TextureButton:
-	var b := TextureButton.new()
+		size: Vector2 = SHEET) -> Button:
+	var b := Button.new()
 	b.name = nm
-	b.texture_normal = board_tex("paper_note.png")
-	b.texture_disabled = b.texture_normal
-	b.ignore_texture_size = true
-	b.stretch_mode = TextureButton.STRETCH_SCALE
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
 	b.custom_minimum_size = size
 	b.mouse_filter = Control.MOUSE_FILTER_STOP
-	var cap := _ink_label("Text", text, 13, Vector2(4.0, 4.0),
-		size - Vector2(8.0, 8.0))
-	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	cap.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	b.add_child(cap)
+	var sb := StyleBoxTexture.new()
+	sb.texture = board_tex("paper_note.png")
+	for m in ["texture_margin_left", "texture_margin_top",
+			"texture_margin_right", "texture_margin_bottom"]:
+		sb.set(m, PAPER_FIELD)
+	for m in ["content_margin_left", "content_margin_top",
+			"content_margin_right", "content_margin_bottom"]:
+		sb.set(m, BTN_M)
+	var sbh: StyleBoxTexture = sb.duplicate()
+	sbh.modulate_color = Color(1.08, 1.08, 1.08)
+	var sbp: StyleBoxTexture = sb.duplicate()
+	sbp.modulate_color = Color(0.94, 0.94, 0.94)
+	# «1 px вниз» при нажатии: в Godot 4 у StyleBoxTexture нет texture_offset,
+	# сдвиг делаем верхним/нижним полем контента.
+	sbp.content_margin_top = BTN_M - 1.0
+	sbp.content_margin_bottom = BTN_M + 1.0
+	b.add_theme_stylebox_override("normal", sb)
+	b.add_theme_stylebox_override("hover", sbh)
+	b.add_theme_stylebox_override("pressed", sbp)
+	b.add_theme_stylebox_override("disabled", sb)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.add_theme_font_size_override("font_size", 13)
+	for c in ["font_color", "font_hover_color", "font_pressed_color"]:
+		b.add_theme_color_override(c, PAPER_INK)
+	b.add_theme_color_override("font_disabled_color",
+		Color(PAPER_INK.r, PAPER_INK.g, PAPER_INK.b, 0.55))
+	b.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return b
 
 func _footer() -> void:
 	var foot := MarginContainer.new()
 	foot.name = "Footer"
 	foot.custom_minimum_size = Vector2(0, FOOT_H)
+	for s in ["margin_left", "margin_right"]:
+		foot.add_theme_constant_override(s, int(PANEL_M))
 	_body.add_child(foot)
 	var plate := TextureRect.new()
 	plate.name = "Rail"
@@ -1135,6 +1232,7 @@ func _footer() -> void:
 	plate.stretch_mode = TextureRect.STRETCH_SCALE
 	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	foot.add_child(plate)
+	_plate_edges(foot, FOOT_H, false)
 	var row := HBoxContainer.new()
 	row.name = "Row"
 	row.add_theme_constant_override("separation", 6)
@@ -1168,28 +1266,59 @@ func _corner(nm: String) -> TextureRect:
 	c.custom_minimum_size = CAP
 	return c
 
+## Латунный гвоздик-декор на рейке титра (спека §C: два гвоздика, правый из них
+## — живая кнопка закрытия).
+func _nail_deco(nm: String) -> TextureRect:
+	var n := TextureRect.new()
+	n.name = nm
+	n.texture = board_tex("nail_brass.png")
+	n.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	n.stretch_mode = TextureRect.STRETCH_SCALE
+	n.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	n.custom_minimum_size = NAIL
+	return n
+
+## Код-кромка плашки (спека §A): 1 px светлого среза сверху самой плашки и 2 px
+## тёмной контактной тени с нужной стороны. Line2D, а не ColorRect: пин «no flat
+## controls in the visible layer» запрещает заливные прямоугольники в видимом
+## слое. У футера тень ложится НАД рейкой — под рейкой край окна.
+func _plate_edges(parent: Control, h: float, shadow_below: bool = true) -> void:
+	var top := Line2D.new()
+	top.name = "EdgeTop"
+	top.points = PackedVector2Array([Vector2(0, 0.7), Vector2(540, 0.7)])
+	top.width = 1.0
+	top.default_color = Color("#fdf3dc")
+	top.default_color.a = 0.14
+	parent.add_child(top)
+	var bottom := Line2D.new()
+	bottom.name = "EdgeShadow"
+	var y := h + 1.0 if shadow_below else -1.0
+	bottom.points = PackedVector2Array([Vector2(0, y), Vector2(540, y)])
+	bottom.width = 2.0
+	bottom.default_color = Color("#120c07")
+	bottom.default_color.a = 0.35
+	parent.add_child(bottom)
+
 func _ink_label(nm: String, text: String, font_size: int,
 		pos: Vector2, size: Vector2) -> Label:
 	var l := Label.new()
 	l.name = nm
 	l.text = text
-	l.position = pos
-	l.size = size
-	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	# Кегль ДО размера: `Control.size` клампится минимальным размером подписи, а
+	# он считается по шрифту. При порядке «size, потом override» rect застревал на
+	# строке дефолтного шрифта темы (23 px вместо 13), и подпись уезжала за
+	# нижний край кармана — ровно тот §D-брак, который ловит пин.
 	l.add_theme_font_size_override("font_size", font_size)
 	l.add_theme_color_override("font_color", PAPER_INK)
+	l.position = pos
+	l.size = size
+	# Чернила сверху полосы: box подписи клампится к минимуму по дефолтному кеглю
+	# темы (23 px) и остаётся выше строки, а §D считает отступ по верхнему краю
+	# полосы. При CENTER глифы уезжали бы на 5 px вниз, к нижней кромке кожи.
+	l.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
-
-## Подпись кармана: 9 px, а если имя не влезает — 8, потом 7. Хроматические имена
-## («Пепельный язык», «Кобальтовая тропа») в 14–17 знаков на 9 px выходили за
-## карман и обрезались посреди слова (кадр trade_gift).
-func _name_size(text: String, w: float) -> int:
-	var f := g.get_theme_default_font()
-	for s in [9, 8]:
-		if f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, s).x <= w:
-			return s
-	return 7
 
 func _copies_label(side: String, e: Dictionary) -> String:
 	if String(e.get("card_id", "")) == "":
@@ -1280,14 +1409,7 @@ func _render_confirm() -> void:
 	sheet.custom_minimum_size = CONFIRM
 	sheet.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_body.add_child(sheet)
-	var plate := TextureRect.new()
-	plate.name = "Plate"
-	plate.texture = board_tex("paper_note.png")
-	plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	plate.stretch_mode = TextureRect.STRETCH_SCALE
-	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	plate.pivot_offset = CONFIRM / 2.0
-	plate.rotation_degrees = _tilt(_peer) * 0.5
+	var plate := _paper_plate("Plate", CONFIRM, _tilt(_peer) * 0.5)
 	sheet.add_child(plate)
 	var pad := MarginContainer.new()
 	pad.name = "Pad"
@@ -1340,12 +1462,12 @@ func _render_confirm() -> void:
 			+ "коллекции: прогресс достижений по сигилам и невыбранные вехи "
 			+ "комплекта пересчитываются по тому, что осталось.", 13)
 		warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		warn.add_theme_color_override("font_color", Color("#e6a84a"))
+		warn.add_theme_color_override("font_color", AMBER)
 		_body.add_child(warn)
 	if _note != "":
 		var note := g._label(_note, 12)
 		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		note.add_theme_color_override("font_color", Color("#e6a84a"))
+		note.add_theme_color_override("font_color", AMBER)
 		_body.add_child(note)
 	var acts := HBoxContainer.new()
 	acts.name = "Acts"

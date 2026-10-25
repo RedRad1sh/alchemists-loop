@@ -1880,6 +1880,17 @@ static func _contract_board_checks(g: Game) -> void:
 		and close_btn.tooltip_text != ""
 		and board.get_node_or_null("Ring") == null)
 
+	# 8b. §C (спека 2026-10-25): кнопки доски одеты в латунную плашку. Жёлтый
+	# `UIStyle.style_button(..., 2)` даёт StyleBoxFlat, поэтому «normal — это
+	# StyleBoxTexture с plate_brass.png» краснеет и от возврата к теме, и от
+	# плашки без текстуры. Числа в хелпере литеральные, не константы ContractBoard:
+	# понижать поле в коде — это решение, а пин обязан его заметить.
+	var t8b_hearth: Button = board.get("_hearth_btn") as Button
+	Selftest.check("§C the board's close button is sawn in the brass plate",
+		_plate_state(close_btn) == "")
+	Selftest.check("§C the board's hearth button is sawn in the brass plate",
+		_plate_state(t8b_hearth) == "")
+
 	# 9. Доска v2: восемь карточек — 4 daily + 4 weekly (было 3+2).
 	var dr: Control = board.get_node_or_null("DailyRow") as Control
 	var wr: Control = board.get_node_or_null("WeeklyRow") as Control
@@ -2244,6 +2255,10 @@ static func _contract_board_checks(g: Game) -> void:
 		Selftest.check("§5.4 the popup has the reward title and an OK button",
 			pop_title != null and pop_title.text == ContractBoard.POPUP_TITLE
 			and pop_ok_btn != null)
+		# §C: та же латунная плашка на единственной кнопке попапа (проверяется ДО
+		# onжатия: press закрывает доску награды вместе с кнопкой).
+		Selftest.check("§C the reward popup's OK button is sawn in the brass plate",
+			_plate_state(pop_ok_btn) == "")
 		if pop_ok_btn != null:
 			pop_ok_btn.pressed.emit()
 		await g.get_tree().process_frame
@@ -2264,6 +2279,22 @@ static func _contract_board_checks(g: Game) -> void:
 		and tip_lbl.tooltip_text.contains("+%d%%" % tip_pct)
 		and tip_stamp.tooltip_text.contains("+%d%%" % tip_pct)
 		and tip_lbl.tooltip_text.contains(String(ContractsBalance.BUFF_TITLE.get(String(r_tip["buff"]), "нетбаффа"))))
+
+	# 20b. §D: штамп не наезжает на текст. Прямоугольники штампа, тела и награды
+	# сравниваются в координатах листа (`_hang`), поэтому поворот бумаги не мешает.
+	# Краснеет, если вернуть прежние _stamp.position = h-112 при _reward = h-78:
+	# там рамка 132×56 ложилась и на цель, и на награду.
+	var stamp_clear := true
+	for row in [dr, wr]:
+		for ch0 in row.get_children():
+			var card0 := ch0 as ContractCard
+			if card0 == null:
+				continue
+			var sr := (card0.get_node("Hang/Stamp") as Control).get_rect()
+			for sub in ["Reward", "Detail"]:
+				if sr.intersects((card0.get_node("Hang/" + String(sub)) as Control).get_rect()):
+					stamp_clear = false
+	Selftest.check("§D stamp band does not overlap card text", stamp_clear)
 
 	# 21. Записка активного баффа: наведение показывает название, эффект и силу.
 	c.grant_buff("craft_discount", 3600, 0.2, int(Time.get_unix_time_from_system()))
@@ -3186,6 +3217,25 @@ static func _ca_mean_diff(a: Image, b: Image) -> float:
 	return acc / float(maxi(n, 1))
 
 
+## Число различных цветов на сетке 24×24 с квантом 5 бит на канал: без кванта
+## дизеринг PNG посчитался бы разнообразием, а с квантом плоская заливка даёт
+## ровно 1 цвет. Квант — 32 уровня, а не 16: тёмная древесина виньетки целиком
+## не влезает в 16 коробок по каналу. Хелпер живёт здесь, а сюита обмена зовёт
+## его как `SuiteContractBoard._ca_distinct` — то же направление, что у
+## `_ca_img`/`_ca_inner`/`_ca_seam`.
+static func _ca_distinct(img: Image) -> int:
+	var seen := {}
+	var w := img.get_width()
+	var h := img.get_height()
+	for i in range(24):
+		for j in range(24):
+			var c := img.get_pixel(int(w * (0.05 + 0.9 * i / 23.0)),
+				int(h * (0.05 + 0.9 * j / 23.0)))
+			seen["%d_%d_%d_%d" % [int(c.r * 31), int(c.g * 31), int(c.b * 31),
+				int(c.a * 31)]] = true
+	return seen.size()
+
+
 static func _contract_asset_checks() -> void:
 	# Контракт имён и размеров, который читают экраны Task 9 и Task 10.
 	var sizes := {
@@ -3204,6 +3254,7 @@ static func _contract_asset_checks() -> void:
 		"seal_gold.png": Vector2i(104, 104),
 		"stamp_frame.png": Vector2i(264, 112),
 		"ring_pull.png": Vector2i(88, 88),
+		"plate_brass.png": Vector2i(224, 64),
 	}
 	var missing := []
 	var wrong := []
@@ -3415,6 +3466,15 @@ static func _contract_asset_checks() -> void:
 			and float(inside_changed) / float(inside_n) > 0.5 and outside_changed == 0)
 	Selftest.check("§3.4 the reward vitraj recolors only the donor's glass area", recolored)
 
+	# §B/§C (спека 2026-10-25): плашка — не «PNG картинкой сверху»: орех под
+	# латунью обязан держать и цветовой разброс, и высокочастотную деталь (волокно,
+	# сколы, speckle) ПОДОЛЬНЕ растягиваемой оси — середина nine-slice live'ет при
+	# любом размере кнопки, и плоский тон там читался бы наклейкой.
+	var plate := _ca_img(CA_DIR + "plate_brass.png")
+	Selftest.check("§C the brass plate is sawn walnut under metal, not a flat fill",
+		plate != null and _ca_distinct(plate) >= 24
+		and _ca_inner(plate, "x") > 0.02)
+
 # ---------- §5.3: хелперы карточки ----------
 
 static func _cc_desc(node: Node, acc: Array) -> void:
@@ -3457,6 +3517,110 @@ static func _cc_bad(node: Node, acc: Array) -> void:
 			if t == null or not str(t.resource_path).begins_with(CA_DIR):
 				acc.append("layer:%s" % str(n.name))
 		_cc_bad(n, acc)
+
+
+## §C (спека 2026-10-25): пустая строка, если кнопка доски реально одета в
+## латунную плашку nine-slice; иначе — короткая причина. Жёлтый
+## `UIStyle.style_button(..., 2)` даёт StyleBoxFlat, так что первая же проверка
+## краснеет и от возврата к теме, и от плашки без текстуры. Числа литеральные
+## (36/10/6), не константы ContractBoard: понизить поле в коде — решение, а пин
+## обязан его заметить. Мутации: снять `style_plate`, уронить поля до 16 px,
+## оставить content_margin по умолчанию, сделать hover темнее normal.
+static func _plate_state(b: Button) -> String:
+	if b == null:
+		return "нет кнопки"
+	var sb := b.get_theme_stylebox("normal") as StyleBoxTexture
+	if sb == null or sb.texture == null:
+		return "normal не StyleBoxTexture с PNG"
+	if not String(sb.texture.resource_path).ends_with("plate_brass.png"):
+		return String(sb.texture.resource_path).get_file()
+	# 36 px по бокам держат гвоздик целиком: меньше — и два куска наедут в
+	# растягиваемую середину.
+	if sb.texture_margin_left < 36.0 or sb.texture_margin_right < 36.0 \
+			or sb.texture_margin_top < 10.0 or sb.texture_margin_bottom < 10.0:
+		return "поля nine-slice уже 36/10"
+	for k in ["content_margin_left", "content_margin_top",
+			"content_margin_right", "content_margin_bottom"]:
+		if float(sb.get(k)) < 6.0:
+			return "§D %s" % k
+	var hov := b.get_theme_stylebox("hover") as StyleBoxTexture
+	var prs := b.get_theme_stylebox("pressed") as StyleBoxTexture
+	if hov == null or prs == null:
+		return "нет hover/pressed"
+	if hov.modulate_color.r <= 1.0 or prs.modulate_color.r >= 1.0:
+		return "hover/pressed не ярче/тусклее"
+	# «1 px вниз» при нажатии: texture_offset в Godot 4 нет, сдвиг — полем контента.
+	if not is_equal_approx(prs.content_margin_top, sb.content_margin_top - 1.0):
+		return "pressed не сдвинут на 1 px"
+	var ink: Color = b.get_theme_color("font_color")
+	if ink.r < 0.8 or ink.g < 0.7:
+		return "чернила не светлые"
+	return ""
+
+
+## §D: ни одна подпись листа не ближе 6 px к кромке своего текстурированного
+## блока. Карточка задаёт position/size всем полям сама (лист не в контейнере
+## ряда), поэтому геометрия читается из декларации и в headless. Обходим с
+## накоплением смещения; рядом с подписью, у которой есть текстурный родитель
+## (слово внутри рамки штампа), эталоном становится именно его rect — иначе
+## штамп краснел бы за свес рамки, а не за тесный текст. Меряем Label и
+## Container; TextureRect/TextureButton не меряем — сургуч нарочно свешивается
+## за край бумаги на 4 px. Поворот на ±4° (наклон листа) и −6° (штамп)
+## прямоугольниками не учитываем: он меньше поля PAD.
+static func _cc_margin_bad(card: Control) -> Array:
+	var acc: Array = []
+	var hang := card.get("_hang") as Control
+	if hang == null:
+		acc.append("no Hang")
+		return acc
+	_cc_margin_walk(hang, Vector2.ZERO, hang.size, acc)
+	return acc
+
+
+static func _cc_margin_walk(n: Control, off: Vector2, box: Vector2, acc: Array) -> void:
+	if n == null:
+		return
+	var o := off + n.position
+	if (n is Label or n is Container) and n.size.x > 0.0 and n.size.y > 0.0:
+		var d := minf(minf(o.x, box.x - o.x - n.size.x),
+			minf(o.y, box.y - o.y - n.size.y))
+		if d < 6.0:
+			acc.append("%s=%.1f" % [str(n.name), d])
+	var own := _cc_block(n)
+	for ch in n.get_children():
+		if own.x > 0.0:
+			_cc_margin_walk(ch as Control, Vector2.ZERO, own, acc)
+		else:
+			_cc_margin_walk(ch as Control, o, box, acc)
+
+
+## Rect текстурированного блока, чьим детям он задаёт поля: PNG-слой или
+## nine-slice кнопка. Пустой вектор — блок не текстурный, эталон не меняется.
+static func _cc_block(n: Control) -> Vector2:
+	if n.size.x <= 0.0 or n.size.y <= 0.0:
+		return Vector2.ZERO
+	if n is TextureRect:
+		var tr := (n as TextureRect).texture
+		return n.size if tr != null else Vector2.ZERO
+	if n is TextureButton:
+		var tb := (n as TextureButton).texture_normal
+		return n.size if tb != null else Vector2.ZERO
+	if n is Button and (n as Button).get_theme_stylebox("normal") is StyleBoxTexture:
+		return n.size
+	return Vector2.ZERO
+
+
+static func _cc_button(n: Node, want: String) -> Button:
+	for ch in n.get_children():
+		var c := ch as Control
+		if c == null:
+			continue
+		if c is Button and String(c.name) == want:
+			return c as Button
+		var found := _cc_button(c, want)
+		if found != null:
+			return found
+	return null
 
 
 static func _contract_card_checks(g: Game) -> void:
@@ -3677,6 +3841,38 @@ static func _contract_card_checks(g: Game) -> void:
 	Selftest.check("§5.3 the stamp settles to rest pose the moment it is hit",
 		stamp_r != null and stamp_r.scale == Vector2.ONE
 		and is_equal_approx(stamp_r.rotation_degrees, ContractCard.STAMP_TILT))
+
+	# 16. §D (спека 2026-10-25): текст не впритык к кромке бумаги. Мутации:
+	# поднять `_reward` на 8 px, ужать слово штампа до rect рамки, сдвинуть
+	# `_title` влево на 6 px — каждая красит эту проверку.
+	# Кадр до замера: у Label минимум считается до первого процесса по кеглю
+	# темы (16 px), и `set_size()` клампится до минимума — «ИСПОЛНЕНО» 16 px
+	# шириной 99 px вместо объявленных 84, тело — 157 вместо 112. Пин краснел
+	# бы на артефакте headless, а не на вёрстке (мутация: убрать await).
+	await g.get_tree().process_frame
+	var tight: Array = []
+	for card in cards:
+		tight.append_array(_cc_margin_bad(card as Control))
+	if not tight.is_empty():
+		print("  §D tight: ", ", ".join(tight))
+	Selftest.check("§D every word on a note keeps six pixels off its paper and frame",
+		tight.is_empty())
+
+	# 17. §C+§D ряда жилы: «Влить» — та же латунная плашка, что у кнопки доски, а
+	# не жёлтая тема, и её подпись не касается metal-края. Ряд существует только
+	# при находке статуса `registered` текущего цикла (contracts.gd:1795), поэтому
+	# её и подставляем; `_cb_restore` откатывает `_vein_finds` и `_cycle_cache`.
+	var vein_contract := _mk(c, "weekly", "vein", "bronze", 1)
+	c._cycle_cache = {"cycle_id": "d-cyc"}
+	c._vein_finds = [{"id": "d-f1", "tag": "руда", "points": 1, "pair_key": "a+b",
+		"cycle_id": "d-cyc", "status": "registered"}]
+	var vein_card := ContractCard.new(g)
+	vein_card.setup(vein_contract)
+	g.add_child(vein_card)
+	cards.append(vein_card)
+	var pour := _cc_button(vein_card, "Pour")
+	Selftest.check("§C the vein row's pour button is sawn in the brass plate",
+		_plate_state(pour) == "")
 
 	for card in cards:
 		(card as ContractCard).queue_free()

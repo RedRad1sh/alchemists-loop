@@ -283,7 +283,9 @@ static func _constructor(g: Game) -> void:
 		"confirm warns before offer",
 		"confirm sheet lists both sides as thumbnails",
 		"confirm sheet is paper with no flat fills",
+		"confirm text keeps six pixels off the paper",
 		"offer sends only on proceed",
+		"gift text keeps six pixels off the paper",
 		"offer failure shows server copy", "offline refusal says no connection",
 		"confirm warns about what you give", "confirm drops the stale refusal",
 		"gift success leaves confirm", "open clears the draft"]
@@ -416,6 +418,8 @@ static func _constructor(g: Game) -> void:
 	Selftest.check("confirm sheet is paper with no flat fills",
 		_tex_name(_node(tr._body, "ConfirmSheet/Plate")) == "paper_note.png"
 		and _flat_in(tr._body).is_empty())
+	Selftest.check("confirm text keeps six pixels off the paper",
+		_ink_margin_bad(tr._body).is_empty())
 	var proceed := _button_named(tr._body, "Предложить")
 	# Offer обязан уходить по нажатию кнопки, а не из open_confirm(). Сигнал
 	# ждём детерминированно: гасим base_url на время нажатия (шаблон
@@ -486,6 +490,8 @@ static func _constructor(g: Game) -> void:
 		and _node(tr._body, "WantCol") == null
 		and _button_named(tr._body, "Подарить") != null
 		and _button_named(tr._body, "Предложить") == null)
+	Selftest.check("gift text keeps six pixels off the paper",
+		_ink_margin_bad(tr._body).is_empty())
 	tr.call("on_gift", {"ok": true, "craft_id": "x1", "moved_name": "Радуга",
 		"remain": 7})
 	Selftest.check("gift success leaves confirm", tr._mode != 2
@@ -523,12 +529,14 @@ static func _row_named(box, want: String) -> bool:
 
 
 ## «Спокойное состояние, а не красный баннер» измеримо только цветом строки:
-## слой рисует отказ янтарным (Color("#e6a84a") — он же у `_note` в конструкторе
-## и у `social_ui.gd:89`), красный этот пин краснит.
+## слой рисует отказ акцентной латунью `TradeUI.AMBER` (ей же рисуются `_note`
+## в конструкторе и предупреждение на листе подтверждения), красный этот пин
+## краснит. Сверка с константой, а не с литералом: палитра уже переезжала с
+## янтаря #e6a84a на латунь, и дубль значения в тесте тогда поехал бы молча.
 static func _label_is_calm(node: Node, needle: String) -> bool:
 	for c in node.get_children():
 		if c is Label and (c as Label).text.contains(needle):
-			return (c as Label).get_theme_color("font_color") == Color("#e6a84a")
+			return (c as Label).get_theme_color("font_color") == TradeUI.AMBER
 		if _label_is_calm(c, needle):
 			return true
 	return false
@@ -578,6 +586,7 @@ static func _list_actions(g: Game) -> void:
 	var names := ["list rows follow server slices",
 		"list note is paper with a mini pair",
 		"list visible layer has no flat controls",
+		"list text keeps six pixels off the paper",
 		"incoming row has accept only", "outgoing row has cancel",
 		"accept press sends that order", "header shows server remain",
 		"offer entry live while remain remains",
@@ -652,6 +661,8 @@ static func _list_actions(g: Game) -> void:
 		and _label_has(note11, "Лёд, Пыль"))
 	Selftest.check("list visible layer has no flat controls",
 		_flat_in(tr._body).is_empty())
+	Selftest.check("list text keeps six pixels off the paper",
+		_ink_margin_bad(tr._body).is_empty())
 	var in_box: Control = tr._incoming
 	Selftest.check("incoming row has accept only", _button_named(in_box, "Принять") != null
 		and _button_named(in_box, "Отклонить") == null
@@ -914,7 +925,7 @@ static func _textures(_g: Game) -> void:
 		if img == null:
 			varied = false
 			continue
-		varied = varied and _distinct(img) >= 24
+		varied = varied and SuiteContractBoard._ca_distinct(img) >= 24
 		varied = varied and SuiteContractBoard._ca_inner(img, "x") > 0.02
 	Selftest.check("trade textures are not flat fills", varied)
 	# Рваный край бумаги — это альфа-канал, а не нарисованная рамка: 2 px у углов
@@ -946,24 +957,6 @@ static func _textures(_g: Game) -> void:
 	Selftest.check("trade cloth tile is seamless on both axes", seam_ok)
 
 
-## Число различных цветов на сетке 24×24 с квантом 5 бит на канал: без кванта
-## дизеринг PNG посчитался бы разнообразием и пин краснел бы на плоской залике
-## неверно, а с квантом плоская заливка даёт ровно 1 цвет. Квант — 32 уровня, а
-## не 16: тёмная ткань виньетки (#0d0906…#b3a37c) целиком не влезает в 16
-## коробок по каналу, и проверка требовала бы от затемнения bright-палитры.
-static func _distinct(img: Image) -> int:
-	var seen := {}
-	var w := img.get_width()
-	var h := img.get_height()
-	for i in range(24):
-		for j in range(24):
-			var c := img.get_pixel(int(w * (0.05 + 0.9 * i / 23.0)),
-				int(h * (0.05 + 0.9 * j / 23.0)))
-			seen["%d_%d_%d_%d" % [int(c.r * 31), int(c.g * 31), int(c.b * 31),
-				int(c.a * 31)]] = true
-	return seen.size()
-
-
 ## Узел по пути, где каждый сегмент — ИМЯ в поддереве предыдущего сегмента.
 ## Буквальный `get_node("Slots/SlotGive_5/Seal")` не годится: раскладка обязана
 ## содержать ScrollContainer в планшете и ряд-обёртку в доске оффера (план
@@ -990,8 +983,8 @@ static func _desc(root: Node, nm: String) -> Node:
 	return null
 
 
-static func _btn(node: Node, path: String) -> TextureButton:
-	return _node(node, path) as TextureButton
+static func _btn(node: Node, path: String) -> BaseButton:
+	return _node(node, path) as BaseButton
 
 
 ## Имя PNG под контролом. Пины сверяют КОНКРЕТНУЮ текстуру: «TextureRect вообще
@@ -1000,6 +993,8 @@ static func _tex_name(node: Node) -> String:
 	var t: Texture2D = null
 	if node is TextureRect:
 		t = (node as TextureRect).texture
+	elif node is NinePatchRect:
+		t = (node as NinePatchRect).texture
 	elif node is TextureButton:
 		t = (node as TextureButton).texture_normal
 	if t == null:
@@ -1046,6 +1041,64 @@ static func _buttons_in(node: Node) -> Array:
 	return out
 
 
+## §D (спека 2026-10-25): ни одна подпись не ближе 6 px к кромке своего
+## текстурного блока — «текст касается границ блоков» был брак приёмки. Меряем по
+## декларации, а не по растопосности: в selftest кадр не разложен (`size`
+## контейнерных детей нулевой), поэтому блок берёт размер из
+## `custom_minimum_size`. Три правила: (1) у кнопки, одетой в `StyleBoxTexture`,
+## все четыре `content_margin` >= 6; (2) у `Pad`-прокладки над плашкой все четыре
+## поля >= 6; (3) у подписи с явным положением внутри блок'а с PNG отступ от всех
+## четырёх кромок >= 6 — по ЧЕРНИЛАМ (метрика строки), а не по `size`:
+## `Control.set_size()` клампится минимальным размером Label, а тот до первого
+## кадра считается по `default_font_size` темы (16 px → строка 23 px), поэтому
+## box карманной подписи всегда больше нарисованных глифов и по нему честный
+## экран краснел бы всегда (замер 2026-10-25: минимум до кадра 157×23, после
+## кадра — 88×13 при том же `font_size=9`).
+## Мутации, красящие блок: BTN_M/PANEL_M/PANE_PAD/NOTE_PAD/CONFIRM_PAD/SLOT_M
+## ниже 6; не выставить content_margin (у StyleBoxTexture поле по умолчанию
+## отрицательное — это «auto», а не 6); подпись задвинута к краю кармана;
+## `_fit_name` перестаёт обрезать имя — чернила выходят за 48-px полосу.
+static func _ink_bad(node: Node, acc: Array) -> void:
+	for ch in node.get_children():
+		var c := ch as Control
+		if c != null:
+			if c is Button:
+				var sb := (c as Button).get_theme_stylebox("normal") as StyleBoxTexture
+				if sb != null:
+					for k in ["content_margin_left", "content_margin_top",
+							"content_margin_right", "content_margin_bottom"]:
+						if float(sb.get(k)) < 6.0:
+							acc.append("%s %s=%.1f" % [str(c.name), k, float(sb.get(k))])
+			elif String(c.name) == "Pad":
+				for k in ["margin_left", "margin_top", "margin_right", "margin_bottom"]:
+					if float(c.get_theme_constant(k)) < 6.0:
+						acc.append("Pad %s=%.1f" % [k, float(c.get_theme_constant(k))])
+			elif c is Label and c.size.x > 0.0:
+				var p := c.get_parent() as Control
+				if p != null and _tex_name(p) != "":
+					var pw := p.size.x if p.size.x > 0.0 else p.custom_minimum_size.x
+					var ph := p.size.y if p.size.y > 0.0 else p.custom_minimum_size.y
+					if pw > 0.0 and ph > 0.0:
+						var fs := c.get_theme_font_size("font_size")
+						var f := c.get_theme_font("font")
+						var iw := f.get_string_size(c.text,
+							HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+						var ih := f.get_height(fs)
+						var d := minf(minf(c.position.x, pw - c.position.x - iw),
+							minf(c.position.y, ph - c.position.y - ih))
+						if d < 6.0:
+							acc.append("%s/%s inset=%.1f @%s ink=%.0fx%.0f fs=%d of %s" % [
+								str(p.name), str(c.name), d, c.position, iw, ih, fs,
+								Vector2(pw, ph)])
+		_ink_bad(ch, acc)
+
+
+static func _ink_margin_bad(node: Node) -> Array:
+	var acc: Array = []
+	_ink_bad(node, acc)
+	return acc
+
+
 ## Тёплый кэш миниатюр: preview_texture отдаёт ImageTexture по попаду в кэш, не
 ## заводя настоящий SubViewport-рендер. Без этого каждая перерисовка
 ## конструктора в headless стояла бы по кадру на клетку (тот же приём, что
@@ -1085,7 +1138,8 @@ static func _builder(g: Game) -> void:
 		"proceed opens confirm from a full draft",
 		"builder buttons declare tappable sizes",
 		"builder visible layer has no flat controls",
-		"window chrome is planks cloth and nail",
+		"builder text keeps six pixels off the paper",
+		"window chrome is rail cloth and nails",
 		"window chrome closes on the nail"]
 	var T = load("res://game/social/trade_ui.gd")
 	var ui = g.get("_social_ui")
@@ -1282,17 +1336,21 @@ static func _builder(g: Game) -> void:
 	Selftest.check("builder buttons declare tappable sizes", too_small.is_empty())
 	Selftest.check("builder visible layer has no flat controls",
 		_flat_in(b).is_empty())
-	# Шапка и затемнение окна: ткань вместо ColorRect, доски вместо плоской
-	# панели, заклёпка-кнопка вместо «Назад». Пишется по всему экрану: снимает
-	# и ColorRect затемнения, и PanelContainer с темой-стилем. `dim` вынесен в
-	# переменную и проверен на null: прямой каст при ещё плоском окне уронил бы
-	# всю сюиту ошибкой вместо чистой RED-падения проверки.
+	Selftest.check("builder text keeps six pixels off the paper",
+		_ink_margin_bad(b).is_empty())
+	# Шапка и затемнение окна: ореховая рейка с двумя латунными гвоздиками
+	# (спека 2026-10-25 §C), ткань вместо ColorRect, заклёпка-кнопка вместо
+	# «Назад». `dim` вынесен в переменную и проверен на null: прямой каст при
+	# ещё плоском окне уронил бы всю сюиту ошибкой вместо чистой RED-падения
+	# проверки.
 	var screen: Control = tr.get("_screen")
 	var pre_open: bool = tr.is_open()
 	var close_btn := _btn(screen, "Head/BtnClose")
+	var nail_l := _node(screen, "Head/NailL")
 	var dim := _node(screen, "Dim") as TextureRect
-	Selftest.check("window chrome is planks cloth and nail",
-		_tex_name(_node(screen, "Head/Plate")) == "board_planks.png"
+	Selftest.check("window chrome is rail cloth and nails",
+		_tex_name(_node(screen, "Head/Plate")) == "frame_h.png"
+		and nail_l is TextureRect and _tex_name(nail_l) == "nail_brass.png"
 		and _tex_name(close_btn) == "nail_brass.png"
 		and _tex_name(dim) == "cloth_dark.png"
 		and dim != null and dim.stretch_mode == TextureRect.STRETCH_TILE
