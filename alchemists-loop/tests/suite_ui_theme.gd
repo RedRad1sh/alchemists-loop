@@ -9,6 +9,7 @@ static func run(g: Game) -> void:
 	_tokens()
 	_icon_default()
 	_assets()
+	_theme_cache()
 	_warm_texts(g)
 
 
@@ -121,6 +122,31 @@ static func _assets() -> void:
 		var mode := _sidecar("res://assets/ui/theme/%s.png.import" % name, "compress/mode")
 		var mips := _sidecar("res://assets/ui/theme/%s.png.import" % name, "mipmaps/generate")
 		Selftest.check("theme %s VRAM compressed" % name, mode == "2" and mips == "true")
+
+
+static func _theme_cache() -> void:
+	var a := UITheme.tex("frame_panel")
+	var b := UITheme.tex("frame_panel")
+	Selftest.check("texture cache returns one resource", a != null and a == b)
+	var sb := UITheme.nine("frame_panel", Vector4(20, 20, 20, 20), Vector4(12, 10, 12, 10))
+	Selftest.check("nine returns StyleBoxTexture", sb is StyleBoxTexture)
+	Selftest.check("nine margins", sb != null and is_equal_approx(sb.texture_margin_left, 20.0)
+		and is_equal_approx(sb.texture_margin_top, 20.0))
+	Selftest.check("nine content margins", sb != null and is_equal_approx(sb.content_margin_left, 12.0)
+		and is_equal_approx(sb.content_margin_top, 10.0))
+	var sb2 := UITheme.nine("frame_panel", Vector4(20, 20, 20, 20), Vector4(12, 10, 12, 10))
+	Selftest.check("nine boxes are independent", sb != null and sb2 != null and sb != sb2
+		and sb.texture == sb2.texture)
+	Selftest.check("nine unknown returns null", UITheme.nine("nope", Vector4(1, 1, 1, 1)) == null)
+	var hv := UITheme.nine_hv("btn_brass", Vector4(24, 14, 24, 14), Vector4(10, 10, 10, 10))
+	var hn := hv.get("normal") as StyleBoxTexture
+	var hh := hv.get("hover") as StyleBoxTexture
+	var hp := hv.get("pressed") as StyleBoxTexture
+	Selftest.check("nine_hv states", hn != null and hh != null and hp != null)
+	Selftest.check("nine_hv hover brighter", hh != null and hh.modulate_color.r > 1.0)
+	Selftest.check("nine_hv pressed dimmer", hp != null and hp.modulate_color.r < 1.0)
+	Selftest.check("nine_hv pressed 1 px down",
+		hn != null and hp != null and is_equal_approx(hp.content_margin_top, hn.content_margin_top - 1.0))
 
 
 static func _warm_texts(g: Game) -> void:
