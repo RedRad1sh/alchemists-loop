@@ -487,14 +487,14 @@ static func run(g: Game) -> void:
 		and (g._home.house_unlocked as Array).count("window_guild") == 1)
 	g._home.house_tasks_done.clear()
 	g._home.house_unlocked = ["window_seal"]
+	Selftest.check("b already-owned reward reports no gift",
+		g._home._grant_task_reward(_u28_task("plant_by_window")) == "")
 	var u28_aff0 := g._spirit._companion_affinity
 	g._home._complete_house_task(_u28_task("plant_by_window"))
 	Selftest.check("b already-owned reward still completes",
 		g._home.house_tasks_done == ["plant_by_window"])
-	Selftest.check("b already-owned reward adds no duplicate",
-		(g._home.house_unlocked as Array).count("window_seal") == 1)
-	Selftest.check("b already-owned reward reports no gift",
-		g._home._grant_task_reward(_u28_task("plant_by_window")) == "")
+	Selftest.check("b already-owned reward keeps the owned list unchanged",
+		g._home.house_unlocked == ["window_seal"])
 	Selftest.check("b completion gives affinity, not ether",
 		g._spirit._companion_affinity > u28_aff0 and g._engine.ether == u28_ether)
 	g._home._cosmetic_house = u28_house
