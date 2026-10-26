@@ -89,10 +89,10 @@ static func _placement() -> void:
 		Placement.valid(bed, [fireplace_placement()]))
 	Selftest.check("hv2 move that reduces overlap is allowed",
 		Placement.move_allowed({"id": "chair", "x": 1.9, "z": -0.5, "y": 0.0, "flip": false, "wall": -1},
-			{"id": "chair", "x": 1.9, "z": 0.0, "y": 0.0, "flip": false, "wall": -1}, [table], 0))
+			{"id": "chair", "x": 1.9, "z": 0.0, "y": 0.0, "flip": false, "wall": -1}, [table], -1))
 	Selftest.check("hv2 push_out removes the overlap",
 		Placement.valid(Placement.push_out(
-			{"id": "chair", "x": 1.9, "z": -0.5, "y": 0.0, "flip": false, "wall": -1}, [table], 0), [table], 0))
+			{"id": "chair", "x": 1.9, "z": -0.5, "y": 0.0, "flip": false, "wall": -1}, [table], -1), [table]))
 
 
 static func fireplace_placement() -> Dictionary:
