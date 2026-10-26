@@ -468,7 +468,6 @@ static func run(g: Game) -> void:
 	var u28_house := g._home._cosmetic_house
 	var u28_flag_prev := g._spirit._companion_unlocked
 	g._spirit._companion_unlocked = true
-	var u28_unlocked_flag := g._spirit._companion_unlocked
 	var u28_unlocked: Array = g._home.house_unlocked.duplicate()
 	var u28_done: Array = g._home.house_tasks_done.duplicate()
 	var u28_affinity := g._spirit._companion_affinity
@@ -498,10 +497,9 @@ static func run(g: Game) -> void:
 	Selftest.check("b completion gives affinity, not ether",
 		g._spirit._companion_affinity > u28_aff0 and g._engine.ether == u28_ether)
 	g._home._cosmetic_house = u28_house
-	g._spirit._companion_unlocked = u28_unlocked_flag
-	Selftest.check("b U28 restores the companion flag it found",
-		g._spirit._companion_unlocked == u28_unlocked_flag)
 	g._spirit._companion_unlocked = u28_flag_prev
+	Selftest.check("b U28 restores the companion flag it found",
+		g._spirit._companion_unlocked == u28_flag_prev)
 	g._spirit._companion_affinity = u28_affinity
 	g._spirit._companion_level = u28_level
 	g._home.house_unlocked = u28_unlocked
