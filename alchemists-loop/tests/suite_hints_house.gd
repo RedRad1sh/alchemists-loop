@@ -79,11 +79,9 @@ static func run(g: Game) -> void:
 	Selftest.check("buy furniture idempotent", g._home.house_furniture.size() == 1 and g._engine.ether == _eth0 - 270 - Game.HOUSE_COST - _rug_cost)
 	Selftest.check("decor category", g._home._decor_cat("rug").get("label", "") == "Ковёр" and g._home._decor_cat("rug").get("items", []).size() == 10)
 	Selftest.check("decor lookup", g._home._decor_label("rug", "rug") == "Классический" and g._home._decor_cost("bed", "bed") == 250)
-	Selftest.check("house json shape", g._home._house_json().has("furniture") and g._home._house_json().get("built", false) == g._home._cosmetic_house)
-	g._home.house_layout = {"bed": [0.22, 0.86], "lamp": [0.68, 0.84]}
-	var _house_with_layout := g._home._house_json()
-	Selftest.check("house json keeps layout", _house_with_layout.get("layout", {}).get("bed", []).size() == 2 and absf(float(_house_with_layout["layout"]["lamp"][0]) - 0.68) < 0.001)
-	g._home.house_layout.clear()
+	Selftest.check("house json shape", g._home._house_json().get("v", 0) == 2
+		and g._home._house_json().has("items")
+		and g._home._house_json().get("built", false) == g._home._cosmetic_house)
 	Selftest.check("challenge requirement text", g._progress_ui._ach_requirement({"kind": "challenge", "param": 3}) == "Выполни цель дня 3 раз(а)")
 	# Светик пробуждается от первой Искры; до этого подсказок нет
 	var _unl0 := g._spirit._companion_unlocked

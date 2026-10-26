@@ -1065,9 +1065,9 @@ static func run(g: Game) -> void:
 		g._contracts != null and g._contracts.g == g)
 	# доска v2 Task 6 (спека §6): блок переехал на v2 — чинит 17 новых ключей.
 	Selftest.check("§4.1 CONTRACTS_SAVE_VERSION is 2", Contracts.CONTRACTS_SAVE_VERSION == 2)
-	# доска v2 Task 6: формат сейва поднялся до 5; v4-файлы остаются читаемыми
+	# доска v2 Task 6: формат сейва поднялся до 6; v5-файлы остаются читаемыми
 	# (гейт _read_save принимает 1..SAVE_VERSION) и мигрируют presence-based.
-	Selftest.check("§6 Game.SAVE_VERSION is 5", Game.SAVE_VERSION == 5)
+	Selftest.check("§6 Game.SAVE_VERSION is 6", Game.SAVE_VERSION == 6)
 	# Живой экземпляр генерирует сегодняшний набор при первом обращении.
 	# доска v2: размер ряда 3/2→4/4, условие названо литералом.
 	Selftest.check("§1.4 the live instance generates 4 daily and 4 weekly on first access",
@@ -2689,13 +2689,11 @@ static func _contracts_durability_checks(g: Game) -> void:
 
 	# ---- 2. round-trip (§6.16): rich-состояние → файл → память начисто → загрузка ----
 	_cb_fill(c, daily_set, weekly_set, now_u)
-	g._home._own_item("window", "window_seal")
 	g._sigil._daily_crafts = []
 	g._saves._save_game()
 	# Память вычищена НАМЕРЕННО: без этого no-op-загрузка оставила бы фикстуру
 	# на месте и вся группа была бы зелёной без всякого load_block.
 	_cb_wipe(c)
-	g._home.house_owned["window"] = []
 	g._saves._load_game()
 	Selftest.check("§6.16 a restart keeps the period keys, the progress and the claim log",
 		c._contracts_last_daily == day_key and c._contracts_last_weekly == week_key
@@ -2710,8 +2708,10 @@ static func _contracts_durability_checks(g: Game) -> void:
 		c._active_buffs.size() == 1 and int(buff_back.get("until", 0)) == now_u + 1800
 		and float(buff_back.get("power", 0.0)) == 2.0
 		and c.buff_power("spring_yield", now_u + 600) == 2.0)
-	Selftest.check("§6.16 a restart keeps the decor journal together with House ownership",
-		c._unlocked_decor == ["window_seal"] and g._home._decor_owned("window", "window_seal"))
+	# Task 5: house_owned больше не пишется в сейв (формат v6), поэтому после
+	# рестарта проверяется только журнал наград контрактов.
+	Selftest.check("§6.16 a restart keeps the decor journal",
+		c._unlocked_decor == ["window_seal"])
 
 	# Разбор вместо == на всём массиве: goal после файла — float, и сверка
 	# контейнеров здесь зависела бы от типов, которых в сейве больше нет.

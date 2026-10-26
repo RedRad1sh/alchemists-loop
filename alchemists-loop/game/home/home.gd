@@ -1044,7 +1044,7 @@ func _task_text(id: String) -> String:
 
 func _house_json() -> Dictionary:
 	return {
-		"v": 1,
+		"v": 2,
 		"built": _cosmetic_house,
 		"theme": _cosmetic_theme,
 		"aura": _cosmetic_aura,
@@ -1052,10 +1052,17 @@ func _house_json() -> Dictionary:
 		"aura_custom": _aura_custom.to_html(false) if _aura_custom_on else "",
 		"wall": _cosmetic_wall.to_html(false),
 		"floor": _cosmetic_floor.to_html(false),
-		"furniture": house_furniture,
-		"layout": house_layout,
+		"items": house_placements.duplicate(true),
 		"world_first": g._progress_ui._ach_world_first,
 	}
+
+
+static func _parse_guest_house(h: Dictionary) -> Dictionary:
+	var out := {"built": false, "items": []}
+	if int(h.get("v", 0)) != 2:
+		return out
+	var model := HouseLayout.parse({"unlocked": [], "placements": h.get("items", [])})
+	return {"built": bool(h.get("built", false)), "items": model.placements}
 
 
 func _upload_house() -> void:

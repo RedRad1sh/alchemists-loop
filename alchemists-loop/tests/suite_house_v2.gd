@@ -3,11 +3,48 @@ class_name SuiteHouseV2
 
 
 static func run(g: Game) -> void:
+	_save_and_guest(g)
 	_catalog()
 	_placement()
 	_layout()
 	_tasks()
 	# дальше задачи добавляют свои секции
+
+
+static func _save_and_guest(g: Game) -> void:
+	var prev_house := g._home._cosmetic_house
+	var prev_unlocked: Array = g._home.house_unlocked.duplicate()
+	var prev_placements: Array[Dictionary] = []
+	prev_placements.assign(g._home.house_placements)
+	g._home._cosmetic_house = true
+	g._home.house_unlocked = ["bed", "shelf"]
+	g._home.house_placements = HouseLayout.default_placements()
+	var block := g._saves._house_block()
+	Selftest.check("hv2 save block has only new fields",
+		block.has("house_unlocked") and block.has("house_placements")
+		and not block.has("house_furniture") and not block.has("house_layout") and not block.has("house_owned"))
+	g._home.house_unlocked.clear()
+	g._home.house_placements.clear()
+	g._saves._apply_house_block(block)
+	Selftest.check("hv2 save block roundtrip", g._home.house_unlocked.size() == 2
+		and g._home.house_placements.size() == 9)
+	var json := g._home._house_json()
+	Selftest.check("hv2 house json is v2 with items",
+		int(json.get("v", 0)) == 2 and json.has("items") and not json.has("furniture") and not json.has("layout"))
+	var guest := Home._parse_guest_house(json)
+	Selftest.check("hv2 guest parses v2 items", guest["built"] and (guest["items"] as Array).size() == 9)
+	var old := Home._parse_guest_house({"v": 1, "built": true, "furniture": {"bed": "bed"}})
+	Selftest.check("hv2 guest rejects non-v2", not old["built"] and (old["items"] as Array).is_empty())
+	var junk := Home._parse_guest_house({"v": 2, "built": true, "items": [
+		{"id": "nope", "x": 0, "z": 0, "y": 0, "flip": false, "wall": -1},
+		{"id": "bed", "x": NAN, "z": 0, "y": 0, "flip": false, "wall": -1},
+		{"id": "bed", "x": 0, "z": 0, "y": 0, "flip": false, "wall": -1},
+	]})
+	Selftest.check("hv2 guest drops junk and keeps the valid item",
+		(junk["items"] as Array).size() == 1 and String(junk["items"][0]["id"]) == "bed")
+	g._home._cosmetic_house = prev_house
+	g._home.house_unlocked = prev_unlocked
+	g._home.house_placements = prev_placements
 
 
 static func _catalog() -> void:
