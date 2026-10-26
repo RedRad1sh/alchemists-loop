@@ -1862,7 +1862,7 @@ func _square_button(text: String, kind: int = 0) -> Button:
 func _header_button(kind: int) -> Button:
 	var b := _square_button("", kind)
 	for s in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
-		var sb := b.get_theme_stylebox(s) as StyleBoxFlat
+		var sb := b.get_theme_stylebox(s) as StyleBox
 		if sb != null:
 			sb.content_margin_left = 2.0
 			sb.content_margin_right = 2.0

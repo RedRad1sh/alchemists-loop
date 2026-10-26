@@ -10,6 +10,7 @@ static func run(g: Game) -> void:
 	_icon_default()
 	_assets()
 	_theme_cache()
+	_factories()
 	_warm_texts(g)
 
 
@@ -158,6 +159,83 @@ static func _theme_cache() -> void:
 	Selftest.check("texture cache maps name to file",
 		UITheme.tex("btn_brass") != null
 		and UITheme.tex("btn_brass").resource_path.ends_with("btn_brass.png"))
+
+
+static func _factories() -> void:
+	var p := UIStyle.panel() as StyleBoxTexture
+	Selftest.check("panel is frame_panel",
+		p != null and p.texture != null and p.texture.resource_path.ends_with("frame_panel.png"))
+	Selftest.check("panel margins 20",
+		p != null and is_equal_approx(p.texture_margin_left, 20.0)
+		and is_equal_approx(p.texture_margin_top, 20.0))
+	Selftest.check("panel content R8",
+		p != null and is_equal_approx(p.content_margin_left, 12.0)
+		and is_equal_approx(p.content_margin_top, 10.0))
+
+	var m := UIStyle.modal_panel() as StyleBoxTexture
+	Selftest.check("modal is frame_modal",
+		m != null and m.texture != null and m.texture.resource_path.ends_with("frame_modal.png"))
+	Selftest.check("modal margins 34", m != null and is_equal_approx(m.texture_margin_left, 34.0))
+	Selftest.check("modal content R8",
+		m != null and is_equal_approx(m.content_margin_left, 18.0)
+		and is_equal_approx(m.content_margin_top, 16.0))
+
+	var b := Button.new()
+	UIStyle.style_button(b, 1)
+	var n := b.get_theme_stylebox("normal") as StyleBoxTexture
+	var h := b.get_theme_stylebox("hover") as StyleBoxTexture
+	var pr := b.get_theme_stylebox("pressed") as StyleBoxTexture
+	Selftest.check("primary button is btn_brass",
+		n != null and n.texture != null and n.texture.resource_path.ends_with("btn_brass.png"))
+	Selftest.check("button content 10",
+		n != null and is_equal_approx(n.content_margin_left, 10.0)
+		and is_equal_approx(n.content_margin_top, 10.0))
+	Selftest.check("button hover brighter", h != null and h.modulate_color.r > 1.0)
+	Selftest.check("button pressed dimmer", pr != null and pr.modulate_color.r < 1.0)
+	Selftest.check("button pressed 1 px down",
+		n != null and pr != null and is_equal_approx(pr.content_margin_top, n.content_margin_top - 1.0))
+	Selftest.check("brass button ink", b.get_theme_color("font_color").r < 0.3)
+	UIStyle.style_button(b, 0)
+	var w := b.get_theme_stylebox("normal") as StyleBoxTexture
+	Selftest.check("secondary button is btn_wood",
+		w != null and w.texture != null and w.texture.resource_path.ends_with("btn_wood.png"))
+	Selftest.check("wood button cream",
+		b.get_theme_color("font_color").is_equal_approx(UIStyle.CREAM))
+	b.free()
+
+	var row := Button.new()
+	UIStyle.style_row(row)
+	var r := row.get_theme_stylebox("normal") as StyleBoxTexture
+	Selftest.check("row is frame_panel",
+		r != null and r.texture != null and r.texture.resource_path.ends_with("frame_panel.png"))
+	Selftest.check("row content R8",
+		r != null and is_equal_approx(r.content_margin_left, 12.0)
+		and is_equal_approx(r.content_margin_top, 10.0))
+	row.free()
+
+	var cell := Button.new()
+	UIStyle.style_cell(cell)
+	var cs := cell.get_theme_stylebox("normal") as StyleBoxTexture
+	Selftest.check("cell is well_slot",
+		cs != null and cs.texture != null and cs.texture.resource_path.ends_with("well_slot.png"))
+	Selftest.check("cell content 8", cs != null and is_equal_approx(cs.content_margin_left, 8.0))
+	cell.free()
+
+	var tabs := TabContainer.new()
+	UIStyle.style_tabs(tabs)
+	var sel := tabs.get_theme_stylebox("tab_selected") as StyleBoxTexture
+	var pan := tabs.get_theme_stylebox("panel") as StyleBoxTexture
+	Selftest.check("tab selected is tab_active",
+		sel != null and sel.texture != null and sel.texture.resource_path.ends_with("tab_active.png"))
+	Selftest.check("tab panel is frame_panel",
+		pan != null and pan.texture != null and pan.texture.resource_path.ends_with("frame_panel.png"))
+	tabs.free()
+
+	var th := Theme.new()
+	UIStyle.apply_theme(th)
+	var le := th.get_stylebox("normal", "LineEdit") as StyleBoxTexture
+	Selftest.check("line edit is field",
+		le != null and le.texture != null and le.texture.resource_path.ends_with("field.png"))
 
 
 static func _warm_texts(g: Game) -> void:

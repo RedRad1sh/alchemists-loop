@@ -463,7 +463,7 @@ static func _friend_buttons(g: Game) -> void:
 	# и честный get_string_size по фактическому шрифту кнопки).
 	Selftest.check("attach pending button widened for its caption", sent.custom_minimum_size.x == 156)
 	var sent_f: Font = sent.get_theme_font("font")
-	var sent_box := sent.get_theme_stylebox("normal") as StyleBoxFlat
+	var sent_box := sent.get_theme_stylebox("normal") as StyleBox
 	Selftest.check("«заявка отправлена» fits its button width", sent_f != null and sent_box != null
 		and sent_f.get_string_size("заявка отправлена", HORIZONTAL_ALIGNMENT_LEFT, -1,
 			sent.get_theme_font_size("font_size")).x
@@ -819,7 +819,7 @@ static func _badge_sum(g: Game) -> void:
 	if b != null:
 		var f := b.get_theme_font("font")
 		var fs := b.get_theme_font_size("font_size")
-		var box := b.get_theme_stylebox("normal") as StyleBoxFlat
+		var box := b.get_theme_stylebox("normal") as StyleBox
 		var margins: float = 24.0
 		if box != null:
 			margins = box.content_margin_left + box.content_margin_right
