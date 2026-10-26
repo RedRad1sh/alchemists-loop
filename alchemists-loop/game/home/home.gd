@@ -984,7 +984,7 @@ func _grant_task_reward(task: Dictionary) -> String:
 	if not _unlock_item(id):
 		return ""
 	var it := HouseItems.get_item(id)
-	return "%s: «%s»" % [String(it["cat"]), String(it["label"])]
+	return String(it["label"])
 
 
 func _unlock_item(id: String) -> bool:

@@ -466,31 +466,42 @@ static func run(g: Game) -> void:
 	# ============ U28 (β): выдача награды идемпотентна и не в эфире ============
 	var u28_ether := g._engine.ether
 	var u28_house := g._home._cosmetic_house
+	var u28_flag_prev := g._spirit._companion_unlocked
+	g._spirit._companion_unlocked = true
+	var u28_unlocked_flag := g._spirit._companion_unlocked
 	var u28_unlocked: Array = g._home.house_unlocked.duplicate()
 	var u28_done: Array = g._home.house_tasks_done.duplicate()
 	var u28_affinity := g._spirit._companion_affinity
 	var u28_level := g._spirit._companion_level
 	g._home._cosmetic_house = true
-	g._spirit._companion_unlocked = true
 	g._home.house_tasks_done.clear()
 	g._home.house_unlocked.clear()
 	g._home._complete_house_task(_u28_task("chair_at_table"))
 	Selftest.check("b reward grants ownership", g._home.house_unlocked.has("window_guild"))
 	Selftest.check("b reward spends no ether", g._engine.ether == u28_ether)
 	Selftest.check("b reward marks the task done once", g._home.house_tasks_done == ["chair_at_table"])
+	Selftest.check("b gift text names the item, not the category id",
+		g._engine.status_text.contains("Витраж гильдии") and not g._engine.status_text.contains("window"))
 	g._home._complete_house_task(_u28_task("chair_at_table"))
 	Selftest.check("b reward idempotent", g._home.house_tasks_done.size() == 1
 		and (g._home.house_unlocked as Array).count("window_guild") == 1)
 	g._home.house_tasks_done.clear()
-	g._home.house_unlocked = ["window_guild"]
+	g._home.house_unlocked = ["window_seal"]
 	var u28_aff0 := g._spirit._companion_affinity
 	g._home._complete_house_task(_u28_task("plant_by_window"))
 	Selftest.check("b already-owned reward still completes",
 		g._home.house_tasks_done == ["plant_by_window"])
+	Selftest.check("b already-owned reward adds no duplicate",
+		(g._home.house_unlocked as Array).count("window_seal") == 1)
+	Selftest.check("b already-owned reward reports no gift",
+		g._home._grant_task_reward(_u28_task("plant_by_window")) == "")
 	Selftest.check("b completion gives affinity, not ether",
 		g._spirit._companion_affinity > u28_aff0 and g._engine.ether == u28_ether)
 	g._home._cosmetic_house = u28_house
-	g._spirit._companion_unlocked = false
+	g._spirit._companion_unlocked = u28_unlocked_flag
+	Selftest.check("b U28 restores the companion flag it found",
+		g._spirit._companion_unlocked == u28_unlocked_flag)
+	g._spirit._companion_unlocked = u28_flag_prev
 	g._spirit._companion_affinity = u28_affinity
 	g._spirit._companion_level = u28_level
 	g._home.house_unlocked = u28_unlocked

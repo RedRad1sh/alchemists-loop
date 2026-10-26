@@ -154,15 +154,15 @@ static func _tasks() -> void:
 	Selftest.check("hv2 near rule accepts a zero gap",
 		Home.house_task_satisfied(_task("chair_at_table"), [desk, chair_near]))
 	var bed := {"id": "bed", "x": 0.95, "z": -2.28, "y": 0.0, "flip": false, "wall": -1}
-	var shelf_low := {"id": "shelf", "x": -3.406, "z": 0.90, "y": 1.15, "flip": false, "wall": 0}
-	var shelf_over := {"id": "shelf", "x": 0.95, "z": -2.28, "y": 1.55, "flip": false, "wall": 0}
+	var shelf_low := {"id": "shelf", "x": 0.95, "z": -2.28, "y": 1.15, "flip": false, "wall": 1}
+	var shelf_side := {"id": "shelf", "x": 2.5, "z": -2.28, "y": 1.55, "flip": false, "wall": 1}
 	Selftest.check("hv2 over rule needs y >= 1.2",
 		not Home.house_task_satisfied(_task("shelf_over_bed"), [bed, shelf_low]))
 	Selftest.check("hv2 over rule needs the projection to cross",
-		not Home.house_task_satisfied(_task("shelf_over_bed"), [bed, shelf_over]))
+		not Home.house_task_satisfied(_task("shelf_over_bed"), [bed, shelf_side]))
 	Selftest.check("hv2 over rule passes above the bed",
 		Home.house_task_satisfied(_task("shelf_over_bed"),
-			[bed, {"id": "shelf", "x": 0.95, "z": -2.28, "y": 1.55, "flip": false, "wall": -1}]))
+			[bed, {"id": "shelf", "x": 0.95, "z": -2.28, "y": 1.55, "flip": false, "wall": 1}]))
 	var ids_ok := true
 	var rewards_ok := true
 	var tasks := {}
