@@ -2481,7 +2481,7 @@ func _build_confirm() -> void:
 
 	var t := _label("АВТОВАРКА", 20)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_color_override("font_color", Color(0.45, 0.95, 0.9))
+	t.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	col.add_child(t)
 
 	var row := HBoxContainer.new()

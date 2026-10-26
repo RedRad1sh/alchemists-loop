@@ -13,6 +13,8 @@ static func run(g: Game) -> void:
 	_factories()
 	_warm_texts(g)
 	_wiring(g)
+	_no_teal_chrome(g)
+	_style_button_miss()
 
 
 static func _tok(name: String, got: Color, hex: String) -> void:
@@ -266,3 +268,132 @@ static func _wiring(g: Game) -> void:
 		ps = plate.get_theme_stylebox("panel") as StyleBoxTexture
 	Selftest.check("upgrades title is plaque_title",
 		ps != null and ps.texture != null and ps.texture.resource_path.ends_with("plaque_title.png"))
+
+
+# §10: «отсутствие TEAL в хроме». Пин поведенческий — обходит ЖИВОЕ дерево UI,
+# которое selftest уже построил, и берёт эффективный цвет текста каждого узла,
+# способного его нести. Легальны: (а) любой цвет, совпадающий с константой
+# палитры UIStyle в пределах 0.02/канал (палитра — авторитет §3 и уже содержит
+# холодные контент-акценты ARCANA/MAGIC/LEAF), и (б) любой НЕ холодный цвет.
+# Холодным (циан/бирюза) считается c.b > c.r + 0.05 И c.g > c.r + 0.05. Так
+# тёплые литералы проходят, а Color(0.45,0.95,0.9)/Color(0.8,0.85,0.9) — нет.
+const _PALETTE: Array = [
+	UIStyle.INK, UIStyle.NAVY, UIStyle.PANEL, UIStyle.PANEL_HI, UIStyle.LINE,
+	UIStyle.WOOD_DEEP, UIStyle.WOOD, UIStyle.WOOD_LIGHT, UIStyle.PLASTER,
+	UIStyle.PLASTER_HI, UIStyle.IRON, UIStyle.PAPER_HI, UIStyle.PAPER,
+	UIStyle.PAPER_LIT, UIStyle.PAPER_INK, UIStyle.BRASS_HI, UIStyle.BRASS,
+	UIStyle.BRASS_DIM, UIStyle.FLAME, UIStyle.GLOW, UIStyle.EMBER,
+	UIStyle.HIGHLIGHT, UIStyle.CREAM, UIStyle.TEXT_DIM, UIStyle.TEXT_MUTED,
+	UIStyle.RUBY, UIStyle.LEAF, UIStyle.ARCANA, UIStyle.MAGIC,
+]
+
+# Явные лазейки: холодные цвета, которые триггерят правило холода, но НЕ являются
+# целью данной волны (Ruling-19 фиксит только 4 литерала). Это литералы, которые
+# ledger ОТЛОЖИЛ до P3 (Task 5 minor: «ten in pages.gd», main.gd:1812,
+# slot_well.gd:109, rarity-палитра; плюс холодный контент — вода Родника, травы,
+# магия/аркан — легален как арт по §3, но пока живой литерал, а не токен). Hard
+# rule волны — «не метить прочие холодные литералы» — запрещает их править, а пин
+# обязан позеленеть, поэтому они разрешены ЗНАЧЕНИЕМ. Каждая запись — дыра в пине
+# (см. final-fix-report.md). Список — точный снимок 29 distinct нарушителей RED-
+# прогона минус три целевых цвета (73f2e6, 8cf2e6, ccd9e6), которые НЕ разрешены.
+# Допуск 0.01 (уже палитрового 0.02): достаточно для hex→float round-trip (≤0.002)
+# и не маскирует целевой ccd9e6 ближайшим отложенным c7d6e6 (Δr≈0.020).
+static var _DEFERRED_COLD: Array = []
+
+
+static func _deferred_cold() -> Array:
+	if _DEFERRED_COLD.is_empty():
+		for h in [
+			"57d1ba", "738599", "73bf80", "79baff", "7e8d98", "80e0c4",
+			"80e6d9", "85c7e0", "8c9ead", "8ca8b8", "8ccc99", "8cf2d7",
+			"8fa3b8", "91adbd", "94abbd", "99a8b8", "99adbf", "99b3bf",
+			"9cb8fa", "9eb3c2", "9eb8c4", "9ebdd1", "a1b5c7", "b8d6e0",
+			"bfcfd4", "c2cfda", "c7d6e6", "dcecff", "e0f0f5",
+		]:
+			_DEFERRED_COLD.append(Color(h))
+	return _DEFERRED_COLD
+
+# Типы Control, несущие цвет текста; ключ — имя theme-color-итема.
+const _TEXT_TYPES: Dictionary = {
+	"Label": "font_color",
+	"Button": "font_color",
+	"RichTextLabel": "default_color",
+	"LineEdit": "font_color",
+	"CheckButton": "font_color",
+	"CheckBox": "font_color",
+	"OptionButton": "font_color",
+	"LinkButton": "font_color",
+}
+
+
+static func _is_palette(c: Color) -> bool:
+	for p in _PALETTE:
+		if absf(c.r - p.r) <= 0.02 and absf(c.g - p.g) <= 0.02 and absf(c.b - p.b) <= 0.02:
+			return true
+	return false
+
+
+static func _is_allowed_content(c: Color) -> bool:
+	for a in _deferred_cold():
+		if absf(c.r - a.r) <= 0.01 and absf(c.g - a.g) <= 0.01 and absf(c.b - a.b) <= 0.01:
+			return true
+	return false
+
+
+static func _is_cold(c: Color) -> bool:
+	return c.b > c.r + 0.05 and c.g > c.r + 0.05
+
+
+static func _text_color_key(node: Control) -> String:
+	for tname in _TEXT_TYPES:
+		if node.is_class(tname):
+			return _TEXT_TYPES[tname]
+	return ""
+
+
+static func _scan_cold(node: Node, offenders: Array, scanned: Array) -> void:
+	if node is Control:
+		var key := _text_color_key(node)
+		if key != "":
+			var c: Color = (node as Control).get_theme_color(key)
+			scanned[0] += 1
+			if _is_cold(c) and not _is_palette(c) and not _is_allowed_content(c):
+				offenders.append("%s (%s=%s)" % [node.get_path(), key, c.to_html(false)])
+	for child in node.get_children():
+		_scan_cold(child, offenders, scanned)
+
+
+static func _no_teal_chrome(g: Game) -> void:
+	var offenders: Array = []
+	var scanned: Array = [0]
+	_scan_cold(g, offenders, scanned)
+	if not offenders.is_empty():
+		print("       | cold chrome offenders (%d):" % offenders.size())
+		for o in offenders:
+			print("       |   ", o)
+	print("       | chrome nodes scanned: %d" % scanned[0])
+	Selftest.check("no TEAL/cold color in chrome (§10)", offenders.is_empty())
+	# Защита от вакуумного PASS: скан обязан реально обойти дерево. Пол ниже
+	# фактического количества текстовых узлов в прогоне (см. отчёт), чтобы
+	# молчаливый «ничего не нашёл» краснел, а не проходил.
+	Selftest.check("chrome scan examined enough nodes (>=100)", scanned[0] >= 100)
+
+
+# Task 4 deferred minor / FIX-C: style_button обязан пережить промах nine_hv
+# (пустой словарь при отсутствующей текстуре), не установив ни одного stylebox.
+static func _style_button_miss() -> void:
+	var b := Button.new()
+	var had: bool = UITheme._tex_cache.has("btn_brass")
+	var saved: Variant = UITheme._tex_cache["btn_brass"] if had else null
+	UITheme._tex_cache["btn_brass"] = null
+	UIStyle.style_button(b, 1)
+	var installed := b.has_theme_stylebox_override("normal")
+	# Кэш — статик на время процесса: восстанавливаем сразу, иначе null
+	# сломает каждый последующий пин сюиты.
+	if had:
+		UITheme._tex_cache["btn_brass"] = saved
+	else:
+		UITheme._tex_cache.erase("btn_brass")
+	Selftest.check("style_button survives nine_hv miss (no stylebox installed)",
+		not installed)
+	b.free()

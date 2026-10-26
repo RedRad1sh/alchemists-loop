@@ -942,7 +942,7 @@ func _build_world(page: VBoxContainer) -> void:
 	challenge_row.add_child(g._online._challenge_label)
 	page.add_child(challenge_row)
 	var feed_title := g._label("Свежие открытия", 16)
-	feed_title.add_theme_color_override("font_color", Color(0.55, 0.95, 0.9))
+	feed_title.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	page.add_child(feed_title)
 	g._feed_list = VBoxContainer.new()
 	g._feed_list.add_theme_constant_override("separation", 3)
@@ -1408,7 +1408,7 @@ func _rebuild_bench_rows() -> void:
 		hb.add_child(nm)
 		if selected:
 			var mk := g._label("выбрано", 12)
-			mk.add_theme_color_override("font_color", Color(0.45, 0.95, 0.9))
+			mk.add_theme_color_override("font_color", UIStyle.GLOW)
 			mk.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			hb.add_child(mk)
 		_bench_rows.add_child(b)

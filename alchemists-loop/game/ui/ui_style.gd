@@ -115,6 +115,11 @@ static func style_button(b: Button, kind: int = 0, _radius: int = 11) -> void:
 	var m := Vector4(24, 14, 24, 14)
 	var c := Vector4(10, 10, 10, 10)
 	var states := UITheme.nine_hv(tex_name, m, c)
+	if states.is_empty():
+		# nine_hv вернул {} — текстуры нет (контракт промаха Task 3). Без guard
+		# states["normal"] дал бы invalid-key в рантайме; промах = «ничего не
+		# ставим», кнопка остаётся на дефолтной теме.
+		return
 	var disabled := UITheme.nine(tex_name, m, c, Color(0.55, 0.50, 0.47, 0.85))
 	b.add_theme_stylebox_override("normal", states["normal"])
 	b.add_theme_stylebox_override("hover", states["hover"])
