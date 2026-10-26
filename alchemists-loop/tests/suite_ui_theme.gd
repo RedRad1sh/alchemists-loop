@@ -12,6 +12,7 @@ static func run(g: Game) -> void:
 	_theme_cache()
 	_factories()
 	_warm_texts(g)
+	_wiring(g)
 
 
 static func _tok(name: String, got: Color, hex: String) -> void:
@@ -242,3 +243,26 @@ static func _warm_texts(g: Game) -> void:
 	var title := g.find_child("ExperimentFieldTitle", true, false) as Label
 	Selftest.check("experiment field title warm",
 		title != null and title.get_theme_color("font_color").is_equal_approx(UIStyle.BRASS))
+
+
+static func _wiring(g: Game) -> void:
+	var u: Dictionary = Game.UPGRADES[0]
+	var row: Button = g._hub._up_row(u)
+	var sb := row.get_theme_stylebox("normal") as StyleBoxTexture
+	Selftest.check("upgrade row is frame_panel",
+		sb != null and sb.texture != null and sb.texture.resource_path.ends_with("frame_panel.png"))
+	var hb: HBoxContainer = null
+	if row.get_child_count() > 0:
+		hb = row.get_child(0) as HBoxContainer
+	Selftest.check("upgrade row inset 12/8",
+		hb != null and is_equal_approx(hb.offset_left, 12.0)
+		and is_equal_approx(hb.offset_top, 8.0)
+		and is_equal_approx(hb.offset_right, -12.0)
+		and is_equal_approx(hb.offset_bottom, -8.0))
+	row.free()
+	var plate := g.find_child("UpgradeTitle", true, false) as PanelContainer
+	var ps: StyleBoxTexture = null
+	if plate != null:
+		ps = plate.get_theme_stylebox("panel") as StyleBoxTexture
+	Selftest.check("upgrades title is plaque_title",
+		ps != null and ps.texture != null and ps.texture.resource_path.ends_with("plaque_title.png"))

@@ -1959,7 +1959,7 @@ func _build_popup() -> void:
 
 func _show_challenge_win_popup(item_id: String, target_name: String, a: String, b: String, first: bool = false) -> void:
 	_popup_title.text = "ЕЖЕДНЕВНАЯ ЦЕЛЬ!"
-	_popup_orb.setup(item_id, _item_colors.get(item_id, Color(0.7, 0.8, 0.9)), true, _online._item_glyph(item_id))
+	_popup_orb.setup(item_id, _item_colors.get(item_id, UIStyle.PAPER), true, _online._item_glyph(item_id))
 	var head := "Ты первым в мире получил вещество из «%s»!" if first else "Цель дня выполнена: вещество из «%s»!"
 	_popup_sub.text = head + "\n%s + %s → %s\n+%d эфира" % [
 		target_name, _online._item_name(a), _online._item_name(b), _online._item_name(item_id), CHALLENGE_REWARD]
@@ -1993,11 +1993,11 @@ func _tier_to_sigil_rarity(tier: int) -> StringName:
 		4: return &"legendary"
 		_: return &"common"
 
-func _present_popup(item_id: String, subtext: String, title: String = "", title_color: Color = Color(1.0, 0.9, 0.4)) -> void:
+func _present_popup(item_id: String, subtext: String, title: String = "", title_color: Color = UIStyle.BRASS_HI) -> void:
 	if title != "":
 		_popup_title.text = title
 	_popup_title.add_theme_color_override("font_color", title_color)
-	_popup_orb.setup(item_id, _item_colors.get(item_id, Color(0.7, 0.8, 0.9)), true, _online._item_glyph(item_id))
+	_popup_orb.setup(item_id, _item_colors.get(item_id, UIStyle.PAPER), true, _online._item_glyph(item_id))
 	_popup_sub.text = subtext
 	Juice.open(_popup_dim, _popup)
 	Sfx.brew_discover()
@@ -2501,7 +2501,7 @@ func _build_confirm() -> void:
 	col.add_child(_confirm_l2)
 	_confirm_l3 = _label("", 13)
 	_confirm_l3.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_confirm_l3.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
+	_confirm_l3.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 	col.add_child(_confirm_l3)
 
 	var btns := HBoxContainer.new()
