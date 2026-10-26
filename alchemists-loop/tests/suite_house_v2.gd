@@ -4,6 +4,7 @@ class_name SuiteHouseV2
 
 static func run(g: Game) -> void:
 	_catalog()
+	_placement()
 	# дальше задачи добавляют свои секции
 
 
@@ -51,3 +52,48 @@ static func _catalog() -> void:
 		Selftest.check("hv2 contract decor id exists: " + String(rid), HouseItems.exists(String(rid)))
 	for rid in Game.CIRCLE_DECOR_REWARDS.values():
 		Selftest.check("hv2 circle decor id exists: " + String(rid), HouseItems.exists(String(rid)))
+
+
+static func _placement() -> void:
+	var bed := {"id": "bed", "x": 0.95, "z": -2.28, "y": 0.0, "flip": false, "wall": -1}
+	var fp := Placement.footprint(bed)
+	Selftest.check("hv2 bed footprint follows box", absf(fp.size.x - 1.7) < 0.001
+		and absf(fp.size.y - 2.2) < 0.001)
+	var shelf := {"id": "shelf", "x": -3.406, "z": 0.90, "y": 1.55, "flip": false, "wall": 0}
+	var sfp := Placement.footprint(shelf)
+	Selftest.check("hv2 wall footprint is depth x span",
+		sfp.position.x >= -3.432 and sfp.position.x <= -3.405
+		and absf(sfp.size.x - 0.25) < 0.001 and absf(sfp.size.y - 1.2) < 0.001)
+	Selftest.check("hv2 clamp keeps floor item inside room",
+		Placement.clamp_record({"id": "bed", "x": 99.0, "z": -99.0, "y": 5.0, "flip": false, "wall": -1})["x"] <= 3.431 - 0.02 - 0.85 + 0.001)
+	Selftest.check("hv2 clamp pins wall item to its wall",
+		is_equal_approx(float(Placement.clamp_record(shelf)["x"]), -3.431 + 0.125))
+	Selftest.check("hv2 wall y stays inside the wall",
+		float(Placement.clamp_record({"id": "window", "x": -3.4, "z": 0.0, "y": 9.0, "flip": false, "wall": 0})["y"]) <= 2.4 - 0.5 + 0.001)
+	Selftest.check("hv2 snap moves to 0.1 grid",
+		absf(float(Placement.snap_record({"id": "table", "x": 0.06, "z": 0.04, "y": 0.0, "flip": false, "wall": -1})["x"]) - 0.1) < 0.001
+		and absf(float(Placement.snap_record({"id": "table", "x": 0.06, "z": 0.04, "y": 0.0, "flip": false, "wall": -1})["z"])) < 0.001)
+	Selftest.check("hv2 touching boxes have zero gap",
+		Placement.gap(Rect2(0, 0, 1, 1), Rect2(1, 0, 1, 1)) < 0.001)
+	Selftest.check("hv2 diagonal gap uses the largest axis gap",
+		absf(Placement.gap(Rect2(0, 0, 1, 1), Rect2(1.2, 1.3, 1, 1)) - 0.3) < 0.001)
+	var table := {"id": "table", "x": 1.9, "z": -0.5, "y": 0.0, "flip": false, "wall": -1}
+	Selftest.check("hv2 non-overlapping floor items are valid",
+		Placement.valid(table, [bed]))
+	Selftest.check("hv2 overlapping floor items are invalid",
+		not Placement.valid({"id": "chair", "x": 1.9, "z": -0.5, "y": 0.0, "flip": false, "wall": -1}, [table]))
+	Selftest.check("hv2 rug is a non-colliding floor layer",
+		Placement.valid({"id": "chair", "x": -1.6, "z": -2.0, "y": 0.0, "flip": false, "wall": -1},
+			[{"id": "rug", "x": -1.6, "z": -2.0, "y": 0.0, "flip": false, "wall": -1}]))
+	Selftest.check("hv2 wall and floor items do not collide",
+		Placement.valid(bed, [fireplace_placement()]))
+	Selftest.check("hv2 move that reduces overlap is allowed",
+		Placement.move_allowed({"id": "chair", "x": 1.9, "z": -0.5, "y": 0.0, "flip": false, "wall": -1},
+			{"id": "chair", "x": 1.9, "z": 0.0, "y": 0.0, "flip": false, "wall": -1}, [table], 0))
+	Selftest.check("hv2 push_out removes the overlap",
+		Placement.valid(Placement.push_out(
+			{"id": "chair", "x": 1.9, "z": -0.5, "y": 0.0, "flip": false, "wall": -1}, [table], 0), [table], 0))
+
+
+static func fireplace_placement() -> Dictionary:
+	return {"id": "fireplace", "x": -1.6, "z": -3.156, "y": 0.0, "flip": false, "wall": 1}
