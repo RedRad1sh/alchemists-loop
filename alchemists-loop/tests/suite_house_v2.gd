@@ -6,6 +6,7 @@ static func run(g: Game) -> void:
 	_catalog()
 	_placement()
 	_layout()
+	_tasks()
 	# дальше задачи добавляют свои секции
 
 
@@ -130,6 +131,56 @@ static func _layout() -> void:
 		move.move_at(0, {"id": "rug", "x": 0.0, "z": 0.0, "y": 0.0, "flip": false, "wall": -1})
 		and String(move.placements[0]["id"]) == "rug")
 	Selftest.check("hv2 remove_at drops one", move.remove_at(0) and move.placements.is_empty())
+
+
+static func _tasks() -> void:
+	var seeded := HouseLayout.default_placements()
+	Selftest.check("hv2 layout B has nine pieces", seeded.size() == 9)
+	var by_cat := {}
+	for p in seeded:
+		by_cat[String(HouseItems.get_item(String(p["id"]))["cat"])] = p
+	Selftest.check("hv2 layout B covers every category", by_cat.size() == 9)
+	var satisfied := []
+	for task in Game.HOUSE_TASKS:
+		if Home.house_task_satisfied(task, seeded):
+			satisfied.append(String(task["id"]))
+	Selftest.check("hv2 layout B satisfies only the onboarding task",
+		satisfied == ["hearth_on_rug"])
+	var desk := {"id": "table", "x": 1.9, "z": -0.5, "y": 0.0, "flip": false, "wall": -1}
+	var chair_far := {"id": "chair", "x": 1.9, "z": 0.5, "y": 0.0, "flip": false, "wall": -1}
+	var chair_near := {"id": "chair", "x": 1.9, "z": -0.1, "y": 0.0, "flip": false, "wall": -1}
+	Selftest.check("hv2 near rule rejects a 0.3 m gap",
+		not Home.house_task_satisfied(_task("chair_at_table"), [desk, chair_far]))
+	Selftest.check("hv2 near rule accepts a zero gap",
+		Home.house_task_satisfied(_task("chair_at_table"), [desk, chair_near]))
+	var bed := {"id": "bed", "x": 0.95, "z": -2.28, "y": 0.0, "flip": false, "wall": -1}
+	var shelf_low := {"id": "shelf", "x": -3.406, "z": 0.90, "y": 1.15, "flip": false, "wall": 0}
+	var shelf_over := {"id": "shelf", "x": 0.95, "z": -2.28, "y": 1.55, "flip": false, "wall": 0}
+	Selftest.check("hv2 over rule needs y >= 1.2",
+		not Home.house_task_satisfied(_task("shelf_over_bed"), [bed, shelf_low]))
+	Selftest.check("hv2 over rule needs the projection to cross",
+		not Home.house_task_satisfied(_task("shelf_over_bed"), [bed, shelf_over]))
+	Selftest.check("hv2 over rule passes above the bed",
+		Home.house_task_satisfied(_task("shelf_over_bed"),
+			[bed, {"id": "shelf", "x": 0.95, "z": -2.28, "y": 1.55, "flip": false, "wall": -1}]))
+	var ids_ok := true
+	var rewards_ok := true
+	var tasks := {}
+	for t in Game.HOUSE_TASKS:
+		tasks[String(t["id"])] = true
+		ids_ok = ids_ok and String(t["give"]) != "" and HouseItems.exists(String(t["give"]))
+		var it := HouseItems.get_item(String(t["give"]))
+		rewards_ok = rewards_ok and bool(it.get("reward", false))
+	Selftest.check("hv2 six tasks exist", tasks.size() == 6)
+	Selftest.check("hv2 every task grants a real reward id", ids_ok)
+	Selftest.check("hv2 every task grants a reward-only item", rewards_ok)
+
+
+static func _task(id: String) -> Dictionary:
+	for t in Game.HOUSE_TASKS:
+		if String(t["id"]) == id:
+			return t
+	return {}
 
 
 static func fireplace_placement() -> Dictionary:

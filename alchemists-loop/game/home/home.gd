@@ -21,6 +21,8 @@ var house_furniture: Dictionary = {}   # категория -> id вариант
 var house_layout: Dictionary = {}      # категория -> [ax, ay] пользовательской расстановки
 var house_owned: Dictionary = {}   # категория -> Array[String] купленных id (коллекция, локально)
 var house_tasks_done: Array = []   # β: id выполненных поручений (одноразовые, без таймеров)
+var house_unlocked: Array = []     # β: id разблокированных предметов (награды поручений)
+var house_placements: Array[Dictionary] = []   # β: расстановка в метрах (раскладка B)
 var _task_rows := {}               # id -> Label строки на странице дома
 var house_visited_day: Dictionary = {}   # γ: nick -> "YYYY-MM-DD" (локальный кэш кнопки)
 var house_gift_week := ""                # γ: ISO-неделя последнего недельного подарка хосту
@@ -941,62 +943,25 @@ static func _give_cat(item_id: String) -> String:
 	return best
 
 
-static func _gap_norm(ra: Rect2, rb: Rect2, w: float, h: float) -> Vector2:
-	# Зазор по оси — расстояние между интервалами (0 при пересечении), а не размер
-	# координат, и нормирован к размеру сцены: порог не должен зависеть от разрешения.
-	var gx := maxf(0.0, maxf(ra.position.x, rb.position.x) - minf(ra.end.x, rb.end.x))
-	var gy := maxf(0.0, maxf(ra.position.y, rb.position.y) - minf(ra.end.y, rb.end.y))
-	return Vector2(gx / w, gy / h)
-
-
-# Компоненты Rect2/Vector2 в этом билде движка — float32 (80.0/400.0 внутри
-# Vector2 даёт 0.20000000298023), а порог `gap` из JSON — double. Ровно граница
-# «зазор == gap» без допуска оказалась бы невыполнима, хотя правило задумано
-# включющим. 1e-6 от размера сцены — доли пикселя, перекрытия не разрешает.
-const GAP_EPS := 1e-6
-
-
-static func house_task_satisfied(task: Dictionary, rects: Dictionary, w: float, h: float) -> bool:
-	if w <= 0.0 or h <= 0.0:
-		return false  # до первого layout'а у Control размер нулевой: проверки молчат
-	if not rects.has(task["a"]) or not rects.has(task["b"]):
+static func house_task_satisfied(task: Dictionary, placements: Array) -> bool:
+	var a := _first_of_cat(placements, String(task["a"]))
+	var b := _first_of_cat(placements, String(task["b"]))
+	if a.is_empty() or b.is_empty():
 		return false
-	var ra: Rect2 = rects[task["a"]]
-	var rb: Rect2 = rects[task["b"]]
-	if ra.size.x <= 0.0 or ra.size.y <= 0.0 or rb.size.x <= 0.0 or rb.size.y <= 0.0:
-		return false
-	var d := _gap_norm(ra, rb, w, h)
+	var fa := Placement.footprint(a)
+	var fb := Placement.footprint(b)
 	if String(task["rule"]) == "over":
-		# спека §5.3: a по горизонтали целиком внутри b, a обязана быть выше b,
-		# вертикальный зазор в пределах gap. 1.0 px — допуск на плавающую точку
-		# «ровно касание», а не разрешение на перекрытие.
-		var inside := ra.position.x >= rb.position.x and ra.end.x <= rb.end.x
-		var above := ra.end.y <= rb.position.y + 1.0
-		return inside and above and d.y <= float(task["gap"]) + GAP_EPS
-	return maxf(d.x, d.y) <= float(task["gap"]) + GAP_EPS
+		return float(a["y"]) >= float(task.get("min_y", 1.2)) and fa.intersects(fb, false)
+	return Placement.gap(fa, fb) <= float(task["gap"]) + 1e-6
 
 
-func _task_rects() -> Dictionary:
-	# Геометрию берём у HouseView — единственного источника. Вид может ещё не иметь
-	# размера (size 0 до первого layout'а) или не иметь спрайта: тогда пустой словарь,
-	# и правила смолчат (спека §5.2, §5.6).
-	var out := {}
-	if _house_view == null:
-		return out
-	var w: float = _house_view.size.x
-	var h: float = _house_view.size.y
-	if w <= 0.0 or h <= 0.0:
-		return out
-	for raw_cat in HouseView.DRAW_ORDER:
-		var cat := String(raw_cat)
-		if not _house_view.furniture.has(cat):
-			continue
-		var item_id := String(_house_view.furniture[cat])
-		var tex: Texture2D = _house_view._tex_of(item_id)
-		if tex == null:
-			continue
-		out[cat] = _house_view._visual_rect(item_id, _house_view._item_rect(cat, item_id, w, h))
-	return out
+static func _first_of_cat(placements: Array, cat: String) -> Dictionary:
+	for raw in placements:
+		var p: Dictionary = raw
+		var item := HouseItems.get_item(String(p.get("id", "")))
+		if String(item.get("cat", "")) == cat:
+			return p
+	return {}
 
 
 func _next_locked_variant(cat_id: String) -> String:
@@ -1013,16 +978,20 @@ func _next_locked_variant(cat_id: String) -> String:
 
 
 func _grant_task_reward(task: Dictionary) -> String:
-	var cat := _give_cat(String(task["give"]))
-	if cat == "":
+	var id := String(task.get("give", ""))
+	if id == "" or not HouseItems.exists(id):
 		return ""
-	var give := String(task["give"])
-	if _decor_owned(cat, give):
-		give = _next_locked_variant(cat)
-		if give == "":
-			return ""  # категория выкуплена целиком: остаётся только дружба
-	_own_item(cat, give)
-	return "%s: «%s»" % [_decor_cat(cat).get("label", cat), _decor_label(cat, give)]
+	if not _unlock_item(id):
+		return ""
+	var it := HouseItems.get_item(id)
+	return "%s: «%s»" % [String(it["cat"]), String(it["label"])]
+
+
+func _unlock_item(id: String) -> bool:
+	if not HouseItems.exists(id) or house_unlocked.has(id):
+		return false
+	house_unlocked.append(id)
+	return true
 
 
 func _complete_house_task(task: Dictionary) -> void:
@@ -1042,20 +1011,13 @@ func _complete_house_task(task: Dictionary) -> void:
 
 
 func _check_house_tasks() -> void:
-	# Вызывается по факту реальной раскладки: resized (первый layout) и layout_changed
-	# (перетаскивание). До первого layout'а size нулевой и _task_rects молчит.
-	if not _cosmetic_house or _house_view == null:
+	if not _cosmetic_house:
 		return
-	var rects := _task_rects()
-	if rects.is_empty():
-		return
-	var w: float = _house_view.size.x
-	var h: float = _house_view.size.y
 	for task in Game.HOUSE_TASKS:
 		var tid := String(task["id"])
 		if house_tasks_done.has(tid):
 			continue
-		if house_task_satisfied(task, rects, w, h):
+		if house_task_satisfied(task, house_placements):
 			_complete_house_task(task)
 
 

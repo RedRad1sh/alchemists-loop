@@ -463,132 +463,38 @@ static func run(g: Game) -> void:
 		u26_view.queue_free()
 		u26_host.queue_free()
 
-	# ============ U27 (β): правила поручений на чистой геометрии ============
-	# Проверка идёт на Rect2-ах, собранных вручную: так краснеет именно правило,
-	# а не подбор якорей (это уже меряет u24).
-	var u27_a := Rect2(100.0, 200.0, 60.0, 40.0)      # x 100..160, y 200..240
-	var u27_b := Rect2(160.0, 200.0, 60.0, 40.0)      # x 160..220 — ровно касание по x
-	var u27_r := {"a": u27_a, "b": u27_b}
-	var near := {"id": "n", "a": "a", "b": "b", "rule": "near", "gap": 0.0}
-	Selftest.check("b near: touching rects satisfy gap 0",
-		Home.house_task_satisfied(near, u27_r, 400.0, 300.0))
-	var u27_far := {"a": u27_a, "b": Rect2(240.0, 200.0, 60.0, 40.0)}   # разрыв 80 px
-	Selftest.check("b near: 80px gap fails gap 0",
-		not Home.house_task_satisfied(near, u27_far, 400.0, 300.0))
-	# 80/400 == 0.2 — ровно граница: правило обязано пропускать равенство
-	Selftest.check("b near: gap threshold is inclusive",
-		Home.house_task_satisfied({"id": "n", "a": "a", "b": "b", "rule": "near", "gap": 0.2},
-			u27_far, 400.0, 300.0))
-	# диагональное соседство: по y пересечение, по x разрыв 80 px -> не выполнено
-	var u27_diag := {"a": u27_a, "b": Rect2(240.0, 220.0, 60.0, 40.0)}
-	Selftest.check("b near: diagonal neighbour does not satisfy gap 0",
-		not Home.house_task_satisfied(near, u27_diag, 400.0, 300.0))
-	var over := {"id": "o", "a": "a", "b": "b", "rule": "over", "gap": 0.1}
-	# a (120..160 по x, низ 190) целиком над b (100..200, верх 200): dy = 10/300
-	var u27_ov_ok := {"a": Rect2(120.0, 170.0, 40.0, 20.0), "b": Rect2(100.0, 200.0, 100.0, 40.0)}
-	Selftest.check("b over: a above b within the horizontal span",
-		Home.house_task_satisfied(over, u27_ov_ok, 400.0, 300.0))
-	var u27_ov_wide := {"a": Rect2(80.0, 170.0, 140.0, 20.0), "b": Rect2(100.0, 200.0, 100.0, 40.0)}
-	Selftest.check("b over: wider than b refuses",
-		not Home.house_task_satisfied(over, u27_ov_wide, 400.0, 300.0))
-	var u27_ov_below := {"a": Rect2(120.0, 260.0, 40.0, 20.0), "b": Rect2(100.0, 200.0, 100.0, 40.0)}
-	Selftest.check("b over: a under b refuses", not Home.house_task_satisfied(over, u27_ov_below, 400.0, 300.0))
-	# too far up: те же прямоугольники, но зазор 200-120 = 80 px -> 80/300 ≈ 0.267 > gap 0.1
-	var u27_ov_high := {"a": Rect2(120.0, 100.0, 40.0, 20.0), "b": Rect2(100.0, 200.0, 100.0, 40.0)}
-	Selftest.check("b over: gap threshold is honoured vertically",
-		not Home.house_task_satisfied(over, u27_ov_high, 400.0, 300.0))
-	# near выполнено там, где over отказывает (a рядом, но не «над»)
-	Selftest.check("b near and over disagree by construction",
-		Home.house_task_satisfied(near, u27_r, 400.0, 300.0)
-		and not Home.house_task_satisfied(over, u27_r, 400.0, 300.0))
-	# нулевой размер сцены молчит: до первого layout'а у вью size == 0 (спека §5.2)
-	Selftest.check("b rules silent on zero size",
-		not Home.house_task_satisfied(near, u27_r, 0.0, 300.0)
-		and not Home.house_task_satisfied(over, u27_r, 400.0, 0.0))
-	# и на отсутствующей категории (дом без half-обстановки)
-	Selftest.check("b rules silent on missing category",
-		not Home.house_task_satisfied(near, {"a": u27_a}, 400.0, 300.0))
-	# данные: a/b — настоящие и разные категории, награда — платный вариант,
-	# правило из двух, зазор неотрицательный, текст есть
-	var u27_cats := {}
-	for c in Game.DECOR:
-		u27_cats[String(c["id"])] = true
-	var u27_data_ok := Game.HOUSE_TASKS.size() == 6
-	for t in Game.HOUSE_TASKS:
-		if not u27_cats.has(String(t["a"])) or not u27_cats.has(String(t["b"])):
-			u27_data_ok = false
-		if String(t["a"]) == String(t["b"]):
-			u27_data_ok = false  # «поставь ковёр рядом с ковром» — не поручение
-		if float(t["gap"]) < 0.0 or String(t["rule"]) not in ["near", "over"]:
-			u27_data_ok = false
-		if String(t["text"]) == "" or String(t["give"]) == String(t["id"]):
-			u27_data_ok = false
-		var gcat := Home._give_cat(String(t["give"]))
-		if gcat == "" or not u27_cats.has(gcat):
-			u27_data_ok = false
-		if gcat == String(t["give"]):
-			u27_data_ok = false  # награда = дефолт категории: он и так свободен
-		if not _u27_variant_exists(gcat, String(t["give"])):
-			u27_data_ok = false
-	Selftest.check("b task data well-formed", u27_data_ok)
-
 	# ============ U28 (β): выдача награды идемпотентна и не в эфире ============
 	var u28_ether := g._engine.ether
 	var u28_house := g._home._cosmetic_house
-	var u28_owned := g._home.house_owned.duplicate(true)
-	var u28_done: Array = g._home.house_tasks_done.duplicate(true)
-	var u28_furn := g._home.house_furniture.duplicate(true)
-	var u28_layout: Dictionary = g._home.house_layout.duplicate(true)
-	var u28_unlocked := g._spirit._companion_unlocked
-	# поручения дарят дружбу (+8 за каждое, spirit.gd:_companion_gain) — вернём
-	# и уровень, чтобы блок не оставлял хвост для аффинити-ассертов дальше по сюиту
+	var u28_unlocked: Array = g._home.house_unlocked.duplicate()
+	var u28_done: Array = g._home.house_tasks_done.duplicate()
 	var u28_affinity := g._spirit._companion_affinity
 	var u28_level := g._spirit._companion_level
 	g._home._cosmetic_house = true
-	# строгий аффинити-ассерт ниже обязан доказывать _companion_gain, а не его no-op
-	# (spirit.gd: ранний выход, пока Светик не открыт); снимок выше возвращает как было
 	g._spirit._companion_unlocked = true
 	g._home.house_tasks_done.clear()
-	g._home.house_owned.clear()
-	# награда = то же владение, что дала бы покупка, и без списания эфира;
-	# настоящий словарь HOUSE_TASKS: _complete_house_task читает и "text" (статус)
+	g._home.house_unlocked.clear()
 	g._home._complete_house_task(_u28_task("chair_at_table"))
-	Selftest.check("b reward grants ownership", g._home.house_owned.get("chair", []).has("chair_2"))
+	Selftest.check("b reward grants ownership", g._home.house_unlocked.has("window_guild"))
 	Selftest.check("b reward spends no ether", g._engine.ether == u28_ether)
 	Selftest.check("b reward marks the task done once", g._home.house_tasks_done == ["chair_at_table"])
-	# повтор того же поручения — ни второй награды, ни второго id
 	g._home._complete_house_task(_u28_task("chair_at_table"))
 	Selftest.check("b reward idempotent", g._home.house_tasks_done.size() == 1
-		and (g._home.house_owned.get("chair", []) as Array).count("chair_2") == 1)
-	# уже купленная награда -> ближайший некупленный вариант той же категории дешевле всех
+		and (g._home.house_unlocked as Array).count("window_guild") == 1)
 	g._home.house_tasks_done.clear()
-	g._home.house_owned["chair"] = ["chair_2"]
-	var u28_taken: Dictionary = _u28_task("rug_tucked_bed").duplicate()
-	u28_taken["give"] = "chair_2"  # куплена награда не из этого поручения, а категория та же
-	g._home._complete_house_task(u28_taken)
-	Selftest.check("b taken reward falls to the next locked variant",
-		g._home.house_owned.get("chair", []).has("chair_1"))
-	# категория выкуплена целиком -> остаётся только дружба, тихого исключения нет
+	g._home.house_unlocked = ["window_guild"]
 	var u28_aff0 := g._spirit._companion_affinity
-	g._home.house_owned["chair"] = []
-	for it in (g._home._decor_cat("chair").get("items", []) as Array):
-		g._home.house_owned["chair"].append(String(it["id"]))
-	g._home.house_tasks_done.clear()
-	var u28_giftless: Dictionary = _u28_task("plant_by_window").duplicate()
-	u28_giftless["give"] = "chair_9"  # награда из категории chair, выкупленной целиком выше
-	g._home._complete_house_task(u28_giftless)
-	Selftest.check("b fully-owned category still completes", g._home.house_tasks_done == ["plant_by_window"])
+	g._home._complete_house_task(_u28_task("plant_by_window"))
+	Selftest.check("b already-owned reward still completes",
+		g._home.house_tasks_done == ["plant_by_window"])
 	Selftest.check("b completion gives affinity, not ether",
 		g._spirit._companion_affinity > u28_aff0 and g._engine.ether == u28_ether)
-	# restore
 	g._home._cosmetic_house = u28_house
-	g._spirit._companion_unlocked = u28_unlocked
+	g._spirit._companion_unlocked = false
 	g._spirit._companion_affinity = u28_affinity
 	g._spirit._companion_level = u28_level
-	g._home.house_owned = u28_owned
+	g._home.house_unlocked = u28_unlocked
 	g._home.house_tasks_done = u28_done
-	g._home.house_furniture = u28_furn
-	g._home.house_layout = u28_layout
 
 	# ============ U29 (δ): витрина считает данные, а не выдумывает их ============
 	var u29_first := g._progress_ui._ach_world_first
@@ -701,13 +607,3 @@ static func _u28_task(id: String) -> Dictionary:
 		if String(t["id"]) == id:
 			return t
 	return {}
-
-
-static func _u27_variant_exists(cat: String, item_id: String) -> bool:
-	for c in Game.DECOR:
-		if String(c["id"]) != cat:
-			continue
-		for it in (c.get("items", []) as Array):
-			if String(it["id"]) == item_id:
-				return true
-	return false

@@ -90,6 +90,27 @@ func _clean(raw: Dictionary) -> Dictionary:
 	return Placement.clamp_record(p)
 
 
+static func default_placements() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var raw := [
+		["bed", 0.95, -2.28, 0.0, -1],
+		["shelf", -3.406, 0.90, 1.55, 0],
+		["rug", -1.6, -2.0, 0.0, -1],
+		["fireplace", -1.6, -3.156, 0.0, 1],
+		["table", 1.9, -0.5, 0.0, -1],
+		["chair", 1.9, 0.5, 0.0, -1],
+		["lamp", 0.0, -0.6, 0.0, -1],
+		["plant", -2.55, -1.9, 0.0, -1],
+		["window", -3.406, -1.9, 1.35, 0],
+	]
+	for r in raw:
+		out.append(Placement.clamp_record({
+			"id": String(r[0]), "x": float(r[1]), "z": float(r[2]),
+			"y": float(r[3]), "flip": false, "wall": int(r[4]),
+		}))
+	return out
+
+
 static func parse(data: Dictionary) -> HouseLayout:
 	var model := HouseLayout.new()
 	model.from_dict(data)
