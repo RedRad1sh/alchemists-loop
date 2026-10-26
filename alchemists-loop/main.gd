@@ -1375,13 +1375,13 @@ func _build_ui() -> void:
 		th.set_font("runic", "Label", _font_runic)
 	theme = th
 
-	var bg := ColorRect.new()
-	bg.color = _home._theme_color(_home._cosmetic_theme)
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(bg)
-	_bg_rect = bg
-	UIFx.ambient_bg(bg)
+	# Фон: комната + тинт темы + виньетка. _bg_rect остаётся ColorRect,
+	# чтобы home._apply_cosmetic() и UIFx.ambient_bg() не меняли тип.
+	var backdrop := UIBackdrop.attach(self)
+	_bg_rect = backdrop.tint_rect()
+	var theme_col := _home._theme_color(_home._cosmetic_theme)
+	_bg_rect.color = Color(theme_col.r, theme_col.g, theme_col.b, UIBackdrop.TINT_ALPHA)
+	UIFx.ambient_bg(_bg_rect)
 
 	# Используем обычный Control-хост вместо MarginContainer: контейнеры не должны
 	# раздувать корневой экран до высоты своего прокручиваемого содержимого.
