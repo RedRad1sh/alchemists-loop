@@ -5,6 +5,7 @@ class_name SuiteHouseV2
 static func run(g: Game) -> void:
 	_catalog()
 	_placement()
+	_layout()
 	# дальше задачи добавляют свои секции
 
 
@@ -93,6 +94,42 @@ static func _placement() -> void:
 	Selftest.check("hv2 push_out removes the overlap",
 		Placement.valid(Placement.push_out(
 			{"id": "chair", "x": 1.9, "z": -0.5, "y": 0.0, "flip": false, "wall": -1}, [table], -1), [table]))
+
+
+static func _layout() -> void:
+	var model := HouseLayout.new()
+	Selftest.check("hv2 unlock validates id", not model.unlock("nope") and model.unlocked.is_empty())
+	Selftest.check("hv2 unlock adds once", model.unlock("bed") and not model.unlock("bed")
+		and model.unlocked == ["bed"])
+	var p := {"id": "bed", "x": 0.95, "z": -2.28, "y": 0.0, "flip": false, "wall": -1}
+	Selftest.check("hv2 add placement", model.add_placement(p) and model.placements.size() == 1)
+	var full := HouseLayout.new()
+	for i in HouseLayout.MAX_ITEMS:
+		full.add_placement({"id": "chair", "x": 0.0, "z": 0.0, "y": 0.0, "flip": false, "wall": -1})
+	Selftest.check("hv2 41st placement rejected",
+		full.placements.size() == HouseLayout.MAX_ITEMS
+		and not full.add_placement({"id": "chair", "x": 0.0, "z": 0.0, "y": 0.0, "flip": false, "wall": -1}))
+	var round := HouseLayout.parse(model.to_dict())
+	Selftest.check("hv2 roundtrip keeps unlocked and placements",
+		round.unlocked == model.unlocked and round.placements.size() == 1
+		and String(round.placements[0]["id"]) == "bed")
+	var junk := HouseLayout.parse({
+		"unlocked": ["bed", "nope", 42],
+		"placements": [
+			{"id": "nope", "x": 0, "z": 0, "y": 0, "flip": false, "wall": -1},
+			{"id": "table", "x": NAN, "z": 0, "y": 0, "flip": false, "wall": -1},
+			{"id": "table", "x": 0, "z": INF, "y": 0, "flip": false, "wall": -1},
+			{"id": "table", "x": "oops", "z": 0, "y": 0, "flip": false, "wall": -1},
+			{"id": "table", "x": 99, "z": -99, "y": 0, "flip": false, "wall": -1}
+		]})
+	Selftest.check("hv2 unknown ids are dropped", junk.unlocked == ["bed"] and junk.placements.size() == 1)
+	Selftest.check("hv2 non-finite coords are dropped and the rest clamps",
+		junk.placements.size() == 1 and float(junk.placements[0]["x"]) <= 3.411)
+	var move := HouseLayout.parse({"unlocked": [], "placements": [p]})
+	Selftest.check("hv2 move_at replaces one placement",
+		move.move_at(0, {"id": "rug", "x": 0.0, "z": 0.0, "y": 0.0, "flip": false, "wall": -1})
+		and String(move.placements[0]["id"]) == "rug")
+	Selftest.check("hv2 remove_at drops one", move.remove_at(0) and move.placements.is_empty())
 
 
 static func fireplace_placement() -> Dictionary:
