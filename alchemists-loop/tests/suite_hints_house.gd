@@ -557,8 +557,7 @@ static func run(g: Game) -> void:
 		u30_gift_id = String(g._home.house_unlocked[0])
 	var u30_gift_label := String(HouseItems.get_item(u30_gift_id).get("label", ""))
 	Selftest.check("c gift text names the item, not a catalog id",
-		u30_gift_label != "" and g._engine.status_text.contains(u30_gift_label)
-		and not g._engine.status_text.contains(u30_gift_id))
+		u30_gift_label != "" and g._engine.status_text == "Гости принесли тебе " + u30_gift_label)
 	g._home._check_house_gift(20)
 	Selftest.check("c gift cap is 2 per week", g._home.house_gift_count == 2)
 	g._home._check_house_gift(20)
