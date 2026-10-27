@@ -341,7 +341,7 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 
 	_experiment_picker_hint = g._label("Нажми на ячейку — вещество сразу появится на поле. Добавляй нужное количество.", 11)
 	_experiment_picker_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_experiment_picker_hint.add_theme_color_override("font_color", Color(0.72, 0.84, 0.88))
+	_experiment_picker_hint.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 	drawer_col.add_child(_experiment_picker_hint)
 
 	_experiment_reagent_search = LineEdit.new()

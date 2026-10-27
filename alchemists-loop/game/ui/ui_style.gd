@@ -90,20 +90,28 @@ static func modal_panel(_accent: Color = GOLD) -> StyleBoxTexture:
 	return UITheme.nine("frame_modal", Vector4(34, 34, 34, 34), Vector4(18, 16, 18, 16))
 
 
-## Поле Эксперимента: пока тёплое углубление (резной стол — P1).
-static func arena_style() -> StyleBoxFlat:
-	var sb := box(Color(INK, 0.94), Color(LINE, 0.65), 22, 1)
-	sb.shadow_color = Color(WOOD_DEEP, 0.55)
-	sb.shadow_size = 14
-	_margins(sb, 0, 0, 0, 0)
-	return sb
+## Поле Эксперимента: резной стол — тёплый обод, углублённая столешница,
+## латунные уголки. Без текстуры — прежнее тёплое углубление.
+static func arena_style() -> StyleBox:
+	var sb := UITheme.nine("arena_table", Vector4(96, 96, 96, 96), Vector4.ZERO)
+	if sb != null:
+		return sb
+	var flat := box(Color(INK, 0.94), Color(LINE, 0.65), 22, 1)
+	flat.shadow_color = Color(WOOD_DEEP, 0.55)
+	flat.shadow_size = 14
+	_margins(flat, 0, 0, 0, 0)
+	return flat
 
 
-## Полупрозрачное окно выбора реагента.
-static func picker_style() -> StyleBoxFlat:
-	var sb := box(Color(WOOD_DEEP, 0.72), Color(BRASS_DIM, 0.55), 20, 1)
-	_margins(sb, 10, 10, 10, 10)
-	return sb
+## Окно выбора реагента: та же доска, притемнённая, чтобы поле читалось сквозь.
+static func picker_style() -> StyleBox:
+	var sb := UITheme.nine("frame_panel", Vector4(20, 20, 20, 20),
+		Vector4(10, 10, 10, 10), Color(0.42, 0.34, 0.28, 0.97))
+	if sb != null:
+		return sb
+	var flat := box(Color(WOOD_DEEP, 0.72), Color(BRASS_DIM, 0.55), 20, 1)
+	_margins(flat, 10, 10, 10, 10)
+	return flat
 
 
 # ---------- кнопки ----------
@@ -187,12 +195,18 @@ static func _tab_flat(bg: Color, edge: Color, underline: int) -> StyleBoxFlat:
 static func style_tabs(tabs: TabContainer) -> void:
 	tabs.add_theme_stylebox_override("tab_selected",
 		UITheme.nine("tab_active", Vector4(22, 12, 22, 12), Vector4(8, 13, 8, 13)))
+	# Неактивные вкладки — деревянная направляющая tab_rail, а не заливка.
+	var rail := UITheme.nine("tab_rail", Vector4(24, 10, 24, 10), Vector4(6, 13, 6, 13))
+	var rail_hover := UITheme.nine("tab_rail", Vector4(24, 10, 24, 10), Vector4(6, 13, 6, 13),
+		Color(1.16, 1.10, 1.02, 1.0))
+	var rail_disabled := UITheme.nine("tab_rail", Vector4(24, 10, 24, 10), Vector4(6, 13, 6, 13),
+		Color(0.62, 0.58, 0.55, 0.85))
 	tabs.add_theme_stylebox_override("tab_unselected",
-		_tab_flat(Color(WOOD_DEEP, 0.78), Color(0, 0, 0, 0), 0))
+		rail if rail != null else _tab_flat(Color(WOOD_DEEP, 0.78), Color(0, 0, 0, 0), 0))
 	tabs.add_theme_stylebox_override("tab_hovered",
-		_tab_flat(Color(WOOD, 0.90), LINE, 2))
+		rail_hover if rail_hover != null else _tab_flat(Color(WOOD, 0.90), LINE, 2))
 	tabs.add_theme_stylebox_override("tab_disabled",
-		_tab_flat(Color(WOOD_DEEP, 0.45), Color(0, 0, 0, 0), 0))
+		rail_disabled if rail_disabled != null else _tab_flat(Color(WOOD_DEEP, 0.45), Color(0, 0, 0, 0), 0))
 	var tab_focus := box(Color(0, 0, 0, 0), Color(BRASS_HI, 0.9), 12, 2)
 	tab_focus.corner_radius_bottom_left = 0
 	tab_focus.corner_radius_bottom_right = 0

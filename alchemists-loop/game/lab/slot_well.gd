@@ -10,7 +10,7 @@ var _orb: ElementOrb
 var _glow := 0.0
 var _flash := 0.0
 var _tween: Tween
-var _ring_col := Color(0.5, 0.6, 0.7, 0.35)
+var _ring_col := Color(0.66, 0.52, 0.36, 0.35)
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -98,7 +98,7 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	var c := size * 0.5
 	var r := minf(size.x, size.y) * 0.5 - 4.0
-	draw_circle(c, r, Color(0.04, 0.06, 0.09, 0.8))
+	draw_circle(c, r, Color(0.05, 0.04, 0.03, 0.8))
 	var rc := _ring_col
 	if _flash > 0.01:
 		rc = _ring_col.lerp(Color(1.0, 0.95, 0.75, 0.9), _flash)
@@ -106,11 +106,11 @@ func _draw() -> void:
 	if _flash > 0.01:
 		draw_arc(c, r + 6.0, 0, TAU, 48, Color(1.0, 0.92, 0.7, 0.35 * _flash), 2.0)
 	if _glow > 0.01:
-		var gc := _orb.orb_color if _orb != null else Color(0.7, 0.8, 0.9)
+		var gc := _orb.orb_color if _orb != null else Color(0.70, 0.60, 0.46)
 		draw_arc(c, r + 4.0, 0, TAU, 48, Color(gc.r, gc.g, gc.b, 0.35 * _glow), 3.0)
 	# подпись лунки (A/B) внизу
 	var f := get_theme_default_font()
 	if not has_meta("slot_letter"):
 		return
 	draw_string(f, c + Vector2(-5, r + 20), str(get_meta("slot_letter")),
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.7, 0.78, 0.82, 0.8))
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.66, 0.55, 0.45, 0.8))

@@ -1437,7 +1437,17 @@ func _build_ui() -> void:
 	elif _font_xbold != null:
 		title.add_theme_font_override("font", _font_xbold)
 	title.add_theme_color_override("font_color", UIStyle.CREAM)
-	head.add_child(title)
+	# Вывеска: заголовок на латунной плашке. Поля контента узкие (10/4), а не
+	# 36/12 набора: в шапке 46 px по высоте и ~216 px по ширине.
+	var title_plate := PanelContainer.new()
+	title_plate.name = "TitlePlaque"
+	title_plate.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_plate.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var plate_sb := UITheme.nine("plaque_title", Vector4(64, 18, 64, 18), Vector4(10, 4, 10, 4))
+	if plate_sb != null:
+		title_plate.add_theme_stylebox_override("panel", plate_sb)
+	title_plate.add_child(title)
+	head.add_child(title_plate)
 	# Ряд шапки — одинаковые квадраты 46×46 с иконками Atheneum 24 px. Размер
 	# задала таро-кнопка Аркана (спека: строго квадратная 46×46); остальные были
 	# 46×36, поэтому ряд шёл рваным по высоте, а аватар жил в своей 9-slice

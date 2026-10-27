@@ -11,6 +11,7 @@ static func run(g: Game) -> void:
 	_assets()
 	_theme_cache()
 	_factories()
+	_main_screen(g)
 	_warm_texts(g)
 	_wiring(g)
 	_no_teal_chrome(g)
@@ -239,6 +240,44 @@ static func _factories() -> void:
 	var le := th.get_stylebox("normal", "LineEdit") as StyleBoxTexture
 	Selftest.check("line edit is field",
 		le != null and le.texture != null and le.texture.resource_path.ends_with("field.png"))
+
+
+## Экран Эксперимента — на материалах, а не на плоских заливках.
+static func _main_screen(g: Game) -> void:
+	var arena_base: StyleBox = UIStyle.arena_style()
+	var arena := arena_base as StyleBoxTexture
+	Selftest.check("arena is carved table",
+		arena != null and arena.texture != null
+		and arena.texture.resource_path.ends_with("arena_table.png"))
+	Selftest.check("arena 9-slice 96",
+		arena != null and is_equal_approx(arena.texture_margin_left, 96.0)
+		and is_equal_approx(arena.texture_margin_top, 96.0))
+
+	var picker_base: StyleBox = UIStyle.picker_style()
+	var picker := picker_base as StyleBoxTexture
+	Selftest.check("reagent picker is textured",
+		picker != null and picker.texture != null)
+
+	var tabs := TabContainer.new()
+	UIStyle.style_tabs(tabs)
+	var un := tabs.get_theme_stylebox("tab_unselected") as StyleBoxTexture
+	Selftest.check("unselected tab is tab_rail",
+		un != null and un.texture != null and un.texture.resource_path.ends_with("tab_rail.png"))
+	tabs.free()
+
+	var warm := false
+	var i := UIFx.FIELD_CODE.find("accent : source_color = vec4(")
+	if i >= 0:
+		var parts := UIFx.FIELD_CODE.substr(i + 29, 30).split(",")
+		if parts.size() >= 3:
+			warm = float(parts[0].strip_edges()) > float(parts[2].strip_edges()) + 0.2
+	Selftest.check("field glyphs warm, not teal", warm)
+
+	var plate := g.find_child("TitlePlaque", true, false) as PanelContainer
+	var psb: StyleBox = plate.get_theme_stylebox("panel") if plate != null else null
+	Selftest.check("header title on plaque",
+		psb is StyleBoxTexture and (psb as StyleBoxTexture).texture != null
+		and (psb as StyleBoxTexture).texture.resource_path.ends_with("plaque_title.png"))
 
 
 static func _warm_texts(g: Game) -> void:

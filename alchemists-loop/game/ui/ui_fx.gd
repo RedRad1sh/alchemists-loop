@@ -40,7 +40,7 @@ const FIELD_CODE := """
 shader_type canvas_item;
 uniform vec2 rect_size = vec2(540.0, 700.0);
 uniform vec2 center_offset_px = vec2(0.0, 23.0);
-uniform vec4 accent : source_color = vec4(0.37, 0.89, 0.84, 1.0);
+uniform vec4 accent : source_color = vec4(0.92, 0.70, 0.40, 1.0);
 
 void fragment() {
 	vec2 p = UV * rect_size - (rect_size * 0.5 + center_offset_px);
