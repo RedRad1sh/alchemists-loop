@@ -234,6 +234,7 @@ static func run(g: Game) -> void:
 	var sv_pts2 := g._contracts._pts_total
 	var sv_titles8 := g._contracts._unlocked_titles.duplicate(true)
 	var sv_act2 := g._contracts._active_title
+	var hc_unlocked_prev: Array = g._home.house_unlocked.duplicate()
 	g._contracts._visit_days = []
 	g._contracts._pts_total = 0
 	var l0 := g._contracts.rank_level() == 0
@@ -267,6 +268,7 @@ static func run(g: Game) -> void:
 	g._contracts._pts_total = sv_pts2
 	g._contracts._unlocked_titles = sv_titles8
 	g._contracts._active_title = sv_act2
+	g._home.house_unlocked = hc_unlocked_prev
 
 	# ---------- T9: swipe-предикат ----------
 	Selftest.check("swipe closes only strong downward drag",

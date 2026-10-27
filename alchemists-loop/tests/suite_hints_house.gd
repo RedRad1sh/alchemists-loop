@@ -552,6 +552,13 @@ static func run(g: Game) -> void:
 	# 3 визита -> 1, 6 -> 2, 20 -> всё равно 2 (потолок недели)
 	g._home._check_house_gift(3)
 	Selftest.check("c one gift at 3 guests", g._home.house_gift_count == 1)
+	var u30_gift_id := ""
+	if g._home.house_unlocked.size() > 0:
+		u30_gift_id = String(g._home.house_unlocked[0])
+	var u30_gift_label := String(HouseItems.get_item(u30_gift_id).get("label", ""))
+	Selftest.check("c gift text names the item, not a catalog id",
+		u30_gift_label != "" and g._engine.status_text.contains(u30_gift_label)
+		and not g._engine.status_text.contains(u30_gift_id))
 	g._home._check_house_gift(20)
 	Selftest.check("c gift cap is 2 per week", g._home.house_gift_count == 2)
 	g._home._check_house_gift(20)

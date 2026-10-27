@@ -453,8 +453,8 @@ func claim(id: String, now: Dictionary = {}, now_unix: int = -1) -> Dictionary:
 	var missing := false
 	if decor_id != "":
 		if not decor_exists(decor_id):
-			# §4.4: в house_owned фантом не пишем — _decor_owned_count считает
-			# владение по этому же массиву и завысил бы счётчик коллекции.
+			# §4.4: фантомный id не выдаём ни во владение, ни в журнал —
+			# несуществующий id только испортил бы счётчик коллекции.
 			missing = true
 			Analytics.track("contract_decor_missing",
 				{"contract_id": id, "decor_id": decor_id})
@@ -1028,9 +1028,8 @@ func _clean_decor(raw: Variant) -> Array:
 		var id := String(entry)
 		if id == "" or not decor_exists(id) or out.has(id):
 			continue
-		# Если каталог когда-нибудь уберёт id, журнал доски потеряет его, а Дом —
-		# нет: _own_item уже сделал предмет владением навсегда, и повторная
-		# выдача дедуплицируется (home.gd:173).
+		# Если каталог уберёт id, журнал доски потеряет его, а Дом — нет:
+		# _unlock_item выдал его навсегда, повтор режет house_unlocked.has(id) (home.gd:978).
 		out.append(id)
 	return out
 
