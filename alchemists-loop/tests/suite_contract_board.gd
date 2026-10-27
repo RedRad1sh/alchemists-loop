@@ -621,7 +621,7 @@ static func run(g: Game) -> void:
 	}
 	var t3_env := {
 		"inv": g._engine.inventory.duplicate(true),
-		"owned": g._home.house_owned.duplicate(true),
+		"unlocked": g._home.house_unlocked.duplicate(),
 		"net": g._online._net_enabled, "avail": Net.is_available(),
 		"dev": g._online._device_id, "status": g._engine.status_text,
 	}
@@ -781,7 +781,7 @@ static func run(g: Game) -> void:
 	g._online._device_id = String(t3_env["dev"])
 	g._engine.status_text = String(t3_env["status"])
 	g._engine.inventory = (t3_env["inv"] as Dictionary).duplicate(true)
-	g._home.house_owned = (t3_env["owned"] as Dictionary).duplicate(true)
+	g._home.house_unlocked = t3_env["unlocked"]
 	g._contracts._week_cache = t3_week["week_cache"]
 	g._contracts._cycle_cache = t3_week["cycle_cache"]
 	g._contracts._vein_finds = t3_week["vein_finds"]
@@ -1571,7 +1571,7 @@ static func run(g: Game) -> void:
 		"inv": g._engine.inventory.duplicate(true),
 		"buffs": c6._active_buffs.duplicate(true),
 		"decor": c6._unlocked_decor.duplicate(true),
-		"owned": g._home.house_owned.duplicate(true),
+		"unlocked": g._home.house_unlocked.duplicate(),
 		"prog": _snap_progress(g),
 		# Task 4: успешный claim больше не нейтрален — очаг/вехи/ранг мутируются
 		# каждым claim() → блок обязан вернуть и их, иначе следующие блоки
@@ -1591,7 +1591,8 @@ static func run(g: Game) -> void:
 	# проверки №6/№8 были бы зелёными без всякого claim.
 	c6._unlocked_decor = []
 	c6._active_buffs = {}
-	g._home.house_owned["window"] = []
+	g._home.house_unlocked = (g._home.house_unlocked as Array).filter(
+		func(id): return not String(id).begins_with("window_"))
 	_set_progress(g, 0, 0, 0, 0, 0, 0)  # множитель ровно 1.0 → числа равны таблице
 
 	# Тест №7: невыполненный контракт.
@@ -1657,7 +1658,7 @@ static func run(g: Game) -> void:
 	Selftest.check("§3.4 a weekly gold claim hands the vitrage to the House, not only to the board log",
 		bool(got_decor["ok"]) and String(got_decor["decor"]) == "window_guild"
 		and not bool(got_decor["missing_decor"])
-		and g._home._decor_owned("window", "window_guild")
+		and g._home.house_unlocked.has("window_guild")
 		and c6._unlocked_decor == ["window_guild"]
 		and int(got_decor["materials"]["crystal"]) == 18)
 	# Тот же id из второй бумажки не должен удваивать журнал.
@@ -1670,7 +1671,7 @@ static func run(g: Game) -> void:
 	var got_decor2 := c6.claim(decor2_id)
 	Selftest.check("§3.4 a repeat decor id is logged once and stays owned in the House",
 		bool(got_decor2["ok"]) and c6._unlocked_decor == ["window_guild"]
-		and g._home._decor_owned("window", "window_guild"))
+		and g._home.house_unlocked.has("window_guild"))
 
 	# Обратная сторона: у не-gold декора нет, и флаг missing не должен зажечься
 	# от пустой строки (decor_exists("") по Task 3 возвращает false).
@@ -1702,7 +1703,7 @@ static func run(g: Game) -> void:
 		and int(g._engine.inventory["crystal"]) == 18
 		and c6._active_buffs.has("brew_speed"))
 	Selftest.check("§4.4 the missing decor id is not written into the House ownership list",
-		not g._home._decor_owned("window", "window_does_not_exist")
+		not g._home.house_unlocked.has("window_does_not_exist")
 		and not c6._unlocked_decor.has("window_does_not_exist"))
 
 	# Тест №21: потолок стека.
@@ -1779,7 +1780,7 @@ static func run(g: Game) -> void:
 	c6._mpts = int(claim_snap["mpts"])
 	c6._unlocked_titles = claim_snap["unlocked_titles"]
 	c6._active_title = String(claim_snap["active_title"])
-	g._home.house_owned = claim_snap["owned"]
+	g._home.house_unlocked = claim_snap["unlocked"]
 	g._engine.inventory = claim_snap["inv"]
 	_clear_prog(c6)
 	c6._contracts_daily = []

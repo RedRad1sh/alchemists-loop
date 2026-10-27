@@ -254,7 +254,7 @@ static func run(g: Game) -> void:
 	var idem := g._contracts._unlocked_titles.count("Тлеющий") == 1
 	# декор за 30 дней выдаётся через β-путь и не продаётся
 	g._contracts._celebrate_mile("дней", 30)
-	var own := (g._home.house_owned.get("fireplace", []) as Array).has("fireplace_ember")
+	var own := g._home.house_unlocked.has("fireplace_ember")
 	var shop_ok := true
 	for c in Game.DECOR:
 		if String(c["id"]) == "fireplace":

@@ -8,6 +8,7 @@ static func run(g: Game) -> void:
 	_placement()
 	_layout()
 	_tasks()
+	_rewards(g)
 	# дальше задачи добавляют свои секции
 
 
@@ -211,6 +212,29 @@ static func _tasks() -> void:
 	Selftest.check("hv2 six tasks exist", tasks.size() == 6)
 	Selftest.check("hv2 every task grants a real reward id", ids_ok)
 	Selftest.check("hv2 every task grants a reward-only item", rewards_ok)
+
+
+static func _rewards(g: Game) -> void:
+	Selftest.check("hv2 all catalog ids pass decor_exists", _all_decor_exist())
+	Selftest.check("hv2 old ids no longer pass decor_exists",
+		not Contracts.decor_exists("rug_1") and not Contracts.decor_exists("bed_3"))
+	g._home.house_unlocked.clear()
+	Selftest.check("hv2 contract reward unlocks only the id",
+		g._home._unlock_item("window_contract") and g._home.house_unlocked == ["window_contract"])
+	Selftest.check("hv2 second unlock is a no-op", not g._home._unlock_item("window_contract"))
+	g._home.house_unlocked.clear()
+	for rid in Game.CIRCLE_DECOR_REWARDS.values():
+		g._home._unlock_item(String(rid))
+	Selftest.check("hv2 circle rewards unlock all three fireplace ids",
+		g._home.house_unlocked.size() == 3 and g._home.house_unlocked.has("fireplace_heart"))
+	g._home.house_unlocked.clear()
+
+
+static func _all_decor_exist() -> bool:
+	for id in HouseItems.ITEMS:
+		if not Contracts.decor_exists(String(id)):
+			return false
+	return true
 
 
 static func _task(id: String) -> Dictionary:

@@ -964,19 +964,6 @@ static func _first_of_cat(placements: Array, cat: String) -> Dictionary:
 	return {}
 
 
-func _next_locked_variant(cat_id: String) -> String:
-	# награда уже куплена -> отдаём самый дешёвый некупленный вариант той же категории
-	var items: Array = (_decor_cat(cat_id).get("items", []) as Array).duplicate(true)
-	items.sort_custom(func(x, y) -> bool: return int(x["cost"]) < int(y["cost"]))
-	for it in items:
-		if bool(it.get("reward", false)):
-			continue
-		var iid := String(it["id"])
-		if not _decor_owned(cat_id, iid):
-			return iid
-	return ""
-
-
 func _grant_task_reward(task: Dictionary) -> String:
 	var id := String(task.get("give", ""))
 	if id == "" or not HouseItems.exists(id):
@@ -1390,19 +1377,21 @@ func _check_house_gift(week_visits: int) -> void:
 
 
 func _grant_free_variant() -> String:
-	var cats: Array = []
-	for c in Game.DECOR:
-		cats.append(String(c["id"]))
-	if cats.is_empty():
+	var ids: Array = []
+	for id in HouseItems.ITEMS:
+		var it: Dictionary = HouseItems.ITEMS[id]
+		if not bool(it.get("reward", false)) and not house_unlocked.has(String(id)):
+			ids.append(String(id))
+	if ids.is_empty():
 		return ""
-	# стабильный по неделе выбор стартовой категории: две недели — разные подарки
-	var start: int = absi(_iso_week_id().hash()) % cats.size()
-	for i in cats.size():
-		var cat := String(cats[(start + i) % cats.size()])
-		var nxt := _next_locked_variant(cat)
-		if nxt != "":
-			_own_item(cat, nxt)
-			return "%s: «%s»" % [_decor_cat(cat).get("label", cat), _decor_label(cat, nxt)]
+	ids.sort()
+	# стабильный по неделе выбор стартового предмета: две недели — разные подарки
+	var start: int = absi(_iso_week_id().hash()) % ids.size()
+	for i in ids.size():
+		var id := String(ids[(start + i) % ids.size()])
+		if _unlock_item(id):
+			var it := HouseItems.get_item(id)
+			return String(it["label"])
 	return ""
 
 
