@@ -43,9 +43,11 @@ PROJECT = ROOT / "alchemists-loop"                             # каталог 
 SHOTS = PROJECT / "previews" / "shots"
 DIFFS = PROJECT / "previews" / "shots-diff"
 
-# Одна сцена = один кадр. Табы main.gd: 0 Эксперимент · 1 Лаборатория ·
-# 2 Мир · 3 Рейтинг · 4 Инструменты. Action-сцены открывают модалку в _ready;
-# имена — из разбора `--action=` в main.gd.
+# Одна сцена = один кадр. Страницы main.gd: 0 Эксперимент · 1 Лаборатория ·
+# 2 Мир · 3 Рейтинг · 4 Инструменты. Верхний бар вкладок спрятан (навигация —
+# нижний бар и объекты сцены), но индексы страниц и --tab остались прежними.
+# Action-сцены открывают модалку/комнату в _ready; имена — из разбора
+# `--action=` в main.gd.
 SCENARIOS: dict[str, list[str]] = {
     "tab0_experiment": ["--tab=0"],
     "tab1_lab": ["--tab=1"],
@@ -63,6 +65,8 @@ SCENARIOS: dict[str, list[str]] = {
     "trade_build": ["--action=trade_build"],
     "trade_confirm": ["--action=trade_confirm"],
     "trade_gift": ["--action=trade_gift"],
+    "room_workshop": ["--action=master"],
+    "sheet_bench": ["--action=sheet"],
 }
 
 # Таймауты настраиваются из env: CI снимает базовые ветки с заведомо

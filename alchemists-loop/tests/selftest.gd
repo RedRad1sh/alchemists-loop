@@ -174,7 +174,7 @@ static func run(g: Game) -> void:
 				await suite.run(g)
 	# UI-сюиты грузятся динамически: отсутствующий UITheme/UIBackdrop или
 	# опечатка в новом файле красят только свой пин, а не весь билд.
-	for ui_suite in ["theme", "backdrop"]:
+	for ui_suite in ["theme", "backdrop", "scene"]:
 		var ui_path := "res://tests/suite_ui_%s.gd" % ui_suite
 		if FileAccess.file_exists(ui_path):
 			var ui_script: Script = load(ui_path)

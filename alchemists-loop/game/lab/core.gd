@@ -1073,6 +1073,8 @@ func _refresh_header() -> void:
 		g._social_btn.text = Social.badge_for(total)
 		g._social_btn.add_theme_color_override("font_color",
 			UIStyle.GOLD if total > 0 else UIStyle.TEXT_DIM)
+	if g._bottom_nav != null:
+		g._bottom_nav.refresh_badges()
 
 func _refresh_book() -> void:
 	if _book_list == null:

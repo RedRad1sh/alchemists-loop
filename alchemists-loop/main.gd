@@ -365,6 +365,9 @@ var _font_lore: Font = null     # Manasco: лор/описания карточ�
 var _font_runic: Font = null    # Alchemist Runic: рунический заголовок шапки
 var _ui_tex: Dictionary = {}   # path -> Texture2D (кэш)
 var _tabs_ref: TabContainer
+var _rooms: RoomCarousel = null  # карусель комнат вкладки «Эксперимент» (game/ui/rooms.gd)
+var _bottom_nav: BottomNav = null  # нижний иконковый таб-бар (game/ui/bottom_nav.gd)
+var _sheet: BottomSheet = null  # bottom-sheet панелей устройств (game/ui/sheet.gd)
 # F1 (раунд правки U18): признак достроенного UI. tabs.tab_changed срабатывает
 # синхронно ещё во время _make_page(...), когда попапы не построены, — ветка
 # interstitial в _on_tab_changed допускается только после достройки (true
@@ -548,6 +551,10 @@ func _ready() -> void:
 			_demo_harness._action_craftable = true
 		elif a == "--action=workshop":
 			_demo_harness._action_workshop = true
+		elif a == "--action=master":
+			_demo_harness._action_master = true
+		elif a == "--action=sheet":
+			_demo_harness._action_sheet = true
 		elif a == "--action=rating":
 			_demo_harness._action_rating = true
 		elif a == "--action=decor":
@@ -819,6 +826,13 @@ func _ready() -> void:
 		_home.house_owned = {"rug": ["rug_1", "rug_4"], "bed": ["bed_3"]}
 		_home._apply_cosmetic()
 		_home._open_workshop()
+	if _demo_harness._demo and _demo_harness._action_master:
+		# кадр приёмки комнаты 2: карусель открывается на Мастерской
+		_rooms.set_room(1)
+	if _demo_harness._demo and _demo_harness._action_sheet:
+		# кадр приёмки листа устройства: комната 2 + bottom-sheet верстака
+		_rooms.set_room(1)
+		_rooms._open_tool("bench")
 	if _demo_harness._demo and _demo_harness._action_rating:
 		if _tabs_ref != null:
 			_tabs_ref.current_tab = TAB_RATING
@@ -1562,7 +1576,9 @@ func _build_ui() -> void:
 	root.add_child(tabs)
 
 	var experiment := _make_page(tabs, "Эксперимент")
-	_pages._build_experiment_location(experiment)
+	# Комната-карусель: сцена эксперимента + Мастерская (game/ui/rooms.gd).
+	_rooms = RoomCarousel.new()
+	_rooms.build(self, experiment)
 	var lab := _make_page(tabs, "Лаборатория")
 	_pages._build_lab(lab)
 	var world := _make_page(tabs, "Мир")
@@ -1572,8 +1588,18 @@ func _build_ui() -> void:
 	var tools := _make_page(tabs, "Инструменты")
 	_pages._build_tools_page(tools)
 	_apply_tab_icons(tabs)
+	# Навигация живёт в нижнем иконковом баре и в объектах сцены: верхний
+	# TabContainer-бар спрятан, сам TabContainer остаётся переключателем страниц.
+	tabs.get_tab_bar().visible = false
 
 	_build_brew_bar()
+	_bottom_nav = BottomNav.new()
+	_bottom_nav.build(self, self)
+	_bottom_nav.refresh(_tabs_ref.current_tab)
+	# Контент не должен уезжать под нижний бар: поднимаем низ корневого хоста.
+	margin.offset_bottom = -14 - BottomNav.NAV_H
+	_sheet = BottomSheet.new()
+	_sheet.build(self)
 	_spirit._build_companion()
 	_build_popup()
 	_build_confirm()
@@ -1639,8 +1665,9 @@ func _build_brew_bar() -> void:
 	bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	bar.offset_left = 12
 	bar.offset_right = -12
-	bar.offset_top = -132
-	bar.offset_bottom = -12
+	# панель стоит над нижним таб-баром (BottomNav.NAV_H), height остаётся 120
+	bar.offset_top = -196
+	bar.offset_bottom = -12 - BottomNav.NAV_H
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := _panel_style(Color(0.07, 0.10, 0.15, 0.96), 18)
 	bar.add_theme_stylebox_override("panel", sb)
@@ -1727,12 +1754,17 @@ func _build_brew_bar() -> void:
 func _on_tab_changed(index: int) -> void:
 	_update_brew_bar_visibility()
 	_spirit._refresh_companion_visible()
-	if index == 2:
+	if _bottom_nav != null:
+		_bottom_nav.refresh(index)
+		_bottom_nav.refresh_badges()
+	if index == TAB_EXPERIMENT and _rooms != null:
+		_rooms.refresh_unlocks()
+	if index == TAB_WORLD:
 		_refetch_world()
 		_resonance._fetch_echoes()
-	elif index == 4:
+	elif index == TAB_RATING:
 		_online._refresh_rating()
-	elif index == 5:
+	elif index == TAB_TOOLS:
 		_pages._ensure_modes()
 	# Единственная граница, где interstitial показывается: смена вкладки при
 	# полностью закрытых модалах, достроенном UI и незанятой варке/верстаке.

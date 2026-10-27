@@ -1852,6 +1852,11 @@ func _close_top_modal() -> bool:
 	if _sigil_coll != null:
 		_close_sigil_collection()
 		return true
+	# Bottom-sheet устройств (z=18/19) — над страницами, под модалками: Esc
+	# гасит его раньше нижележащих попапов.
+	if main._sheet != null and main._sheet.is_open():
+		main._sheet.close()
+		return true
 	if main._admin != null and main._admin.is_visible():
 		main._admin.close()
 		Sfx.click()
@@ -1963,6 +1968,8 @@ func _close_top_modal() -> bool:
 # Предикат из tests/suite_journal_misc.gd переиспользовать нельзя (он тестовый),
 # поэтому у продакшена свой, проверяемый из selftest напрямую.
 func _modal_open_for_ads() -> bool:
+	if main._sheet != null and main._sheet.is_open():
+		return true
 	if main._admin != null and main._admin.is_visible():
 		return true
 	if main._engine._auto:
