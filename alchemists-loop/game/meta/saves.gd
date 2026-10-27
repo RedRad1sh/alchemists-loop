@@ -242,7 +242,6 @@ func _house_block() -> Dictionary:
 		"house_placements": g._home.house_placements.duplicate(true),
 	}
 
-
 func _apply_house_block(data: Dictionary) -> void:
 	var model := HouseLayout.parse({
 		"unlocked": data.get("house_unlocked", []),
@@ -400,8 +399,7 @@ func _load_game() -> void:
 		g._home._cosmetic_aura = String(data["cosmetic_aura"])
 	g._home._cosmetic_house = bool(data.get("cosmetic_house", false))
 	_apply_house_block(data)
-	# γ: локальный кэш визитов — словарь nick -> "YYYY-MM-DD"; фильтр по строковым
-	# ключам-никнеймам, как у house_owned по категориям
+	# γ: локальный кэш визитов — словарь nick -> "YYYY-MM-DD"; ключи-никнеймы обязаны быть строками.
 	g._home.house_visited_day.clear()
 	if data.get("house_visited_day") is Dictionary:
 		for k in data["house_visited_day"]:

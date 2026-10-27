@@ -2690,11 +2690,26 @@ static func _contracts_durability_checks(g: Game) -> void:
 	# ---- 2. round-trip (§6.16): rich-состояние → файл → память начисто → загрузка ----
 	_cb_fill(c, daily_set, weekly_set, now_u)
 	g._sigil._daily_crafts = []
+	# Task 5: дом пишется в тот же файл. Seed до записи и обнуление после делают
+	# проверку красной, если из _load_game убрать _apply_house_block(data) или
+	# переименовать ключ в _save_game.
+	var house_u_prev: Array = g._home.house_unlocked.duplicate()
+	var house_p_prev: Array[Dictionary] = []
+	house_p_prev.assign(g._home.house_placements)
+	g._home.house_unlocked = ["bed", "shelf"]
+	g._home.house_placements = HouseLayout.default_placements()
 	g._saves._save_game()
 	# Память вычищена НАМЕРЕННО: без этого no-op-загрузка оставила бы фикстуру
 	# на месте и вся группа была бы зелёной без всякого load_block.
 	_cb_wipe(c)
+	g._home.house_unlocked.clear()
+	g._home.house_placements.clear()
 	g._saves._load_game()
+	Selftest.check("§6.16 a restart keeps the house ownership and placements",
+		g._home.house_unlocked == ["bed", "shelf"]
+		and g._home.house_placements.size() == 9)
+	g._home.house_unlocked = house_u_prev
+	g._home.house_placements = house_p_prev
 	Selftest.check("§6.16 a restart keeps the period keys, the progress and the claim log",
 		c._contracts_last_daily == day_key and c._contracts_last_weekly == week_key
 		and int(c._contracts_daily_prog.get(id_brew, -1)) == 4 and c.progress(id_brew) == 4
