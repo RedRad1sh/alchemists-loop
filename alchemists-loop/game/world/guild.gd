@@ -149,7 +149,7 @@ func _refresh_quest_label() -> void:
 			_quest_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.42))
 		else:
 			_quest_label.text = "✦ Светик: все задания выполнены!"
-			_quest_label.add_theme_color_override("font_color", Color(0.55, 0.95, 0.9))
+			_quest_label.add_theme_color_override("font_color", UIStyle.GLOW)
 		return
 	var p := mini(_quest_progress(q), _quest_target(q))
 	_quest_label.text = "✦ Светик: %s — %d/%d" % [String(q["title"]), p, _quest_target(q)]
