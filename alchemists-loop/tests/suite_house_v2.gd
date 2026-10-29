@@ -12,7 +12,7 @@ static func run(g: Game) -> void:
 	_assets()
 	await _runtime(g)
 	await _camera(g)
-	# дальше задачи добавляют свои секции
+	await _ui_batch(g)
 
 
 static func _assets() -> void:
@@ -224,8 +224,17 @@ static func _tint_isolation(g: Game) -> void:
 	world_b.name = "TintIsolationWorldB"
 	g.add_child(world_a)
 	g.add_child(world_b)
-	var room_a: Node3D = RoomBuilder.build(world_a).get("room")
+	var built_a := RoomBuilder.build(world_a)
+	var room_a: Node3D = built_a.get("room")
 	var room_b: Node3D = RoomBuilder.build(world_b).get("room")
+	var originals := []
+	for root in [room_a, built_a["mirror"].get_child(0)]:
+		for node in root.find_children("*", "MeshInstance3D", true, false):
+			var mi := node as MeshInstance3D
+			for i in mi.mesh.get_surface_count():
+				var mat := mi.get_active_material(i) as BaseMaterial3D
+				if mat != null:
+					originals.append([mi, i, mat.albedo_color, mat.render_priority, mat.transparency])
 	if room_a == null or room_b == null:
 		Selftest.check("hv2 tinting one room does not contaminate another room", false)
 	else:
@@ -249,6 +258,16 @@ static func _tint_isolation(g: Game) -> void:
 			if mat == null or mat.albedo_color != (entry[2] as Color):
 				clean = false
 		Selftest.check("hv2 tinting one room does not contaminate another room", clean)
+		RoomBuilder.tint_room(built_a["mirror"].get_child(0), probe_wall, probe_floor)
+		RoomBuilder.tint_room(room_a, Color.WHITE, Color.WHITE)
+		RoomBuilder.tint_room(built_a["mirror"].get_child(0), Color.WHITE, Color.WHITE)
+		var restored := not originals.is_empty()
+		for entry in originals:
+			var mi := entry[0] as MeshInstance3D
+			var mat := mi.get_active_material(int(entry[1])) as BaseMaterial3D
+			restored = restored and mat != null and mat.albedo_color == entry[2] \
+				and mat.render_priority == entry[3] and mat.transparency == entry[4]
+		Selftest.check("hv2 tint then white restores original room and mirror materials", restored)
 	g.remove_child(world_a)
 	world_a.free()
 	g.remove_child(world_b)
@@ -376,6 +395,15 @@ static func _placement() -> void:
 	Selftest.check("hv2 push_out removes the overlap",
 		Placement.valid(Placement.push_out(
 			{"id": "chair", "x": 1.9, "z": -0.5, "y": 0.0, "flip": false, "wall": -1}, [table], -1), [table]))
+	var walls_ok := true
+	for wall in [0, 1]:
+		var obstacle := Placement.clamp_record({"id": "shelf", "x": 0.9, "z": 0.9,
+			"y": 1.55, "flip": false, "wall": wall})
+		var window := Placement.clamp_record({"id": "window_alt", "x": 0.0, "z": 0.0,
+			"y": 0.5, "flip": false, "wall": wall})
+		walls_ok = walls_ok and not Placement.valid(window, [obstacle]) \
+			and Placement.valid(Placement.snap_record(Placement.push_out(window, [obstacle], -1)), [obstacle])
+	Selftest.check("hv2 wall push_out moves along both walls and survives snap", walls_ok)
 
 
 static func _layout() -> void:
@@ -461,6 +489,7 @@ static func _rewards(g: Game) -> void:
 	Selftest.check("hv2 all catalog ids pass decor_exists", _all_decor_exist())
 	Selftest.check("hv2 old ids no longer pass decor_exists",
 		not Contracts.decor_exists("rug_1") and not Contracts.decor_exists("bed_3"))
+	var unlocked_before := g._home.house_unlocked.duplicate()
 	g._home.house_unlocked.clear()
 	Selftest.check("hv2 contract reward unlocks only the id",
 		g._home._unlock_item("window_contract") and g._home.house_unlocked == ["window_contract"])
@@ -470,7 +499,7 @@ static func _rewards(g: Game) -> void:
 		g._home._unlock_item(String(rid))
 	Selftest.check("hv2 circle rewards unlock all three fireplace ids",
 		g._home.house_unlocked.size() == 3 and g._home.house_unlocked.has("fireplace_heart"))
-	g._home.house_unlocked.clear()
+	g._home.house_unlocked = unlocked_before
 
 
 static func _all_decor_exist() -> bool:
@@ -489,3 +518,239 @@ static func _task(id: String) -> Dictionary:
 
 static func fireplace_placement() -> Dictionary:
 	return {"id": "fireplace", "x": -1.6, "z": -3.156, "y": 0.0, "flip": false, "wall": 1}
+
+
+static func _ui_batch(g: Game) -> void:
+	# Снимаем весь затронутый мир, а не оставляем false/пустые массивы следующей сюите.
+	var h := g._home
+	var home_before := {}
+	for key in ["_cosmetic_house", "house_unlocked", "house_placements", "house_tasks_done",
+			"_shop_cat", "_house_spirit_t", "_house_spirit_lean"]:
+		var value: Variant = h.get(key)
+		home_before[key] = value.duplicate(true) if value is Array else value
+	var engine_before := {}
+	for key in ["ether", "ether_overflow", "status_text", "regen_clock", "autosave_clock"]:
+		engine_before[key] = g._engine.get(key)
+	var spirit_before := {}
+	for key in ["_companion_unlocked", "_companion_affinity", "_companion_level", "_companion_idle_clock"]:
+		spirit_before[key] = g._spirit.get(key)
+	var screen_before := h._house_screen.visible
+	var tray_before := h._house_tray_open
+	var tab_before := "decor"
+	for id in h._house_tab_scrolls:
+		if (h._house_tab_scrolls[id] as Control).visible:
+			tab_before = String(id)
+	var ui_before := []
+	for node in [g._spirit._companion_dim, g._spirit._companion_dlg]:
+		ui_before.append(_node_state(node, ["visible", "z_index", "modulate", "scale"]))
+	for node in [g._spirit._companion_dlg_title, g._spirit._companion_dlg_text,
+			g._spirit._companion_dlg_aff, g._spirit._companion_dlg_name, h._house_popup_title, h._host_showcase_lbl]:
+		ui_before.append(_node_state(node, ["text"]))
+	ui_before.append(_node_state(g._spirit._companion_dlg_name_row, ["visible"]))
+	ui_before.append(_node_state(g._spirit._companion, ["z_index", "_base_key"]))
+	ui_before.append(_node_state(h._house_spirit_node, ["position", "scale", "rotation", "_base_key", "_hearts"]))
+	ui_before.append(_node_state(h._host_spirit, ["visible", "_aura"]))
+	ui_before.append(_node_state(h._host_flame, ["color"]))
+	var hearts_processing: bool = h._house_spirit_node.is_processing()
+	var cameras_before := []
+	var materials_before := []
+	for view in [h._house_room, h._house_popup_view]:
+		cameras_before.append(_node_state(view, ["built", "placements", "_zoom", "_target", "_tray_lift_px"]))
+		for root in [view._room, view._mirror]:
+			for raw_mesh in root.find_children("*", "MeshInstance3D", true, false):
+				var mesh := raw_mesh as MeshInstance3D
+				for surface in mesh.mesh.get_surface_count():
+					materials_before.append([mesh, surface, mesh.get_surface_override_material(surface)])
+	var frozen := g._saves._save_frozen
+	g._saves._save_frozen = true
+	# Покупки/награды тестируем отдельно от бонуса эфира за повышение дружбы.
+	g._spirit._companion_unlocked = false
+	await _screen(g)
+	_shop(g)
+	await _spirit_and_guest(g)
+	h._close_house_screen()
+	# Дожидаемся штатного закрытия Juice, чтобы его tween не испортил restore.
+	await g.get_tree().create_timer(0.25).timeout
+	for key in home_before:
+		h.set(key, home_before[key])
+	for key in engine_before:
+		g._engine.set(key, engine_before[key])
+	for key in spirit_before:
+		g._spirit.set(key, spirit_before[key])
+	h._set_house_tab(tab_before)
+	if screen_before:
+		h._open_house_screen()
+		if tray_before:
+			h._open_house_tray()
+	for state in cameras_before:
+		_restore_node_state(state)
+		var view := state["node"] as RoomView
+		view._rebuild_items()
+		view._apply_camera()
+	for material in materials_before:
+		(material[0] as MeshInstance3D).set_surface_override_material(material[1], material[2])
+	for state in ui_before:
+		_restore_node_state(state)
+	h._house_spirit_node.set_process(hearts_processing)
+	g._engine._refresh()
+	g._saves._save_frozen = frozen
+	Selftest.check("hv2 UI fixtures restore the economy and house",
+		g._engine.ether == engine_before["ether"]
+		and g._engine.ether_overflow == engine_before["ether_overflow"]
+		and h._cosmetic_house == home_before["_cosmetic_house"]
+		and h.house_unlocked == home_before["house_unlocked"]
+		and h.house_placements == home_before["house_placements"]
+		and h.house_tasks_done == home_before["house_tasks_done"]
+		and g._spirit._companion_affinity == spirit_before["_companion_affinity"])
+
+
+static func _node_state(node: Node, keys: Array) -> Dictionary:
+	var values := {}
+	for key in keys:
+		var value: Variant = node.get(key)
+		values[key] = value.duplicate(true) if value is Array else value
+	return {"node": node, "values": values}
+
+
+static func _restore_node_state(state: Dictionary) -> void:
+	for key in state["values"]:
+		state["node"].set(key, state["values"][key])
+
+
+static func _screen(g: Game) -> void:
+	var h := g._home
+	h._cosmetic_house = false
+	h.house_unlocked.clear()
+	h.house_placements.clear()
+	h.house_tasks_done.clear()
+	h._refresh_house_screen()
+	Selftest.check("hv2 house screen owns a room view", h._house_room != null)
+	Selftest.check("hv2 unbuilt house shows the build overlay", h._house_overlay != null and h._house_overlay.visible)
+	g._engine.ether_overflow = 0
+	g._engine.ether = Game.HOUSE_COST - 1
+	h._buy_house()
+	Selftest.check("hv2 build rejects insufficient ether", not h._cosmetic_house and g._engine.ether == Game.HOUSE_COST - 1)
+	g._engine.ether = Game.HOUSE_COST
+	h._buy_house()
+	var base_ok := true
+	for cat in HouseItems.CATS:
+		base_ok = base_ok and h.house_unlocked.has(String(cat))
+	Selftest.check("hv2 build spends ether and unlocks the nine base items", h._cosmetic_house and base_ok and g._engine._available_ether() == 0)
+	Selftest.check("hv2 build seeds layout B", h.house_placements.size() == 9)
+	Selftest.check("hv2 build hides the overlay", h._house_overlay != null and not h._house_overlay.visible)
+	Selftest.check("hv2 build completes only the onboarding task", h.house_tasks_done == ["hearth_on_rug"])
+	h._open_house_screen()
+	h._open_house_tray()
+	await g.get_tree().create_timer(0.25).timeout
+	Selftest.check("hv2 tray opens", h._house_tray_open and h._house_tray != null and h._house_tray.visible)
+	Selftest.check("hv2 room lift is half the actual tray height", h._house_room != null and h._house_tray != null
+		and is_equal_approx(h._house_room._tray_lift_px, h._house_tray.size.y * 0.5))
+	Selftest.check("hv2 esc closes tray before screen", g._close_top_modal() and not h._house_tray_open and h._house_screen.visible)
+	if h._house_room != null:
+		h._house_room.zoom_at(1.5, Vector2(270, 480))
+		h._open_house_tray()
+		h._close_house_tray()
+		Selftest.check("hv2 closing tray resets to fit", is_equal_approx(h._house_room._camera.size, h._house_room._fit_size)
+			and is_zero_approx(h._house_room._tray_lift_px))
+	h._close_house_screen()
+	h._refresh_house_screen()
+	Selftest.check("hv2 refreshing a closed screen keeps the room hidden", not h._house_screen.visible
+		and h._house_room != null and not h._house_room.is_visible_in_tree())
+
+
+static func _card_button(h: Home, id: String) -> Button:
+	if h._house_cards == null:
+		return null
+	var card := h._house_cards.get_node_or_null(NodePath(id))
+	return card.find_child("Action", true, false) as Button if card != null else null
+
+
+static func _shop(g: Game) -> void:
+	var h := g._home
+	h._cosmetic_house = true
+	h.house_unlocked.clear()
+	h.house_placements.clear()
+	h._refresh_house_screen()
+	g._engine.ether_overflow = 0
+	g._engine.ether = 0
+	Selftest.check("hv2 buy unknown item fails", not h._buy_house_item("nope"))
+	Selftest.check("hv2 buy reward item fails", not h._buy_house_item("window_contract"))
+	Selftest.check("hv2 buy rejects insufficient ether", not h._buy_house_item("rug_alt") and h.house_unlocked.is_empty())
+	g._engine.ether = 10000
+	var eth0 := g._engine.ether
+	Selftest.check("hv2 buy alt item spends ether and unlocks", h._buy_house_item("rug_alt") and g._engine.ether == eth0 - 130 and h.house_unlocked.has("rug_alt"))
+	Selftest.check("hv2 repeat buy is a no-op", not h._buy_house_item("rug_alt") and g._engine.ether == eth0 - 130)
+	h._on_room_placement({"id": "rug_alt", "x": 0.0, "z": 0.0, "y": 0.0, "flip": false, "wall": -1})
+	Selftest.check("hv2 placing an unlocked item adds a placement", h.house_placements.size() == 1)
+	Selftest.check("hv2 placing a locked item does nothing", not h._on_room_placement({"id": "bed", "x": 0.0, "z": 0.0, "y": 0.0, "flip": false, "wall": -1}) and h.house_placements.size() == 1)
+	for i in HouseLayout.MAX_ITEMS - 1:
+		h.house_placements.append({"id": "rug_alt", "x": 0.0, "z": 0.0, "y": 0.0, "flip": false, "wall": -1})
+	Selftest.check("hv2 41st placement is rejected with a hint", not h._on_room_placement({"id": "rug_alt", "x": 0.0, "z": 0.0, "y": 0.0, "flip": false, "wall": -1}) and h.house_placements.size() == 40 and g._engine.status_text.contains("40"))
+	h.house_placements.clear()
+	h.house_tasks_done.clear()
+	h._complete_house_task(_task("chair_at_table"))
+	h._set_shop_cat("window")
+	var earned := _card_button(h, "window_guild")
+	var locked := _card_button(h, "window_contract")
+	Selftest.check("hv2 earned reward card offers placement", earned != null and not earned.disabled and earned.text == "Поставить")
+	Selftest.check("hv2 locked reward card is not sold", locked != null and locked.disabled and locked.text == "За поручение")
+	var pic := h._house_cards.get_node_or_null("window_guild/Content/Picture") as TextureRect if h._house_cards != null else null
+	Selftest.check("hv2 reward card uses catalog tint", pic != null and pic.self_modulate == Color("#4d7ab7"))
+	if earned != null:
+		earned.pressed.emit()
+	Selftest.check("hv2 earned reward placed through its real card", h.house_placements.size() == 1 and h.house_placements[0]["id"] == "window_guild")
+	h.house_placements.clear()
+	h._refresh_house_screen()
+	h._set_shop_cat("rug")
+	var rug := _card_button(h, "rug_alt")
+	if rug != null:
+		rug.pressed.emit()
+		rug.pressed.emit()
+	Selftest.check("hv2 unlocked item allows unlimited free copies", h.house_placements.size() == 2 and g._engine.ether == eth0 - 130)
+
+
+static func _spirit_and_guest(g: Game) -> void:
+	var h := g._home
+	h._open_house_screen()
+	var node = h._house_spirit_node
+	Selftest.check("hv2 house spirit is interactive", node != null and node.mouse_filter == Control.MOUSE_FILTER_STOP)
+	var old_t: float = h.get("_house_spirit_t") if h.get("_house_spirit_t") != null else 0.0
+	h._house_spirit_tick(0.1)
+	Selftest.check("hv2 visible house spirit breathes", node != null and node.scale != Vector2.ONE)
+	if node != null:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = true
+		node._gui_input(ev)
+	Selftest.check("hv2 spirit tap opens friendship dialog and hearts", node != null and node.get("_hearts").size() == 3
+		and g._spirit._companion_dlg.visible and g._spirit._companion_dlg.z_index > h._house_screen.z_index)
+	var touch_buttons := g._spirit._companion_dlg.find_children("*", "Button", true, false)
+	var touch_ok := not touch_buttons.is_empty()
+	for button in touch_buttons:
+		touch_ok = touch_ok and (button as Button).custom_minimum_size.y >= 48
+	Selftest.check("hv2 friendship dialog keeps 48 px touch buttons", touch_ok)
+	g._spirit._companion_close_dialog()
+	h._close_house_screen()
+	var parked: Variant = h.get("_house_spirit_t")
+	h._house_spirit_tick(0.5)
+	Selftest.check("hv2 hidden house spirit tick is parked", parked != null and h.get("_house_spirit_t") == parked and float(parked) > old_t)
+	var parsed := h._parse_guest_house({"v": 2, "built": true, "items": HouseLayout.default_placements(), "world_first": 4})
+	Selftest.check("hv2 guest layout keeps nine items", (parsed["items"] as Array).size() == 9)
+	var view := RoomView.new()
+	view.size = Vector2(400, 700)
+	g.add_child(view)
+	await g.get_tree().process_frame
+	view.set_built(true)
+	view.set_layout(parsed["items"])
+	view.read_only = true
+	Selftest.check("hv2 guest room is read-only", not view.place_at_center("bed"))
+	var pos := view.spirit_screen_pos()
+	Selftest.check("hv2 spirit screen position is finite", is_finite(pos.x) and is_finite(pos.y))
+	g.remove_child(view)
+	view.free()
+	h._apply_player_house("Люмина", {"v": 2, "built": true, "items": parsed["items"], "world_first": 4, "aura": "rose"})
+	Selftest.check("hv2 actual guest popup uses read-only room", h._house_popup_view is RoomView and h._house_popup_view.get("read_only") == true)
+	var showcase := h._house_popup.find_child("HostShowcase", true, false) as Label
+	Selftest.check("hv2 guest showcase keeps bottles flame caption", showcase != null and showcase.text.contains("4")
+		and showcase.text.contains("после связи") and h._host_flame != null
+		and h._host_flame.polygon.size() >= 3 and h._host_flame.color == h._showcase_flame_color())

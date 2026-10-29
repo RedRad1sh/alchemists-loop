@@ -79,18 +79,23 @@ static func tint_room(room: Node3D, wall_tint: Color, floor_tint: Color) -> void
 	for node in room.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
 		var lower := String(mi.name).to_lower()
-		var col := floor_tint if lower.contains("floor") else (wall_tint if lower.contains("wall") else Color.WHITE)
-		if col == Color.WHITE:
+		var is_floor := lower.contains("floor")
+		if not is_floor and not lower.contains("wall"):
 			continue
+		var col := floor_tint if is_floor else wall_tint
 		for i in mi.mesh.get_surface_count():
-			# Правка 2: за основу берём активный материал (оверрайд _prepare_floor
-			# несёт прозрачность пола), меняем только albedo, пишем оверрайдом —
-			# surface_set_material трогал бы общий кэшированный ArrayMesh.
-			var mat := mi.get_active_material(i) as BaseMaterial3D
+			# Каждый раз от оригинала, не от прошлого tint-оверрайда. WHITE
+			# восстанавливает albedo GLB; материал остаётся строго per-instance.
+			var mat := mi.mesh.surface_get_material(i) as BaseMaterial3D
 			if mat == null:
 				continue
 			var dup := mat.duplicate() as BaseMaterial3D
-			dup.albedo_color = col
+			if col != Color.WHITE:
+				dup.albedo_color = col
+			if is_floor:
+				dup.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+				dup.render_priority = 0
+				dup.cull_mode = BaseMaterial3D.CULL_DISABLED
 			mi.set_surface_override_material(i, dup)
 
 

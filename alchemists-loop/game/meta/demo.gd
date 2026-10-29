@@ -31,6 +31,9 @@ var _action_journal := false
 var _action_settings := false
 var _action_craftable := false
 var _action_workshop := false
+var _action_house_tray := false
+var _house_input_ok := true
+var _house_shot_pending := false
 var _action_room_spike := false
 var _action_room_camera := false
 var _action_rating := false
@@ -74,6 +77,97 @@ var _demo_confirm := ""
 
 func _init(game: Game) -> void:
 	g = game
+
+func _seed_house() -> void:
+	g._home._cosmetic_house = not _action_house_tray
+	g._home.house_unlocked.clear()
+	g._home.house_tasks_done.clear()
+	g._home.house_placements.clear()
+	if not _action_house_tray:
+		g._home.house_placements = HouseLayout.default_placements()
+		for cat in HouseItems.CATS:
+			g._home._unlock_item(String(cat))
+	else:
+		g._engine.ether = 2000
+		g._engine.ether_overflow = 0
+	g._home._apply_cosmetic()
+	g._home._refresh_house_screen()
+
+
+func _house_check(label: String, ok: bool) -> void:
+	_house_input_ok = _house_input_ok and ok
+	print("HOUSE_UI ", label, " ", "OK" if ok else "FAIL")
+
+
+func _house_pointer(name: String, pressed: bool) -> void:
+	var target := g.find_child(name, true, false) as Control
+	if target == null:
+		_house_check("missing target " + name, false)
+		return
+	_screen_touch(target.get_global_rect().get_center(), pressed)
+
+
+func _house_card_pointer(id: String, pressed: bool) -> void:
+	var target := g._home._house_cards.get_node_or_null(NodePath(id + "/Content/Action")) as Button
+	if target != null:
+		_screen_touch(target.get_global_rect().get_center(), pressed)
+	else:
+		_house_check("missing card " + id, false)
+
+
+func _house_esc() -> void:
+	var ev := InputEventKey.new()
+	ev.pressed = true
+	ev.keycode = KEY_ESCAPE
+	g.get_viewport().push_input(ev)
+
+
+func _house_input_smoke(frame: int) -> void:
+	var h := g._home
+	match frame:
+		4, 5: _house_pointer("HouseEntry", frame == 4)
+		8: _house_check("entry opens unbuilt overlay", h._house_screen.visible and h._house_overlay.visible)
+		10, 11: _house_pointer("BuildHouse", frame == 10)
+		14: _house_check("build seeds nine base items", h._cosmetic_house and h.house_placements.size() == 9 and h.house_unlocked.has("bed"))
+		18, 19: _screen_touch(Vector2(70, 500), frame == 18)
+		22: _house_check("room tap does not close", h._house_screen.visible)
+		24, 25: _house_pointer("OpenTray", frame == 24)
+		28: _house_check("decor tray opens", h._house_tray_open)
+		30, 31: _house_pointer("Tab_cozy", frame == 30)
+		34: _house_check("cozy tab opens in scroll", (h._house_tab_scrolls["cozy"] as Control).visible)
+		36, 37: _house_pointer("Tab_spirit", frame == 36)
+		40: _house_check("spirit tasks visible", (h._house_tab_scrolls["spirit"] as Control).visible and h._task_rows.size() == 6)
+		42, 43: _house_pointer("Tab_decor", frame == 42)
+		48, 49: _house_card_pointer("window_alt", frame == 48)
+		52: _house_check("buy alternate card", h.house_unlocked.has("window_alt"))
+		54, 55: _house_card_pointer("window_alt", frame == 54)
+		58: _house_check("place closes tray after success", h.house_placements.size() == 10 and not h._house_tray_open)
+		60, 61: _house_pointer("OpenTray", frame == 60)
+		66: _house_esc()
+		68: _house_check("esc closes tray first", not h._house_tray_open and h._house_screen.visible)
+		70: _house_esc()
+		72: _house_check("esc closes screen second", not h._house_screen.visible and h._house_room._viewport.render_target_update_mode == SubViewport.UPDATE_DISABLED)
+		74, 75: _house_pointer("HouseEntry", frame == 74)
+		78, 79: _house_pointer("OpenTray", frame == 78)
+		82: _house_check("reopen actual tray", h._house_tray_open and h._house_room.is_visible_in_tree())
+		84:
+			# Только позиционирование скролла; сам выбор категории — pointer ниже.
+			var chips := h._house_decor_tab.get_node("CategoryChips") as ScrollContainer
+			chips.ensure_control_visible(h._house_cat_btns["fireplace"])
+		88, 89: _house_pointer("Cat_fireplace", frame == 88)
+		92: _house_check("category contains base alternate earned and locked rewards", h._shop_cat == "fireplace"
+			and h.house_unlocked.has("fireplace_heart") and not h.house_unlocked.has("fireplace_alt"))
+
+
+func _capture_house_frame() -> void:
+	await RenderingServer.frame_post_draw
+	var img := g.get_viewport().get_texture().get_image()
+	var err := img.save_png(_shot_path) if img != null else ERR_UNAVAILABLE
+	print("HOUSE_FRAME viewport=", g.get_viewport_rect().size, " tray=", g._home._house_tray.size,
+		" lift=", g._home._house_room._tray_lift_px)
+	print("SHOT ", _shot_path, " err=", err)
+	g.get_tree().quit(0 if err == OK and _house_input_ok else 1)
+
 
 func _auto_confirm_demo() -> void:
 	# headless-диагностика: подтверждаем диалог автоварки без клика
@@ -375,6 +469,12 @@ func _tick_demo() -> bool:
 		_shot_frame += 1
 		if _action_experiment and not _experiment_input_done:
 			_experiment_input_smoke(_shot_frame)
+		if _action_house_tray:
+			_house_input_smoke(_shot_frame)
+			if _shot_frame >= 120 and not _house_shot_pending:
+				_house_shot_pending = true
+				_capture_house_frame()
+			return true
 		if _shot_scroll >= 0 and _shot_frame in [20, 40]:
 			_set_page_scroll(_shot_scroll)
 		if _pending_hint_shot and _shot_frame == 44:

@@ -257,11 +257,9 @@ static func run(g: Game) -> void:
 	g._contracts._celebrate_mile("дней", 30)
 	var own := g._home.house_unlocked.has("fireplace_ember")
 	var shop_ok := true
-	for c in Game.DECOR:
-		if String(c["id"]) == "fireplace":
-			for it in (c.get("items", []) as Array):
-				if bool(it.get("reward", false)) and int(it.get("cost", 0)) > 0:
-					shop_ok = false
+	for it in HouseItems.items_in_cat("fireplace"):
+		if bool(it.get("reward", false)) and int(it.get("cost", 0)) > 0:
+			shop_ok = false
 	Selftest.check("rank formula + titles idempotent + decor reward",
 		l0 and l3 and mono and l7 and t1 and idem and own and shop_ok)
 	g._contracts._visit_days = sv_days

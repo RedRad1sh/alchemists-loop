@@ -3436,8 +3436,8 @@ static func _contract_asset_checks() -> void:
 		soft = head and pen > 200
 	Selftest.check("§5.3 the brass nail sits on a soft cast shadow", soft)
 
-	# §3.4: награды-витражи обязаны иметь арт и калибровку стекла:
-	# house_view.gd:236-241 грузит res://assets/decor/<id>.png без guard'а.
+	# §3.4: исходный арт наград-витражей и калибровка стекла сохраняются
+	# в assets/decor; новый каталог дома использует подготовленные спрайты.
 	var vitrajes := true
 	for id in ["window_contract", "window_seal", "window_guild"]:
 		var img := _ca_img("res://assets/decor/%s.png" % String(id))

@@ -138,7 +138,9 @@ static func push_out(to: Dictionary, others: Array, index: int) -> Dictionary:
 			var overlap := fp.intersection(op)
 			if overlap.size.x <= EPS or overlap.size.y <= EPS:
 				continue
-			if overlap.size.x < overlap.size.y:
+			# Прижим к стене отменяет сдвиг по нормали: выталкиваем вдоль стены.
+			var wall := int(current.get("wall", -1))
+			if wall == 1 or (wall < 0 and overlap.size.x < overlap.size.y):
 				var dir := 1.0 if fp.get_center().x >= op.get_center().x else -1.0
 				current["x"] = float(current["x"]) + dir * (overlap.size.x + EPS)
 			else:

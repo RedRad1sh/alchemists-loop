@@ -150,11 +150,7 @@ static func run(g: Game) -> void:
 	var _b0 := g._home._cp_b.value
 	var _oktext0 := g._home._cp_ok.text
 	var _cust_theme0 := bool(g._home._custom_unlocked.get("theme", false))
-	# _close_decor_popup прокручивает экран дома наверх, если тот открыт
-	var _house_sc: ScrollContainer = g._home._house_scroll
-	var _scroll0 := 0
-	if _house_sc != null:
-		_scroll0 = _house_sc.scroll_vertical
+	var _house_built0 := g._home._cosmetic_house
 
 	# Слив возможных утечек из предыдущих сюит ДО проверок: иначе утёкшая попап
 	# (а) красит T1 чужим дефектом и (б) крадёт второй вызов в T2, отчего краснеет
@@ -185,37 +181,24 @@ static func run(g: Game) -> void:
 	Selftest.check("esc false branch hid nothing", _no_modal_visible(g)
 		and g._engine._auto_cancel == _acancel0 and g._engine.status_text == _status0)
 
-	# T2: магазин декора (z=100) закрывается раньше нижнего попапа настроек хаба —
-	# и закрывается именно хелпером (R4), а не «просто visible=false»: у хелпера
-	# есть наблюдаемый побочный эффект, пересборка страницы дома (текст кнопки
-	# палитры зависит от _custom_unlocked["theme"]).
-	var _t2_btn: Button = g._home._theme_btns.get("__custom", null)
-	g._home._custom_unlocked["theme"] = false
-	g._home._theme_custom_on = false
-	g._home._refresh_house_page()
-	var _t2_stale := "кнопки нет" if _t2_btn == null else _t2_btn.text
-	g._home._custom_unlocked["theme"] = true
-	g._home._decor_popup.visible = true
-	g._hub._settings_dim.visible = true
-	g._hub._settings_popup.visible = true
-	# Предикат ESC проверяется ПРИ ОТКРЫТОЙ модалке. На пустом стеке это бессмысленно:
-	# там _close_top_modal() вернёт false в любом случае, поэтому и потеря `ke.pressed`,
-	# и потеря проверки keycode прошли бы зелёными.
-	Selftest.check("esc wiring ignores non-key events", g._handle_esc(_not_key) == false
-		and g._home._decor_popup.visible and g._hub._settings_popup.visible)
-	Selftest.check("esc wiring ignores other keys", g._handle_esc(_mk) == false
-		and g._home._decor_popup.visible and g._hub._settings_popup.visible)
-	Selftest.check("esc wiring ignores key release", g._handle_esc(_unpressed) == false
-		and g._home._decor_popup.visible and g._hub._settings_popup.visible)
+	# T2: лоток — верхняя часть дома. Esc сперва лоток, потом экран;
+	# посторонние события проверяются при действительно открытом модале.
+	g._home._cosmetic_house = true
+	g._home._open_house_screen()
+	g._home._open_house_tray()
+	Selftest.check("esc wiring ignores non-key events", not g._handle_esc(_not_key)
+		and g._home._house_tray_open and g._home._house_screen.visible)
+	Selftest.check("esc wiring ignores other keys", not g._handle_esc(_mk)
+		and g._home._house_tray_open and g._home._house_screen.visible)
+	Selftest.check("esc wiring ignores key release", not g._handle_esc(_unpressed)
+		and g._home._house_tray_open and g._home._house_screen.visible)
 	var _t2a := g._handle_esc(_esc_key())
-	Selftest.check("esc decor closes above settings", _t2a
-		and not g._home._decor_popup.visible
-		and g._hub._settings_popup.visible and g._hub._settings_dim.visible)
-	Selftest.check("esc decor close goes through the helper", _t2_btn != null
-		and _t2_btn.text != _t2_stale and _t2_btn.text == "Палитра")
+	Selftest.check("esc tray closes above house screen", _t2a
+		and not g._home._house_tray_open and g._home._house_screen.visible)
+	Selftest.check("esc tray close goes through camera reset", is_zero_approx(g._home._house_room._tray_lift_px))
 	var _t2b := g._handle_esc(_esc_key())
-	Selftest.check("esc settings closes second", _t2b
-		and not g._hub._settings_popup.visible and not g._hub._settings_dim.visible)
+	Selftest.check("esc house screen closes second", _t2b and not g._home._house_screen.visible)
+	g._home._cosmetic_house = _house_built0
 
 	# T3: гостевой домик — ветка только закрывает окно. Повторного Net.house_get
 	# тут быть не может: _close_house_popup (home.gd) лишь скрывает окно и играет
@@ -249,7 +232,7 @@ static func run(g: Game) -> void:
 	Selftest.check("esc picker cancel keeps ether", g._engine.ether == _ether_before)
 
 	# восстановление: ни один модал не остаётся открытым, поля как до блока
-	g._home._decor_popup.visible = false
+	g._home._close_house_screen()
 	g._home._color_picker.visible = false
 	g._home._house_popup.visible = false
 	g._hub._settings_popup.visible = false
@@ -272,9 +255,7 @@ static func run(g: Game) -> void:
 	g._home._theme_custom_on = _themeon0
 	g._home._aura_custom_on = _auraon0
 	g._home._apply_cosmetic()
-	g._home._refresh_house_page()
-	if _house_sc != null:
-		_house_sc.scroll_vertical = _scroll0
+	g._home._refresh_house_screen()
 	g._engine._auto = _auto0
 	g._engine._auto_cancel = _acancel0
 	g._engine.status_text = _status0
@@ -1018,9 +999,9 @@ static func run(g: Game) -> void:
 	Selftest.check("t23 tab change does not interrupt an open modal",
 		_t23_settings and UserData.last_interstitial_at() == _t23_ts2)
 	g._hub._settings_popup.visible = false
-	g._home._decor_popup.visible = true
-	var _t23_decor := g._modal_open_for_ads()
-	g._home._decor_popup.visible = false
+	g._home._house_screen.visible = true
+	var _t23_house := g._modal_open_for_ads()
+	g._home._house_screen.visible = false
 	g._shop._popup.visible = true
 	var _t23_shop := g._modal_open_for_ads()
 	g._shop._popup.visible = false
@@ -1033,7 +1014,7 @@ static func run(g: Game) -> void:
 	# Предикат перечисляет поверхности сам: без любой из строк свой модальный слой
 	# пропускает рекламу поверх себя, и проверяется это именно этой парой имён.
 	Selftest.check("t23 modal predicate covers every closable surface",
-		_t23_settings and _t23_decor and _t23_shop and _t23_main_popup and _t23_auto)
+		_t23_settings and _t23_house and _t23_shop and _t23_main_popup and _t23_auto)
 	g._engine._auto = _t23_auto0
 
 	# --- F2 (раунд правки): ручная варка и занятый верстак блокируют показ ---
@@ -1578,7 +1559,7 @@ static func _no_modal_visible(g: Game) -> bool:
 	# home-ноды построены в _ready, но цепочка main.gd guard'ит их на != null —
 	# повторяем guard'ы, иначе битая сборка уронила бы весь selftest вместо одной
 	# красной проверки
-	if g._home._decor_popup != null and g._home._decor_popup.visible:
+	if g._home._house_screen != null and g._home._house_screen.visible:
 		return false
 	if g._home._color_picker != null and g._home._color_picker.visible:
 		return false

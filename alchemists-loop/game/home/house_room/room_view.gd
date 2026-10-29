@@ -77,14 +77,22 @@ func _ready() -> void:
 	_zoom = 1.0
 	_apply_camera()
 	resized.connect(_on_resized)
+	visibility_changed.connect(_sync_rendering)
+	_sync_rendering()
+	_rebuild_items()
+
+
+func _sync_rendering() -> void:
+	_viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE if is_visible_in_tree() else SubViewport.UPDATE_DISABLED
 
 
 func set_built(value: bool) -> void:
 	built = value
-	visible = true
 
 
 func set_layout(list: Array) -> void:
+	if placements == list:
+		return
 	placements = list.duplicate(true)
 	_rebuild_items()
 
@@ -120,7 +128,10 @@ func place_at_center(id: String) -> bool:
 
 
 func _rebuild_items() -> void:
+	if _items_root == null:
+		return
 	for child in _items_root.get_children():
+		_items_root.remove_child(child)
 		child.queue_free()
 	_items.clear()
 	for raw in placements:

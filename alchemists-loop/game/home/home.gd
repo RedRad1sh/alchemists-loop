@@ -1,7 +1,7 @@
 extends RefCounted
 class_name Home
-# Дом и декор (R7): тема/аура, страница дома, покупки, магазин декора, палитра,
-# сериализация домика, гостевой домик. Своё состояние — поля ниже.
+# Полноэкранный дом: RoomView, лоток обстановки, Светик, палитра и гости.
+# Экономика и социальные действия остаются в существующих модулях.
 
 var g: Game
 
@@ -11,15 +11,7 @@ var _cosmetic_house := false
 var _theme_btns := {}
 var _aura_btns := {}
 var _house_btn: Button = null
-var _furniture_btns := {}
-var _house_view: Control = null
-var _house_screen: Control = null      # полноэкранный экран дома (не вкладка)
-var _house_scroll: ScrollContainer = null
-var _furniture_shop: VBoxContainer = null
-var _house_hint: Label = null
-var house_furniture: Dictionary = {}   # категория -> id варианта (DECOR)
-var house_layout: Dictionary = {}      # категория -> [ax, ay] пользовательской расстановки
-var house_owned: Dictionary = {}   # категория -> Array[String] купленных id (коллекция, локально)
+var _house_screen: Control = null
 var house_tasks_done: Array = []   # β: id выполненных поручений (одноразовые, без таймеров)
 var house_unlocked: Array = []     # β: id разблокированных предметов (награды поручений)
 var house_placements: Array[Dictionary] = []   # β: расстановка в метрах (раскладка B)
@@ -37,15 +29,6 @@ var _aura_custom_on := false
 var _aura_custom := Color("#ffb85c")
 var _cosmetic_wall := Color("#5a4d40")
 var _cosmetic_floor := Color("#5d452f")
-var _decor_cat_btns := {}
-var _decor_cat_thumbs := {}   # категория -> HouseView-превью текущего варианта
-var _decor_cat_labels := {}   # категория -> Label («Ковёр · 3/10»)
-var _collection_lbl: Label = null
-var _decor_cat_open := ""
-var _decor_popup: Control = null
-var _decor_list: VBoxContainer = null
-var _decor_title: Label = null
-var _decor_preview = null  # живое превью домика в магазине (HouseView, без анимации)
 var _wall_btn: Button = null
 var _floor_btn: Button = null
 var _color_picker: Control = null
@@ -60,8 +43,164 @@ var _cp_old := Color.WHITE  # значение до открытия пикер�
 var _cp_old_on := false  # был ли кастом включён (theme/aura)
 var _custom_unlocked: Dictionary = {}  # цель -> true (разблокировка куплена)
 var _house_popup: Control = null
-var _house_popup_view: Control = null
+var _house_popup_view: RoomView = null
 var _house_popup_title: Label = null
+
+var _house_room: RoomView = null
+var _house_overlay: Control = null
+var _house_tray: PanelContainer = null
+var _house_tray_open := false
+var _house_decor_tab: VBoxContainer = null
+var _house_spirit_tab: VBoxContainer = null
+var _house_cozy_tab: VBoxContainer = null
+var _house_tab_scrolls := {}
+var _house_tab_btns := {}
+var _house_cards: HBoxContainer = null
+var _house_cat_btns := {}
+var _shop_cat := "window"
+var _house_collection_lbl: Label = null
+var _house_spirit_node = null  # существующий Companion: аура, уровень, сердечки
+var _house_spirit_t := 0.0
+var _house_spirit_lean := 0.0
+var _house_affinity_lbl: Label = null
+var _house_lift_tween: Tween = null
+var _host_showcase_lbl: Label = null
+var _host_flame: Polygon2D = null
+var _host_spirit = null
+
+
+func _open_house_tray() -> void:
+	if not _cosmetic_house:
+		g._engine.status_text = "Сначала построй домик Светика."
+		Sfx.error()
+		return
+	_house_tray_open = true
+	_house_tray.visible = true
+	_refresh_house_tray()
+	_lift_house_room()
+	Sfx.click()
+
+
+func _lift_house_room() -> void:
+	if not _house_tray_open or _house_room == null:
+		return
+	if _house_lift_tween != null:
+		_house_lift_tween.kill()
+	_house_lift_tween = g.create_tween()
+	_house_lift_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_house_lift_tween.tween_method(_house_room.set_tray_lift,
+		_house_room._tray_lift_px, _house_tray.size.y * 0.5, 0.18)
+
+
+func _close_house_tray() -> void:
+	_house_tray_open = false
+	if _house_lift_tween != null:
+		_house_lift_tween.kill()
+		_house_lift_tween = null
+	if _house_tray != null:
+		_house_tray.visible = false
+	if _house_room != null:
+		_house_room.reset_camera()
+	Sfx.click()
+
+
+func _toggle_house_tray() -> void:
+	if _house_tray_open:
+		_close_house_tray()
+	else:
+		_open_house_tray()
+
+
+func _buy_house_item(id: String) -> bool:
+	if not _cosmetic_house or not HouseItems.exists(id):
+		return false
+	var item := HouseItems.get_item(id)
+	if bool(item.get("reward", false)) or house_unlocked.has(id):
+		return false
+	var cost := int(item.get("cost", 0))
+	if g._engine._available_ether() < cost:
+		g._engine.status_text = "Не хватает эфира: «%s» стоит %d ⚡." % [String(item["label"]), cost]
+		Sfx.error()
+		return false
+	g._engine._spend_ether(cost)
+	_unlock_item(id)
+	_refresh_house_tray()
+	g._engine._refresh()
+	g._saves._save_game()
+	_upload_house()
+	g._engine.status_text = "«%s» теперь в домике!" % String(item["label"])
+	Sfx.stage_up()
+	return true
+
+
+func _on_room_placement(p: Dictionary) -> bool:
+	if not _cosmetic_house or not house_unlocked.has(String(p.get("id", ""))):
+		return false
+	if house_placements.size() >= HouseLayout.MAX_ITEMS:
+		g._engine.status_text = "В комнате тесно: больше %d предметов не влезет." % HouseLayout.MAX_ITEMS
+		Sfx.error()
+		return false
+	var clean := Placement.snap_record(p)
+	if not Placement.valid(clean, house_placements):
+		g._engine.status_text = "Здесь не помещается."
+		Sfx.error()
+		return false
+	house_placements.append(clean)
+	_house_room.set_layout(house_placements)
+	_check_house_tasks()
+	_refresh_house_tray()
+	g._saves._save_game()
+	_upload_house()
+	return true
+
+
+func _place_from_tray(id: String) -> void:
+	# RoomView сигнал не возвращает bool: не закрываем лоток, если Home отверг
+	# постановку (например, сорок первый предмет).
+	var before := house_placements.size()
+	if _house_room.place_at_center(id) and house_placements.size() > before:
+		_close_house_tray()
+
+
+func _set_shop_cat(cat: String) -> void:
+	if not HouseItems.CATS.has(cat):
+		return
+	_shop_cat = cat
+	_refresh_house_tray()
+
+
+func _set_house_tab(tab: String) -> void:
+	for id in _house_tab_scrolls:
+		(_house_tab_scrolls[id] as Control).visible = String(id) == tab
+	for id in _house_tab_btns:
+		(_house_tab_btns[id] as Button).disabled = String(id) == tab
+	_refresh_house_tray()
+
+
+func _refresh_house_tray() -> void:
+	if _house_cards != null:
+		_rebuild_decor_cards()
+	for cat in _house_cat_btns:
+		(_house_cat_btns[cat] as Button).disabled = String(cat) == _shop_cat
+	if _house_collection_lbl != null:
+		_house_collection_lbl.text = "Коллекция: %d/%d · купленное ставится бесплатно" % [house_unlocked.size(), HouseItems.ITEMS.size()]
+	_refresh_house_screen()
+
+
+func _house_spirit_tick(delta: float) -> void:
+	if _house_popup != null and _house_popup.visible and _host_spirit != null:
+		_host_spirit.position = _house_popup_view.spirit_screen_pos() - _host_spirit.size * 0.5
+	if _house_spirit_node == null or _house_room == null or _house_screen == null or not _house_screen.visible or not _cosmetic_house:
+		return
+	_house_spirit_t += delta
+	var base := _house_room.spirit_screen_pos()
+	var breath := 1.0 + 0.035 * sin(_house_spirit_t * 2.2)
+	var sway := sin(_house_spirit_t * 1.4) * 1.5
+	_house_spirit_node.position = base + Vector2(sway + _house_spirit_lean, 0.0) - _house_spirit_node.size * 0.5
+	_house_spirit_node.scale = Vector2(breath, 2.0 - breath)
+	_house_spirit_node.rotation = deg_to_rad(_house_spirit_lean * 0.33)
+	_house_spirit_node.set_aura(_aura_now())
+	_house_spirit_node.set_base("lv%d" % g._spirit._companion_level)
 
 func _init(game: Game) -> void:
 	g = game
@@ -105,7 +244,8 @@ func _apply_cosmetic() -> void:
 		g._bg_rect.color = _theme_now()
 	if g._spirit._companion != null:
 		g._spirit._companion.set_aura(_aura_now())
-	_refresh_house_view()
+	if _house_room != null:
+		_house_room.set_room_tint(_cosmetic_wall, _cosmetic_floor)
 
 
 func _theme_label(id: String) -> String:
@@ -136,112 +276,6 @@ func _aura_cost(id: String) -> int:
 	return 0
 
 
-func _decor_cat(cat_id: String) -> Dictionary:
-	for c in Game.DECOR:
-		if String(c["id"]) == cat_id:
-			return c
-	return {}
-
-
-func _decor_item(cat_id: String, item_id: String) -> Dictionary:
-	var cat := _decor_cat(cat_id)
-	if cat.is_empty():
-		return {}
-	var items: Array = cat.get("items", [])
-	for it in items:
-		if String(it["id"]) == item_id:
-			return it
-	return items[0] if not items.is_empty() else {}
-
-
-func _decor_current(cat_id: String) -> String:
-	var v := String(house_furniture.get(cat_id, ""))
-	if v == "":
-		v = cat_id
-	return v
-
-
-func _decor_default(cat_id: String) -> String:
-	var cat := _decor_cat(cat_id)
-	var items: Array = cat.get("items", [])
-	return String(items[0]["id"]) if not items.is_empty() else cat_id
-
-
-func _decor_owned(cat_id: String, item_id: String) -> bool:
-	if item_id == _decor_default(cat_id):
-		return true
-	return item_id in (house_owned.get(cat_id, []) as Array)
-
-
-func _own_item(cat_id: String, item_id: String) -> void:
-	if item_id == _decor_default(cat_id):
-		return
-	var arr: Array = house_owned.get(cat_id, [])
-	if not arr.has(item_id):
-		arr.append(item_id)
-	house_owned[cat_id] = arr
-
-
-func _decor_owned_count(cat_id: String) -> int:
-	var seen := {_decor_default(cat_id): true}
-	for v in house_owned.get(cat_id, []):
-		seen[String(v)] = true
-	return seen.size()
-
-
-func _collection_owned() -> int:
-	var n := 0
-	for c in Game.DECOR:
-		n += _decor_owned_count(String(c["id"]))
-	return n
-
-
-func _collection_total() -> int:
-	var n := 0
-	for c in Game.DECOR:
-		n += (c.get("items", []) as Array).size()
-	return n
-
-
-func _house_furn() -> Dictionary:
-	var t := {}
-	for c in Game.DECOR:
-		var cid := String(c["id"])
-		t[cid] = _decor_current(cid)
-	return t
-
-
-func _decor_label(cat_id: String, item_id: String) -> String:
-	var it := _decor_item(cat_id, item_id)
-	var lab := String(it.get("label", ""))
-	if lab != "":
-		return lab
-	var cat := _decor_cat(cat_id)
-	return String(cat.get("label", cat_id))
-
-
-func _decor_cost(cat_id: String, item_id: String) -> int:
-	var it := _decor_item(cat_id, item_id)
-	return int(it.get("cost", 0))
-
-
-func _on_house_layout_changed(layout: Dictionary) -> void:
-	# Перетаскивание — часть сохранённого состояния домика, а не только
-	# временный рисунок текущего кадра.
-	house_layout = layout.duplicate(true)
-	g._saves._save_game()
-	_upload_house()
-	g._engine.status_text = "Расстановка домика сохранена."
-	_check_house_tasks()
-
-
-func _refresh_house_view() -> void:
-	_sync_house_view(_house_view)
-	if _house_view != null and _cosmetic_house:
-		_house_view.set_display_data(_showcase_bottles(), _showcase_flame_color(),
-			_showcase_window_caption())
-
-
 func _showcase_bottles() -> int:
 	return mini(9, maxi(0, g._progress_ui._ach_world_first))
 
@@ -268,101 +302,8 @@ func _showcase_window_caption() -> String:
 	return "мир: " + g._contracts._day_hint
 
 
-func _sync_house_view(view) -> void:
-	if view == null:
-		return
-	var tex: Texture2D = null
-	if g._spirit._companion != null:
-		tex = g._spirit._companion.sprite_tex("idle")
-	view.set_state(_cosmetic_house, _house_furn(), tex, _aura_now(),
-		_cosmetic_wall, _cosmetic_floor, house_layout)
-
-
-func _build_house_page(page: VBoxContainer) -> void:
-	var t := g._label("ДОМ СВЕТИКА", 20)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
-	page.add_child(t)
-	var sub := g._label("Уют, обстановка и произвольные цвета. Это навсегда и видно другим игрокам.", 13)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
-	page.add_child(sub)
-
-	_house_view = Game.HouseViewScript.new()
-	_house_view.set_editable(true)
-	_house_view.layout_changed.connect(_on_house_layout_changed)
-	# Первый реальный размер — единственный момент, когда дефолтная раскладка
-	# становится измеримой: без этого подарка-онбординга механика невидима.
-	_house_view.resized.connect(_check_house_tasks)
-	_house_view.custom_minimum_size = Vector2(0, 300)
-	page.add_child(_house_view)
-	_house_hint = g._label("", 12)
-	_house_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_house_hint.add_theme_color_override("font_color", Color(0.6, 0.66, 0.72))
-	page.add_child(_house_hint)
-
-	_house_btn = g._small_button("", Vector2(0, 46), 2)
-	_house_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_house_btn.pressed.connect(_buy_house)
-	page.add_child(_house_btn)
-
-	page.add_child(g._label("Обстановка", 14))
-	_collection_lbl = g._label("", 12)
-	_collection_lbl.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
-	page.add_child(_collection_lbl)
-	_furniture_shop = VBoxContainer.new()
-	_furniture_shop.add_theme_constant_override("separation", 6)
-	page.add_child(_furniture_shop)
-	for c in Game.DECOR:
-		var cid := String(c["id"])
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
-		_furniture_shop.add_child(row)
-		var frame := PanelContainer.new()
-		frame.custom_minimum_size = Vector2(76, 50)
-		var fsb := StyleBoxFlat.new()
-		fsb.bg_color = Color(0.05, 0.08, 0.12, 0.9)
-		fsb.set_corner_radius_all(8)
-		frame.add_theme_stylebox_override("panel", fsb)
-		row.add_child(frame)
-		var thumb := Game.HouseViewScript.new()
-		thumb.animate = false
-		thumb.set_editable(false)
-		thumb.custom_minimum_size = Vector2(76, 50)
-		frame.add_child(thumb)
-		_decor_cat_thumbs[cid] = thumb
-		var lbl := g._label(String(c["label"]), 14)
-		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		row.add_child(lbl)
-		_decor_cat_labels[cid] = lbl
-		var b := g._small_button("Выбрать", Vector2(160, 40), 1)
-		b.pressed.connect(_open_decor_shop.bind(cid))
-		row.add_child(b)
-		_decor_cat_btns[cid] = b
-
-	page.add_child(g._label("Поручения Светика", 14))
-	var hint := g._label("Поставь мебель как он просит — и получишь то, что не купить.", 11)
-	hint.add_theme_color_override("font_color", Color(0.55, 0.62, 0.68))
-	page.add_child(hint)
-	for ht in Game.HOUSE_TASKS:
-		var row := g._label("", 12)
-		row.add_theme_color_override("font_color", Color(0.62, 0.7, 0.76))
-		page.add_child(row)
-		_task_rows[String(ht["id"])] = row
-
-	# γ: кто заглядывал в гости на этой неделе (заполняется из GET /api/me)
-	_guests_lbl = g._label("", 12)
-	_guests_lbl.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
-	page.add_child(_guests_lbl)
-	# S1 §9.3 (задача 7): карточка гостя — кнопки «в друзья» рядом со строкой
-	# гостей. Ник приходит из house_visitors (device_id клиенту недоступен),
-	# заявка идёт по нику через общий SocialUI.attach; отказ — тостом (R8).
-	_guests_row = HBoxContainer.new()
-	_guests_row.name = "GuestFriendActions"
-	_guests_row.add_theme_constant_override("separation", 8)
-	page.add_child(_guests_row)
-
+func _build_house_cozy_tab() -> void:
+	var page := _house_cozy_tab
 	page.add_child(g._label("Тема лаборатории (фон)", 14))
 	var theme_grid := GridContainer.new()
 	theme_grid.columns = 2
@@ -371,12 +312,12 @@ func _build_house_page(page: VBoxContainer) -> void:
 	theme_grid.add_theme_constant_override("v_separation", 6)
 	page.add_child(theme_grid)
 	for th in Game.WORKSHOP_THEMES:
-		var b := g._small_button("", Vector2(0, 42))
+		var b := g._small_button("", Vector2(0, 48))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(_buy_theme.bind(String(th["id"]), int(th["cost"])))
 		theme_grid.add_child(b)
 		_theme_btns[String(th["id"])] = b
-	var th_c := g._small_button("Палитра", Vector2(0, 42))
+	var th_c := g._small_button("Палитра", Vector2(0, 48))
 	th_c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	th_c.pressed.connect(_open_color_picker.bind("theme"))
 	page.add_child(th_c)
@@ -390,12 +331,12 @@ func _build_house_page(page: VBoxContainer) -> void:
 	aura_grid.add_theme_constant_override("v_separation", 6)
 	page.add_child(aura_grid)
 	for au in Game.WORKSHOP_AURAS:
-		var b := g._small_button("", Vector2(0, 42))
+		var b := g._small_button("", Vector2(0, 48))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(_buy_aura.bind(String(au["id"]), int(au["cost"])))
 		aura_grid.add_child(b)
 		_aura_btns[String(au["id"])] = b
-	var au_c := g._small_button("Палитра", Vector2(0, 42))
+	var au_c := g._small_button("Палитра", Vector2(0, 48))
 	au_c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	au_c.pressed.connect(_open_color_picker.bind("aura"))
 	page.add_child(au_c)
@@ -405,44 +346,48 @@ func _build_house_page(page: VBoxContainer) -> void:
 	var home_row := HBoxContainer.new()
 	home_row.add_theme_constant_override("separation", 6)
 	page.add_child(home_row)
-	_wall_btn = g._small_button("Стены", Vector2(0, 42))
+	_wall_btn = g._small_button("Стены", Vector2(0, 48))
 	_wall_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_wall_btn.pressed.connect(_open_color_picker.bind("wall"))
 	home_row.add_child(_wall_btn)
-	_floor_btn = g._small_button("Пол", Vector2(0, 42))
+	_floor_btn = g._small_button("Пол", Vector2(0, 48))
 	_floor_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_floor_btn.pressed.connect(_open_color_picker.bind("floor"))
 	home_row.add_child(_floor_btn)
 
-	var bottom_pad := Control.new()
-	bottom_pad.custom_minimum_size = Vector2(0, 150)
-	page.add_child(bottom_pad)
-	_refresh_house_page()
+	_house_btn = g._small_button("", Vector2(0, 48), 2)
+	_house_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_house_btn.pressed.connect(_buy_house)
+	page.add_child(_house_btn)
 
 
 func _open_workshop() -> void:
-	_refresh_house_page()
+	_refresh_house_screen()
 	_open_house_screen()
 	Sfx.click()
 
 
 func _open_house_screen() -> void:
-	if _house_screen != null:
-		_house_screen.visible = true
-		if _house_scroll != null:
-			_house_scroll.scroll_vertical = 0
+	if _house_screen == null:
+		return
+	_house_screen.visible = true
+	_house_room.visible = true
+	_house_room.reset_camera()
+	_refresh_house_screen()
+	if _house_tray_open:
+		_lift_house_room()
+	_house_spirit_tick(0.0)
 
 
 func _close_house_screen() -> void:
+	_close_house_tray()
+	if _house_room != null:
+		_house_room.visible = false
 	if _house_screen != null:
 		_house_screen.visible = false
 	Sfx.click()
 
 
-# Полноэкранный экран дома — тот же приём, что у Аркана Сигилов
-# (sigil_ui._open_sigil_modal): dim z=20 в группе modal_ui, тап по фону и Esc
-# закрывают. Поверх него живут только декор-магазин (z=100), палитра и гостевой
-# домик (z=21) — они и закрываются раньше (см. _close_top_modal).
 func _build_house_screen() -> void:
 	var root := Control.new()
 	root.name = "HouseScreen"
@@ -453,67 +398,237 @@ func _build_house_screen() -> void:
 	root.add_to_group("modal_ui")
 	g.add_child(root)
 	_house_screen = root
+	_house_room = RoomView.new()
+	_house_room.name = "HouseRoom"
+	_house_room.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_house_room.visible = false
+	_house_room.placement_requested.connect(_on_room_placement)
+	_house_room.hint.connect(func(t: String) -> void: g._engine.status_text = t)
+	root.add_child(_house_room)
+	_build_house_spirit(root)
+	_build_house_overlay(root)
+	var top := HBoxContainer.new()
+	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	top.offset_left = 16
+	top.offset_right = -16
+	top.offset_top = 16
+	top.add_theme_constant_override("separation", 8)
+	root.add_child(top)
+	var title := g._label("ДОМ СВЕТИКА", 18)
+	title.add_theme_color_override("font_color", Color("#f0c987"))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(title)
+	var close := g._small_button("Закрыть", Vector2(116, 48), 1)
+	close.name = "CloseHouse"
+	close.pressed.connect(_close_house_screen)
+	top.add_child(close)
+	var bottom := HBoxContainer.new()
+	bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	bottom.offset_left = 16
+	bottom.offset_right = -16
+	bottom.offset_top = -68
+	bottom.offset_bottom = -16
+	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
+	root.add_child(bottom)
+	var tray_btn := g._small_button("Обстановка", Vector2(220, 52), 2)
+	tray_btn.name = "OpenTray"
+	tray_btn.pressed.connect(_toggle_house_tray)
+	bottom.add_child(tray_btn)
+	_build_house_tray(root)
 
-	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.84)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	dim.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			_close_house_screen()
-	)
-	root.add_child(dim)
 
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 12)
-	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(margin)
+func _house_texture_style(path: String, margin: float) -> StyleBoxTexture:
+	var sb := StyleBoxTexture.new()
+	sb.texture = load(path)
+	for side in ["left", "right", "top", "bottom"]:
+		sb.set("texture_margin_" + side, margin)
+		sb.set("content_margin_" + side, margin)
+	return sb
 
+
+func _build_house_overlay(parent: Control) -> void:
+	var center := CenterContainer.new()
+	center.name = "HouseBuildOverlay"
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(center)
+	_house_overlay = center
+	var vb := VBoxContainer.new()
+	vb.custom_minimum_size = Vector2(320, 0)
+	vb.add_theme_constant_override("separation", 12)
+	center.add_child(vb)
+	var cap := g._label("Домик Светика ещё не построен", 16)
+	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(cap)
+	var b := g._small_button("Построить домик (−%d ⚡)" % Game.HOUSE_COST, Vector2(280, 52), 2)
+	b.name = "BuildHouse"
+	b.pressed.connect(_buy_house)
+	vb.add_child(b)
+
+
+func _build_house_tray(parent: Control) -> void:
 	var panel := PanelContainer.new()
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	panel.add_theme_stylebox_override("panel", g._panel_style(Color(0.055, 0.065, 0.10, 0.99), 18))
-	margin.add_child(panel)
-
+	panel.name = "HouseTray"
+	panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	panel.offset_top = -420
+	panel.offset_bottom = 0
+	panel.visible = false
+	panel.add_theme_stylebox_override("panel", _house_texture_style("res://assets/house/ui/wood_panel.png", 18))
+	parent.add_child(panel)
+	_house_tray = panel
+	panel.resized.connect(_lift_house_room)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
 	panel.add_child(col)
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 6)
+	col.add_child(tabs)
+	for t in [["decor", "Обстановка"], ["spirit", "Светик"], ["cozy", "Уют"]]:
+		var id := String(t[0])
+		var b := g._small_button(String(t[1]), Vector2(0, 48), 1)
+		b.name = "Tab_" + id
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.pressed.connect(_set_house_tab.bind(id))
+		tabs.add_child(b)
+		_house_tab_btns[id] = b
+		var scroll := ScrollContainer.new()
+		scroll.name = "TrayContent_" + id
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		col.add_child(scroll)
+		_house_tab_scrolls[id] = scroll
+		var body := VBoxContainer.new()
+		body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		body.add_theme_constant_override("separation", 8)
+		scroll.add_child(body)
+		match id:
+			"decor": _house_decor_tab = body
+			"spirit": _house_spirit_tab = body
+			"cozy": _house_cozy_tab = body
+	_build_house_decor_tab()
+	_build_house_spirit_tab()
+	_build_house_cozy_tab()
+	_set_house_tab("decor")
 
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
-	col.add_child(head)
-	var head_spacer := Control.new()
-	head_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(head_spacer)
-	var close_btn := g._small_button("Закрыть", Vector2(116, 40), 1)
-	close_btn.pressed.connect(_close_house_screen)
-	head.add_child(close_btn)
 
-	# Каркас содержимого повторяет main._make_page: скролл -> поля -> VBox, чтобы
-	# _build_house_page() не заметил переезда с вкладки на экран.
+func _build_house_decor_tab() -> void:
+	var chip_scroll := ScrollContainer.new()
+	chip_scroll.name = "CategoryChips"
+	chip_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	chip_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	chip_scroll.custom_minimum_size.y = 60
+	_house_decor_tab.add_child(chip_scroll)
+	var chips := HBoxContainer.new()
+	chips.add_theme_constant_override("separation", 6)
+	chip_scroll.add_child(chips)
+	var labels := ["Окна", "Ковры", "Стулья", "Столы", "Растения", "Лампы", "Полки", "Камины", "Кровати"]
+	for i in HouseItems.CATS.size():
+		var cat := String(HouseItems.CATS[i])
+		var b := g._small_button(String(labels[i]), Vector2(100, 48), 1)
+		b.name = "Cat_" + cat
+		b.pressed.connect(_set_shop_cat.bind(cat))
+		chips.add_child(b)
+		_house_cat_btns[cat] = b
+	_house_collection_lbl = g._label("", 12)
+	_house_decor_tab.add_child(_house_collection_lbl)
 	var scroll := ScrollContainer.new()
-	scroll.name = "HouseScroll"
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(scroll)
-	_house_scroll = scroll
-	var body := MarginContainer.new()
-	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("margin_right", 12)
-	body.add_theme_constant_override("margin_left", 2)
-	scroll.add_child(body)
-	var content := VBoxContainer.new()
-	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content.add_theme_constant_override("separation", 8)
-	body.add_child(content)
-	_build_house_page(content)
+	scroll.name = "DecorCards"
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.custom_minimum_size.y = 238
+	_house_decor_tab.add_child(scroll)
+	_house_cards = HBoxContainer.new()
+	_house_cards.add_theme_constant_override("separation", 10)
+	scroll.add_child(_house_cards)
 
 
-func _refresh_house_page() -> void:
+func _rebuild_decor_cards() -> void:
+	for c in _house_cards.get_children():
+		_house_cards.remove_child(c)
+		c.queue_free()
+	for raw in HouseItems.items_in_cat(_shop_cat):
+		var it: Dictionary = raw
+		var id := String(it["id"])
+		var card := PanelContainer.new()
+		card.name = id
+		card.custom_minimum_size = Vector2(176, 216)
+		card.add_theme_stylebox_override("panel", _house_texture_style("res://assets/house/ui/velvet.png", 8))
+		var vb := VBoxContainer.new()
+		vb.name = "Content"
+		vb.add_theme_constant_override("separation", 6)
+		card.add_child(vb)
+		var pic := TextureRect.new()
+		pic.name = "Picture"
+		pic.texture = load(String(it["sprite"]))
+		var tint := String(it.get("tint", ""))
+		pic.self_modulate = Color(tint) if tint != "" else Color.WHITE
+		pic.custom_minimum_size = Vector2(150, 110)
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		vb.add_child(pic)
+		var name_lbl := g._label(String(it["label"]), 14)
+		name_lbl.custom_minimum_size.x = 160
+		name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		name_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		vb.add_child(name_lbl)
+		var btn := g._small_button("", Vector2(0, 48), 2)
+		btn.name = "Action"
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if house_unlocked.has(id):
+			btn.text = "Поставить"
+			btn.pressed.connect(_place_from_tray.bind(id))
+		elif bool(it.get("reward", false)):
+			btn.text = "За поручение"
+			btn.disabled = true
+		else:
+			btn.text = "Купить · %d ⚡" % int(it["cost"])
+			btn.pressed.connect(_buy_house_item.bind(id))
+		vb.add_child(btn)
+		_house_cards.add_child(card)
+
+
+func _build_house_spirit(parent: Control) -> void:
+	# Не игнорирующий TextureRect: переносим готовый Companion со всеми
+	# сердечками и уровнем дружбы, используя те же импортированные спрайты.
+	_house_spirit_node = (load("res://game/home/companion.gd") as GDScript).new()
+	_house_spirit_node.name = "HouseSpirit"
+	_house_spirit_node.size = Vector2(96, 96)
+	_house_spirit_node.pivot_offset = Vector2(48, 48)
+	parent.add_child(_house_spirit_node)
+	_house_spirit_node.set_bubble_allowed(false)
+	_house_spirit_node.tapped.connect(func() -> void:
+		# Штатный диалог был ниже z=20 полноэкранного дома.
+		g._spirit._companion_dim.z_index = 22
+		g._spirit._companion_dlg.z_index = 23
+		for button in g._spirit._companion_dlg.find_children("*", "Button", true, false):
+			(button as Button).custom_minimum_size.y = maxf((button as Button).custom_minimum_size.y, 48)
+		g._spirit._on_companion_tapped())
+
+
+func _build_house_spirit_tab() -> void:
+	_house_affinity_lbl = g._label("", 12)
+	_house_spirit_tab.add_child(_house_affinity_lbl)
+	_house_spirit_tab.add_child(g._label("Поручения Светика", 14))
+	_house_spirit_tab.add_child(g._label("Поставь мебель как он просит — и получишь то, что не купить.", 12))
+	for ht in Game.HOUSE_TASKS:
+		var row := g._label("", 12)
+		_house_spirit_tab.add_child(row)
+		_task_rows[String(ht["id"])] = row
+	_guests_lbl = g._label("Пока никто не заглядывал.", 12)
+	_house_spirit_tab.add_child(_guests_lbl)
+	var scroll := ScrollContainer.new()
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size.y = 60
+	_house_spirit_tab.add_child(scroll)
+	_guests_row = HBoxContainer.new()
+	_guests_row.name = "GuestFriendActions"
+	_guests_row.add_theme_constant_override("separation", 8)
+	scroll.add_child(_guests_row)
+	_refresh_task_rows()
+
+
+func _refresh_house_screen() -> void:
 	for id in _theme_btns:
 		var b: Button = _theme_btns[id]
 		var sid := String(id)
@@ -567,26 +682,16 @@ func _refresh_house_page() -> void:
 		else:
 			_house_btn.text = "Построить домик Светика (−%d ⚡)" % Game.HOUSE_COST
 			_house_btn.disabled = false
-	if _furniture_shop != null:
-		_furniture_shop.visible = _cosmetic_house
-	if _collection_lbl != null:
-		_collection_lbl.visible = _cosmetic_house
-		_collection_lbl.text = "Коллекция: %d/%d · купленное ставится бесплатно" % [_collection_owned(), _collection_total()]
-	for id in _decor_cat_btns:
-		var cidx := String(id)
-		var b: Button = _decor_cat_btns[id]
-		b.disabled = not _cosmetic_house
-		b.text = "%s ✓" % _decor_label(cidx, _decor_current(cidx))
-		if _decor_cat_labels.has(cidx):
-			var cat := _decor_cat(cidx)
-			(_decor_cat_labels[cidx] as Label).text = "%s · %d/%d" % [String(cat.get("label", cidx)), _decor_owned_count(cidx), (cat.get("items", []) as Array).size()]
-		if _decor_cat_thumbs.has(cidx):
-			var th = _decor_cat_thumbs[cidx]
-			th.set_solo(_decor_current(cidx))
-	if _house_hint != null:
-		_house_hint.text = "Светик парит в домике. Выбирай обстановку и цвета — всё видно гостям." if _cosmetic_house \
-			else "Сначала построй домик — потом обставишь его."
-	_refresh_house_view()
+	if _house_overlay != null:
+		_house_overlay.visible = not _cosmetic_house
+	if _house_room != null:
+		_house_room.set_built(_cosmetic_house)
+		_house_room.set_layout(house_placements)
+		_house_room.set_room_tint(_cosmetic_wall, _cosmetic_floor)
+	if _house_spirit_node != null:
+		_house_spirit_node.visible = _cosmetic_house
+	if _house_affinity_lbl != null:
+		_house_affinity_lbl.text = g._spirit._companion_affinity_line()
 	_refresh_task_rows()
 
 
@@ -601,7 +706,7 @@ func _buy_theme(id: String, cost: int) -> void:
 	_cosmetic_theme = id
 	_theme_custom_on = false
 	_apply_cosmetic()
-	_refresh_house_page()
+	_refresh_house_screen()
 	g._engine._refresh()
 	g._saves._save_game()
 	_upload_house()
@@ -624,7 +729,7 @@ func _buy_aura(id: String, cost: int) -> void:
 	_cosmetic_aura = id
 	_aura_custom_on = false
 	_apply_cosmetic()
-	_refresh_house_page()
+	_refresh_house_screen()
 	g._engine._refresh()
 	g._saves._save_game()
 	_upload_house()
@@ -641,137 +746,16 @@ func _buy_house() -> void:
 		return
 	g._engine._spend_ether(Game.HOUSE_COST)
 	_cosmetic_house = true
+	for cat in HouseItems.CATS:
+		_unlock_item(String(cat))
+	house_placements = HouseLayout.default_placements()
 	_apply_cosmetic()
-	_refresh_house_page()
+	_refresh_house_screen()
 	g._engine._refresh()
 	g._saves._save_game()
 	_upload_house()
-	g._engine.status_text = "Домик готов! Светик теперь порхает над собственным гнёздышком."
+	_check_house_tasks()
 	Sfx.legendary()
-
-
-func _buy_furniture(cat_id: String, variant_id: String) -> void:
-	if not _cosmetic_house:
-		g._engine.status_text = "Сначала построй домик Светика."
-		Sfx.error()
-		return
-	# §1.4: reward-декор (Круг §2.2) не продаётся — только β-выдача
-	if bool(_decor_item(cat_id, variant_id).get("reward", false)):
-		return
-	if _decor_current(cat_id) == variant_id:
-		return
-	if _decor_owned(cat_id, variant_id):
-		# купленное ставится бесплатно
-		house_furniture[cat_id] = variant_id
-		_refresh_house_page()
-		g._engine._refresh()
-		g._saves._save_game()
-		_upload_house()
-		if _decor_popup != null and _decor_popup.visible and _decor_cat_open == cat_id:
-			_rebuild_decor_popup()
-		g._engine.status_text = "%s: «%s» — снова в домике!" % [_decor_cat(cat_id).get("label", cat_id), _decor_label(cat_id, variant_id)]
-		Sfx.click()
-		return
-	var cost := _decor_cost(cat_id, variant_id)
-	if g._engine._available_ether() < cost:
-		g._engine.status_text = "Не хватает эфира: %s стоит %d ⚡." % [_decor_label(cat_id, variant_id), cost]
-		Sfx.error()
-		return
-	g._engine._spend_ether(cost)
-	house_furniture[cat_id] = variant_id
-	_own_item(cat_id, variant_id)
-	_refresh_house_page()
-	g._engine._refresh()
-	g._saves._save_game()
-	_upload_house()
-	# магазин живьём: новый ✓ и обновлённое превью домика
-	if _decor_popup != null and _decor_popup.visible and _decor_cat_open == cat_id:
-		_rebuild_decor_popup()
-	g._engine.status_text = "%s: «%s» — теперь в домике!" % [_decor_cat(cat_id).get("label", cat_id), _decor_label(cat_id, variant_id)]
-	Sfx.stage_up()
-
-
-# ---------- магазин декора (отдельное окно на категорию) ----------
-
-func _open_decor_shop(cat_id: String) -> void:
-	if not _cosmetic_house:
-		g._engine.status_text = "Сначала построй домик Светика."
-		Sfx.error()
-		return
-	_decor_cat_open = cat_id
-	_rebuild_decor_popup()
-	if _decor_popup != null:
-		_decor_popup.visible = true
-	Sfx.click()
-
-
-func _rebuild_decor_popup() -> void:
-	if _decor_popup == null:
-		return
-	var cat := _decor_cat(_decor_cat_open)
-	_decor_title.text = String(cat.get("label", "Обстановка"))
-	_sync_house_view(_decor_preview)
-	var items: Array = cat.get("items", [])
-	# очистка списка
-	for child in _decor_list.get_children():
-		_decor_list.remove_child(child)
-		child.queue_free()
-	for it in items:
-		if bool(it.get("reward", false)):
-			continue  # награда Круга не продаётся (§1.4)
-		var item_id := String(it["id"])
-		var cur := _decor_current(_decor_cat_open) == item_id
-		var owned := _decor_owned(_decor_cat_open, item_id)
-		var card := HBoxContainer.new()
-		card.add_theme_constant_override("separation", 8)
-		_decor_list.add_child(card)
-		# превью силуэта варианта: видно, ЧТО покупаешь (п.2)
-		var frame := PanelContainer.new()
-		frame.custom_minimum_size = Vector2(104, 62)
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.05, 0.08, 0.12, 0.9)
-		sb.set_corner_radius_all(10)
-		sb.border_color = Color(1.0, 0.9, 0.4, 0.9) if cur else Color(0, 0, 0, 0.35)
-		sb.set_border_width_all(2 if cur else 1)
-		frame.add_theme_stylebox_override("panel", sb)
-		card.add_child(frame)
-		var prev := Game.HouseViewScript.new()
-		prev.animate = false
-		prev.set_editable(false)
-		prev.custom_minimum_size = Vector2(104, 62)
-		frame.add_child(prev)
-		prev.set_solo(item_id)
-		var lbl := g._label(String(it["label"]), 13)
-		lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
-		lbl.clip_text = true
-		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		card.add_child(lbl)
-		var btn := g._small_button("", Vector2(92, 40), 0 if cur else 1)
-		if cur:
-			btn.text = "Есть ✓"
-			btn.disabled = true
-		elif owned:
-			btn.text = "Поставить"
-			btn.pressed.connect(_buy_furniture.bind(_decor_cat_open, item_id))
-		else:
-			var cost := int(it["cost"])
-			btn.text = "%d ⚡" % cost
-			btn.pressed.connect(_buy_furniture.bind(_decor_cat_open, item_id))
-			# Отключаем кнопку, если эфира недостаточно — игрок видит серую кнопку
-			if g._engine._available_ether() < cost:
-				btn.disabled = true
-		card.add_child(btn)
-
-
-func _close_decor_popup() -> void:
-	if _decor_popup != null:
-		_decor_popup.visible = false
-	_refresh_house_page()
-	# после магазина — наверх страницы, к домику: результат выбора виден сразу (п.3)
-	if _house_screen != null and _house_screen.visible and _house_scroll != null:
-		_house_scroll.scroll_vertical = 0
-	Sfx.click()
 
 
 # ---------- палитра произвольных цветов ----------
@@ -833,7 +817,7 @@ func _confirm_color_picker() -> void:
 			elif t == "aura":
 				_aura_custom_on = _cp_old_on
 			_apply_cosmetic()
-			_refresh_house_page()
+			_refresh_house_screen()
 			g._engine._refresh()
 			_close_color_picker()
 			g._engine.status_text = "Кастомный цвет (%s) стоит %d ⚡ — пока не хватает." % [_cp_target_label(t), cost]
@@ -865,7 +849,7 @@ func _cancel_color_picker() -> void:
 	elif t == "aura":
 		_aura_custom_on = _cp_old_on
 	_apply_cosmetic()
-	_refresh_house_page()
+	_refresh_house_screen()
 	g._engine._refresh()
 	_close_color_picker()
 
@@ -902,7 +886,7 @@ func _set_custom_color(target: String, c: Color, persist := true) -> void:
 		"floor":
 			_cosmetic_floor = c
 	_apply_cosmetic()
-	_refresh_house_page()
+	_refresh_house_screen()
 	if persist:
 		g._saves._save_game()
 		_upload_house()
@@ -910,7 +894,7 @@ func _set_custom_color(target: String, c: Color, persist := true) -> void:
 
 func _swatch_button(hex: String) -> Button:
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(42, 42)
+	b.custom_minimum_size = Vector2(48, 48)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(hex)
 	sb.set_corner_radius_all(8)
@@ -924,23 +908,6 @@ func _swatch_button(hex: String) -> Button:
 # ---------- поручения дома (β) ----------
 
 const TASK_AFFINITY := 8   # дружба за выполненное поручение: валюта дома, не эфир (спека §1)
-
-
-static func _give_cat(item_id: String) -> String:
-	# id варианта = "<категория>" или "<категория>_<N>"; берём самую длинную подходящую
-	# префиксную категорию. `id + "_"` в условии — чтобы "chair_2" не свёлся к
-	# произвольному совпадению по началу строки.
-	# НЕ путать с HouseView._cat_of(item_id) (:354): та функция ищет категорию среди
-	# РАССТАВЛЕННЫХ предметов (читает `furniture`) и на пустом домике вернёт "misc".
-	# Здесь же нужен категори́я варианта по самому каталогу DECOR, независимо от того,
-	# куплен предмет, поставлен или нет, — поэтому это отдельная функция, а не вызов.
-	var best := ""
-	for c in Game.DECOR:
-		var cid := String(c["id"])
-		if item_id == cid or item_id.begins_with(cid + "_"):
-			if cid.length() > best.length():
-				best = cid
-	return best
 
 
 static func house_task_satisfied(task: Dictionary, placements: Array) -> bool:
@@ -1060,59 +1027,7 @@ func _upload_house() -> void:
 	Net.house_save(g._online._device_id, g._online._net_nick, _house_json())
 
 
-# ---------- окна: магазин декора / палитра / гостевой домик ----------
-
-func _build_decor_popup() -> void:
-	var root := Control.new()
-	root.name = "DecorPopup"
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.visible = false
-	root.mouse_filter = Control.MOUSE_FILTER_STOP
-	# Магазин — modal surface, а не обычный sibling страницы. Выводим его
-	# глобально поверх TabContainer, домика, фона и нижней панели.
-	root.z_as_relative = false
-	root.z_index = 100
-	g.add_child(root)
-	_decor_popup = root
-	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.55)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.z_index = 0
-	root.add_child(dim)
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	center.z_index = 1
-	root.add_child(center)
-	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", g._panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
-	center.add_child(card)
-	var col := VBoxContainer.new()
-	col.custom_minimum_size = Vector2(360, 0)
-	col.add_theme_constant_override("separation", 10)
-	card.add_child(col)
-	_decor_title = g._label("Обстановка", 18)
-	_decor_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(_decor_title)
-	# живое превью домика: результат выбора виден сразу, не выходя из магазина (п.3)
-	_decor_preview = Game.HouseViewScript.new()
-	_decor_preview.animate = false
-	_decor_preview.set_editable(false)
-	_decor_preview.custom_minimum_size = Vector2(0, 168)
-	col.add_child(_decor_preview)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 300)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	col.add_child(scroll)
-	# VBox с фиксированной шириной вместо GridContainer: сетка схлопывала колонку,
-	# подписи разъезжались в столбик, а строки растягивались (п.1)
-	_decor_list = VBoxContainer.new()
-	_decor_list.custom_minimum_size = Vector2(344, 0)
-	_decor_list.add_theme_constant_override("separation", 8)
-	scroll.add_child(_decor_list)
-	var close := g._small_button("Закрыть", Vector2(0, 46), 0)
-	close.pressed.connect(_close_decor_popup)
-	col.add_child(close)
-
+# ---------- окна: палитра / гостевой домик ----------
 
 func _build_color_picker() -> void:
 	var root := Control.new()
@@ -1177,6 +1092,7 @@ func _build_color_picker() -> void:
 		lab.custom_minimum_size = Vector2(18, 0)
 		row.add_child(lab)
 		var sl := HSlider.new()
+		sl.custom_minimum_size.y = 48
 		sl.min_value = 0.0
 		sl.max_value = 255.0
 		sl.step = 1.0
@@ -1189,7 +1105,7 @@ func _build_color_picker() -> void:
 			_cp_g = sl
 		else:
 			_cp_b = sl
-	var ok := g._small_button("Готово", Vector2(0, 46), 2)
+	var ok := g._small_button("Готово", Vector2(0, 48), 2)
 	ok.pressed.connect(_confirm_color_picker)
 	col.add_child(ok)
 	_cp_ok = ok
@@ -1226,7 +1142,7 @@ func _build_house_popup() -> void:
 	# нет ни хоста, ни актуального состояния визита — поэтому видимость и адресат
 	# назначаются при открытии домика (_open_player_house), а нажатие только
 	# подтверждает отметку и прячет кнопку: сам запрос шлёт _on_net_house_result.
-	_house_visit_btn = g._small_button("Засвидетельствовать визит", Vector2(0, 42), 1)
+	_house_visit_btn = g._small_button("Засвидетельствовать визит", Vector2(0, 48), 1)
 	_house_visit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_house_visit_btn.visible = false
 	_house_visit_btn.pressed.connect(func() -> void:
@@ -1234,11 +1150,41 @@ func _build_house_popup() -> void:
 		_house_visit_btn.visible = false
 	)
 	col.add_child(_house_visit_btn)
-	_house_popup_view = Game.HouseViewScript.new()
-	_house_popup_view.set_editable(false)
-	_house_popup_view.custom_minimum_size = Vector2(0, 260)
-	col.add_child(_house_popup_view)
-	var close := g._small_button("Закрыть", Vector2(0, 46), 0)
+	var room_host := Control.new()
+	room_host.custom_minimum_size = Vector2(0, 520)
+	col.add_child(room_host)
+	_house_popup_view = RoomView.new()
+	_house_popup_view.read_only = true
+	_house_popup_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	room_host.add_child(_house_popup_view)
+	_host_spirit = (load("res://game/home/companion.gd") as GDScript).new()
+	_host_spirit.size = Vector2(96, 96)
+	_host_spirit.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	room_host.add_child(_host_spirit)
+	_host_spirit.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_host_spirit.set_bubble_allowed(false)
+	var showcase := PanelContainer.new()
+	showcase.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	showcase.offset_top = -56
+	showcase.add_theme_stylebox_override("panel", _house_texture_style("res://assets/house/ui/velvet.png", 8))
+	room_host.add_child(showcase)
+	var row := HBoxContainer.new()
+	showcase.add_child(row)
+	var flame_host := Control.new()
+	flame_host.custom_minimum_size = Vector2(24, 40)
+	flame_host.tooltip_text = "Пламя витрины"
+	flame_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(flame_host)
+	_host_flame = Polygon2D.new()
+	_host_flame.polygon = PackedVector2Array([
+		Vector2(12, 38), Vector2(3, 30), Vector2(3, 23), Vector2(8, 15),
+		Vector2(9, 24), Vector2(15, 3), Vector2(17, 16), Vector2(22, 25), Vector2(21, 32)])
+	flame_host.add_child(_host_flame)
+	_host_showcase_lbl = g._label("", 12)
+	_host_showcase_lbl.name = "HostShowcase"
+	_host_showcase_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(_host_showcase_lbl)
+	var close := g._small_button("Закрыть", Vector2(0, 48), 0)
 	close.pressed.connect(_close_house_popup)
 	col.add_child(close)
 
@@ -1255,37 +1201,23 @@ func _color_from_hex(hex: String, fallback: Color) -> Color:
 func _apply_player_house(nick: String, h: Dictionary) -> void:
 	if _house_popup_view == null:
 		return
-	var built := bool(h.get("built", false))
+	var parsed := _parse_guest_house(h)
 	var wall := _color_from_hex(String(h.get("wall", "")), Color("#5a4d40"))
 	var floor := _color_from_hex(String(h.get("floor", "")), Color("#5d452f"))
 	var aura := _color_from_hex(String(h.get("aura_custom", "")), Color.TRANSPARENT)
 	if aura.a == 0.0 or aura == Color.TRANSPARENT:
 		aura = _aura_color(String(h.get("aura", "amber")))
-	# Серверный JSON может содержать только купленные варианты. Для гостевого
-	# просмотра сначала восстанавливаем дефолтный полный набор, иначе
-	# настольная лампа окажется без стола и ошибочно станет напольной.
-	var furn := {}
-	for c in Game.DECOR:
-		var default_cat := String(c["id"])
-		furn[default_cat] = _decor_default(default_cat)
-	if typeof(h.get("furniture")) == TYPE_DICTIONARY:
-		for k in h["furniture"]:
-			var cat := String(k)
-			var vid := String(h["furniture"][k])
-			var item := _decor_item(cat, vid)
-			if not item.is_empty() and String(item.get("id", "")) == vid:
-				furn[cat] = vid
-	var tex: Texture2D = g._spirit._companion.sprite_tex("idle") if g._spirit._companion != null else null
-	var layout: Dictionary = {}
-	if typeof(h.get("layout", {})) == TYPE_DICTIONARY:
-		layout = h.get("layout", {}) as Dictionary
-	# δ: гость видит и витрину хозяина — колбы первооткрытий и цвет пламени.
-	# Подпись окна гостю не показываем: цель дня гость не запрашивал.
-	var host_first := maxi(0, int(h.get("world_first", 0)))
-	_house_popup_view.set_display_data(mini(9, host_first), _showcase_flame_color(), "")
+	_house_popup_view.set_built(bool(parsed["built"]))
+	_house_popup_view.set_layout(parsed["items"])
+	_house_popup_view.set_room_tint(wall, floor)
+	_house_popup_view.reset_camera()
+	_house_popup_view.read_only = true
+	_host_spirit.visible = bool(parsed["built"])
+	_host_spirit.set_aura(aura)
 	_house_popup_title.text = "Домик: %s" % nick
-	_house_popup_view.set_state(built, furn, tex, aura, wall, floor, layout)
-	_house_popup_view.set_editable(false)
+	var host_first := maxi(0, int(h.get("world_first", 0)))
+	_host_showcase_lbl.text = "Колбы: %d · %s" % [mini(9, host_first), _showcase_window_caption()]
+	_host_flame.color = _showcase_flame_color()
 
 
 func _open_player_house(nick: String) -> void:

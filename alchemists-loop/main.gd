@@ -21,7 +21,6 @@ const TAB_RATING := 3
 const TAB_TOOLS := 4
 
 var BREW_SECONDS := 1.2
-const HouseViewScript := preload("res://game/home/house_view.gd")
 
 # --- данные живут в game/data/* (оп D); алиасы — ноль правок вызовов ---
 # Balance
@@ -112,7 +111,6 @@ const WORKSHOP_THEMES := DecorData.WORKSHOP_THEMES
 const WORKSHOP_AURAS := DecorData.WORKSHOP_AURAS
 const HOUSE_COST := DecorData.HOUSE_COST
 const CUSTOM_COSTS := DecorData.CUSTOM_COSTS
-const DECOR := DecorData.DECOR
 const COLOR_SWATCHES := DecorData.COLOR_SWATCHES
 # HouseTasksData (β)
 const HOUSE_TASKS := HouseTasksData.TASKS
@@ -548,6 +546,8 @@ func _ready() -> void:
 			_demo_harness._action_craftable = true
 		elif a == "--action=workshop":
 			_demo_harness._action_workshop = true
+		elif a == "--action=house_tray":
+			_demo_harness._action_house_tray = true
 		elif a == "--action=room_spike":
 			_demo_harness._action_room_spike = true
 		elif a == "--action=room_camera":
@@ -639,6 +639,16 @@ func _ready() -> void:
 			_demo_harness._sigil_tab = a.substr("--sigiltab=".length())
 		elif a.begins_with("--contractstate="):
 			_demo_harness._contract_state = a.substr("--contractstate=".length())
+	if _demo_harness._action_house_tray:
+		if not _selftest or not _demo_harness._demo or _demo_harness._shot_path == "":
+			push_error("house_tray requires --selftest --demo --shot")
+			get_tree().quit(1)
+			return
+		# UI-приёмка не запускает сюиты параллельно и не пишет демонстрацию в сейв.
+		SAVE_PATH = "user://alchemy_st_save.json"
+		TEMP_PATH = "user://alchemy_st_save.tmp"
+		BACKUP_PATH = "user://alchemy_st_save.bak"
+		_saves._save_frozen = true
 	_online._net_enabled = not _selftest
 	if _online._net_enabled:
 		_online._device_id = _online._load_device_id()
@@ -816,13 +826,10 @@ func _ready() -> void:
 		_engine.inventory["water"] = 2
 		_engine.inventory["earth"] = 2
 		_hub._open_craftable()
-	if _demo_harness._demo and _demo_harness._action_workshop:
-		_home._cosmetic_house = true
-		_home.house_furniture = {"window": "window", "rug": "rug_1", "lamp": "lamp", "plant": "plant",
-			"table": "table", "chair": "chair", "shelf": "shelf", "bed": "bed_3"}
-		_home.house_owned = {"rug": ["rug_1", "rug_4"], "bed": ["bed_3"]}
-		_home._apply_cosmetic()
-		_home._open_workshop()
+	if _demo_harness._demo and (_demo_harness._action_workshop or _demo_harness._action_house_tray):
+		_demo_harness._seed_house()
+		if not _demo_harness._action_house_tray:
+			_home._open_workshop()
 	if _demo_harness._demo and _demo_harness._action_rating:
 		if _tabs_ref != null:
 			_tabs_ref.current_tab = TAB_RATING
@@ -850,29 +857,16 @@ func _ready() -> void:
 		# FIX-E приёмка: экран дома + GuestFriendActions (row кнопок состояний
 		# рядом со строкой гостей) на том же посеве: «в друзьях»/«заявка
 		# отправлена»/«в друзья».
+		_demo_harness._seed_house()
 		_home._open_house_screen()
+		_home._open_house_tray()
+		_home._set_house_tab("spirit")
 		_home._on_house_profile(2, [{"nick": "Николя"}, {"nick": "Мирра"}, {"nick": "Некто"}])
-		# Строка гостей лежит глубоко в длинном скролле дома — дотягиваем её до
-		# кадра приёмки: через несколько кадров после раскладки прокручиваем
-		# HouseScroll так, чтобы GuestFriendActions встал у верхнего края
-		# (паттерн --scroll: кадр 20/40, съёмка на 50-м).
-		var _scroll_to_guests := func() -> void:
-			var sc: ScrollContainer = _home._house_scroll
-			if sc == null:
-				return
-			var row := sc.find_child("GuestFriendActions", true, false) as Control
-			if row == null:
-				return
-			var delta: float = row.get_global_transform_with_canvas().origin.y \
-				- sc.get_global_transform_with_canvas().origin.y
-			sc.scroll_vertical = maxi(0, int(sc.scroll_vertical + delta - 8))
-		get_tree().create_timer(0.25).timeout.connect(_scroll_to_guests)
 	if _demo_harness._demo and _demo_harness._action_decor:
-		_home._cosmetic_house = true
-		_home.house_owned = {"rug": ["rug_1"]}
-		_home._apply_cosmetic()
+		_demo_harness._seed_house()
 		_home._open_workshop()
-		_home._open_decor_shop(_demo_harness._decor_demo_cat)
+		_home._open_house_tray()
+		_home._set_shop_cat(_demo_harness._decor_demo_cat)
 	if _demo_harness._demo and _demo_harness._action_room_spike:
 		# Кадр — приёмка комнаты: гасим игровой UI (в параллельном selftest-прогоне
 		# лабораторный ящик «ВЫБРАТЬ РЕАГЕНТ» с z_index=2 ложится поверх
@@ -912,9 +906,9 @@ func _ready() -> void:
 		# документировать именно это следствие, а не подобранную константу.
 		cam.set_tray_lift(420.0)
 	if _demo_harness._demo and _demo_harness._action_guesthouse:
-		_home._apply_player_house("Люмина", {"built": true, "theme": "ember", "aura": "rose",
-			"wall": "#3f6d5a", "floor": "#4a3a28",
-			"furniture": {"window": "window_2", "rug": "rug_2", "bed": "bed_3", "lamp": "lamp_1", "plant": "plant_4"}})
+		_home._apply_player_house("Люмина", {"v": 2, "built": true, "theme": "ember", "aura": "rose",
+			"wall": "#3f6d5a", "floor": "#4a3a28", "world_first": 4,
+			"items": HouseLayout.default_placements()})
 		_home._house_popup.visible = true
 	if _demo_harness._demo and _demo_harness._action_palette:
 		_home._cosmetic_house = true
@@ -1080,7 +1074,8 @@ func _ready() -> void:
 			Net.atlas_today(_online._device_id)
 			Net.week_status(_online._device_id)
 	if _selftest:
-		_run_selftest()
+		if not _demo_harness._action_house_tray:
+			_run_selftest()
 	else:
 		# Вход в игру: приветственный звук (не в selftest-прогоне).
 		Sfx.game_start()
@@ -1231,6 +1226,8 @@ func _process(delta: float) -> void:
 		if _spirit._companion_idle_clock > 38.0:
 			_spirit._companion_idle_clock = 0.0
 			_spirit._companion_react("idle", "")
+	if _home != null:
+		_home._house_spirit_tick(delta)
 	if _demo_harness._tick_demo():
 		return
 	_engine.autosave_clock += delta
@@ -1543,7 +1540,8 @@ func _build_ui() -> void:
 	_engine._ether_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_engine._ether_label.clip_text = true
 	ether_row.add_child(_engine._ether_label)
-	var home_btn := _small_button("Дом", Vector2(82, 34), 2)
+	var home_btn := _small_button("Дом", Vector2(82, 48), 2)
+	home_btn.name = "HouseEntry"
 	home_btn.tooltip_text = "Дом Светика: построй домик, обставь его, смени тему и ауру"
 	home_btn.pressed.connect(_home._open_workshop)
 	ether_row.add_child(home_btn)
@@ -1620,7 +1618,6 @@ func _build_ui() -> void:
 	_saves._build_return_popup()
 	_hub._build_prestige_popup()
 	_home._build_house_screen()
-	_home._build_decor_popup()
 	_home._build_color_picker()
 	_home._build_house_popup()
 	_social_ui = SocialUI.new(self)
