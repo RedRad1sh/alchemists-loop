@@ -205,7 +205,13 @@ func _update_shadow() -> void:
 	if _shadow == null:
 		return
 	var wall := int(placement.get("wall", -1))
-	var plane := PlaneMesh.new()
+	# Правка 4: меш тени создаётся один раз и переиспользуется — apply() вызывается
+	# на каждом кадре перетаскивания (Task 13), аллоцировать PlaneMesh каждый раз
+	# расточительно. Дальше мутируем только size/transform.
+	var plane := _shadow.mesh as PlaneMesh
+	if plane == null:
+		plane = PlaneMesh.new()
+		_shadow.mesh = plane
 	if wall == 0:
 		plane.size = Vector2(_box.y + SHADOW_MARGIN, _box.x + SHADOW_MARGIN)
 		_shadow.rotation_degrees = Vector3(0.0, 0.0, -90.0)
@@ -219,7 +225,6 @@ func _update_shadow() -> void:
 		plane.size = Vector2(fp.size.x + SHADOW_MARGIN, fp.size.y + SHADOW_MARGIN)
 		_shadow.rotation_degrees = Vector3.ZERO
 		_shadow.position = Vector3(0.0, 0.01, 0.0)
-	_shadow.mesh = plane
 
 
 func _current_tint() -> Color:

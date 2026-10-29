@@ -52,38 +52,43 @@ static func _runtime(g: Game) -> void:
 	view.size = Vector2(540, 960)
 	g.add_child(view)
 	await g.get_tree().process_frame
+	# Все проверки дальше — null-safe: gate обязан краснить сломанные mirror/items
+	# через Selftest.check, а не падать на Nil и обрывать всю секцию.
 	Selftest.check("hv2 room view built the glb", view._room != null and view._mirror != null)
-	print("HV2 room aabb=", view._room_aabb)
 	Selftest.check("hv2 room aabb is non-empty", view._room_aabb.size.x > 6.0 and view._room_aabb.size.y > 2.0)
-	Selftest.check("hv2 room mirror flips y", is_equal_approx(view._mirror.scale.y, -1.0))
+	Selftest.check("hv2 room mirror flips y",
+		view._mirror != null and is_equal_approx(view._mirror.scale.y, -1.0))
 	view.set_built(true)
 	view.set_layout(HouseLayout.default_placements())
 	await g.get_tree().process_frame
 	Selftest.check("hv2 nine items spawned", view._items.size() == 9)
-	var first: FurnitureItem = view._items[0]
-	Selftest.check("hv2 item has a sprited box", first._sprite != null and first._sprite.mesh != null)
+	var first: FurnitureItem = view._items[0] if view._items.size() > 0 else null
+	Selftest.check("hv2 item has a sprited box",
+		first != null and first._sprite != null and first._sprite.mesh != null)
 	Selftest.check("hv2 item has a mirrored copy with scale.y=-1",
-		first._reflection != null and is_equal_approx(first._reflection.scale.y, -1.0))
-	Selftest.check("hv2 item has a planar shadow", first._shadow != null)
+		first != null and first._reflection != null and is_equal_approx(first._reflection.scale.y, -1.0))
+	Selftest.check("hv2 item has a planar shadow", first != null and first._shadow != null)
 	Selftest.check("hv2 camera fit is positive and covers the room",
-		view._fit_size > 5.0 and view._camera.size >= view._fit_size)
+		view._camera != null and view._fit_size > 5.0 and view._camera.size >= view._fit_size)
 	# Проверка правки 4: порядок отрисовки — жёсткий контракт кадра
 	# (зеркало −10, отражение −5, пол 0, тень +1, спрайт +5). Литералы, а не
 	# константы кода: сверка с константой краснела бы только от её удаления.
-	var order_ok := first._sprite_mat != null and first._sprite_mat.render_priority == 5 \
+	var order_ok := first != null \
+		and first._sprite_mat != null and first._sprite_mat.render_priority == 5 \
 		and first._reflection_mat != null and first._reflection_mat.render_priority == -5 \
 		and first._shadow_mat != null and first._shadow_mat.render_priority == 1
-	var mirror_ok := view._mirror != null and view._mirror.get_child_count() > 0
-	if mirror_ok:
-		mirror_ok = false
-		for node in (view._mirror.get_child(0) as Node).find_children("*", "MeshInstance3D", true, false):
-			var mi := node as MeshInstance3D
-			for i in mi.mesh.get_surface_count():
-				var mat := mi.mesh.surface_get_material(i) as BaseMaterial3D
-				if mat != null and mat.render_priority == -10:
-					mirror_ok = true
-	Selftest.check("hv2 draw order: mirror -10, reflection -5, shadow +1, sprite +5",
-		order_ok and mirror_ok)
+	Selftest.check("hv2 draw order: reflection -5, shadow +1, sprite +5", order_ok)
+	# Тотально: каждая видимая поверхность зеркала на −10 (пол в копии скрыт —
+	# старая проверка пропускала поверхности с приоритетом 0).
+	Selftest.check("hv2 draw order: every visible mirror surface is at -10",
+		_mirror_surfaces_all_at(view, -10))
+	# Пол реальной комнаты: TRANSPARENCY_ALPHA на приоритете 0 — без этого
+	# отражения (−5/−10) не просвечивают, а тень (+1) легла бы под пол.
+	Selftest.check("hv2 draw order: room floor is alpha-transparent at priority 0",
+		_floor_alpha_at_priority(view, 0))
+	# Регрессия (правка 2): тонировка одной комнаты не пишет в кэшированные
+	# ресурсы GLB и не заражает вторую комнату в том же процессе.
+	_tint_isolation(g)
 	# Стенной предмет стоит над полом на своей высоте, напольный — на y = 0.
 	var wall_item: FurnitureItem = null
 	var floor_item: FurnitureItem = null
@@ -95,13 +100,11 @@ static func _runtime(g: Game) -> void:
 			wall_item = fi
 		elif int(fi.placement.get("wall", -1)) < 0 and floor_item == null:
 			floor_item = fi
-	var planes_ok := wall_item != null and floor_item != null
+	var planes_ok := wall_item != null and floor_item != null \
+		and wall_item._sprite != null and floor_item._sprite != null
 	if planes_ok:
 		var wb: Vector3 = HouseItems.get_item(wall_item.item_id)["box"]
 		var want_y := float(wall_item.placement.get("y", 0.0)) - wb.y * 0.5
-		print("HV2 planes: wall=%s y=%.3f (placement y=%.3f, box.y=%.2f), floor=%s y=%.3f" % [
-			wall_item.item_id, wall_item.position.y, float(wall_item.placement.get("y", 0.0)),
-			wb.y, floor_item.item_id, floor_item.position.y])
 		planes_ok = want_y > 0.05 \
 			and is_equal_approx(wall_item.position.y, want_y) \
 			and is_equal_approx(floor_item.position.y, 0.0) \
@@ -109,6 +112,77 @@ static func _runtime(g: Game) -> void:
 	Selftest.check("hv2 wall item sits off the floor plane, floor item on it", planes_ok)
 	g.remove_child(view)
 	view.free()
+
+
+static func _mirror_surfaces_all_at(view: RoomView, want: int) -> bool:
+	if view._mirror == null or view._mirror.get_child_count() == 0:
+		return false
+	var surfaces := 0
+	for node in (view._mirror.get_child(0) as Node).find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if not mi.visible:
+			continue
+		for i in mi.mesh.get_surface_count():
+			var mat := mi.get_active_material(i) as BaseMaterial3D
+			if mat == null or mat.render_priority != want:
+				return false
+			surfaces += 1
+	return surfaces > 0
+
+
+static func _floor_alpha_at_priority(view: RoomView, want: int) -> bool:
+	if view._room == null:
+		return false
+	var surfaces := 0
+	for node in view._room.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if not String(mi.name).to_lower().contains("floor"):
+			continue
+		for i in mi.mesh.get_surface_count():
+			var mat := mi.get_active_material(i) as BaseMaterial3D
+			if mat == null or mat.transparency != BaseMaterial3D.TRANSPARENCY_ALPHA \
+					or mat.render_priority != want:
+				return false
+			surfaces += 1
+	return surfaces > 0
+
+
+static func _tint_isolation(g: Game) -> void:
+	var world_a := Node3D.new()
+	world_a.name = "TintIsolationWorldA"
+	var world_b := Node3D.new()
+	world_b.name = "TintIsolationWorldB"
+	g.add_child(world_a)
+	g.add_child(world_b)
+	var room_a: Node3D = RoomBuilder.build(world_a).get("room")
+	var room_b: Node3D = RoomBuilder.build(world_b).get("room")
+	if room_a == null or room_b == null:
+		Selftest.check("hv2 tinting one room does not contaminate another room", false)
+	else:
+		var probe_wall := Color(0.11, 0.85, 0.19)
+		var probe_floor := Color(0.87, 0.13, 0.62)
+		var before := []  # [MeshInstance3D, поверхность, albedo до тонировки]
+		for node in room_b.find_children("*", "MeshInstance3D", true, false):
+			var mi := node as MeshInstance3D
+			var lower := String(mi.name).to_lower()
+			if not (lower.contains("wall") or lower.contains("floor")):
+				continue
+			for i in mi.mesh.get_surface_count():
+				var mat := mi.get_active_material(i) as BaseMaterial3D
+				if mat != null:
+					before.append([mi, i, mat.albedo_color])
+		RoomBuilder.tint_room(room_a, probe_wall, probe_floor)
+		var clean := not before.is_empty()
+		for entry in before:
+			var mi := entry[0] as MeshInstance3D
+			var mat := mi.get_active_material(int(entry[1])) as BaseMaterial3D
+			if mat == null or mat.albedo_color != (entry[2] as Color):
+				clean = false
+		Selftest.check("hv2 tinting one room does not contaminate another room", clean)
+	g.remove_child(world_a)
+	world_a.free()
+	g.remove_child(world_b)
+	world_b.free()
 
 
 static func _save_and_guest(g: Game) -> void:

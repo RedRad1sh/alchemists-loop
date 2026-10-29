@@ -28,9 +28,13 @@ static func _prepare_floor(room: Node3D) -> void:
 		for i in mi.mesh.get_surface_count():
 			var mat := mi.mesh.surface_get_material(i)
 			if mat is BaseMaterial3D:
-				mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-				mat.render_priority = 0
-				mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+				# Правка 2: не пишем в кэшированный импорт GLB — дубликат материала
+				# ложится per-instance оверрайдом, второй экземпляр комнаты чист.
+				var dup := (mat as BaseMaterial3D).duplicate() as BaseMaterial3D
+				dup.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+				dup.render_priority = 0
+				dup.cull_mode = BaseMaterial3D.CULL_DISABLED
+				mi.set_surface_override_material(i, dup)
 
 
 static func _build_mirror(room: Node3D, world: Node3D) -> Node3D:
@@ -79,12 +83,15 @@ static func tint_room(room: Node3D, wall_tint: Color, floor_tint: Color) -> void
 		if col == Color.WHITE:
 			continue
 		for i in mi.mesh.get_surface_count():
-			var mat := mi.mesh.surface_get_material(i) as BaseMaterial3D
+			# Правка 2: за основу берём активный материал (оверрайд _prepare_floor
+			# несёт прозрачность пола), меняем только albedo, пишем оверрайдом —
+			# surface_set_material трогал бы общий кэшированный ArrayMesh.
+			var mat := mi.get_active_material(i) as BaseMaterial3D
 			if mat == null:
 				continue
 			var dup := mat.duplicate() as BaseMaterial3D
 			dup.albedo_color = col
-			mi.mesh.surface_set_material(i, dup)
+			mi.set_surface_override_material(i, dup)
 
 
 static func room_aabb(room: Node3D) -> AABB:
