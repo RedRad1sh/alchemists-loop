@@ -9,7 +9,27 @@ static func run(g: Game) -> void:
 	_layout()
 	_tasks()
 	_rewards(g)
+	_assets()
 	# дальше задачи добавляют свои секции
+
+
+static func _assets() -> void:
+	var missing: Array = []
+	for id in HouseItems.ITEMS:
+		var path := String(HouseItems.ITEMS[id]["sprite"])
+		if not ResourceLoader.exists(path):
+			missing.append(path)
+	Selftest.check("hv2 every catalog sprite exists", missing.is_empty())
+	Selftest.check("hv2 room glb exists",
+		ResourceLoader.exists("res://assets/house/room/room_with_ceiling.glb"))
+	Selftest.check("hv2 blob shadow exists",
+		ResourceLoader.exists("res://assets/house/shadows/blob_soft.png"))
+	var wrong_size: Array = []
+	for id in HouseItems.ITEMS:
+		var tex: Texture2D = load(String(HouseItems.ITEMS[id]["sprite"]))
+		if tex == null or tex.get_width() != 512 or tex.get_height() != 512:
+			wrong_size.append(String(id))
+	Selftest.check("hv2 every sprite is a 512 px square canvas", wrong_size.is_empty())
 
 
 static func _save_and_guest(g: Game) -> void:
