@@ -548,6 +548,8 @@ func _ready() -> void:
 			_demo_harness._action_craftable = true
 		elif a == "--action=workshop":
 			_demo_harness._action_workshop = true
+		elif a == "--action=room_spike":
+			_demo_harness._action_room_spike = true
 		elif a == "--action=rating":
 			_demo_harness._action_rating = true
 		elif a == "--action=decor":
@@ -869,6 +871,21 @@ func _ready() -> void:
 		_home._apply_cosmetic()
 		_home._open_workshop()
 		_home._open_decor_shop(_demo_harness._decor_demo_cat)
+	if _demo_harness._demo and _demo_harness._action_room_spike:
+		# Кадр — приёмка комнаты: гасим игровой UI (в параллельном selftest-прогоне
+		# лабораторный ящик «ВЫБРАТЬ РЕАГЕНТ» с z_index=2 ложится поверх
+		# SubViewportContainer, а приёмка требует кадр без оверлея).
+		var spike_margin := get_node_or_null("Margin")
+		if spike_margin != null:
+			spike_margin.visible = false
+		var spike := RoomView.new()
+		spike.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		# Поверх всего канваса: параллельный selftest-прогон роняет тосты («+Пар»)
+		# и ящики с z_index=2, приёмка комнаты требует кадр без оверлея.
+		spike.z_index = 100
+		add_child(spike)
+		spike.set_built(true)
+		spike.set_layout(HouseLayout.default_placements())
 	if _demo_harness._demo and _demo_harness._action_guesthouse:
 		_home._apply_player_house("Люмина", {"built": true, "theme": "ember", "aura": "rose",
 			"wall": "#3f6d5a", "floor": "#4a3a28",

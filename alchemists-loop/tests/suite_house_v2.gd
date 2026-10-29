@@ -10,6 +10,7 @@ static func run(g: Game) -> void:
 	_tasks()
 	_rewards(g)
 	_assets()
+	await _runtime(g)
 	# дальше задачи добавляют свои секции
 
 
@@ -30,6 +31,84 @@ static func _assets() -> void:
 		if tex == null or tex.get_width() != 512 or tex.get_height() != 512:
 			wrong_size.append(String(id))
 	Selftest.check("hv2 every sprite is a 512 px square canvas", wrong_size.is_empty())
+	var missing_ui: Array = []
+	for path in ["res://assets/house/ui/wood_panel.png", "res://assets/house/ui/velvet.png"]:
+		if not ResourceLoader.exists(path):
+			missing_ui.append(path)
+	Selftest.check("hv2 tray textures exist", missing_ui.is_empty())
+	var opaque_corner: Array = []
+	for id in HouseItems.ITEMS:
+		var path := String(HouseItems.ITEMS[id]["sprite"])
+		# get_image() у импортированной текстуры возвращает сжатый в VRAM образ,
+		# из него нельзя читать пиксели — читаем исходный файл.
+		var img := Image.load_from_file(ProjectSettings.globalize_path(path))
+		if img == null or img.get_pixelv(Vector2i(0, 0)).a != 0.0:
+			opaque_corner.append(String(id))
+	Selftest.check("hv2 every item sprite has a transparent canvas corner", opaque_corner.is_empty())
+
+
+static func _runtime(g: Game) -> void:
+	var view := RoomView.new()
+	view.size = Vector2(540, 960)
+	g.add_child(view)
+	await g.get_tree().process_frame
+	Selftest.check("hv2 room view built the glb", view._room != null and view._mirror != null)
+	print("HV2 room aabb=", view._room_aabb)
+	Selftest.check("hv2 room aabb is non-empty", view._room_aabb.size.x > 6.0 and view._room_aabb.size.y > 2.0)
+	Selftest.check("hv2 room mirror flips y", is_equal_approx(view._mirror.scale.y, -1.0))
+	view.set_built(true)
+	view.set_layout(HouseLayout.default_placements())
+	await g.get_tree().process_frame
+	Selftest.check("hv2 nine items spawned", view._items.size() == 9)
+	var first: FurnitureItem = view._items[0]
+	Selftest.check("hv2 item has a sprited box", first._sprite != null and first._sprite.mesh != null)
+	Selftest.check("hv2 item has a mirrored copy with scale.y=-1",
+		first._reflection != null and is_equal_approx(first._reflection.scale.y, -1.0))
+	Selftest.check("hv2 item has a planar shadow", first._shadow != null)
+	Selftest.check("hv2 camera fit is positive and covers the room",
+		view._fit_size > 5.0 and view._camera.size >= view._fit_size)
+	# Проверка правки 4: порядок отрисовки — жёсткий контракт кадра
+	# (зеркало −10, отражение −5, пол 0, тень +1, спрайт +5). Литералы, а не
+	# константы кода: сверка с константой краснела бы только от её удаления.
+	var order_ok := first._sprite_mat != null and first._sprite_mat.render_priority == 5 \
+		and first._reflection_mat != null and first._reflection_mat.render_priority == -5 \
+		and first._shadow_mat != null and first._shadow_mat.render_priority == 1
+	var mirror_ok := view._mirror != null and view._mirror.get_child_count() > 0
+	if mirror_ok:
+		mirror_ok = false
+		for node in (view._mirror.get_child(0) as Node).find_children("*", "MeshInstance3D", true, false):
+			var mi := node as MeshInstance3D
+			for i in mi.mesh.get_surface_count():
+				var mat := mi.mesh.surface_get_material(i) as BaseMaterial3D
+				if mat != null and mat.render_priority == -10:
+					mirror_ok = true
+	Selftest.check("hv2 draw order: mirror -10, reflection -5, shadow +1, sprite +5",
+		order_ok and mirror_ok)
+	# Стенной предмет стоит над полом на своей высоте, напольный — на y = 0.
+	var wall_item: FurnitureItem = null
+	var floor_item: FurnitureItem = null
+	for it in view._items:
+		var fi := it as FurnitureItem
+		if fi == null:
+			continue
+		if int(fi.placement.get("wall", -1)) >= 0 and wall_item == null:
+			wall_item = fi
+		elif int(fi.placement.get("wall", -1)) < 0 and floor_item == null:
+			floor_item = fi
+	var planes_ok := wall_item != null and floor_item != null
+	if planes_ok:
+		var wb: Vector3 = HouseItems.get_item(wall_item.item_id)["box"]
+		var want_y := float(wall_item.placement.get("y", 0.0)) - wb.y * 0.5
+		print("HV2 planes: wall=%s y=%.3f (placement y=%.3f, box.y=%.2f), floor=%s y=%.3f" % [
+			wall_item.item_id, wall_item.position.y, float(wall_item.placement.get("y", 0.0)),
+			wb.y, floor_item.item_id, floor_item.position.y])
+		planes_ok = want_y > 0.05 \
+			and is_equal_approx(wall_item.position.y, want_y) \
+			and is_equal_approx(floor_item.position.y, 0.0) \
+			and wall_item._sprite.global_position.y > floor_item._sprite.global_position.y + 0.5
+	Selftest.check("hv2 wall item sits off the floor plane, floor item on it", planes_ok)
+	g.remove_child(view)
+	view.free()
 
 
 static func _save_and_guest(g: Game) -> void:

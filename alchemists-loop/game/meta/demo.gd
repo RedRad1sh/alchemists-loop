@@ -31,6 +31,7 @@ var _action_journal := false
 var _action_settings := false
 var _action_craftable := false
 var _action_workshop := false
+var _action_room_spike := false
 var _action_rating := false
 var _action_decor := false
 var _decor_demo_cat := "rug"
