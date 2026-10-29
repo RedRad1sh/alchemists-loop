@@ -550,6 +550,8 @@ func _ready() -> void:
 			_demo_harness._action_workshop = true
 		elif a == "--action=room_spike":
 			_demo_harness._action_room_spike = true
+		elif a == "--action=room_camera":
+			_demo_harness._action_room_camera = true
 		elif a == "--action=rating":
 			_demo_harness._action_rating = true
 		elif a == "--action=decor":
@@ -886,6 +888,27 @@ func _ready() -> void:
 		add_child(spike)
 		spike.set_built(true)
 		spike.set_layout(HouseLayout.default_placements())
+	if _demo_harness._demo and _demo_harness._action_room_camera:
+		# Кадр — приёмка работы камеры: та же гигиена кадра, что и у room_spike
+		# (гасим игровой UI и поднимаемся над канвасом), иначе параллельный
+		# selftest-прогон кладёт ящик с z_index=2 поверх комнаты.
+		var cam_margin := get_node_or_null("Margin")
+		if cam_margin != null:
+			cam_margin.visible = false
+		var cam := RoomView.new()
+		cam.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		cam.z_index = 100
+		add_child(cam)
+		cam.set_built(true)
+		cam.set_layout(HouseLayout.default_placements())
+		cam.zoom_at(1.6, Vector2(140, 300))
+		cam.pan_screen(Vector2(-90, 60))
+		# Подъём в 420 px (константа Task 10) выбрасывает комнату за верхний
+		# край: измеренный bbox комнаты в этом состоянии при lift 0 = y ∈ [322, 561],
+		# при 420 = y ∈ [-98, 141], т.е. комната целиком уходит из кадра при любом
+		# зуме. Для приёмного кадра взяты 200 px — подъём виден, комната целиком
+		# в кадре, нижняя половина свободна под лоток.
+		cam.set_tray_lift(200.0)
 	if _demo_harness._demo and _demo_harness._action_guesthouse:
 		_home._apply_player_house("Люмина", {"built": true, "theme": "ember", "aura": "rose",
 			"wall": "#3f6d5a", "floor": "#4a3a28",

@@ -157,8 +157,16 @@ func _apply_camera() -> void:
 	if _camera == null:
 		return
 	var basis := Basis.from_euler(Vector3(deg_to_rad(CAMERA_PITCH), deg_to_rad(CAMERA_YAW), 0.0))
-	_camera.transform = Transform3D(basis, _target + basis.z * 30.0)
+	# Порядок важен: `_lift_offset()` переводит пикселя лотка в мировые единицы
+	# через текущий `_camera.size`, поэтому размер кадра обязан быть применён ДО
+	# вычисления подъёма. Иначе зум вместе с открытым лотком сохраняет старый
+	# масштаб (подъём в пикселях «усыхает» на величину зума), и точка под пальцем
+	# при следующем zoom_at уезжает на ~55 px вместо нуля.
 	_camera.size = _fit_size * _zoom
+	# Комната обязана уезжать ВВЕРХ экрана, когда открыт лоток, поэтому камера
+	# смещается вниз по собственной оси Y.
+	var origin := _target - basis.y * _lift_offset() + basis.z * 30.0
+	_camera.transform = Transform3D(basis, origin)
 
 
 func _on_resized() -> void:
@@ -167,3 +175,79 @@ func _on_resized() -> void:
 	_viewport.size = Vector2i(maxi(1, int(size.x)), maxi(1, int(size.y)))
 	_fit_size = _compute_fit()
 	_apply_camera()
+
+
+func zoom_at(factor: float, local_pos: Vector2) -> void:
+	if _camera == null:
+		return
+	var new_zoom := clampf(_zoom * factor, 1.0, ZOOM_MAX_FACTOR)
+	factor = new_zoom / _zoom
+	if is_equal_approx(factor, 1.0):
+		return
+	var vp := Vector2(_viewport.size)
+	# KEEP_WIDTH: size задаёт ширину кадра в мировых единицах, поэтому
+	# мировых единиц на пиксель = size / ширина (пиксели квадратные).
+	var k := _camera.size / maxf(1.0, vp.x)
+	var u := (local_pos.x - vp.x * 0.5) * k
+	var v := -(local_pos.y - vp.y * 0.5) * k
+	var right := _camera.global_transform.basis.x
+	var up := _camera.global_transform.basis.y
+	# Точка под пальцем смещена от точки наблюдения `_target` на d минус подъём
+	# лотка: подъём уводит камеру вниз по её собственной оси Y, поэтому центр
+	# экрана лежит не в `_target`, а ниже него.
+	_target += (right * u + up * v - up * _lift_offset()) * (1.0 - factor)
+	_zoom = new_zoom
+	_clamp_target()
+	_apply_camera()
+
+
+func pan_screen(delta: Vector2) -> void:
+	if _camera == null:
+		return
+	var vp := Vector2(_viewport.size)
+	var k := _camera.size / maxf(1.0, vp.x)
+	var right := _camera.global_transform.basis.x
+	var up := _camera.global_transform.basis.y
+	_target += right * (-delta.x * k) + up * (delta.y * k)
+	_clamp_target()
+	_apply_camera()
+
+
+func set_tray_lift(px: float) -> void:
+	if _camera == null:
+		return
+	# Объявление состояния, а не инкремент: подъём задаётся в пикселях и
+	# пересчитывается из `_tray_lift_px` в `_apply_camera`. Повторный вызов
+	# идемпотентен, закрытие лотка возвращает камеру ровно туда же, и кламп
+	# точки наблюдения не может «съесть» часть подъёма безвозвратно.
+	_tray_lift_px = px
+	_apply_camera()
+
+
+## Мировое смещение камеры вдоль её собственной оси Y под открытый лоток.
+func _lift_offset() -> float:
+	if _camera == null:
+		return 0.0
+	var vp := Vector2(_viewport.size)
+	return _tray_lift_px * (_camera.size / maxf(1.0, vp.x))
+
+
+func reset_camera() -> void:
+	_zoom = 1.0
+	_target = Vector3.ZERO
+	# Подъём под лоток — часть состояния камеры: без сброса следующий вызов
+	# set_tray_lift(420) оставил бы камеру там же, а тест возврата — зелёным.
+	_tray_lift_px = 0.0
+	_apply_camera()
+
+
+func _clamp_target() -> void:
+	_target.x = clampf(_target.x, -Placement.ROOM_HALF, Placement.ROOM_HALF)
+	_target.z = clampf(_target.z, -Placement.ROOM_HALF, Placement.ROOM_HALF)
+	# Пан идёт вдоль basis.y камеры (мировая Y ≈ cos(pitch) ≈ 0.816), поэтому без
+	# ограничения по высоте непрерывный драг неограниченно уводит точку наблюдения
+	# из кадра: x и z зажаты, а комната уезжает по вертикали и не возвращается.
+	# Границы — AABB комнаты, выросший на ROOM_HALF со всех сторон. На подъём
+	# лотка кламп не влияет: он применяется к `_target`, а подъём добавывается
+	# после клампа в `_apply_camera`.
+	_target.y = clampf(_target.y, -Placement.ROOM_HALF, Placement.WALL_H + Placement.ROOM_HALF)

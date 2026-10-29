@@ -11,6 +11,7 @@ static func run(g: Game) -> void:
 	_rewards(g)
 	_assets()
 	await _runtime(g)
+	await _camera(g)
 	# дальше задачи добавляют свои секции
 
 
@@ -110,6 +111,75 @@ static func _runtime(g: Game) -> void:
 			and is_equal_approx(floor_item.position.y, 0.0) \
 			and wall_item._sprite.global_position.y > floor_item._sprite.global_position.y + 0.5
 	Selftest.check("hv2 wall item sits off the floor plane, floor item on it", planes_ok)
+	g.remove_child(view)
+	view.free()
+
+
+static func _camera(g: Game) -> void:
+	var view := RoomView.new()
+	view.size = Vector2(540, 960)
+	g.add_child(view)
+	await g.get_tree().process_frame
+	var fit := view._fit_size
+	var before := view._camera.size
+	view.zoom_at(1.2, Vector2(270, 480))
+	Selftest.check("hv2 zoom clamps between fit and 2.2x",
+		view._camera.size > before and view._camera.size <= fit * 2.2 + 0.001)
+	view.zoom_at(100.0, Vector2(270, 480))
+	Selftest.check("hv2 max zoom is fit * 2.2",
+		is_equal_approx(view._camera.size, fit * 2.2))
+	view.zoom_at(1e-6, Vector2(270, 480))
+	Selftest.check("hv2 min zoom is fit", is_equal_approx(view._camera.size, fit))
+	var target0 := view._target
+	view.pan_screen(Vector2(60, 0))
+	Selftest.check("hv2 pan moves the target", view._target.distance_to(target0) > 0.001)
+	view.pan_screen(Vector2(10000, 10000))
+	Selftest.check("hv2 pan stays inside the room bounds",
+		absf(view._target.x) <= Placement.ROOM_HALF and absf(view._target.z) <= Placement.ROOM_HALF)
+	# Пан идёт вдоль basis.y камеры, у которой мировая Y ≈ cos(pitch) ≈ 0.816:
+	# без клампа по высоте тот же мега-пан уводит точку наблюдения на сотни
+	# метров, x и z при этом зажаты, и проверка выше остаётся зелёной.
+	Selftest.check("hv2 pan keeps the look-at height inside the grown room box",
+		view._target.y >= -Placement.ROOM_HALF - 0.001
+		and view._target.y <= Placement.WALL_H + Placement.ROOM_HALF + 0.001)
+	view.reset_camera()
+	Selftest.check("hv2 reset returns to fit", is_equal_approx(view._camera.size, view._fit_size))
+	Selftest.check("hv2 reset returns the look-at to the room centre",
+		view._target.is_zero_approx() and is_zero_approx(view._tray_lift_px))
+	var p0 := view.spirit_screen_pos()
+	view.zoom_at(1.5, Vector2(270, 480))
+	var p1 := view.spirit_screen_pos()
+	Selftest.check("hv2 spirit screen position follows the camera",
+		p0.distance_to(p1) > 0.5)
+	# Открытый лоток закрывает низ экрана, поэтому комната обязана уезжать
+	# ВВЕРХ: экранные координаты духа после set_tray_lift(+) меньше по Y.
+	view.set_tray_lift(420.0)
+	var p2 := view.spirit_screen_pos()
+	Selftest.check("hv2 tray lift moves the room up the screen",
+		is_equal_approx(p2.x, p1.x) and p2.y < p1.y - 1.0)
+	view.set_tray_lift(0.0)
+	var p3 := view.spirit_screen_pos()
+	Selftest.check("hv2 closing the tray puts the room back exactly",
+		is_equal_approx(p1.x, p3.x) and is_equal_approx(p1.y, p3.y))
+	# Якорь зума: мировая точка под пальцем обязана остаться под пальцем.
+	# Проверки размера кадра выше этого не видят — они зелёны и при неверном
+	# якоре, поэтому тут отдельная проверка проекции до/после zoom_at.
+	view.reset_camera()
+	var anchor := view.spirit_anchor()
+	var q0 := view._camera.unproject_position(anchor)
+	view.zoom_at(1.6, q0)
+	var q1 := view._camera.unproject_position(anchor)
+	Selftest.check("hv2 zoom keeps the point under the finger",
+		q0.distance_to(q1) <= 1.0)
+	# Тот же якорь при открытом лотке: подъём входит в якорную поправку
+	# zoom_at (член -up*_lift_offset()), без него точка под пальцем уезжает
+	# на десятки пикселей, а проверка без лотка этого не заметит.
+	view.set_tray_lift(200.0)
+	var q2 := view._camera.unproject_position(anchor)
+	view.zoom_at(1.5, q2)
+	var q3 := view._camera.unproject_position(anchor)
+	Selftest.check("hv2 zoom keeps the point under the finger while the tray is lifted",
+		q2.distance_to(q3) <= 1.0)
 	g.remove_child(view)
 	view.free()
 
