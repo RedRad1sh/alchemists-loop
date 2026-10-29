@@ -123,11 +123,11 @@ static func _camera(g: Game) -> void:
 	var fit := view._fit_size
 	var before := view._camera.size
 	view.zoom_at(1.2, Vector2(270, 480))
-	Selftest.check("hv2 zoom clamps between fit and 2.2x",
-		view._camera.size > before and view._camera.size <= fit * 2.2 + 0.001)
+	Selftest.check("hv2 zoom magnifies and clamps at 2.2x",
+		view._camera.size < before and view._camera.size >= fit / 2.2 - 0.001)
 	view.zoom_at(100.0, Vector2(270, 480))
-	Selftest.check("hv2 max zoom is fit * 2.2",
-		is_equal_approx(view._camera.size, fit * 2.2))
+	Selftest.check("hv2 max zoom magnifies 2.2x",
+		is_equal_approx(view._camera.size, fit / 2.2))
 	view.zoom_at(1e-6, Vector2(270, 480))
 	Selftest.check("hv2 min zoom is fit", is_equal_approx(view._camera.size, fit))
 	var target0 := view._target
