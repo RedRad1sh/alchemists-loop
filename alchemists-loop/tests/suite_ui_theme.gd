@@ -404,7 +404,7 @@ static func _text_color_key(node: Control) -> String:
 
 
 static func _scan_cold(node: Node, offenders: Array, scanned: Array) -> void:
-	if node is Control:
+	if node is Control and not node.has_meta("content_color"):
 		var key := _text_color_key(node)
 		if key != "":
 			var c: Color = (node as Control).get_theme_color(key)

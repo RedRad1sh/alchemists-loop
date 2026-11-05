@@ -355,6 +355,15 @@ static func run(g: Game) -> void:
 	var picker_bounds := g._pages._experiment_drawer.get_global_rect()
 	Selftest.check("reagent selection uses the full screen body",
 			picker_bounds.size.y >= field.size.y * 0.9)
+	# Выбор реагента кладёт его на поле, но лист остаётся открытым: игрок
+	# набирает несколько веществ подряд и закрывает лист сам («Готово»).
+	g._engine.inventory["fire"] = maxi(int(g._engine.inventory.get("fire", 0)), 3)
+	var picks_before := g._pages._experiment_tokens.size()
+	g._pages._select_experiment_item("fire")
+	g._pages._select_experiment_item("fire")
+	Selftest.check("picking reagents keeps the picker open for more",
+			g._pages._experiment_drawer.visible
+			and g._pages._experiment_tokens.size() == picks_before + 2)
 	g._pages._toggle_experiment_drawer()
 	Selftest.check("closing selection returns to the field not the room",
 			g._screens.is_open() and field.is_visible_in_tree()
@@ -392,14 +401,16 @@ static func run(g: Game) -> void:
 	var saved_recent := g._pages._experiment_recent_ids.duplicate()
 	g._pages._set_experiment_filter("all")
 	g._pages._experiment_position_rng.seed = 8124
+	g._pages._show_experiment_drawer()
 	for i in 12:
-		g._pages._show_experiment_drawer()
 		var cell := g._pages._experiment_reagent_grid.get_node_or_null("ReagentCell_fire") as Button
 		if cell != null:
 			cell.pressed.emit()
+	var picker_stayed := g._pages._experiment_drawer.visible
+	g._pages._toggle_experiment_drawer()
 	Selftest.check("selecting reagents returns visible tokens to the field",
 			g._pages._experiment_tokens.size() == saved_token_count + 12
-			and not g._pages._experiment_drawer.visible
+			and picker_stayed and not g._pages._experiment_drawer.visible
 			and g._pages._experiment_cauldron.is_visible_in_tree())
 	var field_bounds := Rect2(Vector2.ZERO, field.size)
 	var pot_bounds := Rect2(g._pages._experiment_cauldron.position,

@@ -891,9 +891,8 @@ func _experiment_can_take(item_id: String) -> bool:
 
 
 func _select_experiment_item(item_id: String) -> void:
-	_experiment_drawer.hide()
-	_set_experiment_picker_field_chrome()
 	_experiment_spawn_token(item_id)
+	_refresh_experiment_drawer()
 
 
 func _on_experiment_source_tapped(_orb: ElementOrb, item_id: String) -> void:
