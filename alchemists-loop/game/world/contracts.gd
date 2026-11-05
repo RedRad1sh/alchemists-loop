@@ -410,13 +410,7 @@ func spring_yield(now_unix: int = -1) -> int:
 
 # §4.4: id декора обязан существовать в каталоге до выдачи.
 static func decor_exists(decor_id: String) -> bool:
-	if decor_id == "":
-		return false
-	for cat in DecorData.DECOR:
-		for item in (cat as Dictionary).get("items", []):
-			if str((item as Dictionary).get("id", "")) == decor_id:
-				return true
-	return false
+	return HouseItems.exists(decor_id)
 
 # ---------- §3.4/§4.4 выдача награды ----------
 # Отметку ставим ДО выдачи. Второй тап, пришедший во время первого, обязан
@@ -459,13 +453,13 @@ func claim(id: String, now: Dictionary = {}, now_unix: int = -1) -> Dictionary:
 	var missing := false
 	if decor_id != "":
 		if not decor_exists(decor_id):
-			# §4.4: в house_owned фантом не пишем — _decor_owned_count считает
-			# владение по этому же массиву и завысил бы счётчик коллекции.
+			# §4.4: фантомный id не выдаём ни во владение, ни в журнал —
+			# несуществующий id только испортил бы счётчик коллекции.
 			missing = true
 			Analytics.track("contract_decor_missing",
 				{"contract_id": id, "decor_id": decor_id})
 		else:
-			g._home._own_item("window", decor_id)
+			g._home._unlock_item(decor_id)
 			if not _unlocked_decor.has(decor_id):
 				_unlocked_decor.append(decor_id)
 	# §1 (доска v2, строки 7–8): у pinned-строк недельного слоя у табличной
@@ -1034,9 +1028,8 @@ func _clean_decor(raw: Variant) -> Array:
 		var id := String(entry)
 		if id == "" or not decor_exists(id) or out.has(id):
 			continue
-		# Если каталог когда-нибудь уберёт id, журнал доски потеряет его, а Дом —
-		# нет: _own_item уже сделал предмет владением навсегда, и повторная
-		# выдача дедуплицируется (home.gd:173).
+		# Если каталог уберёт id, журнал доски потеряет его, а Дом — нет:
+		# _unlock_item выдал его навсегда, повтор режет house_unlocked.has(id) (home.gd:978).
 		out.append(id)
 	return out
 
@@ -1656,7 +1649,7 @@ func _migrate_missed_milestones() -> void:
 			if rank_level() >= int(rank["level"]):
 				_active_title = title
 			if Game.CIRCLE_DECOR_REWARDS.has(m):
-				g._home._own_item("fireplace", String(Game.CIRCLE_DECOR_REWARDS[m]))
+				g._home._unlock_item(String(Game.CIRCLE_DECOR_REWARDS[m]))
 	# Points milestones
 	for i in range(_mpts):
 		if i >= Game.CIRCLE_PTS_MILES.size():
@@ -1722,7 +1715,7 @@ func _celebrate_mile(kind: String, m: int) -> void:
 		Analytics.track("circle_rank_up", {"rank_name": title, "days": _visit_days.size(),
 			"points": _pts_total})
 		if kind == "дней" and Game.CIRCLE_DECOR_REWARDS.has(m):
-			g._home._own_item("fireplace", String(Game.CIRCLE_DECOR_REWARDS[m]))
+			g._home._unlock_item(String(Game.CIRCLE_DECOR_REWARDS[m]))
 	g._saves._save_game()
 	refresh_board()
 	g._engine._refresh()

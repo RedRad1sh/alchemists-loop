@@ -37,11 +37,7 @@ static func _materials_base_cost(g: Game, mats: Dictionary) -> int:
 	return total
 
 static func _decor_item(decor_id: String) -> Dictionary:
-	for cat in DecorData.DECOR:
-		for item in (cat as Dictionary).get("items", []):
-			if str((item as Dictionary).get("id", "")) == decor_id:
-				return (item as Dictionary)
-	return {}
+	return HouseItems.get_item(decor_id)
 
 # Сюита меняет живое состояние игры, поэтому каждый блок обязан снимать снимок
 # и восстанавливать его: иначе краснеют сюиты дальше по await-списку, а не та,
@@ -413,7 +409,7 @@ static func run(g: Game) -> void:
 			decor_ok = false
 		if str(ContractsBalance.DECOR_LABEL.get(String(id), "")) == "":
 			decor_ok = false
-	Selftest.check("§3.4 every decor id exists in DecorData as a reward-only window (cost 0)", decor_ok)
+	Selftest.check("§3.4 every decor id exists in HouseItems as a reward-only window (cost 0)", decor_ok)
 
 	# ---------------- заголовки для UI ----------------
 	var title_ok := true
@@ -621,7 +617,7 @@ static func run(g: Game) -> void:
 	}
 	var t3_env := {
 		"inv": g._engine.inventory.duplicate(true),
-		"owned": g._home.house_owned.duplicate(true),
+		"unlocked": g._home.house_unlocked.duplicate(),
 		"net": g._online._net_enabled, "avail": Net.is_available(),
 		"dev": g._online._device_id, "status": g._engine.status_text,
 	}
@@ -781,7 +777,7 @@ static func run(g: Game) -> void:
 	g._online._device_id = String(t3_env["dev"])
 	g._engine.status_text = String(t3_env["status"])
 	g._engine.inventory = (t3_env["inv"] as Dictionary).duplicate(true)
-	g._home.house_owned = (t3_env["owned"] as Dictionary).duplicate(true)
+	g._home.house_unlocked = t3_env["unlocked"]
 	g._contracts._week_cache = t3_week["week_cache"]
 	g._contracts._cycle_cache = t3_week["cycle_cache"]
 	g._contracts._vein_finds = t3_week["vein_finds"]
@@ -1065,9 +1061,9 @@ static func run(g: Game) -> void:
 		g._contracts != null and g._contracts.g == g)
 	# доска v2 Task 6 (спека §6): блок переехал на v2 — чинит 17 новых ключей.
 	Selftest.check("§4.1 CONTRACTS_SAVE_VERSION is 2", Contracts.CONTRACTS_SAVE_VERSION == 2)
-	# доска v2 Task 6: формат сейва поднялся до 5; v4-файлы остаются читаемыми
+	# доска v2 Task 6: формат сейва поднялся до 6; v5-файлы остаются читаемыми
 	# (гейт _read_save принимает 1..SAVE_VERSION) и мигрируют presence-based.
-	Selftest.check("§6 Game.SAVE_VERSION is 5", Game.SAVE_VERSION == 5)
+	Selftest.check("§6 Game.SAVE_VERSION is 6", Game.SAVE_VERSION == 6)
 	# Живой экземпляр генерирует сегодняшний набор при первом обращении.
 	# доска v2: размер ряда 3/2→4/4, условие названо литералом.
 	Selftest.check("§1.4 the live instance generates 4 daily and 4 weekly on first access",
@@ -1130,7 +1126,7 @@ static func run(g: Game) -> void:
 
 	# ---------------- §3.4 декор ----------------
 	Selftest.check("§3.4 decor_exists is true for a real reward id and false for a made-up one",
-		Contracts.decor_exists("window_contract") and Contracts.decor_exists("fireplace_ember")
+		Contracts.decor_exists("window_contract") and Contracts.decor_exists("planetarium_ember")
 		and not Contracts.decor_exists("window_does_not_exist"))
 
 	# Награда недельного gold несёт декор, дневная — нет.
@@ -1571,7 +1567,7 @@ static func run(g: Game) -> void:
 		"inv": g._engine.inventory.duplicate(true),
 		"buffs": c6._active_buffs.duplicate(true),
 		"decor": c6._unlocked_decor.duplicate(true),
-		"owned": g._home.house_owned.duplicate(true),
+		"unlocked": g._home.house_unlocked.duplicate(),
 		"prog": _snap_progress(g),
 		# Task 4: успешный claim больше не нейтрален — очаг/вехи/ранг мутируются
 		# каждым claim() → блок обязан вернуть и их, иначе следующие блоки
@@ -1591,7 +1587,8 @@ static func run(g: Game) -> void:
 	# проверки №6/№8 были бы зелёными без всякого claim.
 	c6._unlocked_decor = []
 	c6._active_buffs = {}
-	g._home.house_owned["window"] = []
+	g._home.house_unlocked = (g._home.house_unlocked as Array).filter(
+		func(id): return not String(id).begins_with("window_"))
 	_set_progress(g, 0, 0, 0, 0, 0, 0)  # множитель ровно 1.0 → числа равны таблице
 
 	# Тест №7: невыполненный контракт.
@@ -1657,7 +1654,7 @@ static func run(g: Game) -> void:
 	Selftest.check("§3.4 a weekly gold claim hands the vitrage to the House, not only to the board log",
 		bool(got_decor["ok"]) and String(got_decor["decor"]) == "window_guild"
 		and not bool(got_decor["missing_decor"])
-		and g._home._decor_owned("window", "window_guild")
+		and g._home.house_unlocked.has("window_guild")
 		and c6._unlocked_decor == ["window_guild"]
 		and int(got_decor["materials"]["crystal"]) == 18)
 	# Тот же id из второй бумажки не должен удваивать журнал.
@@ -1670,7 +1667,7 @@ static func run(g: Game) -> void:
 	var got_decor2 := c6.claim(decor2_id)
 	Selftest.check("§3.4 a repeat decor id is logged once and stays owned in the House",
 		bool(got_decor2["ok"]) and c6._unlocked_decor == ["window_guild"]
-		and g._home._decor_owned("window", "window_guild"))
+		and g._home.house_unlocked.has("window_guild"))
 
 	# Обратная сторона: у не-gold декора нет, и флаг missing не должен зажечься
 	# от пустой строки (decor_exists("") по Task 3 возвращает false).
@@ -1702,7 +1699,7 @@ static func run(g: Game) -> void:
 		and int(g._engine.inventory["crystal"]) == 18
 		and c6._active_buffs.has("brew_speed"))
 	Selftest.check("§4.4 the missing decor id is not written into the House ownership list",
-		not g._home._decor_owned("window", "window_does_not_exist")
+		not g._home.house_unlocked.has("window_does_not_exist")
 		and not c6._unlocked_decor.has("window_does_not_exist"))
 
 	# Тест №21: потолок стека.
@@ -1779,7 +1776,7 @@ static func run(g: Game) -> void:
 	c6._mpts = int(claim_snap["mpts"])
 	c6._unlocked_titles = claim_snap["unlocked_titles"]
 	c6._active_title = String(claim_snap["active_title"])
-	g._home.house_owned = claim_snap["owned"]
+	g._home.house_unlocked = claim_snap["unlocked"]
 	g._engine.inventory = claim_snap["inv"]
 	_clear_prog(c6)
 	c6._contracts_daily = []
@@ -2689,14 +2686,27 @@ static func _contracts_durability_checks(g: Game) -> void:
 
 	# ---- 2. round-trip (§6.16): rich-состояние → файл → память начисто → загрузка ----
 	_cb_fill(c, daily_set, weekly_set, now_u)
-	g._home._own_item("window", "window_seal")
 	g._sigil._daily_crafts = []
+	# Task 5: дом пишется в тот же файл. Seed до записи и обнуление после делают
+	# проверку красной, если из _load_game убрать _apply_house_block(data) или
+	# переименовать ключ в _save_game.
+	var house_u_prev: Array = g._home.house_unlocked.duplicate()
+	var house_p_prev: Array[Dictionary] = []
+	house_p_prev.assign(g._home.house_placements)
+	g._home.house_unlocked = ["bed", "door"]
+	g._home.house_placements = HouseLayout.default_placements()
 	g._saves._save_game()
 	# Память вычищена НАМЕРЕННО: без этого no-op-загрузка оставила бы фикстуру
 	# на месте и вся группа была бы зелёной без всякого load_block.
 	_cb_wipe(c)
-	g._home.house_owned["window"] = []
+	g._home.house_unlocked.clear()
+	g._home.house_placements.clear()
 	g._saves._load_game()
+	Selftest.check("§6.16 a restart keeps the house ownership and placements",
+		g._home.house_unlocked == ["bed", "door"]
+		and g._home.house_placements.size() == 9)
+	g._home.house_unlocked = house_u_prev
+	g._home.house_placements = house_p_prev
 	Selftest.check("§6.16 a restart keeps the period keys, the progress and the claim log",
 		c._contracts_last_daily == day_key and c._contracts_last_weekly == week_key
 		and int(c._contracts_daily_prog.get(id_brew, -1)) == 4 and c.progress(id_brew) == 4
@@ -2710,8 +2720,10 @@ static func _contracts_durability_checks(g: Game) -> void:
 		c._active_buffs.size() == 1 and int(buff_back.get("until", 0)) == now_u + 1800
 		and float(buff_back.get("power", 0.0)) == 2.0
 		and c.buff_power("spring_yield", now_u + 600) == 2.0)
-	Selftest.check("§6.16 a restart keeps the decor journal together with House ownership",
-		c._unlocked_decor == ["window_seal"] and g._home._decor_owned("window", "window_seal"))
+	# Task 5: владение хранится отдельно в house_unlocked (формат v6), поэтому после
+	# рестарта проверяется только журнал наград контрактов.
+	Selftest.check("§6.16 a restart keeps the decor journal",
+		c._unlocked_decor == ["window_seal"])
 
 	# Разбор вместо == на всём массиве: goal после файла — float, и сверка
 	# контейнеров здесь зависела бы от типов, которых в сейве больше нет.
@@ -3420,8 +3432,8 @@ static func _contract_asset_checks() -> void:
 		soft = head and pen > 200
 	Selftest.check("§5.3 the brass nail sits on a soft cast shadow", soft)
 
-	# §3.4: награды-витражи обязаны иметь арт и калибровку стекла:
-	# house_view.gd:236-241 грузит res://assets/decor/<id>.png без guard'а.
+	# §3.4: исходный арт наград-витражей и калибровка стекла сохраняются
+	# в assets/decor; новый каталог дома использует подготовленные спрайты.
 	var vitrajes := true
 	for id in ["window_contract", "window_seal", "window_guild"]:
 		var img := _ca_img("res://assets/decor/%s.png" % String(id))

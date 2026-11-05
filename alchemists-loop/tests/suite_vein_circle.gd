@@ -234,6 +234,7 @@ static func run(g: Game) -> void:
 	var sv_pts2 := g._contracts._pts_total
 	var sv_titles8 := g._contracts._unlocked_titles.duplicate(true)
 	var sv_act2 := g._contracts._active_title
+	var hc_unlocked_prev: Array = g._home.house_unlocked.duplicate()
 	g._contracts._visit_days = []
 	g._contracts._pts_total = 0
 	var l0 := g._contracts.rank_level() == 0
@@ -254,19 +255,18 @@ static func run(g: Game) -> void:
 	var idem := g._contracts._unlocked_titles.count("Тлеющий") == 1
 	# декор за 30 дней выдаётся через β-путь и не продаётся
 	g._contracts._celebrate_mile("дней", 30)
-	var own := (g._home.house_owned.get("fireplace", []) as Array).has("fireplace_ember")
+	var own := g._home.house_unlocked.has("planetarium_ember")
 	var shop_ok := true
-	for c in Game.DECOR:
-		if String(c["id"]) == "fireplace":
-			for it in (c.get("items", []) as Array):
-				if bool(it.get("reward", false)) and int(it.get("cost", 0)) > 0:
-					shop_ok = false
+	for it in HouseItems.items_in_cat("decor"):
+		if bool(it.get("reward", false)) and int(it.get("cost", 0)) > 0:
+			shop_ok = false
 	Selftest.check("rank formula + titles idempotent + decor reward",
 		l0 and l3 and mono and l7 and t1 and idem and own and shop_ok)
 	g._contracts._visit_days = sv_days
 	g._contracts._pts_total = sv_pts2
 	g._contracts._unlocked_titles = sv_titles8
 	g._contracts._active_title = sv_act2
+	g._home.house_unlocked = hc_unlocked_prev
 
 	# ---------- T9: swipe-предикат ----------
 	Selftest.check("swipe closes only strong downward drag",
