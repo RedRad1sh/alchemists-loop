@@ -88,6 +88,56 @@ static func _resources(g: Game, script: Script, fixture) -> void:
 	Selftest.check("offline one spring feeds shared stock once per absence", r.get("spring_items", -1) > 0
 		and r.get("steps", -1) > 0 and g._engine.inventory["fire"] >= 0)
 	Selftest.check("offline spring itself awards no mastery", w.xp == r.get("steps", -1))
+	# §3.4: Родник офлайн капает только своё купленное окно. Ступень 0 — 300 с
+	# при интервале SPRING_INTERVAL: за час отсутствия ровно window/interval тиков,
+	# а не весь час. Линии пустые — расхода нет, считаем чистую добычу.
+	w = Cases.prepare(g, fixture)
+	w.lines.clear()
+	w.last_simulated_at = 1000.0
+	g._engine.inventory["fire"] = 0
+	g._engine.inventory["water"] = 0
+	var had_plant: bool = g._engine.inventory.has("plant")
+	var plant_before: int = int(g._engine.inventory.get("plant", 0))
+	g._engine.inventory["plant"] = maxi(plant_before, 1)
+	g._engine.spring_on = true
+	g._engine.spring_source = "fire"
+	g._engine.spring_sources = ["fire"]
+	g._engine.spring_buffer = {}
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	g._pages._spring_clock = 0.0
+	var win_ticks := int(floor(float(SpringBalance.OFFLINE_WINDOW_SEC[0]) / g._engine.spring_interval() + 0.0001))
+	s = script.new(g, w)
+	r = s.replay_offline(1000.0, 4600.0)
+	Selftest.check("offline spring stops at its own window, not the absence length",
+		win_ticks > 0 and r.get("spring_items", -1) == win_ticks
+		and int(g._engine.spring_buffer.get("fire", -1)) == win_ticks
+		and g._engine.inventory["fire"] == win_ticks)
+	# Купленное окно длиннее — та же отлучка даёт больше, но не выше капа объёма.
+	g._engine.inventory["fire"] = 0
+	g._engine.spring_buffer = {}
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 3}
+	g._pages._spring_clock = 0.0
+	w.last_simulated_at = 1000.0
+	s = script.new(g, w)
+	r = s.replay_offline(1000.0, 1000.0 + 60000.0)
+	var cap0: int = SpringBalance.VOLUME_CAP[0]
+	Selftest.check("a bought spring window keeps dripping offline up to the volume cap",
+		r.get("spring_items", -1) == cap0 and g._engine.inventory["fire"] == cap0
+		and int(g._engine.spring_buffer.get("fire", -1)) == cap0)
+	# Сводка возврата не обещает добычу выключенного Родника.
+	g._engine.spring_buffer = {}
+	g._engine.spring_on = false
+	Selftest.check("return summary promises no spring gain while the spring is off",
+		g._saves._spring_offline_gain(3600.0) == 0)
+	g._engine.spring_on = true
+	Selftest.check("return summary estimate uses the spring's own window",
+		g._saves._spring_offline_gain(60000.0) == mini(int(floor(
+			float(SpringBalance.OFFLINE_WINDOW_SEC[3]) / g._engine.spring_interval())), cap0))
+	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
+	if had_plant: g._engine.inventory["plant"] = plant_before
+	else: g._engine.inventory.erase("plant")
+	g._engine.spring_buffer = {}
+	g._engine.inventory["fire"] = 0
 	w = Cases.prepare(g, fixture)
 	w.lines.clear()
 	g._engine.ether = g._engine._max_ether() - 1

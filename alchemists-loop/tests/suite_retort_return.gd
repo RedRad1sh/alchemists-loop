@@ -105,9 +105,17 @@ static func run(g: Game) -> void:
 		and String(g._retort._retort_slot(3)["sub"]) == "")
 	g._retort._essences.clear()
 	g._engine.sage_gold = 0
-	# сводка возврата
+	# сводка возврата: оценка Родника — только для включённого и открытого
+	var sp_on: bool = g._engine.spring_on
+	var sp_had_plant: bool = g._engine.inventory.has("plant")
+	var sp_plant: int = int(g._engine.inventory.get("plant", 0))
+	g._engine.spring_on = true
+	g._engine.inventory["plant"] = maxi(sp_plant, 1)
 	Selftest.check("spring offline gain (new formula: window 300s at lvl 0)", g._saves._spring_offline_gain(3600.0) == 50 and g._saves._spring_offline_gain(60.0) == 10
 		and g._saves._spring_offline_gain(30.0) == 0)
+	g._engine.spring_on = sp_on
+	if sp_had_plant: g._engine.inventory["plant"] = sp_plant
+	else: g._engine.inventory.erase("plant")
 	g._saves._return_elapsed = 100.0
 	Selftest.check("return not due early", not g._saves._return_due())
 	g._saves._return_elapsed = 2000.0

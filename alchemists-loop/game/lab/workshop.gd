@@ -134,6 +134,7 @@ func _spend_recipe(recipe: Dictionary) -> bool:
 		return false
 	for item in recipe["materials"]:
 		g._engine.inventory[item] = int(g._engine.inventory.get(item, 0)) - int(recipe["materials"][item])
+		g._engine._spring_burn(item, int(recipe["materials"][item]))
 	_equipment_busy = false
 	return true
 

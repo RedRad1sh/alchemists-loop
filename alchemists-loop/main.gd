@@ -742,6 +742,7 @@ func _ready() -> void:
 	Net.sigil_craft_result.connect(_sigil._on_craft_result)
 	Net.sigil_catalog_result.connect(_sigil._on_catalog_result)
 	Net.sigil_collection_result.connect(_sigil._on_collection_result)
+	Net.sigil_collection_result.connect(_sigil_ui._on_sigil_collection_reconcile)
 	Net.sigil_milestone_result.connect(_sigil._on_milestone_result)
 	Net.sigil_milestone_result.connect(_sigil_ui._on_sigil_milestone_result)
 	_sigil.craft_completed.connect(_sigil_ui._on_sigil_craft_completed)
@@ -861,6 +862,8 @@ func _ready() -> void:
 		var dkey := _demo_harness._device_key
 		if dkey == "":
 			_rooms._open_tool("bench")
+		elif dkey == "spring":
+			_pages._open_spring_screen()
 		elif _pages._mode_pages.has(dkey):
 			# Прямой вызов роутера, а не _open_tool: в демо часть устройств
 			# заблокирована, и гейт показал бы статус вместо экрана.
@@ -1400,6 +1403,11 @@ func _init_new_game() -> bool:
 	# U11 (T14): сброс мира аннулирует и мир-запросы в полёте — их ответы
 	# больше не должны применяться к новому миру (иначе записи ждали бы TTL).
 	_online._pending_requests.clear()
+	# Квитанция незакрытого сигильного крафта — тоже часть старого мира.
+	_sigil_ui._sigil_pending_craft = {}
+	_sigil_ui._pending_craft_result = {}
+	_sigil_ui._sigil_receipt_reconcile = false
+	_sigil_ui._close_sigil_craft_ritual()
 	_engine._craft_job.clear()
 	_engine._blueprints.clear()
 	_reset_world_clock()

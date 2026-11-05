@@ -708,6 +708,11 @@ func _do_prestige() -> void:
 	g._engine._experiment_pending_pair.clear()
 	# U11 (T14): престиж аннулирует и pending-записи мир-запросов в полёте.
 	g._online._pending_requests.clear()
+	# Квитанция незакрытого сигильного крафта — тоже часть старого мира.
+	g._sigil_ui._sigil_pending_craft = {}
+	g._sigil_ui._pending_craft_result = {}
+	g._sigil_ui._sigil_receipt_reconcile = false
+	g._sigil_ui._close_sigil_craft_ritual()
 	g._engine._source_taps = 0
 	g._engine.spring_on = false
 	g._engine.spring_source = "water"

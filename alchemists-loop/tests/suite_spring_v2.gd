@@ -67,11 +67,45 @@ static func run(g: Game) -> void:
 	Selftest.check("spring_buffer capped at VOLUME_CAP[0]", g._engine.spring_buffer.get("water", 0) == 100)
 	# T3.5: избыток сжигается (inventory не растёт сверх капа)
 	Selftest.check("spring_tick burns overflow", g._engine.inventory.get("water", 0) == 100)
-	# T3.6: трата элемента уменьшает буфер
+	# T3.6: настоящий расход освобождает буфер. Без этого после капа Родник
+	# навсегда перестаёт капать, даже если игрок всё потратил. Через call():
+	# отсутствие метода — мягкий FAIL, а не ошибка компиляции всего билда.
 	g._engine.spring_buffer = {"water": 50}
-	g._engine.inventory["water"] -= 10
-	g._engine.spring_buffer["water"] = maxi(0, g._engine.spring_buffer.get("water", 0) - 10)
+	g._engine.inventory["water"] = 50
+	if g._engine.has_method("_spring_burn"):
+		g._engine.call("_spring_burn", "water", 10)
 	Selftest.check("spend decrements buffer", g._engine.spring_buffer.get("water", 0) == 40)
+	g._engine.spring_buffer = {"water": 3}
+	if g._engine.has_method("_spring_burn"):
+		g._engine.call("_spring_burn", "water", 10)
+	Selftest.check("spring burn never goes below zero", g._engine.spring_buffer.get("water", 0) == 0)
+	# Реторта — реальная точка расхода: заложенное вещество освобождает слот,
+	# отмена закладки (вещество вернулось) слот снова занимает.
+	g._engine.spring_buffer = {"water": 100}
+	g._engine.inventory["water"] = 100
+	var r_slot := -1
+	for i in range(g._retort._retort_slots_open()):
+		if not g._retort._retort_busy(i):
+			r_slot = i
+			break
+	var r_started := r_slot >= 0 and g._retort._retort_start(r_slot, "water")
+	var after_start := int(g._engine.spring_buffer.get("water", 0))
+	if r_started:
+		g._retort._retort_cancel(r_slot)
+	Selftest.check("retort spend frees a spring buffer slot and cancel takes it back",
+		r_started and after_start == 99 and int(g._engine.spring_buffer.get("water", 0)) == 100)
+	# Котёл ниже капа снова капает: буфер был полон, расход освободил место.
+	g._engine.spring_on = true
+	g._engine.spring_sources = ["water"]
+	g._engine.spring_levels["volume"] = 0
+	g._engine.spring_buffer = {"water": 100}
+	g._engine.inventory["water"] = 100
+	if g._engine.has_method("_spring_burn"):
+		g._engine.call("_spring_burn", "water", 5)
+	g._pages._spring_clock = 0.0
+	g._engine._spring_tick(7.0)
+	Selftest.check("spring drips again after the player spends from a full buffer",
+		int(g._engine.spring_buffer.get("water", 0)) == 96 and int(g._engine.inventory.get("water", 0)) == 101)
 	# Reset state for later suites
 	g._engine.spring_levels = {"speed": 0, "volume": 0, "sources": 0, "offline": 0}
 	g._engine.spring_buffer = {}
@@ -282,6 +316,10 @@ static func run(g: Game) -> void:
 	# T10.5: экран закрывается
 	g._spring_screen._close()
 	Selftest.check("spring_screen closes", not is_instance_valid(g._spring_screen))
+	# Back/Esc сначала возвращает из Родника, а не гасит что-то под ним.
+	g._pages._open_spring_screen()
+	var esc_consumed: bool = g._close_top_modal()
+	Selftest.check("back closes the spring screen first", esc_consumed and g._spring_screen == null)
 	# T11.1: form_stage на total_level 0 = 0
 	Selftest.check("form_stage 0", SpringSprite.form_stage({"speed": 0, "volume": 0, "sources": 0, "offline": 0}) == 0)
 	# T11.2: form_stage на total_level 4 = 1

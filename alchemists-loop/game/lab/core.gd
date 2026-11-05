@@ -339,6 +339,7 @@ func spring_purchase(axis: String) -> Dictionary:
 	ether -= ether_cost
 	for mat in materials:
 		inventory[mat] = int(inventory.get(mat, 0)) - materials[mat]
+		_spring_burn(String(mat), int(materials[mat]))
 	spring_levels[axis] = lvl + 1
 	_refresh()
 	g._contracts.on_upgrade("spring", axis, lvl + 1)
@@ -496,6 +497,8 @@ func _begin_experiment(a: String, b: String) -> bool:
 		return false
 	inventory[a] = int(inventory.get(a, 0)) - 1
 	inventory[b] = int(inventory.get(b, 0)) - 1
+	_spring_burn(a)
+	_spring_burn(b)
 	attempts += 1
 	_experiment_sync_day()
 	_experiment_count += 1
@@ -514,6 +517,8 @@ func _finish_experiment_inputs(a: String, b: String, full_refund: bool) -> void:
 		return
 	inventory[a] = int(inventory.get(a, 0)) + 1
 	inventory[b] = int(inventory.get(b, 0)) + 1
+	_spring_unburn(a)
+	_spring_unburn(b)
 	_grant_ether(Game.EXPERIMENT_COST if full_refund else Game.EXPERIMENT_FAILURE_REFUND, "experiment_refund")
 	_experiment_pending_pair.clear()
 	_refresh()
@@ -683,6 +688,22 @@ func _mode_unlocked(key: String) -> bool:
 
 func _spring_volume_cap() -> int:
 	return int(SpringBalance.VOLUME_CAP[spring_levels.get("volume", 0)])
+
+## Буфер — учёт родниковой добычи, а не отдельное хранилище: расход элемента
+## игроком освобождает место под капом, иначе после капа Родник замирал навсегда.
+func _spring_burn(item_id: String, amount: int = 1) -> void:
+	var cur := int(spring_buffer.get(item_id, 0))
+	if cur <= 0:
+		return
+	spring_buffer[item_id] = maxi(0, cur - maxi(0, amount))
+
+## Возврат реагента (провал/отмена) отменяет расход, поэтому снимает и burn:
+## иначе каждая неудача навсегда отъедала бы слот ёмкости.
+func _spring_unburn(item_id: String, amount: int = 1) -> void:
+	if not spring_buffer.has(item_id):
+		return
+	spring_buffer[item_id] = mini(_spring_volume_cap(),
+		int(spring_buffer[item_id]) + maxi(0, amount))
 
 func _spring_gain(src: String, amount: int) -> int:
 	# Единая точка начисления родникового выхода: и живой тик, и офлайн-реплей
@@ -974,6 +995,11 @@ func _refresh() -> void:
 	# статус
 	if _status_label != null:
 		_status_label.text = status_text
+	# Ячейки строятся при сборке лаборатории только для того, что уже есть в
+	# запасе; вещество, впервые полученное варкой, достраиваем здесь.
+	for raw_inv in inventory:
+		if not _item_orbs.has(String(raw_inv)) and g.ITEMS.has(String(raw_inv)):
+			g._pages._add_lab_reagent_cell(String(raw_inv))
 	# орбы
 	for raw_id in _item_orbs:
 		var item_id := String(raw_id)
@@ -1681,6 +1707,8 @@ func _commit_brew_locked(a: String, b: String, context: Dictionary) -> Dictionar
 		return _brew_rejected("ether")
 	inventory[a] = int(inventory[a]) - 1
 	inventory[b] = int(inventory[b]) - 1
+	_spring_burn(a)
+	_spring_burn(b)
 	attempts += 1
 	g._riddles._letter_attempt(a, b)
 	g._riddles._atlas_attempt(a, b)

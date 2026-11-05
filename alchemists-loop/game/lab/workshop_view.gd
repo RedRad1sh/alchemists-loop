@@ -269,7 +269,9 @@ func _button(parent: Node, node_name: String, text: String, action: Callable) ->
 	button.text = text
 	button.custom_minimum_size = Vector2(0, 48)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Autowrap и ellipsis схлопывают минимальную ширину кнопки до отступов stylebox.
+	button.autowrap_mode = TextServer.AUTOWRAP_OFF
+	button.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 	UIStyle.style_button(button, 0)
 	button.pressed.connect(action)
 	parent.add_child(button)

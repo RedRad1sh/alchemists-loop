@@ -127,6 +127,7 @@ func _retort_start(slot: int, sub: String, when: float = -1.0) -> bool:
 	var tier := int(g._engine._rarity_of(sub).get("tier", 0))
 	var dur := _retort_hours_for_tier(tier) * 3600.0
 	g._engine.inventory[sub] = int(g._engine.inventory[sub]) - 1
+	g._engine._spring_burn(sub)
 	_retort_slots[slot] = {"sub": sub, "name": g._online._item_name(sub),
 		"started": _retort_now(when), "dur": dur}
 	if not g._selftest:
@@ -146,6 +147,7 @@ func _retort_cancel(slot: int) -> bool:
 	_retort_slots[slot] = {"sub": "", "name": "", "started": 0.0, "dur": 0.0}
 	if sub != "":
 		g._engine.inventory[sub] = int(g._engine.inventory.get(sub, 0)) + 1
+		g._engine._spring_unburn(sub)
 	if not g._selftest:
 		g._online._set_status("Реторта: «%s» возвращено в запасы." % g._clean_str(s.get("name", sub)))
 		Sfx.click()

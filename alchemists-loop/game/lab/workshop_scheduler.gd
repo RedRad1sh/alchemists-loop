@@ -20,6 +20,7 @@ var _manual_phase := 0.0
 var _manual_ready := false
 var _manual_left := 0
 var _manual_block: Array = []
+var _spring_offline_used := 0.0
 
 func _init(game: Game, model: Workshop) -> void:
 	g = game
@@ -76,6 +77,7 @@ func advance(delta_seconds: float, offline := false) -> Dictionary:
 	_mutation = 0
 	_manual_phase = 0.0
 	_manual_ready = false
+	_spring_offline_used = 0.0
 	_manual_left = g._engine._stage_ops() if offline and not workshop.is_read_only() else 0
 	_manual_block.clear()
 	var duration := minf(delta_seconds, Game.OFFLINE_CAP_SEC)
@@ -154,7 +156,17 @@ func _manual_active() -> bool:
 func _spring_active() -> bool:
 	if not g._engine.spring_on or not g._engine._mode_unlocked("spring"):
 		return false
-	return true
+	return not _offline or _spring_offline_left() > EPS
+
+## §3.4: во время отсутствия Родник работает только купленное окно; оно
+## расходуется вместе с прогоном, а не проверяется по часам.
+func _spring_offline_window() -> float:
+	var table: Array = SpringBalance.OFFLINE_WINDOW_SEC
+	var lvl := clampi(int(g._engine.spring_levels.get("offline", 0)), 0, table.size() - 1)
+	return float(table[lvl])
+
+func _spring_offline_left() -> float:
+	return maxf(0.0, _spring_offline_window() - _spring_offline_used)
 
 func _line_speed() -> float:
 	# Одно место для множения: _next_event и _elapse обязаны давать одинаковую
@@ -169,6 +181,8 @@ func _next_event(remaining: float) -> float:
 		dt = minf(dt, maxf(EPS, (1.0 - g._engine.regen_clock) / rate))
 	if _spring_active():
 		dt = minf(dt, maxf(EPS, g._engine.spring_interval() - g._pages._spring_clock))
+		if _offline:
+			dt = minf(dt, maxf(EPS, _spring_offline_left()))
 	var speed: float = _line_speed()
 	for line in workshop.lines:
 		if _timer_active(line):
@@ -188,6 +202,8 @@ func _elapse(dt: float) -> void:
 		_stats["ether_gained"] += gain
 		if gain > 0: _mutation += 1
 	if _spring_active():
+		if _offline:
+			_spring_offline_used = minf(_spring_offline_window(), _spring_offline_used + dt)
 		g._pages._spring_clock += dt
 		var interval: float = g._engine.spring_interval()
 		if g._pages._spring_clock >= interval - EPS:

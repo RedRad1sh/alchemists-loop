@@ -147,6 +147,12 @@ static func _screen(g: Game, w: Workshop, view: Node) -> void:
 	for button in view.find_children("*", "Button", true, false):
 		touch_safe = touch_safe and button.custom_minimum_size.y >= 48
 	Selftest.check("workshop primary controls have at least 48px hit areas", touch_safe)
+	# Autowrap на кнопке схлопывает её минимальную ширину до отступов stylebox —
+	# в HBox шаги гида сжимаются в столбик букв.
+	var guide := _node(view, "GuideAmount") as Button
+	Selftest.check("workshop buttons keep their text width (no autowrap collapse)",
+		guide != null and guide.autowrap_mode == TextServer.AUTOWRAP_OFF
+		and guide.get_combined_minimum_size().x > 60.0)
 	Selftest.check("workshop selectable known nonbase target", _choose(view, "line_1", "steam", 3))
 	var before := g._engine.inventory.duplicate(true)
 	var ether := g._engine._available_ether()

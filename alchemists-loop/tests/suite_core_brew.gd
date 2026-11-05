@@ -71,6 +71,19 @@ static func run(g: Game) -> void:
 		if not g._engine._item_orbs.has(String(raw_id)):
 			orbs_cover = false
 	Selftest.check("item orbs cover inventory", orbs_cover)
+	# Вещество из g.ITEMS, впервые попавшее в инвентарь варкой, обязано получить
+	# ячейку в нижнем инвентаре: _refresh() обходит только _item_orbs.
+	var fresh_id := ""
+	for raw_fresh in g.ITEMS:
+		if not g._engine.inventory.has(String(raw_fresh)) and not g._engine._item_orbs.has(String(raw_fresh)):
+			fresh_id = String(raw_fresh)
+			break
+	g._engine.inventory[fresh_id] = 1
+	g._engine._refresh()
+	Selftest.check("newly brewed item gets an inventory cell",
+			fresh_id != "" and g._engine._item_orbs.has(fresh_id) and g._engine._item_cells.has(fresh_id))
+	g._engine.inventory.erase(fresh_id)
+	g._engine._refresh()
 	Selftest.check("slots exist", g._engine._slot_a != null and g._engine._slot_b != null)
 	Selftest.check("brew disabled no pair", g._engine._can_brew() == false)
 
@@ -281,6 +294,36 @@ static func run(g: Game) -> void:
 	Selftest.check("server persist el", g.ITEMS.has("sv_el")
 		and String(g.ITEMS["sv_el"]["name"]) == "Серверное")
 	Selftest.check("server persist recipe", not g._online._find_recipe("sv_a", "sv_b").is_empty())
+	g._online._restore_server_elements({})
+	g._online._restore_server_recipes([])
+
+	# Bug B регрессия: открытая серверная пара обязана пережить save/load,
+	# иначе в книге/Мастерской рецепт исчезает.
+	g._online._apply_server_element({"slug": "sv_p", "name": "P", "color": "#334455", "layer": 2})
+	g._online._apply_server_element({"slug": "sv_q", "name": "Q", "color": "#445566", "layer": 2})
+	g._online._apply_server_element({"slug": "sv_r", "name": "R", "color": "#556677", "layer": 3})
+	g._online._register_server_recipe("sv_p", "sv_q", "sv_r")
+	g._engine.known_recipes[g._pair_key("sv_p", "sv_q")] = true
+	g._engine.inventory["sv_p"] = 2
+	g._engine.inventory["sv_q"] = 2
+	g._engine.inventory["sv_r"] = 1
+	g._saves._save_game()
+	g._init_new_game()
+	g._saves._load_game()
+	Selftest.check("server-known pair survives save/load",
+		g._engine.known_recipes.has(g._pair_key("sv_p", "sv_q")))
+	Selftest.check("server-known output workshop-craftable after load",
+		g._workshop.known_target_recipe("sv_r"))
+	# _book_list не кэшируется при load: сброшенная подпись обязана пересобрать книгу.
+	var book_sig_before: int = g._engine._book_sig
+	g._engine._book_sig = -1
+	g._engine._refresh()
+	Selftest.check("book refresh fires when sig forces it",
+		g._engine._book_sig != -1 and g._engine.known_recipes.has(g._pair_key("sv_p", "sv_q")))
+	g._engine._book_sig = book_sig_before
+	g._engine.known_recipes.erase(g._pair_key("sv_p", "sv_q"))
+	for sv_id in ["sv_p", "sv_q", "sv_r"]:
+		g._engine.inventory.erase(sv_id)
 	g._online._restore_server_elements({})
 	g._online._restore_server_recipes([])
 
