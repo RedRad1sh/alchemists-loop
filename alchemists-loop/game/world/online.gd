@@ -1118,6 +1118,7 @@ func _floater_at(pos: Vector2, text: String, color: Color) -> void:
 	lb.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	lb.add_theme_constant_override("outline_size", 8)
 	lb.position = pos + Vector2(-40, -20)
+	lb.z_index = ScreenRouter.SCREEN_Z + 1
 	lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	g.add_child(lb)
 	g.floaters.append({"l": lb, "t": 0.0, "life": 0.9})

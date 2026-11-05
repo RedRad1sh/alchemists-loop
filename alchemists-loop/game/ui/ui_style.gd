@@ -90,8 +90,8 @@ static func modal_panel(_accent: Color = GOLD) -> StyleBoxTexture:
 	return UITheme.nine("frame_modal", Vector4(34, 34, 34, 34), Vector4(18, 16, 18, 16))
 
 
-## Поле Эксперимента: резной стол — тёплый обод, углублённая столешница,
-## латунные уголки. Без текстуры — прежнее тёплое углубление.
+## Поле Эксперимента: мягкая тёмная вуаль с тонкой латунной кромкой поверх
+## комнаты — центр прозрачнее, края гуще. Без текстуры — тёплое углубление.
 static func arena_style() -> StyleBox:
 	var sb := UITheme.nine("arena_table", Vector4(96, 96, 96, 96), Vector4.ZERO)
 	if sb != null:
@@ -176,6 +176,22 @@ static func style_row(b: Button) -> void:
 	b.add_theme_color_override("font_pressed_color", CREAM)
 
 
+## Счётчик на иконке (непрочитанное, заявки): рубиновая пилюля, скрыта при нуле.
+static func count_badge() -> Label:
+	var badge := Label.new()
+	badge.name = "Badge"
+	badge.add_theme_font_size_override("font_size", 11)
+	badge.add_theme_color_override("font_color", CREAM)
+	var sb := box(RUBY, Color(PAPER_INK, 0.9), 8, 1)
+	_margins(sb, 4, 0, 4, 0)
+	badge.add_theme_stylebox_override("normal", sb)
+	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.visible = false
+	return badge
+
+
 ## Вывеска заголовка: plaque_title, текст держится вне угловых полей.
 static func title_plaque() -> StyleBoxTexture:
 	return UITheme.nine("plaque_title", Vector4(64, 18, 64, 18), Vector4(36, 12, 36, 12))
@@ -217,6 +233,17 @@ static func style_tabs(tabs: TabContainer) -> void:
 	tabs.add_theme_color_override("font_hovered_color", CREAM)
 	tabs.add_theme_color_override("font_disabled_color", Color(TEXT_DIM.r, TEXT_DIM.g, TEXT_DIM.b, 0.4))
 	# Панель вкладок больше не StyleBoxFlat: corner_radius здесь не мутируется.
+	set_tabs_panel_bare(tabs, false)
+
+
+## Панель вкладок: на стартовом экране рамку снимаем — плита комнаты служит
+## фоном всей страницы, а не картиной в рамке интерфейса.
+static func set_tabs_panel_bare(tabs: TabContainer, bare: bool) -> void:
+	if tabs == null:
+		return
+	if bare:
+		tabs.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+		return
 	tabs.add_theme_stylebox_override("panel",
 		UITheme.nine("frame_panel", Vector4(20, 20, 20, 20), Vector4(12, 10, 12, 10)))
 

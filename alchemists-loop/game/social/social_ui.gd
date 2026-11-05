@@ -5,6 +5,7 @@ class_name SocialUI
 # переходы между уровнями и безопасные действия поверх кэша.
 
 const SPIRIT_INPUT_HINT := "Светик писем не читает — он же дух"
+const PANEL_MAX := Vector2(420.0, 640.0)
 
 var g: Game
 var _screen: Control = null
@@ -37,8 +38,12 @@ func build() -> void:
 	g.add_child(root)
 	_screen = root
 
+	# Нижний раздел: общая панель между шапкой и баром навигации, а не
+	# полноэкранное окно — бар остаётся живым и переключает разделы.
+	root.offset_top = ScreenRouter.HEADER_H + 46.0
+	root.offset_bottom = -BottomNav.NAV_H
 	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.84)
+	dim.color = Color(0.03, 0.02, 0.015, 0.62)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	dim.gui_input.connect(func(ev: InputEvent) -> void:
@@ -52,17 +57,27 @@ func build() -> void:
 	)
 	root.add_child(dim)
 
+	# Окно размером с остальные модалки (Улучшения ~380×640), а не во всю
+	# доступную площадь: поля пересчитываются от размера области.
 	var margin := MarginContainer.new()
+	margin.name = "SocialMargin"
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for side in ["margin_left", "margin_top", "margin_right", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 12)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(margin)
+	var fit := func() -> void:
+		var side := maxf(12.0, (root.size.x - PANEL_MAX.x) * 0.5)
+		var vert := maxf(12.0, (root.size.y - PANEL_MAX.y) * 0.5)
+		margin.add_theme_constant_override("margin_left", int(side))
+		margin.add_theme_constant_override("margin_right", int(side))
+		margin.add_theme_constant_override("margin_top", int(vert))
+		margin.add_theme_constant_override("margin_bottom", int(vert))
+	root.resized.connect(fit)
+	fit.call()
 
 	var panel := PanelContainer.new()
 	panel.name = "SocialPanel"
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	panel.add_theme_stylebox_override("panel", g._panel_style(Color(0.055, 0.065, 0.10, 0.99), 18))
+	panel.add_theme_stylebox_override("panel", UIStyle.modal_panel())
 	margin.add_child(panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
@@ -103,6 +118,8 @@ func open(tab: int = 0) -> void:
 	_refresh_list()
 	if g._social != null:
 		g._social.refresh()
+	if g._bottom_nav != null:
+		g._bottom_nav._repaint()
 
 func close() -> void:
 	_confirm_close()
@@ -110,7 +127,12 @@ func close() -> void:
 	_peer = ""
 	if _screen != null:
 		_screen.visible = false
+	if g._bottom_nav != null:
+		g._bottom_nav._repaint()
 	Sfx.click()
+
+func is_open() -> bool:
+	return _screen != null and _screen.visible
 
 func visible_thread() -> String:
 	return _peer
@@ -312,38 +334,54 @@ func _friend_row(friend: Dictionary) -> Control:
 	av.setup_spec(spec if spec is Dictionary else {}, 40)
 	av.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(av)
+	# Имя, «был(а)» и превью — одна колонка с обрезкой многоточием: превью
+	# отдельной колонкой без обрезки съедало ширину, и имя падало по букве.
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	info.add_theme_constant_override("separation", 0)
 	var nick := String(friend.get("nick", "Алхимик"))
-	info.add_child(g._label(nick, 14))
+	info.add_child(_one_line(g._label(nick, 14)))
 	var seen := Social.last_seen_text(String(friend.get("last_seen", "")), Time.get_date_string_from_system())
-	if seen != "":
-		var seen_l := g._label(seen, 11)
-		seen_l.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
-		info.add_child(seen_l)
+	var sub := Social.preview_cut(String(friend.get("last_msg_preview", "")), 60)
+	if sub == "":
+		sub = seen
+	if sub != "":
+		var sub_l := _one_line(g._label(sub, 11))
+		sub_l.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
+		info.add_child(sub_l)
 	row.add_child(info)
-	var preview := g._label(Social.preview_cut(String(friend.get("last_msg_preview", "")), 60), 11)
-	preview.autowrap_mode = TextServer.AUTOWRAP_OFF
-	preview.size_flags_horizontal = Control.SIZE_SHRINK_END
-	preview.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
-	row.add_child(preview)
 	var unread := int(friend.get("unread", 0))
 	if unread > 0:
-		var badge := g._label("•" + str(unread), 12)
-		badge.autowrap_mode = TextServer.AUTOWRAP_OFF
-		badge.size_flags_horizontal = Control.SIZE_SHRINK_END
-		badge.add_theme_color_override("font_color", UIStyle.GOLD)
-		row.add_child(badge)
+		var badge := UIStyle.count_badge()
+		badge.text = "99+" if unread > 99 else str(unread)
+		badge.visible = true
+		badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		badge.offset_left = -10.0
+		badge.offset_right = 6.0
+		badge.offset_top = -4.0
+		badge.offset_bottom = 12.0
+		av.add_child(badge)
 	if dev != Social.SPIRIT_DEVICE:
-		var swap := g._small_button("Обменять", Vector2(110, 34), 0)
+		var swap := g._small_button("Обменять", Vector2(96, 34), 0)
 		swap.tooltip_text = "Предложить обмен или подарок"
+		swap.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		swap.pressed.connect(_open_trade.bind(dev))
 		row.add_child(swap)
 		var more := g._small_button("⋮", Vector2(34, 34), 0)
 		more.tooltip_text = "Удалить или заблокировать"
+		more.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		more.pressed.connect(_open_confirm.bind(dev))
 		row.add_child(more)
 	return row
+
+
+func _one_line(l: Label) -> Label:
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	l.clip_text = true
+	l.custom_minimum_size.x = 0
+	return l
 
 func _request_row(request: Dictionary) -> Control:
 	var dev := String(request.get("device_id", ""))

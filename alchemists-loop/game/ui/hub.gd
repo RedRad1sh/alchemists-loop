@@ -556,6 +556,10 @@ func _build_upgrade_popup() -> void:
 	title_plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	title_plate.add_theme_stylebox_override("panel", UIStyle.title_plaque())
 	var t := g._label("УЛУЧШЕНИЯ", 21)
+	# g._label() ставит autowrap, а plaque центрирован и сжат по содержимому:
+	# минимум такой метки считается по одной букве, и «УЛУЧШЕНИЯ» стояли
+	# вертикальной колонкой (кадр p0-hd/modal_upgrades).
+	t.autowrap_mode = TextServer.AUTOWRAP_OFF
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	t.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	title_plate.add_child(t)

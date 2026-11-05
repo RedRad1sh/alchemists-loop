@@ -41,7 +41,7 @@ static func nine(name: String, m: Vector4, content: Vector4 = Vector4.ZERO,
 ## (у StyleBoxTexture нет texture_offset); hover светлее, pressed темнее.
 ## Нет текстуры — пустой словарь, как null у nine(): вызывающий обязан проверить.
 static func nine_hv(name: String, m: Vector4, content: Vector4,
-		hover: float = 1.10, press: float = 0.88) -> Dictionary:
+		hover: float = 1.28, press: float = 0.82) -> Dictionary:
 	if tex(name) == null:
 		return {}
 	var down := Vector4(content.x, content.y - 1.0, content.z, content.w + 1.0)

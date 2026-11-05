@@ -367,7 +367,7 @@ var _ui_tex: Dictionary = {}   # path -> Texture2D (кэш)
 var _tabs_ref: TabContainer
 var _rooms: RoomCarousel = null  # карусель комнат вкладки «Эксперимент» (game/ui/rooms.gd)
 var _bottom_nav: BottomNav = null  # нижний иконковый таб-бар (game/ui/bottom_nav.gd)
-var _sheet: BottomSheet = null  # bottom-sheet панелей устройств (game/ui/sheet.gd)
+var _screens: ScreenRouter = null  # полноэкранные экраны механик (game/ui/screens.gd)
 # F1 (раунд правки U18): признак достроенного UI. tabs.tab_changed срабатывает
 # синхронно ещё во время _make_page(...), когда попапы не построены, — ветка
 # interstitial в _on_tab_changed допускается только после достройки (true
@@ -449,8 +449,6 @@ var _sigil: SigilManager  # Аркан Сигилов: карточки реце
 ## при закрытии, чтобы _process не дёргал удалённую ноду.
 var _live_card_node: SigilCard = null
 var _sigil_ui: SigilUI = null  # вынесенный сигильный UI (game/sigil/sigil_ui.gd)
-var _sigil_header_btn: Button  ## кнопка Аркана Сигилов в шапке (иконка-таро)
-var _contracts_header_btn: Button  # контрактная доска (§8.3)
 var _inv_grid: GridContainer = null
 
 func _boot_snapshot_text(path: String) -> String:
@@ -553,8 +551,12 @@ func _ready() -> void:
 			_demo_harness._action_workshop = true
 		elif a == "--action=master":
 			_demo_harness._action_master = true
-		elif a == "--action=sheet":
-			_demo_harness._action_sheet = true
+		elif a == "--action=device":
+			_demo_harness._action_device = true
+		elif a == "--action=reagents":
+			_demo_harness._action_reagents = true
+		elif a == "--action=cauldronbrew":
+			_demo_harness._action_cauldron_brew = true
 		elif a == "--action=rating":
 			_demo_harness._action_rating = true
 		elif a == "--action=decor":
@@ -628,6 +630,9 @@ func _ready() -> void:
 			_demo_harness._shot_tab = a.substr("--tab=".length()).to_int()
 		elif a.begins_with("--scroll="):
 			_demo_harness._shot_scroll = a.substr("--scroll=".length()).to_int()
+		elif a.begins_with("--device="):
+			# кадр приёмки экрана устройства: какой бокс открывать роутером
+			_demo_harness._device_key = a.substr("--device=".length())
 		elif a.begins_with("--shot-node="):
 			# Task 8: кроп кадра-приёмки по global-прямоугольникам нод
 			# ("A,B" — объединение), доска целиком при этом не скроллится.
@@ -829,10 +834,23 @@ func _ready() -> void:
 	if _demo_harness._demo and _demo_harness._action_master:
 		# кадр приёмки комнаты 2: карусель открывается на Мастерской
 		_rooms.set_room(1)
-	if _demo_harness._demo and _demo_harness._action_sheet:
-		# кадр приёмки листа устройства: комната 2 + bottom-sheet верстака
+	if _demo_harness._demo and _demo_harness._action_device:
+		# кадр приёмки экрана устройства: комната 2 + экран верстака
 		_rooms.set_room(1)
-		_rooms._open_tool("bench")
+		var dkey := _demo_harness._device_key
+		if dkey == "":
+			_rooms._open_tool("bench")
+		elif _pages._mode_pages.has(dkey):
+			# Прямой вызов роутера, а не _open_tool: в демо часть устройств
+			# заблокирована, и гейт показал бы статус вместо экрана.
+			_pages._open_device_screen(dkey, _rooms.TOOL_TITLES.get(dkey, dkey))
+	if _demo_harness._demo and _demo_harness._action_reagents:
+		# кадр приёмки: комната 1 с открытым выбором реагентов
+		_pages._show_experiment_drawer()
+	if _demo_harness._demo and _demo_harness._action_cauldron_brew:
+		# кадр приёмки: котёл открыт сразу в режиме варки
+		_pages._show_experiment_drawer()
+		_pages._set_cauldron_mode("brew", false)
 	if _demo_harness._demo and _demo_harness._action_rating:
 		if _tabs_ref != null:
 			_tabs_ref.current_tab = TAB_RATING
@@ -1457,7 +1475,10 @@ func _build_ui() -> void:
 	title_plate.name = "TitlePlaque"
 	title_plate.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_plate.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var plate_sb := UITheme.nine("plaque_title", Vector4(64, 18, 64, 18), Vector4(10, 4, 10, 4))
+	# Поля 16 по бокам — за заклёпками в углах; надпись по центру, а не у края.
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var plate_sb := UITheme.nine("plaque_title", Vector4(20, 16, 20, 16), Vector4(16, 7, 16, 7))
 	if plate_sb != null:
 		title_plate.add_theme_stylebox_override("panel", plate_sb)
 	title_plate.add_child(title)
@@ -1466,41 +1487,24 @@ func _build_ui() -> void:
 	# задала таро-кнопка Аркана (спека: строго квадратная 46×46); остальные были
 	# 46×36, поэтому ряд шёл рваным по высоте, а аватар жил в своей 9-slice
 	# текстуре вместо общего UIStyle-хрома.
-	var quests_btn := _header_button(2)
-	# На золотой кнопке белая база иконки не читается — тёмные чернила.
-	UIIcon.into_button(quests_btn, "star", 24, UIStyle.PAPER_INK)
-	quests_btn.tooltip_text = "Задания Светика, достижения, комплекты, заказы"
-	quests_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# Вся шапка — один материал: тёмное дерево с латунной иконкой. Раньше часть
+	# кнопок была светлой латунью без смысла за этим (претензия владельца);
+	# внимание теперь даёт только бейдж-счётчик, а не цвет плашки.
+	var quests_btn := _icon_row_button("gi_quests", "Задания Светика, достижения, комплекты, заказы")
 	quests_btn.pressed.connect(_progress_ui._open_progress_popup)
 	head.add_child(quests_btn)
-	var sigil_btn := _tarot_button()
-	_sigil_header_btn = sigil_btn
-	sigil_btn.tooltip_text = "Аркан Сигилов: ежедневные крафты"
-	sigil_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	sigil_btn.pressed.connect(_sigil_ui._open_sigil_modal)
-	head.add_child(sigil_btn)
-	# «▲N» → родная иконка trend_up + счётчик текстом (core._refresh_header).
-	# Если SVG не импортирован (текстуры нет), _refresh_header оставит глиф «▲».
-	var up_icon := UIIcon.texture("trend_up")
-	_hub._up_btn = _header_button(0)
-	if up_icon != null:
-		_hub._up_btn.icon = up_icon
-	else:
-		_hub._up_btn.text = "▲"
-	_hub._up_btn.tooltip_text = "Улучшения"
-	_hub._up_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# Счётчик доступных улучшений — бейдж на иконке (core._refresh_header), а не
+	# текст рядом с ней: Button.icon рисовался в натуральную величину SVG и
+	# вылезал за кнопку.
+	_hub._up_btn = _icon_row_button("gi_upgrade", "Улучшения")
+	_hub._up_btn.add_child(UIStyle.count_badge())
+	_place_badge(_hub._up_btn)
 	_hub._up_btn.pressed.connect(_hub._open_upgrades)
 	head.add_child(_hub._up_btn)
-	_sound_btn = _header_button(0)
-	UIIcon.into_button(_sound_btn, "volume", 24)
-	_sound_btn.tooltip_text = "Настройки звука"
-	_sound_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_sound_btn = _icon_row_button("gi_sound", "Настройки звука")
 	_sound_btn.pressed.connect(_hub._open_settings)
 	head.add_child(_sound_btn)
-	var log_btn := _header_button(0)
-	UIIcon.into_button(log_btn, "book", 24)
-	log_btn.tooltip_text = "Журнал событий"
-	log_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var log_btn := _icon_row_button("gi_journal", "Журнал событий")
 	log_btn.pressed.connect(_hub._open_journal)
 	head.add_child(log_btn)
 	var me_btn := _header_button(0)
@@ -1525,28 +1529,22 @@ func _build_ui() -> void:
 	_engine._ether_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_engine._ether_label.clip_text = true
 	ether_row.add_child(_engine._ether_label)
-	var home_btn := _small_button("Дом", Vector2(82, 34), 2)
-	home_btn.tooltip_text = "Дом Светика: построй домик, обставь его, смени тему и ауру"
+	# Ряд эфира — те же иконочные кнопки, что в шапке. Сверху всё открывается
+	# на весь экран или модалкой поверх всего: Дом, Лавка, Аркан Сигилов.
+	# Друзья — нижний раздел (BottomNav), их бейдж живёт там.
+	var home_btn := _icon_row_button("gi_house",
+		"Дом Светика: построй домик, обставь его, смени тему и ауру")
+	home_btn.name = "HomeBtn"
 	home_btn.pressed.connect(_home._open_workshop)
 	ether_row.add_child(home_btn)
-	var market_btn := _small_button("Лавка", Vector2(82, 34), 1)
-	market_btn.tooltip_text = "Покупки, награды за просмотр и приватность"
+	var market_btn := _icon_row_button("gi_shop", "Лавка: покупки, награды за просмотр и приватность")
+	market_btn.name = "ShopBtn"
 	market_btn.pressed.connect(_shop.open)
 	ether_row.add_child(market_btn)
-	# Доска живёт в нижнем ряду, а не в шапке: вход в неё — не счётчик и не
-	# настройки, а «дело дня», рядом с Домом и Лавкой.
-	var contracts_btn := _small_button("", Vector2(46, 34), 0)
-	contracts_btn.name = "ContractsBtn"
-	_contracts_header_btn = contracts_btn
-	UIIcon.into_button(contracts_btn, "board", 20)
-	contracts_btn.tooltip_text = "Контрактная доска: дневные и недельные задания"
-	contracts_btn.pressed.connect(_open_contract_board)
-	ether_row.add_child(contracts_btn)
-	var friends_btn := _small_button("Друзья", Vector2(96, 34), 2)
-	friends_btn.tooltip_text = "Друзья, заявки и личные сообщения"
-	friends_btn.pressed.connect(_open_social)
-	ether_row.add_child(friends_btn)
-	_social_btn = friends_btn
+	var arcana_btn := _icon_row_button("gi_arcana", "Аркан Сигилов: крафт карт и коллекция")
+	arcana_btn.name = "ArcanaBtn"
+	arcana_btn.pressed.connect(func() -> void: _sigil_ui._open_sigil_modal())
+	ether_row.add_child(arcana_btn)
 	_engine._collection_label = _label("", 14)
 	_engine._collection_label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	root.add_child(_engine._collection_label)
@@ -1591,6 +1589,8 @@ func _build_ui() -> void:
 	# Навигация живёт в нижнем иконковом баре и в объектах сцены: верхний
 	# TabContainer-бар спрятан, сам TabContainer остаётся переключателем страниц.
 	tabs.get_tab_bar().visible = false
+	# Стартовая вкладка — комната во весь экран: рамку панели вкладок не рисуем.
+	UIStyle.set_tabs_panel_bare(tabs, tabs.current_tab == TAB_EXPERIMENT)
 
 	_build_brew_bar()
 	_bottom_nav = BottomNav.new()
@@ -1598,8 +1598,8 @@ func _build_ui() -> void:
 	_bottom_nav.refresh(_tabs_ref.current_tab)
 	# Контент не должен уезжать под нижний бар: поднимаем низ корневого хоста.
 	margin.offset_bottom = -14 - BottomNav.NAV_H
-	_sheet = BottomSheet.new()
-	_sheet.build(self)
+	_screens = ScreenRouter.new()
+	_screens.build(self)
 	_spirit._build_companion()
 	_build_popup()
 	_build_confirm()
@@ -1756,7 +1756,11 @@ func _on_tab_changed(index: int) -> void:
 	_spirit._refresh_companion_visible()
 	if _bottom_nav != null:
 		_bottom_nav.refresh(index)
-		_bottom_nav.refresh_badges()
+	# Комната — фон всего стартового экрана и его навигация; на других разделах
+	# сцена уходит, а рамка панели возвращается.
+	UIStyle.set_tabs_panel_bare(_tabs_ref, index == TAB_EXPERIMENT)
+	if _rooms != null:
+		_rooms.set_scene_visible(index == TAB_EXPERIMENT)
 	if index == TAB_EXPERIMENT and _rooms != null:
 		_rooms.refresh_unlocks()
 	if index == TAB_WORLD:
@@ -1795,6 +1799,8 @@ func _update_brew_bar_visibility() -> void:
 	if _brew_bar == null:
 		return
 	var on_lab := _tabs_ref == null or _tabs_ref.current_tab == TAB_LAB
+	if _screens != null and _screens.is_open():
+		on_lab = _screens.key() == "brew"
 	_brew_bar.visible = on_lab
 	if _engine._repeat_btn != null:
 		_engine._repeat_btn.disabled = _engine.brewing or _engine._last_pair.size() != 2
@@ -1909,18 +1915,26 @@ func _header_button(kind: int) -> Button:
 			sb.content_margin_left = 2.0
 			sb.content_margin_right = 2.0
 	return b
-func _tarot_button() -> Button:
-	var b := _square_button("", 1)
-	var icon := TarotIcon.new()
-	icon.name = "Tarot"
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	b.add_child(icon)
-	icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-	icon.offset_left = 8.0
-	icon.offset_top = 6.0
-	icon.offset_right = -8.0
-	icon.offset_bottom = -6.0
+## Иконочная кнопка шапки: тёмное дерево, латунная иконка 24 px в квадрате 44.
+func _icon_row_button(icon: String, tip: String) -> Button:
+	var b := _header_button(0)
+	b.custom_minimum_size = Vector2(44, 42)
+	b.tooltip_text = tip
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	UIIcon.into_button(b, icon, 24, UIStyle.BRASS_HI)
 	return b
+
+
+## Бейдж-счётчик в правом верхнем углу кнопки, чуть заходит за край.
+func _place_badge(b: Control) -> void:
+	var badge := b.get_node_or_null("Badge") as Control
+	if badge == null:
+		return
+	badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	badge.offset_left = -20
+	badge.offset_right = 4
+	badge.offset_top = -5
+	badge.offset_bottom = 12
 
 func _label(text: String, font_size: int = 16) -> Label:
 	var node := Label.new()

@@ -141,6 +141,14 @@ static func _save_keys(g: Game) -> void:
 	t.from_save(data)
 	Selftest.check("roundtrip", t.unread_total() == 2)
 
+static func _badge(b: Button) -> String:
+	if b == null:
+		return "<no button>"
+	var label := b.get_node_or_null("Badge") as Label
+	if label == null:
+		return "<no badge>"
+	return label.text if label.visible else ""
+
 static func _wiring(g: Game) -> void:
 	# Мутации: убрать кнопку «Друзья» из ether_row, сузить её ниже 96,
 	# не звать _refresh_header после inbox (бейдж не отрендерится).
@@ -149,11 +157,14 @@ static func _wiring(g: Game) -> void:
 	# SCRIPT ERROR и молча сорвал бы прогон — а нам нужны честные FAIL-строки.
 	var b: Button = g.get("_social_btn")
 	Selftest.check("social button exists", b != null)
-	Selftest.check("button width holds badge", b != null and b.custom_minimum_size.x >= 96)
+	Selftest.check("social button is the bottom bar friends item", b != null
+		and b.get_parent() != null and g._bottom_nav._items.any(
+			func(it): return it["key"] == "friends" and it["btn"] == b)
+		and b.tooltip_text.contains("Друзья"))
 	g._social.on_inbox({"ok": true, "friends": [], "incoming": [],
 		"outgoing": [], "unread_total": 2, "requests_total": 0})
 	g._engine._refresh_header()
-	Selftest.check("badge renders after inbox", b != null and b.text == "Друзья •2")
+	Selftest.check("badge renders after inbox", _badge(b) == "2")
 	# Не оставляем мусор в живом кэше: ниже по прогону идут другие сюиты.
 	g._social.on_inbox({"ok": true, "friends": [], "incoming": [],
 		"outgoing": [], "unread_total": 0, "requests_total": 0})
@@ -379,7 +390,7 @@ static func _confirm(g: Game) -> void:
 		ui._body.find_children("FriendRow_dev-b", "", true, false).is_empty()
 		and ui._body.find_children("FriendRow_*", "", true, false).size() == 2)
 	g._engine._refresh_header()
-	Selftest.check("badge clears after inbox applied", g._social_btn.text == "Друзья")
+	Selftest.check("badge clears after inbox applied", _badge(g._social_btn) == "")
 	ui._confirm_close()
 	ui.close()
 
@@ -810,26 +821,11 @@ static func _badge_sum(g: Game) -> void:
 	g._social.on_inbox({"ok": true, "friends": [], "incoming": [],
 		"outgoing": [], "unread_total": 3, "requests_total": 1})
 	g._engine._refresh_header()
-	Selftest.check("badge sums unread and requests", b != null and b.text == "Друзья •4")
-	# Прецедент замера ширины («Друзья •2» vs 82 px, спека §8.4; пин-тест
-	# button width holds badge ≥ 96 выше по сюите): строка «Друзья •99+»
-	# фактическим шрифтом кнопки обязана помещаться в её эффективный
-	# minimum-size (custom_minimum_size — нижняя граница, Godot расширяет
-	# кнопку до text+content margins; обрезки значит нет).
-	if b != null:
-		var f := b.get_theme_font("font")
-		var fs := b.get_theme_font_size("font_size")
-		var box := b.get_theme_stylebox("normal") as StyleBox
-		var margins: float = 24.0
-		if box != null:
-			margins = box.content_margin_left + box.content_margin_right
-		var need: float = (f.get_string_size("Друзья •99+", HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-			if f != null else 0.0) + margins
-		var old_text := b.text
-		b.text = Social.badge_for(150)
-		var fits := b.get_combined_minimum_size().x >= need
-		b.text = old_text
-		Selftest.check("badge •99+ not clipped on header button", f != null and fits)
+	Selftest.check("badge sums unread and requests", _badge(b) == "4")
+	g._social.on_inbox({"ok": true, "friends": [], "incoming": [],
+		"outgoing": [], "unread_total": 150, "requests_total": 0})
+	g._engine._refresh_header()
+	Selftest.check("badge caps at 99+ on the icon", _badge(b) == "99+")
 	g._social.on_inbox({"ok": true, "friends": [], "incoming": [],
 		"outgoing": [], "unread_total": 0, "requests_total": 0})
 	g._engine._refresh_header()

@@ -9,9 +9,16 @@ static func run(g: Game) -> void:
 	Selftest.check("brew btn inside bar", g._engine._brew_btn.get_parent() != g._tabs_ref and g._brew_bar.is_ancestor_of(g._engine._brew_btn))
 	Selftest.check("primary experiment tab", g._tabs_ref.get_tab_title(0) == "Эксперимент")
 	Selftest.check("experiment location built", g._pages._experiment_field != null and g._pages._experiment_cauldron != null and g._pages._experiment_drawer != null)
+	# Комната — главный экран: выбор реагентов спрятан и открывается по тапу.
+	if g._pages._experiment_drawer.visible:
+		g._pages._toggle_experiment_drawer()
+	Selftest.check("experiment drawer hidden until asked", not g._pages._experiment_drawer.visible
+		and g._pages._experiment_cauldron_btn.visible
+		and g._pages._experiment_cauldron_art.visible)
 	g._pages._toggle_experiment_drawer()
-	Selftest.check("experiment drawer reopens", not g._pages._experiment_drawer.visible and g._pages._experiment_reopen_button.visible)
+	Selftest.check("experiment drawer opens on demand", g._pages._experiment_drawer.visible)
 	g._pages._toggle_experiment_drawer()
+	Selftest.check("experiment drawer closes back to the field", not g._pages._experiment_drawer.visible)
 	g._engine.inventory["fire"] = maxi(int(g._engine.inventory.get("fire", 0)), 1)
 	var exp_tokens_before := g._pages._experiment_tokens.size()
 	g._pages._experiment_spawn_token("fire")
@@ -21,6 +28,7 @@ static func run(g: Game) -> void:
 	Selftest.check("field reagent enters cauldron", g._pages._experiment_cauldron_items.size() == 1 and g._pages._experiment_cauldron_items[0] == "fire")
 	g._pages._experiment_clear_cauldron()
 	Selftest.check("experiment cauldron can be cleared", g._pages._experiment_cauldron_items.is_empty())
+	g._screens.close()
 	g._tabs_ref.current_tab = Game.TAB_WORLD
 	g._update_brew_bar_visibility()
 	Selftest.check("bar hides on other tab", not g._brew_bar.visible)

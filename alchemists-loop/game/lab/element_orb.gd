@@ -80,6 +80,13 @@ func refuse() -> void:
 	_shake()
 	_bump(0.9)
 
+func cancel_drag() -> void:
+	_pressed = false
+	_dragging = false
+	_drop_done = true
+	modulate.a = 1.0
+	queue_redraw()
+
 func _input(event: InputEvent) -> void:
 	# Пока тащим орб, фиксируем отпускание ГЛОБАЛЬНО: если курсор во время
 	# переноса оказался над «поиском», полосой прокрутки или другим контролом,

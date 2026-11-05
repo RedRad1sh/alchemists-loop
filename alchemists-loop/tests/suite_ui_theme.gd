@@ -3,7 +3,7 @@ class_name SuiteUiTheme
 # P0 темы UI. Каждый пин краснеет от конкретной правки:
 # - token X — возврат старого холодного hex;
 # - icon default — возврат UIIcon.into_button к UIStyle.TEXT;
-# - experiment field title warm — возврат подписи поля к холодному литералу.
+# - room prop plaque warm — возврат подписи предмета комнаты к холодному цвету.
 
 static func run(g: Game) -> void:
 	_tokens()
@@ -281,9 +281,22 @@ static func _main_screen(g: Game) -> void:
 
 
 static func _warm_texts(g: Game) -> void:
-	var title := g.find_child("ExperimentFieldTitle", true, false) as Label
-	Selftest.check("experiment field title warm",
-		title != null and title.get_theme_color("font_color").is_equal_approx(UIStyle.BRASS))
+	# Обводка предмета комнаты: бледно-жёлтый тёплый контур, а не холодный
+	# литерал. И обязательно шейдерная, по контуру самого спрайта:
+	# прямоугольная рамка тап-зоны (Panel + StyleBoxFlat) — это и есть
+	# «ореол квадратный», она гасит warm и красит пин.
+	var warm := true
+	for pname in ["Prop_Deck", "Prop_Board", "Prop_Scroll"]:
+		var prop: Control = g._rooms._host.find_child(pname, true, false) as Control
+		var glow := prop.get_meta("glow", null) as Control if prop != null else null
+		var sprite := prop.find_child("Sprite", true, false) as TextureRect if prop != null else null
+		var mat := glow.material as ShaderMaterial if glow != null else null
+		if mat == null or sprite == null or glow.texture != sprite.texture:
+			warm = false
+			continue
+		var c: Color = mat.get_shader_parameter("outline_color")
+		warm = warm and c.r > c.b and c.g > c.b and c.a > 0.5
+	Selftest.check("room prop outline is pale warm gold", warm)
 
 
 static func _wiring(g: Game) -> void:

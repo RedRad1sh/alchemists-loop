@@ -23,6 +23,7 @@ static func run(g: Game) -> void:
 			ancestor = ancestor.get_parent()
 		Selftest.check("pages production uses existing outer scroll", ancestor is ScrollContainer
 			and ancestor == g._tabs_ref.get_child(Game.TAB_TOOLS) and view.get_parent() == page)
+		await _navigation(g, view)
 	w.enqueue(w.lines[0]["id"], {"target": "steam", "mode": "batch", "amount": 6})
 	w.lines[0]["phase_seconds"] = 17.0
 	var retained := w.export_state()
@@ -46,6 +47,32 @@ static func run(g: Game) -> void:
 
 static func _sync(g: Game) -> bool:
 	return bool(g._pages.call("_sync_legacy_bench"))
+
+static func _navigation(g: Game, view: Node) -> void:
+	var original_tab := g._tabs_ref.current_tab
+	var before := g._workshop.export_state()
+	var known := g._engine.known_recipes.duplicate(true)
+	g._engine.known_recipes.clear()
+	for tab in [Game.TAB_TOOLS, Game.TAB_EXPERIMENT]:
+		g._screens.close()
+		g._tabs_ref.current_tab = tab
+		g._pages._open_device_screen("bench", "Производство")
+		view.refresh()
+		await g.get_tree().process_frame
+		var button := view.find_child("OpenExperiment", true, false) as Button
+		Selftest.check("pages unknown recipe navigation is reachable from tab %d" % tab,
+			button.is_visible_in_tree() and not button.disabled)
+		if button.is_visible_in_tree() and not button.disabled:
+			button.pressed.emit()
+		await g.get_tree().process_frame
+		Selftest.check("pages recipe action opens full experiment from tab %d" % tab,
+			g._screens.key() == "cauldron" and g._screens.node == g._pages._experiment_field
+			and g._tabs_ref.current_tab == Game.TAB_EXPERIMENT)
+	Selftest.check("pages experiment navigation preserves production", g._workshop.export_state() == before)
+	g._screens.close()
+	g._tabs_ref.current_tab = original_tab
+	g._engine.known_recipes = known
+	view.refresh()
 
 static func _legacy(g: Game, w: Workshop) -> void:
 	w.import_state({"version": 1, "unlocked": true, "rank": 1, "xp": 100})

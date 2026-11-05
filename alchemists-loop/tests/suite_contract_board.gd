@@ -2329,12 +2329,12 @@ static func _contract_board_checks(g: Game) -> void:
 	board._close_reward()
 
 	# --- Кнопка входа (Polish 3) ---
-	# 25. Кнопка доски понижена из ряда шапки в ряд эфира и несёт свою иконку.
-	var hb: Button = g._contracts_header_btn
-	Selftest.check("§7 the board button lives in the lower row with its own board icon",
-		hb != null and hb.get_parent() != null and hb.get_parent().name == "EtherRow"
-		and UIIcon.texture("board") != null
-		and hb.get_node_or_null("IconCenter/Icon_board") != null)
+	# 25. Вход в доску — сама доска в комнате; дубль в нижнем баре убран.
+	var nav_board := false
+	for it in g._bottom_nav._items:
+		nav_board = nav_board or it["key"] == "board"
+	Selftest.check("§7 the board entry is the room prop, not a bottom bar item",
+		not nav_board and g._rooms._host.find_child("Prop_Board", true, false) != null)
 
 	# --- Juice Task 4: hover, stamp, board/reward, hearth/rank ---
 	# T4-1. Наведение считается по всей бумаге: STOP-потомок (строка награды,

@@ -66,7 +66,12 @@ SCENARIOS: dict[str, list[str]] = {
     "trade_confirm": ["--action=trade_confirm"],
     "trade_gift": ["--action=trade_gift"],
     "room_workshop": ["--action=master"],
-    "sheet_bench": ["--action=sheet"],
+    "room_reagents": ["--action=reagents"],
+    "room_cauldron_brew": ["--action=cauldronbrew"],
+    "screen_bench": ["--action=device"],
+    # Приёмка вёрстки экранов устройств: один и тот же роутер, разный контент.
+    "screen_retort": ["--action=device", "--device=retort"],
+    "screen_atlas": ["--action=device", "--device=atlas"],
 }
 
 # Таймауты настраиваются из env: CI снимает базовые ветки с заведомо
