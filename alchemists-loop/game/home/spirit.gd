@@ -191,12 +191,22 @@ func _companion_open_dialog(text: String, ask_name: bool) -> void:
 	_companion_dlg_title.text = _spirit_name
 	if _companion_dlg_aff != null:
 		_companion_dlg_aff.text = _companion_affinity_line()
+	# Godot 4 сортирует отрисовку по z_index, а GUI-пикинг — по порядку детей в
+	# дереве: полноэкранный STOP-слой дома (z=20, добавлен позже диалога) глушил
+	# клики по «Закрыть», даже когда диалог был поднят до z=23. Пока модальный
+	# диалог открыт, он обязан быть последним.
+	g.move_child(_companion_dim, -1)
+	g.move_child(_companion_dlg, -1)
 	Juice.open(_companion_dim, _companion_dlg)
 	if _companion != null:
 		_companion.z_index = 10
 
 func _companion_close_dialog() -> void:
 	Juice.close(_companion_dim, _companion_dlg)
+	# Экран дома поднимает диалог над своим z=20; на закрытии возвращаем штатные
+	# значения из `_build_companion_dialog`, иначе диалог перекроет витрину сигилов.
+	_companion_dim.z_index = 8
+	_companion_dlg.z_index = 9
 	if _companion != null:
 		_companion.z_index = 3
 	Sfx.click()

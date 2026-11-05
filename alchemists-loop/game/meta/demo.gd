@@ -31,6 +31,15 @@ var _action_journal := false
 var _action_settings := false
 var _action_craftable := false
 var _action_workshop := false
+var _action_house_tray := false
+var _action_house_touch := false
+var _house_lift_deadline := 0
+var _house_lift_skipped := 0
+var _action_room_spike_full := false
+var _house_input_ok := true
+var _house_shot_pending := false
+var _action_room_spike := false
+var _action_room_camera := false
 var _action_rating := false
 var _action_decor := false
 var _decor_demo_cat := "rug"
@@ -72,6 +81,259 @@ var _demo_confirm := ""
 
 func _init(game: Game) -> void:
 	g = game
+
+func house_capture_action() -> bool:
+	return _action_house_tray or _action_house_touch or _action_room_spike_full or _action_decor or _action_guesthouse or _action_palette
+
+
+static func full_house_layout() -> Array[Dictionary]:
+	var full: Array[Dictionary] = []
+	# Метрики предметов удвоены, поэтому сплошная мебель (стол 1,0×2,0 м) стоит на
+	# сетке 4×3, а остальные слоты закрыты коврами: ковёр разрешено класть поверх,
+	# и только так набирается потолок расстановки в 40 предметов.
+	var xs := [-2.4, -0.8, 0.8, 2.4]
+	var zs := [-2.2, 0.0, 2.2]
+	var solid := xs.size() * zs.size()
+	for i in HouseLayout.MAX_ITEMS:
+		var slot := i % solid
+		var p := Placement.snap_record({"id": "table" if i < solid else "rug",
+			"x": xs[slot % 4], "z": zs[int(slot / 4.0)], "y": 0.0,
+			"flip": i % 2 == 0, "wall": -1})
+		if not Placement.valid(p, full):
+			push_error("Stress layout contains an invalid placement")
+			return []
+		full.append(p)
+	return full
+
+
+func _seed_house() -> void:
+	g._home._cosmetic_house = not (_action_house_tray or _action_house_touch)
+	g._home.house_unlocked.clear()
+	g._home.house_tasks_done.clear()
+	g._home.house_placements.clear()
+	if not (_action_house_tray or _action_house_touch):
+		g._home.house_placements = HouseLayout.default_placements()
+		for cat in HouseItems.CATS:
+			g._home._unlock_item(HouseItems.base_item(String(cat)))
+	else:
+		g._engine.ether = 2000
+		g._engine.ether_overflow = 0
+	g._home._apply_cosmetic()
+	g._home._refresh_house_screen()
+
+
+func _house_check(label: String, ok: bool) -> void:
+	_house_input_ok = _house_input_ok and ok
+	print("HOUSE_UI ", label, " ", "OK" if ok else "FAIL")
+
+
+func _house_pointer(name: String, pressed: bool) -> void:
+	var target := g.find_child(name, true, false) as Control
+	if target == null:
+		_house_check("missing target " + name, false)
+		return
+	_screen_touch(target.get_global_rect().get_center(), pressed)
+
+
+func _house_card_pointer(id: String, pressed: bool) -> void:
+	var card := g._home._house_cards.get_node_or_null(NodePath(id))
+	var target := card.find_child("Action", true, false) as Button if card != null else null
+	if target != null:
+		_screen_touch(target.get_global_rect().get_center(), pressed)
+	else:
+		_house_check("missing card " + id, false)
+
+
+func _house_esc() -> void:
+	var ev := InputEventKey.new()
+	ev.pressed = true
+	ev.keycode = KEY_ESCAPE
+	g.get_viewport().push_input(ev)
+
+
+func _house_input_smoke(frame: int) -> void:
+	var h := g._home
+	match frame:
+		4, 5: _house_pointer("HouseEntry", frame == 4)
+		8: _house_check("entry opens unbuilt overlay", h._house_screen.visible and h._house_overlay.visible)
+		10, 11: _house_pointer("BuildHouse", frame == 10)
+		14: _house_check("build seeds nine base items", h._cosmetic_house and h.house_placements.size() == 9 and h.house_unlocked.has("bed"))
+		18, 19: _screen_touch(Vector2(70, 500), frame == 18)
+		22: _house_check("room tap does not close", h._house_screen.visible)
+		24, 25: _house_pointer("OpenTray", frame == 24)
+		28: _house_check("decor tray opens", h._house_tray_open)
+		30, 31: _house_pointer("Tab_cozy", frame == 30)
+		34: _house_check("cozy tab opens in scroll", (h._house_tab_scrolls["cozy"] as Control).visible)
+		36, 37: _house_pointer("Tab_spirit", frame == 36)
+		40: _house_check("spirit tasks visible", (h._house_tab_scrolls["spirit"] as Control).visible and h._task_rows.size() == 6)
+		42, 43: _house_pointer("Tab_decor", frame == 42)
+		48, 49: _house_card_pointer("window_alt", frame == 48)
+		52: _house_check("buy alternate card", h.house_unlocked.has("window_alt"))
+		54, 55: _house_card_pointer("window_alt", frame == 54)
+		56:
+			_house_check("card creates pointer ghost without append", h.house_placements.size() == 9 and h._house_room._touch.ghost_exists())
+			_house_motion(_house_world(Vector3(-Placement.ROOM_HALF, 1.35, 1.5)))
+		57, 58: _screen_touch(_house_world(Vector3(-Placement.ROOM_HALF, 1.35, 1.5)), frame == 57)
+		59: _house_check("pointer release places and tray stays closed", h.house_placements.size() == 10 and not h._house_tray_open)
+		60, 61: _house_pointer("OpenTray", frame == 60)
+		66: _house_esc()
+		68: _house_check("esc closes tray first", not h._house_tray_open and h._house_screen.visible)
+		70: _house_esc()
+		72: _house_check("esc closes screen second", not h._house_screen.visible and h._house_room._viewport.render_target_update_mode == SubViewport.UPDATE_DISABLED)
+		74, 75: _house_pointer("HouseEntry", frame == 74)
+		78, 79: _house_pointer("OpenTray", frame == 78)
+		82: _house_check("reopen actual tray", h._house_tray_open and h._house_room.is_visible_in_tree())
+		84:
+			# Только позиционирование скролла; сам выбор категории — pointer ниже.
+			var chips := h._house_decor_tab.get_node("CategoryChips") as ScrollContainer
+			chips.ensure_control_visible(h._house_cat_btns["rug"])
+		88, 89: _house_pointer("Cat_rug", frame == 88)
+		92: _house_check("category contains base and locked alternate cards", h._shop_cat == "rug"
+			and h.house_unlocked.has("rug") and not h.house_unlocked.has("rug_alt"))
+
+
+func _house_world(at: Vector3) -> Vector2:
+	return g._home._house_room.get_global_transform_with_canvas() * (g._home._house_room._camera.unproject_position(at) / g._home._house_room._px_scale)
+
+
+func _house_motion(at: Vector2) -> void:
+	var ev := InputEventMouseMotion.new()
+	ev.position = at
+	ev.global_position = at
+	ev.relative = Vector2(18, -24)
+	ev.button_mask = MOUSE_BUTTON_MASK_LEFT
+	g.get_viewport().push_input(ev)
+
+
+func _house_touch(index: int, at: Vector2, down: bool) -> void:
+	var ev := InputEventScreenTouch.new()
+	ev.index = index
+	ev.position = at
+	ev.pressed = down
+	g.get_viewport().push_input(ev)
+
+
+func _house_touch_drag(index: int, at: Vector2) -> void:
+	var ev := InputEventScreenDrag.new()
+	ev.index = index
+	ev.position = at
+	ev.relative = Vector2(18, -24)
+	g.get_viewport().push_input(ev)
+
+
+func _house_picture_pointer(id: String, down: bool) -> void:
+	var pic := g._home._house_cards.get_node_or_null(NodePath(id + "/Content/Picture")) as Control
+	if pic != null:
+		_screen_touch(pic.get_global_rect().get_center(), down)
+	else:
+		_house_check("missing picture " + id, false)
+
+
+func _capture_house_state(label: String) -> void:
+	await RenderingServer.frame_post_draw
+	var img := g.get_viewport().get_texture().get_image()
+	var path := _shot_path.get_base_dir().path_join(label + ".png")
+	var err := img.save_png(path)
+	print("HOUSE_STATE ", label, " path=", path, " err=", err)
+	_house_input_ok = _house_input_ok and err == OK
+
+
+func _house_touch_smoke(frame: int) -> void:
+	# Lift-твин длится 0.18 с реального времени, а без упора в vsync кадры идут быстрее 16 мс:
+	# паузу меряем часами, а не фиксированным числом кадров.
+	if frame == 18:
+		_house_lift_deadline = Time.get_ticks_msec() + 300
+	if _house_lift_deadline > 0:
+		if Time.get_ticks_msec() < _house_lift_deadline:
+			_house_lift_skipped += 1
+			return
+		_house_lift_deadline = 0
+	frame -= _house_lift_skipped
+	var h := g._home
+	var v := h._house_room
+	match frame:
+		4, 5: _house_pointer("HouseEntry", frame == 4)
+		8:
+			_house_check("actual unbuilt overlay", h._house_screen.visible and h._house_overlay.visible)
+			_capture_house_state("01_unbuilt")
+		10, 11: _house_pointer("BuildHouse", frame == 10)
+		14:
+			_house_check("actual built layout B", h.house_placements.size() == 9 and not h._house_overlay.visible)
+			_capture_house_state("02_built")
+		16, 17: _house_pointer("OpenTray", frame == 16)
+		22:
+			_house_check("real tray and half lift", h._house_tray_open and absf(v._tray_lift_px - h._house_tray_room_rect().size.y * 0.5) < 0.1)
+			_capture_house_state("03_tray")
+		24: h._set_shop_cat("table")
+		26: _house_picture_pointer("table", true)
+		27, 28: _house_motion(_house_world(Vector3(1.2, 0, 1.6)))
+		29:
+			_house_check("native card drag has valid moving ghost without append", v._touch.ghost_exists() and v._touch.ghost_valid() and h.house_placements.size() == 9 and not h._house_tray_open)
+			_capture_house_state("04_valid_ghost")
+		30: _screen_touch(_house_world(Vector3(1.2, 0, 1.6)), false)
+		32: _house_check("captured card release adds exactly one", h.house_placements.size() == 10 and v._touch.last_placed_id == "table")
+		34, 35: _house_pointer("OpenTray", frame == 34)
+		36: _house_picture_pointer("table", true)
+		37, 38: _house_motion(_house_world(Vector3(0.95, 0, -2.28)))
+		40:
+			_house_check("occupied native ghost is red", v._touch.ghost_exists() and not v._touch.ghost_valid())
+			_capture_house_state("05_invalid_ghost")
+		41: _screen_touch(_house_world(Vector3(0.95, 0, -2.28)), false)
+		43: _house_check("invalid release never appends", h.house_placements.size() == 10 and h._house_spirit_node._override_key == "sad_soft")
+		45, 46: _screen_touch(_house_world(Vector3(1.2, 0.2, 1.6)), frame == 45)
+		48:
+			_house_check("native selected toolbar", h._house_toolbar.visible and v.selected_index() == 9)
+			_capture_house_state("06_toolbar")
+		50, 51: _house_pointer("HouseFlip", frame == 50)
+		52: _house_check("native toolbar flip saved", h.house_placements.size() == 10 and h.house_placements[9]["flip"])
+		54: _house_touch(3, _house_world(Vector3(1.2, 0.2, 1.6)), true)
+		56: _house_touch_drag(3, _house_world(Vector3(-2.4, 0, 0.9)))
+		57: _house_touch(7, Vector2(70, 200), true)
+		58: _house_touch_drag(7, Vector2(190, 300))
+		59: _house_touch(7, Vector2(190, 300), false)
+		60: _house_check("secondary touch release cannot commit primary drag", v._touch.ghost_exists() and v._touch._primary == 3 and is_equal_approx(h.house_placements[9]["x"], 1.2))
+		61: _house_touch(3, _house_world(Vector3(-2.4, 0, 0.9)), false)
+		64: _house_check("primary touch move reaches exact saved layout", h.house_placements[9]["x"] == -2.4 and h.house_placements == v.placements)
+		66, 67: _house_pointer("OpenTray", frame == 66)
+		68: h._set_shop_cat("rug")
+		70: _house_picture_pointer("rug", true)
+		71, 72: _house_motion(_house_world(Vector3(0, 0, 1)))
+		74: _house_motion(Vector2(270, 800))
+		75: _screen_touch(Vector2(270, 800), false)
+		76: _house_check("returning pointer into tray strip cancels", not v._touch.ghost_exists() and h.house_placements.size() == 10)
+		78:
+			h._apply_player_house("Люмина", {"v": 2, "built": true, "items": HouseLayout.default_placements(), "world_first": 4, "aura": "rose"})
+			h._house_popup.visible = true
+		82:
+			_house_check("actual guest showcase read only", h._house_popup.visible and h._house_popup_view.read_only and h._host_showcase_lbl.text.begins_with("Колбы: 4"))
+			_capture_house_state("07_guest")
+		84:
+			h._close_house_popup()
+			h.house_placements = full_house_layout()
+			h._refresh_house_screen()
+		88:
+			var count := 0
+			for node in v._items:
+				if node._reflection != null and node._shadow != null:
+					count += 1
+			_house_check("stress 40 items reflections shadows", count == 40 and h.house_placements.size() == 40)
+			_capture_house_state("08_stress40")
+		89:
+			_house_check("stress 41st rejected", not h._on_room_placement({"id": "rug", "x": 0.0, "z": 0.0, "y": 0.0, "flip": false, "wall": -1}) and h.house_placements.size() == 40)
+		92: _house_esc()
+		94:
+			_house_check("esc closes and clears selection", not h._house_screen.visible and not h._house_toolbar.visible and not v._touch.capturing())
+
+
+func _capture_house_frame() -> void:
+	await RenderingServer.frame_post_draw
+	var img := g.get_viewport().get_texture().get_image()
+	var err := img.save_png(_shot_path) if img != null else ERR_UNAVAILABLE
+	print("HOUSE_FRAME viewport=", g.get_viewport_rect().size, " tray=", g._home._house_tray.size,
+		" lift=", g._home._house_room._tray_lift_px)
+	print("SHOT ", _shot_path, " err=", err)
+	g.get_tree().quit(0 if err == OK and _house_input_ok else 1)
+
 
 func _auto_confirm_demo() -> void:
 	# headless-диагностика: подтверждаем диалог автоварки без клика
@@ -373,6 +635,15 @@ func _tick_demo() -> bool:
 		_shot_frame += 1
 		if _action_experiment and not _experiment_input_done:
 			_experiment_input_smoke(_shot_frame)
+		if house_capture_action():
+			if _action_house_tray:
+				_house_input_smoke(_shot_frame)
+			elif _action_house_touch:
+				_house_touch_smoke(_shot_frame)
+			if _shot_frame >= 120 + _house_lift_skipped and not _house_shot_pending:
+				_house_shot_pending = true
+				_capture_house_frame()
+			return true
 		if _shot_scroll >= 0 and _shot_frame in [20, 40]:
 			_set_page_scroll(_shot_scroll)
 		if _pending_hint_shot and _shot_frame == 44:

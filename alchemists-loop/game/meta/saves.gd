@@ -58,6 +58,7 @@ func _save_game() -> bool:
 	snapshot_ts = maxf(snapshot_ts, _timestamp(workshop_state.get("last_simulated_at")))
 	if not g._workshop.is_read_only():
 		workshop_state["last_simulated_at"] = snapshot_ts
+	var house_block := _house_block()
 	var data := {
 		"version": Game.SAVE_VERSION,
 		"device_id": g._online._device_id,
@@ -133,9 +134,8 @@ func _save_game() -> bool:
 		"cosmetic_aura": g._home._cosmetic_aura,
 		"cosmetic_house": g._home._cosmetic_house,
 		"companion_unlocked": g._spirit._companion_unlocked,
-		"house_furniture": g._home.house_furniture,
-		"house_layout": g._home.house_layout,
-		"house_owned": g._home.house_owned,
+		"house_unlocked": house_block["house_unlocked"],
+		"house_placements": house_block["house_placements"],
 		"house_visited_day": g._home.house_visited_day,
 		"house_gift_week": g._home.house_gift_week,
 		"house_gift_count": g._home.house_gift_count,
@@ -147,6 +147,8 @@ func _save_game() -> bool:
 		"wall_hex": "#" + g._home._cosmetic_wall.to_html(false),
 		"floor_hex": "#" + g._home._cosmetic_floor.to_html(false),
 		"custom_unlocked": g._home._custom_unlocked,
+		"floor_mat": g._home._floor_mat,
+		"wall_mat": g._home._wall_mat,
 		# Доска v2 (Task 6, спека §6): ключи очага/вех/круга/ярмарки переехали в
 		# блок contracts v2 (save_block) и здесь больше не пишутся. server_tags —
 		# знание Online, остаётся на верхнем уровне.
@@ -235,6 +237,30 @@ func _migrate_retention_into_contracts(data: Dictionary) -> void:
 	c._migrate_missed_milestones()
 	c._check_day_miles()
 	c._check_pts_miles()
+
+## Материал из сейва принимается, только если он бесплатный или куплен.
+static func _owned_mat(game: Game, kind: String, id: String) -> String:
+	var m := DecorData.floor_mat(id) if kind == "floor" else DecorData.wall_mat(id)
+	var mid := String(m["id"])
+	if int(m["cost"]) == 0 or bool(game._home._custom_unlocked.get("mat_%s_%s" % [kind, mid], false)):
+		return mid
+	return String((DecorData.FLOOR_MATS if kind == "floor" else DecorData.WALL_MATS)[0]["id"])
+
+
+func _house_block() -> Dictionary:
+	return {
+		"house_unlocked": g._home.house_unlocked.duplicate(),
+		"house_placements": g._home.house_placements.duplicate(true),
+	}
+
+func _apply_house_block(data: Dictionary) -> void:
+	var model := HouseLayout.parse({
+		"unlocked": data.get("house_unlocked", []),
+		"placements": data.get("house_placements", []),
+	})
+	g._home.house_unlocked = model.unlocked
+	g._home.house_placements = model.placements
+
 
 func _load_game() -> void:
 	var data := _read_save(g.SAVE_PATH)
@@ -383,43 +409,8 @@ func _load_game() -> void:
 	if data.get("cosmetic_aura") is String:
 		g._home._cosmetic_aura = String(data["cosmetic_aura"])
 	g._home._cosmetic_house = bool(data.get("cosmetic_house", false))
-	g._home.house_furniture.clear()
-	if data.get("house_furniture") is Dictionary:
-		for k in data["house_furniture"]:
-			var cat := String(k)
-			var vid := String(data["house_furniture"][k])
-			if not g._home._decor_cat(cat).is_empty() and not g._home._decor_item(cat, vid).is_empty():
-				g._home.house_furniture[cat] = vid
-	elif data.get("house_furniture") is Array:
-		# старый сейв: плоский список категорий → дефолтный вариант каждой
-		for fid in data["house_furniture"]:
-			var fs := String(fid)
-			if not g._home._decor_cat(fs).is_empty():
-				g._home.house_furniture[fs] = fs
-	g._home.house_layout.clear()
-	if data.get("house_layout") is Dictionary:
-		for k in data["house_layout"]:
-			var lcat := String(k)
-			if g._home._decor_cat(lcat).is_empty():
-				continue
-			var lpos = data["house_layout"][k]
-			if lpos is Array and lpos.size() >= 2:
-				g._home.house_layout[lcat] = [clampf(float(lpos[0]), -0.25, 1.25), clampf(float(lpos[1]), -0.25, 1.25)]
-	g._home.house_owned.clear()
-	if data.get("house_owned") is Dictionary:
-		for k in data["house_owned"]:
-			var ocat := String(k)
-			if g._home._decor_cat(ocat).is_empty():
-				continue
-			var oarr: Array = []
-			if data["house_owned"][k] is Array:
-				for v in data["house_owned"][k]:
-					var ovid := String(v)
-					if not g._home._decor_item(ocat, ovid).is_empty() and not oarr.has(ovid):
-						oarr.append(ovid)
-			g._home.house_owned[ocat] = oarr
-	# γ: локальный кэш визитов — словарь nick -> "YYYY-MM-DD"; фильтр по строковым
-	# ключам-никнеймам, как у house_owned по категориям
+	_apply_house_block(data)
+	# γ: локальный кэш визитов — словарь nick -> "YYYY-MM-DD"; ключи-никнеймы обязаны быть строками.
 	g._home.house_visited_day.clear()
 	if data.get("house_visited_day") is Dictionary:
 		for k in data["house_visited_day"]:
@@ -435,9 +426,6 @@ func _load_game() -> void:
 			for t in Game.HOUSE_TASKS:
 				if String(t["id"]) == tid and not g._home.house_tasks_done.has(tid):
 					g._home.house_tasks_done.append(tid)
-	# миграция: текущая расстановка считается купленной
-	for fcat in g._home.house_furniture:
-		g._home._own_item(String(fcat), String(g._home.house_furniture[fcat]))
 	g._home._theme_custom_on = bool(data.get("theme_custom_on", false))
 	if typeof(data.get("theme_custom")) == TYPE_STRING:
 		g._home._theme_custom = g._home._color_from_hex(String(data["theme_custom"]), Color("#0d1219"))
@@ -445,9 +433,9 @@ func _load_game() -> void:
 	if typeof(data.get("aura_custom")) == TYPE_STRING:
 		g._home._aura_custom = g._home._color_from_hex(String(data["aura_custom"]), Color("#ffb85c"))
 	if typeof(data.get("wall_hex")) == TYPE_STRING:
-		g._home._cosmetic_wall = g._home._color_from_hex(String(data["wall_hex"]), Color("#5a4d40"))
+		g._home._cosmetic_wall = g._home._color_from_hex(String(data["wall_hex"]), Color.WHITE)
 	if typeof(data.get("floor_hex")) == TYPE_STRING:
-		g._home._cosmetic_floor = g._home._color_from_hex(String(data["floor_hex"]), Color("#5d452f"))
+		g._home._cosmetic_floor = g._home._color_from_hex(String(data["floor_hex"]), Color.WHITE)
 	g._home._custom_unlocked.clear()
 	if data.get("custom_unlocked") is Dictionary:
 		for k in data["custom_unlocked"]:
@@ -459,10 +447,15 @@ func _load_game() -> void:
 			g._home._custom_unlocked["theme"] = true
 		if g._home._aura_custom_on:
 			g._home._custom_unlocked["aura"] = true
-		if String(data.get("wall_hex", "")) != "":
-			g._home._custom_unlocked["wall"] = true
-		if String(data.get("floor_hex", "")) != "":
-			g._home._custom_unlocked["floor"] = true
+	# Некупленная косметика не имеет права красить комнату: `wall_hex`/`floor_hex`
+	# пишутся при каждом сейве, поэтому их наличие никогда не означало покупку,
+	# а прежний «дефолтный» коричневый тон затемнял стены навсегда.
+	if not bool(g._home._custom_unlocked.get("wall", false)):
+		g._home._cosmetic_wall = Color.WHITE
+	if not bool(g._home._custom_unlocked.get("floor", false)):
+		g._home._cosmetic_floor = Color.WHITE
+	g._home._floor_mat = _owned_mat(g, "floor", String(data.get("floor_mat", "")))
+	g._home._wall_mat = _owned_mat(g, "wall", String(data.get("wall_mat", "")))
 	# Доска v2 (Task 6, спека §6): старые retention-ключи больше не читаются
 	# построчно — при наличии хотя бы одного из них запускается однократная
 	# presence-миграция в Contracts (порядок присваиваний и побочные вызовы —

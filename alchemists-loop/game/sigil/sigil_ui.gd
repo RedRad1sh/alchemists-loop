@@ -1864,10 +1864,6 @@ func _close_top_modal() -> bool:
 		# Не даём обойти первый consent через Esc: один из двух режимов
 		# должен быть выбран явно.
 		return true
-	elif main._home != null and main._home._decor_popup != null and main._home._decor_popup.visible:
-		# Магазин декора — modal surface с z=100 (home.gd), выше shop/hub/discovery.
-		main._home._close_decor_popup()
-		return true
 	elif main._shop != null and main._shop._popup != null and main._shop._popup.visible:
 		main._shop.close()
 		return true
@@ -1942,9 +1938,11 @@ func _close_top_modal() -> bool:
 	elif main._social_ui != null and main._social_ui._screen != null and main._social_ui._screen.visible:
 		main._social_ui.close()
 		return true
+	elif main._home != null and main._home._house_tray_open:
+		main._home._close_house_tray()
+		return true
 	elif main._home != null and main._home._house_screen != null and main._home._house_screen.visible:
-		# Полноэкранный дом (z=20) — нижняя поверхность: декор-магазин, палитра и
-		# гостевой домик лежат поверх него и закрываются раньше.
+		# Палитра и гостевой домик лежат выше экрана и лотка.
 		main._home._close_house_screen()
 		return true
 	return false
@@ -1972,8 +1970,6 @@ func _modal_open_for_ads() -> bool:
 	if main._pages != null and main._pages._bench_busy:
 		return true
 	if main._shop != null and main._shop._consent_popup != null and main._shop._consent_popup.visible:
-		return true
-	if main._home != null and main._home._decor_popup != null and main._home._decor_popup.visible:
 		return true
 	if main._shop != null and main._shop._popup != null and main._shop._popup.visible:
 		return true
