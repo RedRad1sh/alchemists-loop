@@ -918,7 +918,7 @@ func _brew(from_auto: bool = false) -> Dictionary:
 			if not _auto:
 				Sfx.divide()
 				Input.vibrate_handheld(20)
-				g._online._floater_at(_cauldron.get_global_rect().get_center(), "+%s" % g._online._item_name(output),
+				g._online._floater_at(_cauldron._mouth_global(), "+%s" % g._online._item_name(output),
 					g._item_colors.get(output, Color.WHITE))
 	if g._spirit._companion != null:
 		g._spirit._companion.set_shake(false)
@@ -1054,24 +1054,27 @@ func _refresh_header() -> void:
 			var uid := String(u["id"])
 			if _up_unlocked(uid) and _up_lvl(uid) < int(u["max"]) and _available_ether() >= _up_cost(uid):
 				affordable += 1
-		# Смысл «улучшений» несёт иконка trend_up (main._build_ui), в тексте —
-		# только счётчик. Без импортированной иконки — прежний глиф «▲».
-		if g._hub._up_btn.icon != null:
-			g._hub._up_btn.text = "" if affordable == 0 else str(affordable)
-		else:
-			g._hub._up_btn.text = "▲" if affordable == 0 else "▲%d" % affordable
-		g._hub._up_btn.add_theme_color_override("font_color",
-			Color(1.0, 0.88, 0.45) if affordable > 0 else Color(0.8, 0.85, 0.9))
+		# Счётчик доступных улучшений — бейдж на иконке; текста на кнопке нет.
+		var up_badge := g._hub._up_btn.get_node_or_null("Badge") as Label
+		if up_badge != null:
+			up_badge.text = str(affordable)
+			up_badge.visible = affordable > 0
+		g._hub._up_btn.tooltip_text = "Улучшения" + (
+			"" if affordable == 0 else " · доступно: %d" % affordable)
 	if g._social_btn != null:
 		# S1 бейдж: приём тот же, что у _up_btn выше, — один
 		# add_theme_color_override с тернарником; акцент — палитра UIStyle.GOLD,
-		# нейтральный цвет — прежний нейтральный оттенок блока.
+		# нейтраль — тёплый второстепенный текст UIStyle.TEXT_DIM (§3), а не
+		# прежний холодный оттенок блока.
 		# FIX-C (спека 542/575): N = unread_total + requests_total (>99→99+),
 		# не один unread — заявка в друзья тоже «непрочитанное» для пользователя.
 		var total := g._social.total()
-		g._social_btn.text = Social.badge_for(total)
-		g._social_btn.add_theme_color_override("font_color",
-			UIStyle.GOLD if total > 0 else Color(0.8, 0.85, 0.9))
+		var badge := g._social_btn.get_node_or_null("Badge") as Label
+		if badge != null:
+			badge.text = "99+" if total > 99 else str(total)
+			badge.visible = total > 0
+		g._social_btn.tooltip_text = "Друзья, заявки и личные сообщения" + (
+			"" if total <= 0 else " · новых: %d" % total)
 
 func _refresh_book() -> void:
 	if _book_list == null:

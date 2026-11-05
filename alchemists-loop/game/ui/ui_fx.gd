@@ -14,9 +14,9 @@ void fragment() {
 	// COLOR = цвет ColorRect (тема дома меняет его — шейдер подхватывает).
 	vec3 base = COLOR.rgb;
 	vec3 col = mix(base * 1.55 + vec3(0.010, 0.020, 0.030), base * 0.45, smoothstep(0.0, 1.0, uv.y));
-	// холодное свечение сверху-слева
+	// тёплый отсвет штукатурки и латуни сверху-слева
 	vec2 c1 = vec2(0.18 + 0.06 * sin(TIME * 0.11), 0.12);
-	col += vec3(0.10, 0.42, 0.42) * exp(-length((uv - c1) * vec2(aspect, 1.0)) * 3.4) * 0.35;
+	col += vec3(0.42, 0.30, 0.18) * exp(-length((uv - c1) * vec2(aspect, 1.0)) * 3.4) * 0.35;
 	// тёплый отсвет очага снизу
 	vec2 c2 = vec2(0.5, 1.02);
 	col += vec3(0.60, 0.30, 0.10) * exp(-length((uv - c2) * vec2(aspect, 1.0)) * 3.0) * 0.22 * (0.92 + 0.08 * sin(TIME * 1.7));
@@ -28,12 +28,11 @@ void fragment() {
 	vec2 off = (vec2(hash(id + 3.1), hash(id + 7.7)) - 0.5) * 0.6;
 	float tw = 0.5 + 0.5 * sin(TIME * 1.5 + r * 6.2831);
 	float m = (1.0 - smoothstep(0.0, 0.07, length(f - off))) * step(0.85, r) * tw;
-	col += vec3(0.60, 0.95, 0.95) * m * 0.35;
-	// виньетка и зерно против бандинга
-	vec2 v = uv - 0.5;
-	col *= 1.0 - dot(v, v) * 0.9;
+	col += vec3(0.95, 0.72, 0.40) * m * 0.35;
+	// зерно против бандинга (виньетка — baked-слой UIBackdrop, не шейдер)
 	col += (hash(FRAGCOORD.xy + fract(TIME) * 100.0) - 0.5) * 0.015;
-	COLOR = vec4(col, 1.0);
+	// rect — тинт бэкдропа с альфой 0.45: непрозрачность закрыла бы комнату
+	COLOR = vec4(col, COLOR.a);
 }
 """
 
@@ -41,7 +40,7 @@ const FIELD_CODE := """
 shader_type canvas_item;
 uniform vec2 rect_size = vec2(540.0, 700.0);
 uniform vec2 center_offset_px = vec2(0.0, 23.0);
-uniform vec4 accent : source_color = vec4(0.37, 0.89, 0.84, 1.0);
+uniform vec4 accent : source_color = vec4(0.92, 0.70, 0.40, 1.0);
 
 void fragment() {
 	vec2 p = UV * rect_size - (rect_size * 0.5 + center_offset_px);

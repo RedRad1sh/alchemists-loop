@@ -70,7 +70,7 @@ func _build_profile_popup() -> void:
 	card.add_child(col)
 	var t := g._label("ПРОФИЛЬ АЛХИМИКА", 20)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
+	t.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	col.add_child(t)
 	_profile_avatar = g._make_avatar(g._online._net_nick, 96)
 	_profile_avatar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -80,7 +80,7 @@ func _build_profile_popup() -> void:
 	col.add_child(_profile_stats)
 	var sub := g._label("Это твоё имя в мире: его видят в ленте первооткрытий и в зале славы. Аватар рисуется из имени.", 13)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
+	sub.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 	col.add_child(sub)
 	_profile_nick = LineEdit.new()
 	_profile_nick.custom_minimum_size = Vector2(0, 42)
@@ -244,11 +244,11 @@ func _build_craftable_popup() -> void:
 	card.add_child(col)
 	var t := g._label("ЧТО ВАРИТЬ СЕЙЧАС?", 20)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
+	t.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	col.add_child(t)
 	var sub := g._label("Пары из твоих запасов, которые ты ещё не пробовал. Тап — и они встанут в котёл.", 13)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
+	sub.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(sub)
 	var scroll := ScrollContainer.new()
@@ -283,7 +283,7 @@ func _rebuild_craftable_rows() -> void:
 	if pairs.is_empty():
 		var none := g._label("Все доступные пары уже опробованы.\nОткрой новые вещества в Эксперименте или добудь их из источников.", 13)
 		none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		none.add_theme_color_override("font_color", Color(0.6, 0.66, 0.72))
+		none.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 		_craftable_list.add_child(none)
 		return
 	for p in pairs:
@@ -295,18 +295,8 @@ func _rebuild_craftable_rows() -> void:
 		btn.add_theme_font_size_override("font_size", 15)
 		if g._font_semi != null:
 			btn.add_theme_font_override("font", g._font_semi)
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.08, 0.11, 0.16, 0.9)
-		sb.set_corner_radius_all(14)
-		sb.border_color = Color(0.35, 0.55, 0.5, 0.5)
-		sb.set_border_width_all(1)
-		var sb_h: StyleBoxFlat = sb.duplicate()
-		sb_h.bg_color = Color(0.13, 0.18, 0.25, 1)
-		btn.add_theme_stylebox_override("normal", sb)
-		btn.add_theme_stylebox_override("hover", sb_h)
-		btn.add_theme_stylebox_override("pressed", sb_h)
-		btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-		btn.add_theme_color_override("font_color", Color(0.8, 0.95, 0.86))
+		UIStyle.style_row(btn)
+		btn.add_theme_color_override("font_color", UIStyle.CREAM)
 		btn.pressed.connect(_try_craftable_pair.bind(a, b))
 		_craftable_list.add_child(btn)
 
@@ -348,7 +338,7 @@ func _build_settings_popup() -> void:
 	card.add_child(col)
 	var t := g._label("НАСТРОЙКИ", 20)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
+	t.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	col.add_child(t)
 	_music_toggle = g._small_button("Музыка: вкл", Vector2(0, 42))
 	_music_toggle.pressed.connect(func() -> void:
@@ -420,7 +410,7 @@ func _build_credits_popup() -> void:
 	card.add_child(col)
 	var ttl := g._label("О ИГРЕ / CREDITS", 20)
 	ttl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ttl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
+	ttl.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	col.add_child(ttl)
 	# Заглушка: централизованное место про шрифты/тему, чтобы не забыть.
 	# Дальше — дизайн (портрет авторов, лицензии, ссылки).
@@ -428,11 +418,11 @@ func _build_credits_popup() -> void:
 	var fl := g._label(fonts_line, 12)
 	fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	fl.add_theme_color_override("font_color", Color(0.7, 0.75, 0.8))
+	fl.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 	col.add_child(fl)
 	var ver := g._label("Версия: MVP", 12)
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ver.add_theme_color_override("font_color", Color(0.55, 0.6, 0.65))
+	ver.add_theme_color_override("font_color", UIStyle.TEXT_MUTED)
 	col.add_child(ver)
 	# Превью шрифтов: Divagon на названии, Manasco на лоре, Runic на заголовке.
 	var prev_runic := g._label("ПЕТЛЯ АЛХИМИКА", 24)
@@ -495,7 +485,7 @@ func _build_journal_popup() -> void:
 	card.add_child(col)
 	var t := g._label("ЖУРНАЛ АЛХИМИКА", 20)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
+	t.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	col.add_child(t)
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(0, 460)
@@ -554,21 +544,29 @@ func _build_upgrade_popup() -> void:
 	_up_popup = center
 
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel",
-		g._panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
+	card.add_theme_stylebox_override("panel", UIStyle.modal_panel(UIStyle.BRASS_HI))
 	center.add_child(card)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
 	col.custom_minimum_size = Vector2(330, 0)
 	card.add_child(col)
 
+	var title_plate := PanelContainer.new()
+	title_plate.name = "UpgradeTitle"
+	title_plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	title_plate.add_theme_stylebox_override("panel", UIStyle.title_plaque())
 	var t := g._label("УЛУЧШЕНИЯ", 21)
+	# g._label() ставит autowrap, а plaque центрирован и сжат по содержимому:
+	# минимум такой метки считается по одной букве, и «УЛУЧШЕНИЯ» стояли
+	# вертикальной колонкой (кадр p0-hd/modal_upgrades).
+	t.autowrap_mode = TextServer.AUTOWRAP_OFF
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
-	col.add_child(t)
+	t.add_theme_color_override("font_color", UIStyle.BRASS_HI)
+	title_plate.add_child(t)
+	col.add_child(title_plate)
 	var hint := g._label("Покупается за эфир и действует вечно. Излишек над капом попадает в резерв и тратится здесь.", 13)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
+	hint.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 	col.add_child(hint)
 
 	var scroll := ScrollContainer.new()
@@ -620,7 +618,7 @@ func _build_prestige_popup() -> void:
 	card.add_child(col)
 	var t := g._label("ПЕРЕГОНКА", 20)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_color_override("font_color", Color(1.0, 0.85, 0.42))
+	t.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	col.add_child(t)
 	_prestige_confirm_label = g._label("", 13)
 	_prestige_confirm_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -656,12 +654,12 @@ func _refresh_prestige_ui() -> void:
 	if gain <= 0:
 		_prestige_btn.disabled = true
 		_prestige_label.text = "«Перегонка» откроется на %d веществах (сейчас %d)." % [Game.PRESTIGE_MIN, g._engine.inventory.size()]
-		_prestige_label.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
+		_prestige_label.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 		return
 	_prestige_btn.disabled = false
 	_prestige_label.text = "Сброс → +%d Золота мудрецов (сейчас %d). Регенерация ×%.2f, кап +%d." % [
 		gain, g._engine.sage_gold, g._engine._sage_multiplier(), 40 * g._engine.sage_gold]
-	_prestige_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.42))
+	_prestige_label.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 
 func _open_prestige_confirm() -> void:
 	# U9 (T12): под престижем спит корутина варки/производства и может висеть
@@ -774,20 +772,14 @@ func _up_row(u: Dictionary) -> Button:
 	b.custom_minimum_size = Vector2(0, 74)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.add_theme_font_size_override("font_size", 15)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.11, 0.16, 0.9)
-	sb.set_corner_radius_all(14)
-	sb.border_color = Color(0.3, 0.4, 0.5, 0.35)
-	sb.set_border_width_all(1)
-	var sb_h: StyleBoxFlat = sb.duplicate()
-	sb_h.bg_color = Color(0.13, 0.18, 0.25, 1)
-	b.add_theme_stylebox_override("normal", sb)
-	b.add_theme_stylebox_override("hover", sb_h)
-	b.add_theme_stylebox_override("pressed", sb_h)
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	UIStyle.style_row(b)
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 10)
 	hb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hb.offset_left = 12.0
+	hb.offset_top = 8.0
+	hb.offset_right = -12.0
+	hb.offset_bottom = -8.0
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(hb)
 	var key_item := String(u.get("unlock", ""))
@@ -803,7 +795,7 @@ func _up_row(u: Dictionary) -> Button:
 	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(nm)
 	var ds := g._label(String(u["desc"]), 12)
-	ds.add_theme_color_override("font_color", Color(0.62, 0.68, 0.74))
+	ds.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 	ds.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(ds)
 	var st := g._label("", 13)
@@ -811,15 +803,15 @@ func _up_row(u: Dictionary) -> Button:
 	col.add_child(st)
 	if not unlocked:
 		st.text = "Откроется вместе с «%s»" % g._online._item_name(key_item)
-		st.add_theme_color_override("font_color", Color(0.6, 0.62, 0.66))
+		st.add_theme_color_override("font_color", UIStyle.TEXT_MUTED)
 		b.disabled = true
-		nm.add_theme_color_override("font_color", Color(0.65, 0.68, 0.72))
+		nm.add_theme_color_override("font_color", UIStyle.TEXT_MUTED)
 	elif lvl >= mx:
 		st.text = "максимум"
-		st.add_theme_color_override("font_color", Color(1.0, 0.88, 0.45))
+		st.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	else:
 		var cost := g._engine._up_cost(id)
 		st.text = "Стоимость: %d ⚡" % cost
-		st.add_theme_color_override("font_color", Color(0.45, 0.95, 0.9) if g._engine._available_ether() >= cost else Color(0.75, 0.6, 0.55))
+		st.add_theme_color_override("font_color", UIStyle.FLAME if g._engine._available_ether() >= cost else UIStyle.RUBY)
 		b.pressed.connect(g._engine._buy_upgrade.bind(id))
 	return b

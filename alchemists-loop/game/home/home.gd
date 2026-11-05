@@ -385,7 +385,8 @@ func _aura_now() -> Color:
 
 func _apply_cosmetic() -> void:
 	if g._bg_rect != null:
-		g._bg_rect.color = _theme_now()
+		var c := _theme_now()
+		g._bg_rect.color = Color(c.r, c.g, c.b, UIBackdrop.TINT_ALPHA)
 	if g._spirit._companion != null:
 		g._spirit._companion.set_aura(_aura_now())
 	if _house_room != null:

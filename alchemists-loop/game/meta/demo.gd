@@ -31,6 +31,11 @@ var _action_journal := false
 var _action_settings := false
 var _action_craftable := false
 var _action_workshop := false
+var _action_master := false  # комната 2 карусели — Мастерская (кадры сцены)
+var _action_device := false  # экран устройства поверх комнаты (кадры экрана)
+var _device_key := ""  # --device=<key>: какой экран устройства снимать
+var _action_reagents := false  # комната 1 с открытым выбором реагентов (кадры сцены)
+var _action_cauldron_brew := false  # комната 1: котёл открыт в режиме варки
 var _action_house_tray := false
 var _action_house_touch := false
 var _house_lift_deadline := 0

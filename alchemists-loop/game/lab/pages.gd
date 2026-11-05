@@ -37,20 +37,20 @@ var _experiment_button: Button = null
 var _experiment_preview: Label = null
 var _experiment_confirm: ConfirmationDialog = null
 
-# Большая экспериментальная локация: поле, выдвижная панель реагентов и котёл.
+# Большая экспериментальная локация: комната с котлом и выдвижной выбор реагентов.
 var _experiment_field: Control = null
-var _experiment_center: CenterContainer = null
 var _experiment_cauldron: CauldronView = null
-var _experiment_cauldron_title: Label = null
-var _experiment_cauldron_frame: PanelContainer = null
+var _experiment_cauldron_art: TextureRect = null
+var _experiment_cauldron_glow: TextureRect = null
+var _experiment_cauldron_btn: Button = null
 var _experiment_drawer: PanelContainer = null
+var _experiment_drawer_head: HBoxContainer = null
 var _experiment_drawer_button: Button = null
 var _experiment_drawer_label: Label = null
 var _experiment_reagent_search: LineEdit = null
 var _experiment_filter_buttons: Dictionary = {}
 var _experiment_filter := "recent"
 var _experiment_drawer_empty: Label = null
-var _experiment_reopen_button: Button = null
 var _experiment_reagent_grid: GridContainer = null
 var _experiment_picker_scroll: ScrollContainer = null
 var _experiment_picker_title: Label = null
@@ -58,7 +58,6 @@ var _experiment_picker_count: Label = null
 var _experiment_picker_hint: Label = null
 var _experiment_hint_ids: Array[String] = []
 var _experiment_recent_ids: Array[String] = []
-var _experiment_side_drawer := false
 var _experiment_play_right := 0.0
 var _experiment_status: Label = null
 var _experiment_recipe_line: Label = null
@@ -70,6 +69,27 @@ var _experiment_drag_source := ""
 var _experiment_token_seq := 0
 var _experiment_position_rng := RandomNumberGenerator.new()
 var _experiment_drawer_signature := ""
+
+var _cauldron_mode := "experiment"
+var _cauldron_mode_buttons: Dictionary = {}
+var _cauldron_modes: HBoxContainer = null
+var _lab_page: VBoxContainer = null
+var _lab_bottom_pad: Control = null
+var _experiment_backdrop: Panel = null
+var _experiment_reopen_button: Button = null
+var _experiment_filter_row: GridContainer = null
+
+# Котёл стоит на полу комнаты: положение — доля нарисованной плиты, размер — в
+# пикселях плиты, устье — доля самого спрайта котла. Одна и та же плита, один и
+# тот же масштаб: спрайт, варево и тап-зона всегда совпадают.
+const CAULDRON_PLATE_UV := Vector2(0.55, 0.72)
+const CAULDRON_PLATE_PX := Vector2(520.0, 685.0)
+const CAULDRON_MOUTH_UV := Vector2(0.5, 0.372)
+const CAULDRON_MOUTH_RADII := Vector2(0.320, 0.038)
+const CAULDRON_IDLE := Color(0.95, 0.64, 0.25, 0.92)
+const SCREEN_STRIP_H := 76.0
+const ROOM_IDLE_HINT := "Нажми на котёл, чтобы открыть лабораторию."
+const SCREEN_IDLE_HINT := "Разложи вещества на поле и перенеси нужные в котёл."
 
 func _init(game: Game) -> void:
 	g = game
@@ -113,6 +133,7 @@ func _add_lab_reagent_cell(item_id: String) -> void:
 
 
 func _build_lab(page: VBoxContainer) -> void:
+	_lab_page = page
 	# Котёл закрепляется вверху и не уезжает при прокрутке: внешний скролл вкладки
 	# отключается (тот же приём, что в _build_experiment_location), а остальная
 	# лаборатория идёт одним потоком внутри LabScroll.
@@ -156,6 +177,7 @@ func _build_lab(page: VBoxContainer) -> void:
 	# 2. Прокручиваемая часть: автоварка → родник → инвентарь.
 	var lab_scroll := ScrollContainer.new()
 	lab_scroll.name = "LabScroll"
+	lab_scroll.add_theme_stylebox_override("panel", UIStyle.modal_panel())
 	lab_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	lab_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	lab_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -219,12 +241,13 @@ func _build_lab(page: VBoxContainer) -> void:
 	var bottom_pad := Control.new()
 	bottom_pad.custom_minimum_size = Vector2(0, 150)
 	page.add_child(bottom_pad)
+	_lab_bottom_pad = bottom_pad
 
 
 func _build_experiment_location(page: VBoxContainer) -> void:
 	_experiment_position_rng.randomize()
-	# Канвас Эксперимента помещается в viewport целиком: сам список реагентов
-	# прокручивается внутри своего окна, но поле — нет.
+	# Сцена Эксперимента — комната целиком: поле занимает всю площадь без рамок,
+	# скролл вкладки выключен, реагенты — временные жетоны поверх комнаты.
 	page.add_theme_constant_override("separation", 8)
 	var page_margin := page.get_parent() as Control
 	if page_margin != null:
@@ -232,88 +255,95 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 		if page_scroll != null:
 			page_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 			page_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	var title_row := HBoxContainer.new()
-	title_row.add_theme_constant_override("separation", 10)
-	page.add_child(title_row)
-	var title := g._label("ЭКСПЕРИМЕНТ", 20)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	title.autowrap_mode = TextServer.AUTOWRAP_OFF
-	title_row.add_child(title)
 
-	_experiment_status = g._label("Выбери вещество: окно выбора останется прозрачным, чтобы видеть поле.", 13)
-	_experiment_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_experiment_status.add_theme_color_override("font_color", Color(0.68, 0.82, 0.88))
-	page.add_child(_experiment_status)
-
-	var arena := PanelContainer.new()
-	arena.custom_minimum_size = Vector2.ZERO
-	arena.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	arena.add_theme_stylebox_override("panel", UIStyle.arena_style())
-	page.add_child(arena)
 	_experiment_field = Control.new()
+	_experiment_field.name = "ExperimentRoom"
 	_experiment_field.custom_minimum_size = Vector2.ZERO
 	_experiment_field.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_experiment_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_experiment_field.clip_contents = true
-	arena.add_child(_experiment_field)
-	UIFx.field_decor(_experiment_field, Vector2(0, 23))
+	page.add_child(_experiment_field)
+	# Подложка поля: мягкая тёмная вуаль со скруглением, без латунных уголков —
+	# прежние уголки-копии смотрели в одну сторону и не несли смысла.
+	_experiment_backdrop = Panel.new()
+	_experiment_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_experiment_backdrop.add_theme_stylebox_override("panel", UIStyle.arena_style())
+	_experiment_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_experiment_backdrop.visible = false
+	_experiment_field.add_child(_experiment_backdrop)
 
-	var field_title := g._label("ПОЛЕ ЭКСПЕРИМЕНТА", 12)
-	field_title.name = "ExperimentFieldTitle"
-	field_title.position = Vector2(18, 14)
-	field_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	field_title.add_theme_color_override("font_color", Color(0.45, 0.72, 0.78))
-	_experiment_field.add_child(field_title)
-	var field_hint := g._label("Котёл — место для смешения. Нажатие на ячейку сразу кладёт вещество на поле.", 12)
-	field_hint.name = "ExperimentFieldHint"
-	field_hint.position = Vector2(18, 38)
-	field_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	field_hint.add_theme_color_override("font_color", Color(0.48, 0.56, 0.64))
-	_experiment_field.add_child(field_hint)
+	_experiment_status = g._label(ROOM_IDLE_HINT, 13)
+	_experiment_status.name = "ExperimentStatus"
+	_experiment_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_experiment_status.add_theme_color_override("font_color", UIStyle.CREAM)
+	_experiment_status.add_theme_color_override("font_outline_color", Color(0.06, 0.04, 0.03, 0.92))
+	_experiment_status.add_theme_constant_override("outline_size", 5)
+	_experiment_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_experiment_field.add_child(_experiment_status)
 
-	var center := CenterContainer.new()
-	_experiment_center = center
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	center.offset_top = 76
-	center.offset_bottom = -26
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_experiment_field.add_child(center)
-	_experiment_cauldron_frame = PanelContainer.new()
-	_experiment_cauldron_frame.custom_minimum_size = Vector2(232, 292)
-	_experiment_cauldron_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_experiment_cauldron_frame.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
-	center.add_child(_experiment_cauldron_frame)
-	var cauldron_col := VBoxContainer.new()
-	cauldron_col.alignment = BoxContainer.ALIGNMENT_CENTER
-	cauldron_col.add_theme_constant_override("separation", 4)
-	_experiment_cauldron_frame.add_child(cauldron_col)
-	_experiment_cauldron_title = g._label("КОТЁЛ", 12)
-	_experiment_cauldron_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_experiment_cauldron_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	cauldron_col.add_child(_experiment_cauldron_title)
+	# Котёл — часть картины комнаты: спрайт, живое варево в его устье и тап-зона.
+	_experiment_cauldron_art = TextureRect.new()
+	_experiment_cauldron_art.name = "CauldronArt"
+	_experiment_cauldron_art.texture = load(SceneProps.ROOM_DIR + "prop_cauldron.png") as Texture2D
+	_experiment_cauldron_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_experiment_cauldron_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_experiment_cauldron_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Котёл — главный вход в лабораторию, поэтому обведён как остальные предметы:
+	# без кольца игрок не видел, что по нему можно тапнуть.
+	_experiment_cauldron_glow = SceneProps.make_outline(_experiment_cauldron_art.texture,
+			CAULDRON_PLATE_PX)
+	_experiment_cauldron_glow.name = "CauldronGlow"
+	_experiment_field.add_child(_experiment_cauldron_glow)
+	_experiment_field.add_child(_experiment_cauldron_art)
+
 	_experiment_cauldron = CauldronView.new()
-	_experiment_cauldron.custom_minimum_size = Vector2(218, 188)
+	_experiment_cauldron.name = "CauldronBrew"
+	_experiment_cauldron.overlay_only = true
+	_experiment_cauldron.idle_color = CAULDRON_IDLE
+	_experiment_cauldron.mouth_uv = CAULDRON_MOUTH_UV
+	_experiment_cauldron.mouth_radii = CAULDRON_MOUTH_RADII
 	_experiment_cauldron.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_experiment_cauldron.add_to_group("qte_exclusion")
-	cauldron_col.add_child(_experiment_cauldron)
-	_experiment_recipe_line = g._label("Свободен · перетащи реагенты сюда", 10)
-	_experiment_recipe_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_experiment_recipe_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_experiment_field.add_child(_experiment_cauldron)
+
+	_experiment_cauldron_btn = Button.new()
+	_experiment_cauldron_btn.name = "CauldronTap"
+	for st in ["normal", "hover", "pressed", "focus", "disabled"]:
+		_experiment_cauldron_btn.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+	_experiment_cauldron_btn.focus_mode = Control.FOCUS_NONE
+	_experiment_cauldron_btn.tooltip_text = "Открыть лабораторию"
+	_experiment_cauldron_btn.pressed.connect(_open_cauldron_screen)
+	_experiment_field.add_child(_experiment_cauldron_btn)
+	SceneProps.wire(_experiment_cauldron_btn, _experiment_cauldron_glow, false)
+
+	_experiment_recipe_line = g._label("Котёл пуст", 12)
+	_experiment_recipe_line.name = "CauldronRecipe"
+	_experiment_recipe_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_experiment_recipe_line.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_experiment_recipe_line.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_experiment_recipe_line.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_experiment_recipe_line.add_theme_color_override("font_color", UIStyle.CREAM)
+	_experiment_recipe_line.add_theme_color_override("font_outline_color", Color(0.06, 0.04, 0.03, 0.92))
+	_experiment_recipe_line.add_theme_constant_override("outline_size", 5)
 	_experiment_recipe_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	cauldron_col.add_child(_experiment_recipe_line)
+	_experiment_field.add_child(_experiment_recipe_line)
 	_experiment_clear_button = g._small_button("Очистить", Vector2(96, 38), 0)
-	_experiment_clear_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_experiment_clear_button.add_theme_font_size_override("font_size", 12)
 	_experiment_clear_button.pressed.connect(_experiment_clear_cauldron)
-	cauldron_col.add_child(_experiment_clear_button)
+	_experiment_field.add_child(_experiment_clear_button)
 
-	# Полноэкранный выбор вещества: полупрозрачный слой накрывает всё поле.
+	# Лист реагентов — широкое полотно внизу экрана котла, как лист старой
+	# модалки: целая текстура рамки держит текст на себе. Дырявый picker_style
+	# давал те самые «обломанные» границы, поэтому здесь modal_panel.
 	_experiment_drawer = PanelContainer.new()
 	_experiment_drawer.name = "ExperimentReagentPicker"
 	_experiment_drawer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_experiment_drawer.mouse_filter = Control.MOUSE_FILTER_STOP
 	_experiment_drawer.z_index = 2
-	_experiment_drawer.add_theme_stylebox_override("panel", UIStyle.picker_style())
+	_experiment_drawer.add_theme_stylebox_override("panel",
+			UIStyle.modal_panel(UIStyle.BRASS_HI))
+	# Комната — главный экран: интерфейс котла открывается по тапу на котёл.
+	_experiment_drawer.visible = false
 	_experiment_field.add_child(_experiment_drawer)
 	var drawer_col := VBoxContainer.new()
 	drawer_col.add_theme_constant_override("separation", 6)
@@ -321,40 +351,73 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 	drawer_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_experiment_drawer.add_child(drawer_col)
 
-	var drawer_head := HBoxContainer.new()
-	drawer_head.add_theme_constant_override("separation", 8)
-	drawer_col.add_child(drawer_head)
-	_experiment_drawer_label = g._label("ВЫБРАТЬ РЕАГЕНТ", 14)
+	_experiment_drawer_head = HBoxContainer.new()
+	_experiment_drawer_head.add_theme_constant_override("separation", 8)
+	drawer_col.add_child(_experiment_drawer_head)
+	_experiment_drawer_label = g._label("КОТЁЛ", 14)
 	_experiment_drawer_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_experiment_drawer_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	if g._font_semi != null:
 		_experiment_drawer_label.add_theme_font_override("font", g._font_semi)
-	drawer_head.add_child(_experiment_drawer_label)
+	_experiment_drawer_head.add_child(_experiment_drawer_label)
 	_experiment_picker_count = g._label("", 11)
 	_experiment_picker_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_experiment_picker_count.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	drawer_head.add_child(_experiment_picker_count)
-	_experiment_drawer_button = g._small_button("Закрыть", Vector2(86, 44), 0)
+	_experiment_drawer_head.add_child(_experiment_picker_count)
+	_experiment_drawer_button = g._small_button("Готово", Vector2(86, 44), 0)
 	_experiment_drawer_button.custom_minimum_size.y = 44.0
 	_experiment_drawer_button.pressed.connect(_toggle_experiment_drawer)
-	drawer_head.add_child(_experiment_drawer_button)
+	_experiment_drawer_head.add_child(_experiment_drawer_button)
+
+	var mode_row := HBoxContainer.new()
+	mode_row.name = "CauldronModes"
+	mode_row.add_theme_constant_override("separation", 6)
+	mode_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mode_row.visible = false
+	g.add_child(mode_row)
+	_cauldron_modes = mode_row
+	for mode_spec in [["experiment", "Эксперимент"], ["brew", "Варка"]]:
+		var mode_key := String(mode_spec[0])
+		var mode_btn := g._small_button(String(mode_spec[1]), Vector2(0, 42), 1)
+		mode_btn.name = "CauldronMode_" + mode_key
+		mode_btn.toggle_mode = true
+		mode_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		mode_btn.add_theme_font_size_override("font_size", 13)
+		mode_btn.pressed.connect(_set_cauldron_mode.bind(mode_key))
+		mode_row.add_child(mode_btn)
+		_cauldron_mode_buttons[mode_key] = mode_btn
 
 	_experiment_picker_hint = g._label("Нажми на ячейку — вещество сразу появится на поле. Добавляй нужное количество.", 11)
-	_experiment_picker_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_experiment_picker_hint.add_theme_color_override("font_color", Color(0.72, 0.84, 0.88))
+	# autowrap без нижней границы ширины считает минимум по одной букве: метка
+	# раздувала минимум листа на 5 строк и не оставляла места ни котлу, ни
+	# сетке. На широком полотне подсказка — одна строка.
+	_experiment_picker_hint.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_experiment_picker_hint.clip_text = true
+	_experiment_picker_hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_experiment_picker_hint.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 	drawer_col.add_child(_experiment_picker_hint)
 
 	_experiment_reagent_search = LineEdit.new()
-	_experiment_reagent_search.placeholder_text = "Найти вещество по имени, идентификатору или описанию…"
+	# Длинный placeholder — это минимальная ширина LineEdit: он ломал правую
+	# колонку экрана котла и контент выползал за край поля.
+	_experiment_reagent_search.placeholder_text = "Найти вещество…"
+	_experiment_reagent_search.tooltip_text = "Поиск по имени, идентификатору или описанию"
 	_experiment_reagent_search.clear_button_enabled = true
 	_experiment_reagent_search.custom_minimum_size = Vector2(0, 44)
 	_experiment_reagent_search.add_theme_font_size_override("font_size", 14)
 	_experiment_reagent_search.text_changed.connect(_on_experiment_search_changed)
 	drawer_col.add_child(_experiment_reagent_search)
 
-	var filter_row := HBoxContainer.new()
-	filter_row.add_theme_constant_override("separation", 5)
+	var filter_row := GridContainer.new()
+	filter_row.name = "CauldronFilters"
+	# HBox из четырёх чипов дал минимальную ширину лотка 331 px: узкая колонка
+	# экрана котла её не вмещала, и содержимое выползало за край поля. Сетка
+	# переставляется по ширине колонки.
+	filter_row.columns = 4
+	filter_row.add_theme_constant_override("h_separation", 5)
+	filter_row.add_theme_constant_override("v_separation", 5)
 	filter_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_experiment_filter_row = filter_row
 	drawer_col.add_child(filter_row)
 	for filter_spec in [
 		{"key": "recent", "title": "Недавние", "width": 100.0},
@@ -397,15 +460,10 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 	_experiment_drawer_empty.custom_minimum_size = Vector2(0, 24)
 	drawer_col.add_child(_experiment_drawer_empty)
 
-	_experiment_reopen_button = g._small_button("Выбрать реагент", Vector2(158, 44), 1)
-	_experiment_reopen_button.custom_minimum_size.y = 44.0
-	_experiment_reopen_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_experiment_reopen_button.offset_left = -170
-	_experiment_reopen_button.offset_right = -12
-	_experiment_reopen_button.offset_top = -56
-	_experiment_reopen_button.offset_bottom = -12
+	_experiment_reopen_button = g._small_button("Выбрать реагент", Vector2(174, 44), 1)
+	_experiment_reopen_button.name = "ExperimentChooseReagent"
 	_experiment_reopen_button.visible = false
-	_experiment_reopen_button.pressed.connect(_toggle_experiment_drawer)
+	_experiment_reopen_button.pressed.connect(_show_experiment_drawer)
 	_experiment_field.add_child(_experiment_reopen_button)
 
 	_experiment_field.resized.connect(_fit_experiment_overlay)
@@ -427,63 +485,206 @@ func _set_experiment_rect(control: Control, rect: Rect2) -> void:
 
 
 func _set_experiment_picker_field_chrome() -> void:
-	var field_title := _experiment_field.get_node_or_null("ExperimentFieldTitle") as Control
-	var field_hint := _experiment_field.get_node_or_null("ExperimentFieldHint") as Control
-	var picker_open := _experiment_drawer != null and _experiment_drawer.visible
-	if field_title != null:
-		field_title.visible = not picker_open
-	if field_hint != null:
-		field_hint.visible = not picker_open
-	if _experiment_cauldron_title != null:
-		_experiment_cauldron_title.visible = not picker_open
-	if _experiment_recipe_line != null:
-		_experiment_recipe_line.visible = not picker_open
-	if _experiment_clear_button != null:
-		_experiment_clear_button.visible = not picker_open
+	var on_screen := _on_cauldron_screen()
+	_experiment_cauldron_art.visible = not on_screen
+	_experiment_cauldron_glow.visible = not on_screen
+	_experiment_cauldron_btn.visible = not on_screen
+	_experiment_backdrop.visible = on_screen
+	if not on_screen:
+		_experiment_drawer.hide()
+	var choosing := _experiment_drawer.visible
+	for c in [_experiment_status, _experiment_recipe_line, _experiment_clear_button]:
+		(c as Control).visible = on_screen and not choosing
+	_experiment_reopen_button.visible = on_screen and not choosing
+	_experiment_cauldron.visible = not choosing
+	for token in _experiment_tokens:
+		if is_instance_valid(token):
+			(token as Control).visible = on_screen and not choosing
+	if on_screen and _experiment_status.text == ROOM_IDLE_HINT:
+		_experiment_status.text = SCREEN_IDLE_HINT
+
+
+## Прямоугольник котла в координатах поля: и спрайт, и варево, и тап-зона берут
+## его из одной проекции — комнаты или экрана котла. У проекций разные классы,
+## поэтому источник берётся динамически, без общего интерфейса.
+func _cauldron_field_rect() -> Rect2:
+	if g == null or _experiment_field == null:
+		return Rect2()
+	if g._rooms == null:
+		return Rect2()
+	var rect: Rect2 = g._rooms.plate_rect(CAULDRON_PLATE_UV, CAULDRON_PLATE_PX)
+	if rect.size.x <= 0.0:
+		return Rect2()
+	return Rect2(rect.position - _experiment_field.global_position, rect.size)
+
+
+## Спрайт котла, варево и тап-зона — один прямоугольник из одной проекции.
+func _place_cauldron(rect: Rect2) -> void:
+	_set_experiment_rect(_experiment_cauldron_art, rect)
+	_set_experiment_rect(_experiment_cauldron_glow, rect)
+	var mat := _experiment_cauldron_glow.material as ShaderMaterial
+	if mat != null and _experiment_cauldron_glow.texture != null:
+		mat.set_shader_parameter("thickness", SceneProps.OUTLINE_SCREEN_PX
+				* float(_experiment_cauldron_glow.texture.get_width()) / maxf(rect.size.x, 1.0))
+	if _experiment_cauldron != null:
+		_experiment_cauldron.custom_minimum_size = rect.size
+	_set_experiment_rect(_experiment_cauldron, rect)
+	_set_experiment_rect(_experiment_cauldron_btn, rect)
 
 
 func _fit_experiment_overlay() -> void:
-	if _experiment_field == null or _experiment_field.size.x <= 0.0 or _experiment_field.size.y <= 0.0:
+	if _experiment_field == null:
+		return
+	if _experiment_field.size.x <= 0.0 or _experiment_field.size.y <= 0.0:
+		# В контейнере поле получает размер только на ближайшей сортировке. Прямоугольни-
+		# ки подождут resized, а вот видимость комнаты и лотка восстанавливать нужно
+		# сразу: иначе закрытый экран оставил бы комнату погашенной.
+		_set_experiment_picker_field_chrome()
 		return
 	var field_size := _experiment_field.size
 	if _experiment_reagent_grid != null:
 		_experiment_reagent_grid.columns = 4 if field_size.x >= 420.0 else (3 if field_size.x >= 330.0 else 2)
-	_experiment_side_drawer = false
 	_experiment_play_right = field_size.x
-	_experiment_cauldron_frame.custom_minimum_size = Vector2(232, 292)
-	_experiment_cauldron.custom_minimum_size = Vector2(218, 188)
-	_set_experiment_rect(_experiment_drawer, Rect2(0.0, 0.0, field_size.x, field_size.y))
-	var field_title := _experiment_field.get_node_or_null("ExperimentFieldTitle") as Control
-	_set_experiment_rect(field_title, Rect2(18.0, 12.0, maxf(1.0, field_size.x - 36.0), 22.0))
-	var field_hint := _experiment_field.get_node_or_null("ExperimentFieldHint") as Control
-	_set_experiment_rect(field_hint, Rect2(18.0, 36.0, maxf(1.0, field_size.x - 36.0), 30.0))
-	_set_experiment_rect(_experiment_center,
-		Rect2(0.0, 72.0, field_size.x, maxf(1.0, field_size.y - 98.0)))
-	_set_experiment_rect(_experiment_reopen_button,
-		Rect2(maxf(12.0, field_size.x - 170.0), maxf(12.0, field_size.y - 56.0), 158.0, 44.0))
-	if _experiment_drawer_button != null and _experiment_drawer.visible:
-		_experiment_drawer_button.text = "Закрыть"
+	_experiment_cauldron.overlay_only = not _on_cauldron_screen()
+	if _on_cauldron_screen():
+		_fit_cauldron_screen(field_size)
+	else:
+		# Котёл — сам по себе вход в выбор реагентов, отдельной кнопки в комнате нет:
+		# подсказка, состав котла и «Очистить» — левая колонка над сценой, чтобы не
+		# перекрывать пробковую доску, свиток гильдии и огонь под котлом.
+		var cauldron_rect := _cauldron_field_rect()
+		if cauldron_rect.size.x > 0.0:
+			_place_cauldron(cauldron_rect)
+		_set_experiment_rect(_experiment_status,
+			Rect2(12.0, 8.0, maxf(1.0, field_size.x - 24.0), 40.0))
+		_set_experiment_rect(_experiment_recipe_line,
+			Rect2(14.0, 52.0, maxf(1.0, field_size.x - 28.0), 24.0))
+		_set_experiment_rect(_experiment_clear_button,
+			Rect2(14.0, 84.0, 96.0, 38.0))
 	_set_experiment_picker_field_chrome()
+
+
+func _fit_cauldron_screen(field_size: Vector2) -> void:
+	var pot_size := Vector2(minf(270.0, field_size.x * 0.52),
+			minf(242.0, field_size.y * 0.32))
+	_experiment_cauldron.custom_minimum_size = Vector2.ZERO
+	_set_experiment_rect(_experiment_cauldron,
+			Rect2((field_size - pot_size) * 0.5, pot_size))
+	_experiment_picker_scroll.custom_minimum_size = Vector2(0, 96)
+	_experiment_filter_row.columns = 4 if field_size.x >= 420.0 else 2
+	_set_experiment_rect(_experiment_drawer, Rect2(Vector2.ZERO, field_size))
+	_set_experiment_rect(_experiment_status,
+			Rect2(18.0, 12.0, maxf(1.0, field_size.x - 36.0), 36.0))
+	_set_experiment_rect(_experiment_recipe_line,
+			Rect2(18.0, 50.0, maxf(1.0, field_size.x - 140.0), 24.0))
+	_set_experiment_rect(_experiment_clear_button,
+			Rect2(field_size.x - 114.0, 46.0, 96.0, 38.0))
+	_set_experiment_rect(_experiment_reopen_button,
+			Rect2(field_size.x - 194.0, field_size.y - 60.0, 174.0, 44.0))
+	var bounds := Rect2(Vector2.ZERO, field_size)
+	for token in _experiment_tokens:
+		if not is_instance_valid(token) or bounds.encloses(Rect2(token.position, token.size)):
+			continue
+		token.position = Vector2(
+				clampf(token.position.x, 16.0, maxf(16.0, field_size.x - token.size.x - 16.0)),
+				clampf(token.position.y, 70.0, maxf(70.0, field_size.y - token.size.y - 70.0)))
 
 
 func _show_experiment_drawer() -> void:
-	if _experiment_drawer == null or _experiment_drawer.visible:
+	if not _on_cauldron_screen():
+		_open_cauldron_screen()
+	_experiment_drawer.show()
+	_experiment_picker_scroll.scroll_vertical = 0
+	_refresh_experiment_drawer()
+	_set_experiment_picker_field_chrome()
+
+
+## Экран механики вместо модалки: бокс вкладки «Инструменты» уезжает в роутер и
+## возвращается на закрытии, поэтому refresh-логика страниц не меняется.
+func _open_device_screen(key: String, title: String) -> void:
+	if g._screens == null or not _mode_pages.has(key):
 		return
-	_toggle_experiment_drawer()
+	var box := _mode_pages[key] as Control
+	if box == null:
+		return
+	g._screens.open(key, title, box)
+
+
+func _open_cauldron_screen() -> void:
+	_set_cauldron_mode("experiment", false)
+
+
+func _on_cauldron_screen() -> bool:
+	return g != null and g._screens != null and g._screens.is_open() \
+			and g._screens.key() == "cauldron"
 
 
 func _toggle_experiment_drawer() -> void:
-	if _experiment_drawer == null:
-		return
-	_experiment_drawer.visible = not _experiment_drawer.visible
-	if _experiment_drawer_button != null:
-		_experiment_drawer_button.text = "Закрыть"
-	if _experiment_reopen_button != null:
-		_experiment_reopen_button.visible = not _experiment_drawer.visible
-	if _experiment_drawer.visible and _experiment_picker_scroll != null:
-		_experiment_picker_scroll.scroll_vertical = 0
-	_set_experiment_picker_field_chrome()
+	if _on_cauldron_screen() and _experiment_drawer.visible:
+		_experiment_drawer.hide()
+		_set_experiment_picker_field_chrome()
+	else:
+		_show_experiment_drawer()
 	Sfx.click()
+
+
+func _set_cauldron_mode(mode: String, audible := true) -> void:
+	if g._screens == null:
+		return
+	mode = "brew" if mode == "brew" else "experiment"
+	var key := "brew" if mode == "brew" else "cauldron"
+	if g._screens.key() == key:
+		return
+	g._screens.close()
+	_cauldron_mode = mode
+	_experiment_drawer.hide()
+	if mode == "brew":
+		_lab_bottom_pad.hide()
+		g._brew_bar.reparent(_lab_page)
+		g._brew_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		g._screens.open(key, "Варка", _lab_page,
+				Callable(self, "_close_cauldron_screen"), true)
+	else:
+		g._screens.open(key, "Эксперимент", _experiment_field,
+				Callable(self, "_close_cauldron_screen"), true)
+		_refresh_experiment_cauldron()
+	_cauldron_modes.reparent(g._screens.root)
+	_cauldron_modes.show()
+	for mode_key in _cauldron_mode_buttons:
+		var button := _cauldron_mode_buttons[mode_key] as Button
+		button.button_pressed = String(mode_key) == mode
+		UIStyle.style_button(button, 1 if button.button_pressed else 0)
+	g._screens._relayout()
+	_fit_cauldron_modes()
+	g._update_brew_bar_visibility()
+	if audible:
+		Sfx.click()
+
+
+func _fit_cauldron_modes() -> void:
+	_set_experiment_rect(_cauldron_modes,
+			Rect2(12.0, ScreenRouter.HEADER_H, g._screens.root.size.x - 24.0, 42.0))
+
+
+func _close_cauldron_screen() -> void:
+	_experiment_drag_token = null
+	_experiment_drag_source = ""
+	for token in _experiment_tokens:
+		if is_instance_valid(token):
+			(token as ElementOrb).cancel_drag()
+	_cauldron_modes.hide()
+	_experiment_drawer.hide()
+	if g._brew_bar.get_parent() == _lab_page:
+		g._brew_bar.reparent(g)
+		g._brew_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+		g._brew_bar.offset_left = 12
+		g._brew_bar.offset_right = -12
+		g._brew_bar.offset_top = -196
+		g._brew_bar.offset_bottom = -12 - BottomNav.NAV_H
+		_lab_bottom_pad.show()
+	_fit_experiment_overlay()
+	_refresh_experiment_cauldron()
+	g._update_brew_bar_visibility()
 
 
 func _experiment_normalize_search(value: String) -> String:
@@ -632,11 +833,11 @@ func _refresh_experiment_drawer() -> void:
 		filter_button.button_pressed = filter_key == _experiment_filter and query == ""
 		filter_button.disabled = filter_key == "hint" and _experiment_hint_ids.is_empty()
 	if _experiment_drawer_label != null:
-		_experiment_drawer_label.text = "ВЫБРАТЬ РЕАГЕНТ"
+		_experiment_drawer_label.text = "РЕАГЕНТЫ"
 	if _experiment_picker_count != null:
 		_experiment_picker_count.text = "%d / %d" % [visible_ids.size(), all_ids.size()]
 	if _experiment_picker_hint != null:
-		_experiment_picker_hint.text = "Нажми на ячейку — вещество сразу появится на поле. Добавляй нужное количество."
+		_experiment_picker_hint.text = "Выбери вещество, чтобы разместить его на поле."
 	if _experiment_drawer_empty != null:
 		_experiment_drawer_empty.visible = query != "" and visible_ids.is_empty()
 	for item_id in visible_ids:
@@ -690,6 +891,8 @@ func _experiment_can_take(item_id: String) -> bool:
 
 
 func _select_experiment_item(item_id: String) -> void:
+	_experiment_drawer.hide()
+	_set_experiment_picker_field_chrome()
 	_experiment_spawn_token(item_id)
 
 
@@ -733,36 +936,28 @@ func _experiment_position_taken(candidate: Rect2, token_size: float) -> bool:
 		var token_rect := Rect2(token.position, Vector2(token_size, token_size)).grow(10.0)
 		if padded.intersects(token_rect):
 			return true
-	if _experiment_drawer != null and _experiment_drawer.visible:
-		var menu_head := Rect2(0.0, 0.0, _experiment_field.size.x, 214.0)
-		if padded.intersects(menu_head):
-			return true
-		if _experiment_reagent_grid != null:
-			for cell in _experiment_reagent_grid.get_children():
-				var cell_control := cell as Control
-				if cell_control != null and padded.intersects(_experiment_field_local_rect(cell_control).grow(6.0)):
-					return true
 	return false
 
 
-func _experiment_token_position(_lane: int, token_size: float) -> Vector2:
-	var w := _experiment_field.size.x
-	var h := _experiment_field.size.y
+func _experiment_token_position(token_size: float) -> Vector2:
 	var min_x := 10.0
-	var max_x := maxf(min_x, w - token_size - 10.0)
-	var min_y := 82.0
-	if _experiment_drawer != null and _experiment_drawer.visible:
-		min_y = 216.0
-	var max_y := maxf(min_y, h - token_size - 20.0)
-	var candidate := Vector2(min_x, min_y)
+	var max_x := _experiment_field.size.x - token_size - 10.0
+	var min_y := SCREEN_STRIP_H + 6.0
+	var max_y := _experiment_field.size.y - token_size - 70.0
+	if max_x < min_x or max_y < min_y:
+		return Vector2.INF
 	for _attempt in 80:
-		candidate = Vector2(
+		var candidate := Vector2(
 			_experiment_position_rng.randf_range(min_x, max_x),
 			_experiment_position_rng.randf_range(min_y, max_y))
-		var candidate_rect := Rect2(candidate, Vector2(token_size, token_size))
-		if not _experiment_position_taken(candidate_rect, token_size):
+		if not _experiment_position_taken(Rect2(candidate, Vector2.ONE * token_size), token_size):
 			return candidate
-	return candidate
+	for y in range(int(min_y), int(max_y) + 1, 10):
+		for x in range(int(min_x), int(max_x) + 1, 10):
+			var candidate := Vector2(x, y)
+			if not _experiment_position_taken(Rect2(candidate, Vector2.ONE * token_size), token_size):
+				return candidate
+	return Vector2.INF
 
 
 func _experiment_spawn_token(item_id: String) -> void:
@@ -770,6 +965,10 @@ func _experiment_spawn_token(item_id: String) -> void:
 		_experiment_status.text = "В запасе нет свободной порции «%s»." % g._online._item_name(item_id)
 		return
 	if _experiment_field == null:
+		return
+	var position := _experiment_token_position(50.0)
+	if not position.is_finite():
+		_experiment_status.text = "На поле нет места. Перенеси реагенты в котёл."
 		return
 	var token: ElementOrb = g._make_orb(item_id, 50)
 	token.count = 1
@@ -784,8 +983,7 @@ func _experiment_spawn_token(item_id: String) -> void:
 	_experiment_field.add_child(token)
 	_experiment_tokens.append(token)
 	_remember_experiment_reagent(item_id)
-	var lane := _experiment_tokens.size() - 1
-	token.position = _experiment_token_position(lane, 50.0)
+	token.position = position
 	token.scale = Vector2(0.74, 0.74)
 	var appear := g.create_tween()
 	appear.tween_property(token, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -942,7 +1140,7 @@ func _build_world(page: VBoxContainer) -> void:
 	challenge_row.add_child(g._online._challenge_label)
 	page.add_child(challenge_row)
 	var feed_title := g._label("Свежие открытия", 16)
-	feed_title.add_theme_color_override("font_color", Color(0.55, 0.95, 0.9))
+	feed_title.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	page.add_child(feed_title)
 	g._feed_list = VBoxContainer.new()
 	g._feed_list.add_theme_constant_override("separation", 3)
@@ -1084,6 +1282,10 @@ func _apply_tools_selection() -> void:
 	for k in _mode_pages:
 		if is_instance_valid(_mode_pages[k]):
 			(_mode_pages[k] as Control).visible = (k == _tools_sel) and g._engine._mode_unlocked(String(k))
+	# Узел, переехавший на экран механики, видим по воле экрана, а не по выбору
+	# во вкладке «Инструменты»: иначе любой _refresh() гасит открытый экран.
+	if g._screens != null and g._screens.is_open() and is_instance_valid(g._screens.node):
+		(g._screens.node as Control).visible = true
 	for k in _mode_chips:
 		if not is_instance_valid(_mode_chips[k]):
 			continue
@@ -1344,10 +1546,9 @@ func _bench_poster_text() -> String:
 	return "Мастерская: базовый этап каждой линии — %d с и %d операций (Архивная печать). Партия производит заданное количество; поддержание запаса проверяет общий инвентарь до общего предела стека ×%d. Эфир списывается перед каждой операцией, включая резерв; скидка чертежа и бонус скорости комплекта учитываются на линии." % [int(Game.BENCH_INTERVAL), g._engine._stage_ops(), Game.CRAFT_INVENTORY_STACK_CAP]
 
 func _build_bench_page(container: VBoxContainer) -> void:
-	container.add_child(g._label(_mode_hint("bench"), 15))
+	container.add_child(g._label("Выбери рецепт — мастерская изготовит его сама.", 15))
 	var bench_poster := _bench_poster_text()
 	_bench_poster = g._label(bench_poster, 12)
-	container.add_child(_bench_poster)
 	if _bench_page_labels == null:
 		_bench_page_labels = []
 	(_bench_page_labels as Array).append(bench_poster)
@@ -1355,6 +1556,7 @@ func _build_bench_page(container: VBoxContainer) -> void:
 	_workshop_view = load("res://game/lab/workshop_view.gd").new()
 	container.add_child(_workshop_view)
 	_workshop_view.call("setup", g, g._workshop)
+	_workshop_view._upgrades.add_child(_bench_poster)
 
 func _bench_candidates() -> Array:
 	var res: Array = []
@@ -1408,7 +1610,7 @@ func _rebuild_bench_rows() -> void:
 		hb.add_child(nm)
 		if selected:
 			var mk := g._label("выбрано", 12)
-			mk.add_theme_color_override("font_color", Color(0.45, 0.95, 0.9))
+			mk.add_theme_color_override("font_color", UIStyle.GLOW)
 			mk.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			hb.add_child(mk)
 		_bench_rows.add_child(b)

@@ -168,7 +168,7 @@ func _rebuild() -> void:
 		child.queue_free()
 	var state := Monetization.status_text()
 	_status.text = state
-	_status.add_theme_color_override("font_color", Color(0.55, 0.85, 0.82) if Monetization.billing_available else Color(0.76, 0.68, 0.58))
+	_status.add_theme_color_override("font_color", UIStyle.GLOW if Monetization.billing_available else Color(0.76, 0.68, 0.58))
 	var products := Monetization.get_products()
 	for raw in products:
 		if not (raw is Dictionary):

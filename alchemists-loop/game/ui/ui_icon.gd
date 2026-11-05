@@ -33,7 +33,7 @@ static func make(icon: String, size_px: int = 20, color: Color = Color.WHITE) ->
 ## Иконка по центру кнопки: текст-глиф убирается, тач-зона не меняется.
 ## Если SVG ещё не импортирован (текстуры нет), текст остаётся как есть.
 static func into_button(btn: Button, icon: String, size_px: int = 20,
-		color: Color = UIStyle.TEXT) -> void:
+		color: Color = UIStyle.BRASS_HI) -> void:
 	if btn == null:
 		return
 	var tex := texture(icon)
@@ -47,5 +47,24 @@ static func into_button(btn: Button, icon: String, size_px: int = 20,
 	center.name = "IconCenter"
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	center.add_child(make(icon, size_px, color))
+	var rect := make(icon, size_px, color)
+	center.add_child(rect)
 	btn.add_child(center)
+	# Наведение: иконка чуть светлеет и подрастает — одного осветления плашки
+	# на тёмной латуни не видно.
+	center.pivot_offset = btn.custom_minimum_size * 0.5
+	if not btn.mouse_entered.is_connected(_hover):
+		btn.mouse_entered.connect(_hover.bind(btn, true))
+		btn.mouse_exited.connect(_hover.bind(btn, false))
+	btn.set_meta("icon_color", color)
+
+
+static func _hover(btn: Button, over: bool) -> void:
+	var center := btn.get_node_or_null("IconCenter") as Control
+	if center == null:
+		return
+	center.pivot_offset = btn.size * 0.5
+	center.scale = Vector2(1.12, 1.12) if over and not btn.disabled else Vector2.ONE
+	var base: Color = btn.get_meta("icon_color", Color.WHITE)
+	for c in center.get_children():
+		(c as CanvasItem).modulate = base.lightened(0.25) if over and not btn.disabled else base

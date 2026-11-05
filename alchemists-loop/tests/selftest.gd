@@ -176,6 +176,16 @@ static func run(g: Game) -> void:
 				Selftest.check("workshop suite loads: " + workshop_suite, suite != null and suite.can_instantiate())
 				if suite != null and suite.can_instantiate():
 					await suite.run(g)
+		# UI-сюиты грузятся динамически: отсутствующий UITheme/UIBackdrop или
+		# опечатка в новом файле красят только свой пин, а не весь билд.
+		for ui_suite in ["theme", "backdrop", "scene"]:
+			var ui_path := "res://tests/suite_ui_%s.gd" % ui_suite
+			if FileAccess.file_exists(ui_path):
+				var ui_script: Script = load(ui_path)
+				Selftest.check("ui suite loads: " + ui_suite,
+					ui_script != null and ui_script.can_instantiate())
+				if ui_script != null and ui_script.can_instantiate():
+					await ui_script.run(g)
 
 	_u20_wipe([g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH] + U20_ST_FILES)
 	g.SAVE_PATH = "user://alchemy_save.json"

@@ -21,7 +21,9 @@ static func run(g: Game) -> void:
 	g.add_child(view)
 	view.setup(g, w)
 	Selftest.check("workshop UI real add button exists", view.find_child("Add_line_1", true, false) is Button)
+	await _guided_controls(g, w, view)
 	await _screen(g, w, view)
+	_guide_states(g, w, view)
 	await _hidden_page(g, view)
 	view.queue_free()
 	await g.get_tree().process_frame
@@ -62,6 +64,53 @@ static func _choose(view: Node, line: String, target: String, amount: int, stock
 			return true
 	return false
 
+static func _guided_controls(g: Game, w: Workshop, view: Node) -> void:
+	var upgrades := _node(view, "WorkshopUpgrades") as Control
+	var guide := _node(view, "GuideSteps") as Control
+	Selftest.check("workshop upgrades do not precede production", upgrades != null
+		and not upgrades.visible and _node(view, "LineCard_1").get_parent().get_index() < upgrades.get_index())
+	Selftest.check("workshop unavailable lines do not fill the working screen",
+		not _node(view, "LineCard_3").is_visible_in_tree() and not _node(view, "LineCard_4").is_visible_in_tree())
+	Selftest.check("workshop instruction stays optional", guide != null and not guide.visible)
+	if upgrades == null or guide == null:
+		return
+	var before := w.export_state()
+	var stock := g._engine.inventory.duplicate(true)
+	var ether := g._engine._available_ether()
+	_press(view, "GuideToggle")
+	_press(view, "GuideRecipe")
+	Selftest.check("workshop recipe step focuses actual recipe picker", guide.visible
+		and (_node(view, "Target_line_1") as Control).has_focus())
+	_press(view, "GuideAmount")
+	Selftest.check("workshop quantity step focuses actual production mode",
+		(_node(view, "Mode_line_1") as Control).has_focus())
+	_press(view, "GuideQueue")
+	Selftest.check("workshop queue step focuses actual add action",
+		(_node(view, "Add_line_1") as Control).has_focus())
+	_choose(view, "line_1", "steam", 4)
+	var batch_hint := _text(view, "GuideHint")
+	_choose(view, "line_1", "steam", 4, true)
+	Selftest.check("workshop instruction follows batch versus shared stock choice",
+		batch_hint != _text(view, "GuideHint") and _text(view, "GuideHint").contains("4"))
+	_press(view, "ToggleUpgrades")
+	Selftest.check("workshop equipment commands remain reachable on demand", upgrades.visible
+		and _node(view, "BuyEquipment").is_visible_in_tree())
+	view.refresh()
+	Selftest.check("workshop refresh retains expanded help and upgrades", guide.visible and upgrades.visible)
+	Selftest.check("workshop instruction never spends or queues", w.export_state() == before
+		and g._engine.inventory == stock and g._engine._available_ether() == ether)
+	_press(view, "GuideToggle")
+	_press(view, "ToggleUpgrades")
+	Selftest.check("workshop help and upgrades can be dismissed inline", not guide.visible and not upgrades.visible)
+	_choose(view, "line_1", "steam", 1)
+	var known := g._engine.known_recipes.duplicate(true)
+	g._engine.known_recipes.clear()
+	view.refresh()
+	Selftest.check("workshop guide redirects to discovery when recipes disappear",
+		_text(view, "GuideHint").contains("Эксперимент"))
+	g._engine.known_recipes = known
+	view.refresh()
+
 static func _screen(g: Game, w: Workshop, view: Node) -> void:
 	Selftest.check("workshop heading names production mastery", _text(view, "MasteryHeading") == "Мастерство Мастерской")
 	Selftest.check("workshop rank and next threshold visible", _text(view, "MasteryInfo").contains("Мастер")
@@ -82,10 +131,12 @@ static func _screen(g: Game, w: Workshop, view: Node) -> void:
 		elif _text(view, "LineInfo_%d" % index).contains("Недоступна"):
 			locked += 1
 	Selftest.check("workshop Master rank enables two of four cards", active == 2 and locked == 2)
-	Selftest.check("workshop interval and concrete speed source rendered", _text(view, "LineState_1").contains("этап каждые")
-		and _text(view, "LineState_1").contains("40.0") and _text(view, "LineState_1").contains("базовая скорость"))
-	Selftest.check("workshop wallet shows active ether and reserve", _text(view, "EtherWallet").contains("активного")
-		and _text(view, "EtherWallet").contains("резерва"))
+	_press(view, "Details_line_1")
+	Selftest.check("workshop interval and concrete speed source available on demand", _node(view, "LineDetails_1").is_visible_in_tree()
+		and _text(view, "LineDetails_1").contains("40.0") and _text(view, "LineDetails_1").contains("базовая скорость"))
+	_press(view, "Details_line_1")
+	Selftest.check("workshop wallet includes active ether and reserve", _text(view, "EtherWallet").contains(str(g._engine._available_ether()))
+		and (_node(view, "EtherWallet") as Control).tooltip_text.contains("резерва"))
 	var targets := _node(view, "Target_line_1") as OptionButton
 	var only_known := targets != null
 	if targets != null:
@@ -179,6 +230,40 @@ static func _screen(g: Game, w: Workshop, view: Node) -> void:
 	w.changed.emit()
 	Selftest.check("workshop deleted view disconnects changed safely", w.changed.get_connections().size() < connection_count and w.lines == jobs)
 	g.add_child(view)
+
+static func _guide_states(g: Game, w: Workshop, view: Node) -> void:
+	var fixture := Fixture.new(g)
+	fixture.capture(g._workshop_scheduler)
+	fixture.prepare_production()
+	w.import_state({"version": 1, "unlocked": true})
+	view.refresh()
+	_press(view, "GuideToggle")
+	_choose(view, "line_1", "steam", 1)
+	g._engine.inventory["water"] = 0
+	_press(view, "Add_line_1")
+	g._workshop_scheduler.advance(40.0)
+	view.refresh()
+	Selftest.check("workshop blocked stage shows waiting instead of a fresh countdown",
+		w.lines[0]["stage_credit"] > 0 and _text(view, "LineState_1").contains("Ждёт")
+		and not _text(view, "LineState_1").contains("через"))
+	g._engine.inventory["water"] = 1
+	g._workshop_scheduler.advance(0.0)
+	view.refresh()
+	Selftest.check("workshop ready stage resumes immediately when input arrives",
+		g._engine.inventory.get("steam", 0) == 1 and w.lines[0]["queue"].is_empty())
+	_press(view, "Add_line_1")
+	view.refresh()
+	_press(view, "Pause_line_1")
+	var job_id := String(w.lines[0]["queue"][0]["id"])
+	_press(view, "Remove_" + job_id)
+	view.refresh()
+	Selftest.check("workshop removed paused job returns guide to adding not hidden resume",
+		w.lines[0]["queue"].is_empty() and not _node(view, "Pause_line_1").visible
+		and not _text(view, "GuideHint").contains("Продолжить")
+		and _text(view, "GuideHint").contains("Добавить в очередь"))
+	_press(view, "GuideToggle")
+	fixture.finish()
+	view.refresh()
 
 static func _hidden_page(g: Game, view: Node) -> void:
 	# Re-adding the view above arms one deferred refresh; consume it first,

@@ -7,6 +7,12 @@ extends Control
 
 var liquid := Color(0.10, 0.16, 0.24, 0.96)
 var liquid_target := liquid
+# Режим «только зелье»: тело котла уже нарисовано спрайтом комнаты, а вид
+# рисует жидкость/пар/вспышки в устье этого спрайта (доли от size).
+var overlay_only := false
+var idle_color := Color(0.10, 0.16, 0.24, 0.96)
+var mouth_uv := Vector2(0.5, 0.397)
+var mouth_radii := Vector2(0.30, 0.042)
 var flame := 0.0          # 0..1 текущая интенсивность
 var _flame_target := 0.0
 var flash := 0.0          # вспышка результата
@@ -32,6 +38,9 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if custom_minimum_size == Vector2.ZERO:
 		custom_minimum_size = Vector2(256, 210)
+	if overlay_only:
+		liquid = idle_color
+		liquid_target = idle_color
 	# Покой котла статичен; анимация включается только при изменении смеси,
 	# варке или вспышке результата.
 	set_process(false)
@@ -54,8 +63,14 @@ func _ready() -> void:
 			"ph": _rng.randf_range(0.0, TAU)
 		})
 
+## Цвет покоя: в обычном режиме — тёмное варево кодом, в режиме наложения —
+## запечённый цвет жидкости на спрайте комнаты.
+func _idle_color() -> Color:
+	return idle_color if overlay_only else Color(0.10, 0.16, 0.24, 0.96)
+
+
 func set_mixture(a_col: Color, b_col: Color) -> void:
-	var next_target := Color(0.10, 0.16, 0.24, 0.96)
+	var next_target := _idle_color()
 	if a_col.a >= 0.01 or b_col.a >= 0.01:
 		next_target = a_col.lerp(b_col, 0.5).darkened(0.15)
 		next_target.a = 0.96
@@ -76,20 +91,25 @@ func trigger_ingredient(col: Color) -> void:
 func _splash_now(col: Color) -> void:
 	flash = 0.35
 	flash_color = col.lightened(0.18)
-	var origin := Vector2(DRAW_SIZE.x * 0.5, 61.0)
+	var origin := _mouth_local()
+	var spread := 42.0
+	var radius_scale := 1.0
+	if overlay_only:
+		spread = maxf(10.0, size.x * mouth_radii.x * 0.55)
+		radius_scale = clampf(size.x / DRAW_SIZE.x, 0.3, 1.0)
 	for i in 12:
 		var angle := _juice_rng.randf_range(-PI * 0.94, -PI * 0.06)
-		var speed := _juice_rng.randf_range(34.0, 108.0)
+		var speed := _juice_rng.randf_range(34.0, 108.0) * radius_scale
 		var particle_col := col.lightened(_juice_rng.randf_range(0.08, 0.38))
 		particle_col.a = 1.0
 		_ingredient_particles.append({
-			"pos": origin + Vector2(_juice_rng.randf_range(-42.0, 42.0), _juice_rng.randf_range(-2.0, 7.0)),
+			"pos": origin + Vector2(_juice_rng.randf_range(-spread, spread), _juice_rng.randf_range(-2.0, 7.0) * radius_scale),
 			"vel": Vector2(cos(angle) * speed, sin(angle) * speed),
 			"life": _juice_rng.randf_range(0.65, 1.15),
 			"max_life": 1.15,
-			"radius": _juice_rng.randf_range(3.0, 6.0),
+			"radius": _juice_rng.randf_range(3.0, 6.0) * radius_scale,
 			"color": particle_col,
-			"gravity": _juice_rng.randf_range(48.0, 92.0),
+			"gravity": _juice_rng.randf_range(48.0, 92.0) * radius_scale,
 		})
 	while _ingredient_particles.size() > 24:
 		_ingredient_particles.pop_front()
@@ -97,12 +117,22 @@ func _splash_now(col: Color) -> void:
 	queue_redraw()
 
 
+func _mouth_local() -> Vector2:
+	if overlay_only:
+		return Vector2(size.x * mouth_uv.x, size.y * mouth_uv.y)
+	return Vector2(DRAW_SIZE.x * 0.5, 61.0)
+
+
 func _mouth_global() -> Vector2:
-	return global_position + Vector2(DRAW_SIZE.x * 0.5, 61.0) * _draw_scale
+	if overlay_only:
+		return get_global_transform() * _mouth_local()
+	var draw_scale := maxf(0.01, minf(1.0, minf(size.x / DRAW_SIZE.x, size.y / DRAW_SIZE.y)))
+	var origin := (size - DRAW_SIZE * draw_scale) * 0.5
+	return get_global_transform() * (origin + _mouth_local() * draw_scale)
 
 
 func clear_mixture() -> void:
-	var next_target := Color(0.10, 0.16, 0.24, 0.96)
+	var next_target := _idle_color()
 	if liquid_target.is_equal_approx(next_target) and _ingredient_pulse <= 0.001 and _ingredient_particles.is_empty():
 		return
 	liquid_target = next_target
@@ -161,6 +191,9 @@ func _process(delta: float) -> void:
 # ---------- отрисовка ----------
 
 func _draw() -> void:
+	if overlay_only:
+		_draw_brew_overlay()
+		return
 	_draw_scale = minf(1.0, minf(size.x / DRAW_SIZE.x, size.y / DRAW_SIZE.y))
 	_draw_scale = maxf(_draw_scale, 0.01)
 	_draw_origin = (size - DRAW_SIZE * _draw_scale) * 0.5
@@ -292,6 +325,89 @@ func _draw() -> void:
 		_soft(Vector2(cx, liquid_y), pot_r * (0.3 + flash * 0.5),
 			Color(1, 1, 1, 0.7 * flash))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## Режим наложения: тело котла и огонь уже нарисованы спрайтом комнаты, поэтому
+## рисуем только то, что должно жить: смесь в устье, рябь, пузырьки, пар и
+## вспышки. Устье задано долями от размера спрайта, так что оно не «плывёт»
+## при любом масштабе комнаты.
+func _draw_brew_overlay() -> void:
+	if size.x <= 1.0 or size.y <= 1.0:
+		return
+	var m := _mouth_local()
+	var rx := size.x * mouth_radii.x
+	var ry := size.y * mouth_radii.y
+	var act := clampf(flame + _ingredient_pulse / INGREDIENT_PULSE_DURATION, 0.0, 1.0)
+
+	# тёплый отсвет над поверхностью
+	_soft_ellipse(m + Vector2(0.0, ry * 0.4), Vector2(rx * 1.16, ry * 1.8),
+		Color(liquid.r, liquid.g, liquid.b, 0.16 + 0.10 * act))
+	# сама жидкость: тело + затемнение у стенок
+	_soft_ellipse(m, Vector2(rx, ry), Color(liquid.r, liquid.g, liquid.b, 0.96))
+	_soft_ellipse(m + Vector2(0.0, ry * 0.55), Vector2(rx * 0.78, ry * 0.85),
+		Color(liquid.r * 0.55, liquid.g * 0.55, liquid.b * 0.55, 0.45))
+	# блик на поверхности
+	_soft_ellipse(m + Vector2(-rx * 0.24, -ry * 0.22), Vector2(rx * 0.42, ry * 0.55),
+		Color(1.0, 1.0, 1.0, 0.10))
+	var edge := liquid.lightened(0.36)
+	_ellipse_ring(m, Vector2(rx, ry), Color(edge.r, edge.g, edge.b, 0.42 + 0.25 * act), 1.4)
+	# рябь: заметна при варке и после добавления вещества
+	for k in 2:
+		var ph := fmod(_time * 0.55 + float(k) * 0.5, 1.0)
+		var ripple_a := 0.24 * act * (1.0 - ph)
+		if ripple_a > 0.01:
+			_ellipse_ring(m, Vector2(rx * (0.2 + 0.72 * ph), ry * (0.2 + 0.72 * ph)),
+				Color(1.0, 1.0, 1.0, ripple_a), 1.1)
+	# пузырьки: только внутри устья
+	for b in _bubbles:
+		var bp := m + Vector2(float(b["x"]) * rx * 1.4, (float(b["y"]) - 0.5) * ry * 1.15)
+		draw_circle(bp, maxf(1.0, float(b["r"]) * rx), Color(1.0, 1.0, 1.0, 0.10 + 0.10 * flame))
+	# пар поднимается из устья
+	for st in _steam:
+		var sp := m + Vector2(float(st["x"]) * rx * 1.45, float(st["y"]) * ry * 2.6)
+		var sa: float = (0.05 + 0.05 * flame) * (1.0 - clampf((-float(st["y"]) - 0.3) / 1.6, 0.0, 1.0) * 0.6)
+		_soft_ellipse(sp, Vector2(float(st["r"]) * rx * 1.7, float(st["r"]) * ry * 3.6),
+			Color(0.8, 0.85, 0.9, sa))
+	# всплеск от входящего вещества
+	if _ingredient_pulse > 0.02:
+		var pulse_t := 1.0 - _ingredient_pulse / INGREDIENT_PULSE_DURATION
+		var pulse_alpha := _ingredient_pulse / INGREDIENT_PULSE_DURATION
+		var glow_col := _ingredient_color.lightened(0.16)
+		_soft_ellipse(m, Vector2(rx * (0.5 + pulse_t * 0.6), ry * (0.8 + pulse_t * 1.2)),
+			Color(glow_col.r, glow_col.g, glow_col.b, 0.16 * pulse_alpha))
+	for raw_particle in _ingredient_particles:
+		var particle: Dictionary = raw_particle
+		var life_ratio := clampf(float(particle["life"]) / float(particle["max_life"]), 0.0, 1.0)
+		var pcol: Color = particle["color"]
+		var alpha := 0.88 * life_ratio
+		var ppos: Vector2 = particle["pos"]
+		var pr: float = float(particle["radius"]) * (0.70 + 0.30 * life_ratio)
+		_soft(ppos, pr * 2.4, Color(pcol.r, pcol.g, pcol.b, alpha * 0.22))
+		draw_circle(ppos, pr, Color(pcol.r, pcol.g, pcol.b, alpha))
+		draw_circle(ppos - Vector2(pr * 0.28, pr * 0.3), pr * 0.28, Color(1.0, 1.0, 1.0, alpha * 0.62))
+	# вспышка результата
+	if flash > 0.02:
+		var fc := flash_color
+		_soft_ellipse(m, Vector2(rx * (1.0 + flash * 0.8), ry * (2.0 + flash * 1.6)),
+			Color(fc.r, fc.g, fc.b, 0.45 * flash))
+		_soft_ellipse(m, Vector2(rx * (0.6 + flash * 0.4), ry * (1.2 + flash * 0.8)),
+			Color(1.0, 1.0, 1.0, 0.6 * flash))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _soft_ellipse(center: Vector2, radii: Vector2, color: Color) -> void:
+	var r := Vector2(maxf(radii.x, 0.5), maxf(radii.y, 0.5))
+	draw_set_transform(center, 0.0, r)
+	draw_texture_rect(Art.soft(), Rect2(Vector2(-1.0, -1.0), Vector2(2.0, 2.0)), false, color)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _ellipse_ring(center: Vector2, radii: Vector2, col: Color, width: float) -> void:
+	var pts := PackedVector2Array()
+	for i in 41:
+		var a := TAU * float(i) / 40.0
+		pts.append(center + Vector2(cos(a) * radii.x, sin(a) * radii.y))
+	draw_polyline(pts, col, width, true)
 
 # ---------- помощники ----------
 

@@ -7,11 +7,11 @@ extends RefCounted
 static func card(accent: Color = UIStyle.LINE, done: bool = false) -> PanelContainer:
 	var p := PanelContainer.new()
 	p.mouse_filter = Control.MOUSE_FILTER_PASS
-	var bg := Color(0.07, 0.12, 0.18, 0.85)
+	var bg := Color(UIStyle.PANEL, 0.90)
 	var edge := accent
 	if done:
-		bg = Color(0.06, 0.12, 0.11, 0.80)
-		edge = Color(UIStyle.TEAL_DIM.r, UIStyle.TEAL_DIM.g, UIStyle.TEAL_DIM.b, 0.7)
+		bg = Color(UIStyle.PANEL_HI, 0.85)
+		edge = Color(UIStyle.BRASS.r, UIStyle.BRASS.g, UIStyle.BRASS.b, 0.75)
 	var sb := UIStyle.box(bg, Color(edge.r, edge.g, edge.b, 0.65), 12, 1)
 	sb.border_width_left = 4  # цветная полоса слева — быстро читается состояние
 	sb.content_margin_left = 12.0
@@ -38,7 +38,7 @@ static func progress_row(g: Game, title: String, sub: String, cur: int, target: 
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	body.add_child(head)
 	var t := g._label(("✓  " if done else "") + title, 14)
-	t.add_theme_color_override("font_color", UIStyle.TEAL if done else UIStyle.TEXT)
+	t.add_theme_color_override("font_color", UIStyle.BRASS_HI if done else UIStyle.CREAM)
 	if g._font_semi != null:
 		t.add_theme_font_override("font", g._font_semi)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -46,7 +46,7 @@ static func progress_row(g: Game, title: String, sub: String, cur: int, target: 
 	if reward != "":
 		var r := g._label(reward, 12)
 		r.autowrap_mode = TextServer.AUTOWRAP_OFF
-		r.add_theme_color_override("font_color", UIStyle.GOLD if not done else UIStyle.TEXT_DIM)
+		r.add_theme_color_override("font_color", UIStyle.BRASS if not done else UIStyle.TEXT_DIM)
 		r.size_flags_horizontal = Control.SIZE_SHRINK_END
 		head.add_child(r)
 	if sub != "":
@@ -67,10 +67,10 @@ static func progress_row(g: Game, title: String, sub: String, cur: int, target: 
 		bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var fill_col := UIStyle.TEAL if done else accent
+		var fill_col := UIStyle.FLAME if done else accent
 		bar.add_theme_stylebox_override("fill", UIStyle.box(fill_col, Color(0, 0, 0, 0), 4, 0))
 		bar.add_theme_stylebox_override("background",
-			UIStyle.box(Color(0.03, 0.05, 0.08, 0.9), Color(UIStyle.LINE.r, UIStyle.LINE.g, UIStyle.LINE.b, 0.5), 4, 1))
+			UIStyle.box(Color(UIStyle.INK, 0.9), Color(UIStyle.LINE.r, UIStyle.LINE.g, UIStyle.LINE.b, 0.5), 4, 1))
 		row.add_child(bar)
 		var v := g._label("%d/%d" % [mini(cur, target), target], 11)
 		v.autowrap_mode = TextServer.AUTOWRAP_OFF

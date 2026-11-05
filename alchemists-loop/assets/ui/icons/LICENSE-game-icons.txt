@@ -1,0 +1,18 @@
+Иконки gi_*.svg — проект game-icons.net (https://game-icons.net,
+https://github.com/game-icons/icons), лицензия CC BY 3.0
+(https://creativecommons.org/licenses/by/3.0/). Чёрная подложка-квадрат
+удалена, задан размер 48 px; формы не менялись.
+
+gi_cauldron.svg  — Lorc, cauldron
+gi_world.svg     — Lorc, world
+gi_journal.svg   — Lorc, open-book
+gi_arcana.svg    — Faithtoken, card-pick
+gi_board.svg     — Delapouite, stabbed-note
+gi_rating.svg    — Delapouite, podium-winner
+gi_more.svg      — Delapouite, settings-knobs
+gi_house.svg     — Delapouite, house
+gi_shop.svg      — Delapouite, shop
+gi_friends.svg   — Delapouite, three-friends
+gi_upgrade.svg   — Delapouite, upgrade
+gi_sound.svg     — Delapouite, speaker
+gi_quests.svg    — Delapouite, scroll-quill
