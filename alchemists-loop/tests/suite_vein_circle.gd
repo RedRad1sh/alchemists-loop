@@ -255,9 +255,9 @@ static func run(g: Game) -> void:
 	var idem := g._contracts._unlocked_titles.count("Тлеющий") == 1
 	# декор за 30 дней выдаётся через β-путь и не продаётся
 	g._contracts._celebrate_mile("дней", 30)
-	var own := g._home.house_unlocked.has("fireplace_ember")
+	var own := g._home.house_unlocked.has("planetarium_ember")
 	var shop_ok := true
-	for it in HouseItems.items_in_cat("fireplace"):
+	for it in HouseItems.items_in_cat("decor"):
 		if bool(it.get("reward", false)) and int(it.get("cost", 0)) > 0:
 			shop_ok = false
 	Selftest.check("rank formula + titles idempotent + decor reward",

@@ -147,6 +147,8 @@ func _save_game() -> bool:
 		"wall_hex": "#" + g._home._cosmetic_wall.to_html(false),
 		"floor_hex": "#" + g._home._cosmetic_floor.to_html(false),
 		"custom_unlocked": g._home._custom_unlocked,
+		"floor_mat": g._home._floor_mat,
+		"wall_mat": g._home._wall_mat,
 		# Доска v2 (Task 6, спека §6): ключи очага/вех/круга/ярмарки переехали в
 		# блок contracts v2 (save_block) и здесь больше не пишутся. server_tags —
 		# знание Online, остаётся на верхнем уровне.
@@ -235,6 +237,15 @@ func _migrate_retention_into_contracts(data: Dictionary) -> void:
 	c._migrate_missed_milestones()
 	c._check_day_miles()
 	c._check_pts_miles()
+
+## Материал из сейва принимается, только если он бесплатный или куплен.
+static func _owned_mat(game: Game, kind: String, id: String) -> String:
+	var m := DecorData.floor_mat(id) if kind == "floor" else DecorData.wall_mat(id)
+	var mid := String(m["id"])
+	if int(m["cost"]) == 0 or bool(game._home._custom_unlocked.get("mat_%s_%s" % [kind, mid], false)):
+		return mid
+	return String((DecorData.FLOOR_MATS if kind == "floor" else DecorData.WALL_MATS)[0]["id"])
+
 
 func _house_block() -> Dictionary:
 	return {
@@ -422,9 +433,9 @@ func _load_game() -> void:
 	if typeof(data.get("aura_custom")) == TYPE_STRING:
 		g._home._aura_custom = g._home._color_from_hex(String(data["aura_custom"]), Color("#ffb85c"))
 	if typeof(data.get("wall_hex")) == TYPE_STRING:
-		g._home._cosmetic_wall = g._home._color_from_hex(String(data["wall_hex"]), Color("#5a4d40"))
+		g._home._cosmetic_wall = g._home._color_from_hex(String(data["wall_hex"]), Color.WHITE)
 	if typeof(data.get("floor_hex")) == TYPE_STRING:
-		g._home._cosmetic_floor = g._home._color_from_hex(String(data["floor_hex"]), Color("#5d452f"))
+		g._home._cosmetic_floor = g._home._color_from_hex(String(data["floor_hex"]), Color.WHITE)
 	g._home._custom_unlocked.clear()
 	if data.get("custom_unlocked") is Dictionary:
 		for k in data["custom_unlocked"]:
@@ -436,10 +447,15 @@ func _load_game() -> void:
 			g._home._custom_unlocked["theme"] = true
 		if g._home._aura_custom_on:
 			g._home._custom_unlocked["aura"] = true
-		if String(data.get("wall_hex", "")) != "":
-			g._home._custom_unlocked["wall"] = true
-		if String(data.get("floor_hex", "")) != "":
-			g._home._custom_unlocked["floor"] = true
+	# Некупленная косметика не имеет права красить комнату: `wall_hex`/`floor_hex`
+	# пишутся при каждом сейве, поэтому их наличие никогда не означало покупку,
+	# а прежний «дефолтный» коричневый тон затемнял стены навсегда.
+	if not bool(g._home._custom_unlocked.get("wall", false)):
+		g._home._cosmetic_wall = Color.WHITE
+	if not bool(g._home._custom_unlocked.get("floor", false)):
+		g._home._cosmetic_floor = Color.WHITE
+	g._home._floor_mat = _owned_mat(g, "floor", String(data.get("floor_mat", "")))
+	g._home._wall_mat = _owned_mat(g, "wall", String(data.get("wall_mat", "")))
 	# Доска v2 (Task 6, спека §6): старые retention-ключи больше не читаются
 	# построчно — при наличии хотя бы одного из них запускается однократная
 	# presence-миграция в Contracts (порядок присваиваний и побочные вызовы —

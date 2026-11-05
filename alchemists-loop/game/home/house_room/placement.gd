@@ -8,12 +8,24 @@ const SNAP := 0.1
 const EPS := 1e-3
 
 
+# Экранное зеркало изометрии (порт mirrored_xz донора): отражённый напольный
+# предмет — тот же бокс с переставленными X и Z, иначе картинка режется гранями.
+static func floor_box(item: Dictionary, p: Dictionary) -> Vector3:
+	var box: Vector3 = item["box"]
+	if int(p.get("wall", -1)) < 0 and bool(p.get("flip", false)) \
+			and bool(item.get("flip_ok", false)):
+		return Vector3(box.z, box.y, box.x)
+	return box
+
+
 static func footprint(p: Dictionary) -> Rect2:
 	var item := HouseItems.get_item(String(p.get("id", "")))
 	if item.is_empty():
 		return Rect2()
 	var box: Vector3 = item["box"]
 	var wall := int(p.get("wall", -1))
+	if wall < 0:
+		box = floor_box(item, p)
 	if wall == 0:
 		return Rect2(-ROOM_HALF, float(p.get("z", 0.0)) - box.x * 0.5, box.z, box.x)
 	if wall == 1:
@@ -45,6 +57,8 @@ static func clamp_record(p: Dictionary) -> Dictionary:
 	else:
 		q["wall"] = -1
 		q["y"] = 0.0
+		q["flip"] = bool(q.get("flip", false)) and bool(item.get("flip_ok", false))
+		box = floor_box(item, q)
 		q["x"] = clampf(float(q.get("x", 0.0)),
 			-ROOM_HALF + FLOOR_INSET + box.x * 0.5,
 			ROOM_HALF - FLOOR_INSET - box.x * 0.5)

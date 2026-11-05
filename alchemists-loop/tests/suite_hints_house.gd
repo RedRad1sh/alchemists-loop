@@ -94,7 +94,7 @@ static func run(g: Game) -> void:
 	g._home._buy_house_item("rug_alt")
 	Selftest.check("buy furniture applies", g._home.house_unlocked.has("rug_alt") and g._engine.ether == _eth0 - 270 - Game.HOUSE_COST - _rug_cost)
 	Selftest.check("buy furniture idempotent", not g._home._buy_house_item("rug_alt") and g._engine.ether == _eth0 - 270 - Game.HOUSE_COST - _rug_cost)
-	Selftest.check("decor category", HouseItems.items_in_cat("rug").size() == 2)
+	Selftest.check("decor category", HouseItems.items_in_cat("rug").size() == 10)
 	Selftest.check("decor lookup", HouseItems.get_item("rug")["label"] == "Тканый ковёр" and HouseItems.price("bed") == 250)
 	Selftest.check("house json shape", g._home._house_json().get("v", 0) == 2
 		and g._home._house_json().has("items")
@@ -228,7 +228,6 @@ static func run(g: Game) -> void:
 	Selftest.check("u13 guards released for later suites", not g._pages._spend_guard_ms.has("hint"))
 
 	# ============ U28 (β): выдача награды идемпотентна и не в эфире ============
-	var u28_ether := g._engine.ether
 	var u28_house := g._home._cosmetic_house
 	var u28_flag_prev := g._spirit._companion_unlocked
 	g._spirit._companion_unlocked = true
@@ -236,26 +235,31 @@ static func run(g: Game) -> void:
 	var u28_done: Array = g._home.house_tasks_done.duplicate()
 	var u28_affinity := g._spirit._companion_affinity
 	var u28_level := g._spirit._companion_level
+	# Дружба на максимум: повышение уровня дружбы выдаёт эфир (spirit.gd:580), и
+	# проверка «награда поручения — не эфир» меряла бы чужую механику.
+	g._spirit._companion_affinity = 60
+	g._spirit._companion_level = 4
+	var u28_ether := g._engine.ether
 	g._home._cosmetic_house = true
 	g._home.house_tasks_done.clear()
 	g._home.house_unlocked.clear()
-	g._home._complete_house_task(_u28_task("chair_at_table"))
+	g._home._complete_house_task(_u28_task("table_at_window"))
 	Selftest.check("b reward grants ownership", g._home.house_unlocked.has("window_guild"))
 	Selftest.check("b reward spends no ether", g._engine.ether == u28_ether)
-	Selftest.check("b reward marks the task done once", g._home.house_tasks_done == ["chair_at_table"])
+	Selftest.check("b reward marks the task done once", g._home.house_tasks_done == ["table_at_window"])
 	Selftest.check("b gift text names the item, not the category id",
 		g._engine.status_text.contains("Витраж гильдии") and not g._engine.status_text.contains("window"))
-	g._home._complete_house_task(_u28_task("chair_at_table"))
+	g._home._complete_house_task(_u28_task("table_at_window"))
 	Selftest.check("b reward idempotent", g._home.house_tasks_done.size() == 1
 		and (g._home.house_unlocked as Array).count("window_guild") == 1)
 	g._home.house_tasks_done.clear()
 	g._home.house_unlocked = ["window_seal"]
 	Selftest.check("b already-owned reward reports no gift",
-		g._home._grant_task_reward(_u28_task("plant_by_window")) == "")
+		g._home._grant_task_reward(_u28_task("window_over_bed")) == "")
 	var u28_aff0 := g._spirit._companion_affinity
-	g._home._complete_house_task(_u28_task("plant_by_window"))
+	g._home._complete_house_task(_u28_task("window_over_bed"))
 	Selftest.check("b already-owned reward still completes",
-		g._home.house_tasks_done == ["plant_by_window"])
+		g._home.house_tasks_done == ["window_over_bed"])
 	Selftest.check("b already-owned reward keeps the owned list unchanged",
 		g._home.house_unlocked == ["window_seal"])
 	Selftest.check("b completion gives affinity, not ether",

@@ -3,7 +3,7 @@ class_name RoomBuilder
 
 const ROOM_PATH := "res://assets/house/room/room_with_ceiling.glb"
 const ROOM_OFFSET := Vector3(-23.24929, 0.0, -15.735065)
-const ROOM_MIRROR_PRIORITY := -10
+const DEFAULT_FLOOR_TEX := "res://assets/house/room/floor_planks.png"
 
 
 static func build(world: Node3D) -> Dictionary:
@@ -14,9 +14,32 @@ static func build(world: Node3D) -> Dictionary:
 	room.name = "Room"
 	room.position = ROOM_OFFSET
 	world.add_child(room)
+	_unshade(room)
+	_hide_ceiling(room)
 	_prepare_floor(room)
-	var mirror := _build_mirror(room, world)
-	return {"room": room, "mirror": mirror, "aabb": room_aabb(room)}
+	return {"room": room, "aabb": room_aabb(room)}
+
+
+# Изо-камера смотрит сверху вниз: потолок закрыл бы комнату. В исходнике его
+# прятал CeilingSetup (горячая клавиша), здесь он спрятан всегда.
+static func _hide_ceiling(room: Node3D) -> void:
+	for node in room.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if String(mi.name).to_lower().contains("ceiling"):
+			mi.visible = false
+
+
+# Исходная комната экспортируется с KHR_materials_unlit и все её шейдеры идут
+# render_mode unshaded: свет в кадре не участвует, цвет = albedo текстуры.
+static func _unshade(room: Node3D) -> void:
+	for node in room.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		for i in mi.mesh.get_surface_count():
+			var mat := mi.mesh.surface_get_material(i)
+			if mat is BaseMaterial3D:
+				var dup := (mat as BaseMaterial3D).duplicate() as BaseMaterial3D
+				dup.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				mi.set_surface_override_material(i, dup)
 
 
 static func _prepare_floor(room: Node3D) -> void:
@@ -31,49 +54,20 @@ static func _prepare_floor(room: Node3D) -> void:
 				# Правка 2: не пишем в кэшированный импорт GLB — дубликат материала
 				# ложится per-instance оверрайдом, второй экземпляр комнаты чист.
 				var dup := (mat as BaseMaterial3D).duplicate() as BaseMaterial3D
+				dup.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 				dup.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 				dup.render_priority = 0
 				dup.cull_mode = BaseMaterial3D.CULL_DISABLED
+				var planks := load(DEFAULT_FLOOR_TEX) as Texture2D
+				if planks != null:
+					dup.albedo_texture = planks
 				mi.set_surface_override_material(i, dup)
 
 
-static func _build_mirror(room: Node3D, world: Node3D) -> Node3D:
-	var mirror := Node3D.new()
-	mirror.name = "RoomMirror"
-	mirror.scale = Vector3(1.0, -1.0, 1.0)
-	world.add_child(mirror)
-	var copy := room.duplicate() as Node3D
-	copy.name = "RoomCopyMirroredUnderFloor"
-	mirror.add_child(copy)
-	# Копия сохраняет ROOM_OFFSET исходной комнаты: зеркало масштабирует её
-	# вокруг y=0, где после смещения лежит пол. Обнуление position сдвинуло бы
-	# копию в сырые координаты GLB и вывело из кадра.
-	for node in copy.find_children("*", "MeshInstance3D", true, false):
-		var mi := node as MeshInstance3D
-		var lower := String(mi.name).to_lower()
-		if lower.contains("floor"):
-			mi.visible = false
-			continue
-		if lower.contains("ceiling"):
-			mi.visible = true
-		var mesh := mi.mesh.duplicate(true) as Mesh
-		for i in mesh.get_surface_count():
-			var mat := mesh.surface_get_material(i) as BaseMaterial3D
-			if mat == null:
-				continue
-			var dup := mat.duplicate() as BaseMaterial3D
-			dup.cull_mode = BaseMaterial3D.CULL_DISABLED
-			dup.render_priority = ROOM_MIRROR_PRIORITY
-			mesh.surface_set_material(i, dup)
-		mi.mesh = mesh
-	for node in room.find_children("*", "MeshInstance3D", true, false):
-		var mi := node as MeshInstance3D
-		if String(mi.name).to_lower().contains("ceiling"):
-			mi.visible = false
-	return mirror
-
-
-static func tint_room(room: Node3D, wall_tint: Color, floor_tint: Color) -> void:
+## Пустой путь текстуры стен = родная текстура GLB. У пола родная текстура с
+## пятью вставками плитки, поэтому по умолчанию он всегда досками.
+static func tint_room(room: Node3D, wall_tint: Color, floor_tint: Color,
+		floor_tex := DEFAULT_FLOOR_TEX, wall_left_tex := "", wall_right_tex := "") -> void:
 	if room == null:
 		return
 	for node in room.find_children("*", "MeshInstance3D", true, false):
@@ -90,13 +84,32 @@ static func tint_room(room: Node3D, wall_tint: Color, floor_tint: Color) -> void
 			if mat == null:
 				continue
 			var dup := mat.duplicate() as BaseMaterial3D
+			dup.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			if col != Color.WHITE:
 				dup.albedo_color = col
+			var tex_path := floor_tex if is_floor else _wall_tex_for(mat, wall_left_tex, wall_right_tex)
+			if tex_path != "":
+				var tex := load(tex_path) as Texture2D
+				if tex != null:
+					dup.albedo_texture = tex
 			if is_floor:
 				dup.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 				dup.render_priority = 0
 				dup.cull_mode = BaseMaterial3D.CULL_DISABLED
 			mi.set_surface_override_material(i, dup)
+
+
+# Имя меша не говорит, какая это развёртка (obj_wall_right_south несёт left_wall),
+# поэтому сторона берётся из исходного материала GLB.
+static func _wall_tex_for(mat: BaseMaterial3D, left: String, right: String) -> String:
+	var key := mat.resource_name.to_lower()
+	if mat.albedo_texture != null:
+		key += " " + mat.albedo_texture.resource_path.to_lower()
+	if key.contains("left"):
+		return left
+	if key.contains("right"):
+		return right
+	return ""
 
 
 static func room_aabb(room: Node3D) -> AABB:

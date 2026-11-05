@@ -112,6 +112,8 @@ const WORKSHOP_AURAS := DecorData.WORKSHOP_AURAS
 const HOUSE_COST := DecorData.HOUSE_COST
 const CUSTOM_COSTS := DecorData.CUSTOM_COSTS
 const COLOR_SWATCHES := DecorData.COLOR_SWATCHES
+const FLOOR_MATS := DecorData.FLOOR_MATS
+const WALL_MATS := DecorData.WALL_MATS
 # HouseTasksData (β)
 const HOUSE_TASKS := HouseTasksData.TASKS
 # QuestData
@@ -548,6 +550,10 @@ func _ready() -> void:
 			_demo_harness._action_workshop = true
 		elif a == "--action=house_tray":
 			_demo_harness._action_house_tray = true
+		elif a == "--action=house_touch":
+			_demo_harness._action_house_touch = true
+		elif a == "--action=room_spike_full":
+			_demo_harness._action_room_spike_full = true
 		elif a == "--action=room_spike":
 			_demo_harness._action_room_spike = true
 		elif a == "--action=room_camera":
@@ -639,7 +645,7 @@ func _ready() -> void:
 			_demo_harness._sigil_tab = a.substr("--sigiltab=".length())
 		elif a.begins_with("--contractstate="):
 			_demo_harness._contract_state = a.substr("--contractstate=".length())
-	if _demo_harness._action_house_tray:
+	if _demo_harness.house_capture_action():
 		if not _selftest or not _demo_harness._demo or _demo_harness._shot_path == "":
 			push_error("house_tray requires --selftest --demo --shot")
 			get_tree().quit(1)
@@ -826,10 +832,14 @@ func _ready() -> void:
 		_engine.inventory["water"] = 2
 		_engine.inventory["earth"] = 2
 		_hub._open_craftable()
-	if _demo_harness._demo and (_demo_harness._action_workshop or _demo_harness._action_house_tray):
+	if _demo_harness._demo and (_demo_harness._action_house_tray or _demo_harness._action_house_touch):
 		_demo_harness._seed_house()
-		if not _demo_harness._action_house_tray:
-			_home._open_workshop()
+	if _demo_harness._demo and _demo_harness._action_workshop and _tabs_ref != null:
+		_tabs_ref.current_tab = TAB_LAB
+	if _demo_harness._demo and _demo_harness._action_room_spike_full:
+		_demo_harness._seed_house()
+		_home.house_placements = Demo.full_house_layout()
+		_home._open_house_screen()
 	if _demo_harness._demo and _demo_harness._action_rating:
 		if _tabs_ref != null:
 			_tabs_ref.current_tab = TAB_RATING
@@ -864,7 +874,7 @@ func _ready() -> void:
 		_home._on_house_profile(2, [{"nick": "Николя"}, {"nick": "Мирра"}, {"nick": "Некто"}])
 	if _demo_harness._demo and _demo_harness._action_decor:
 		_demo_harness._seed_house()
-		_home._open_workshop()
+		_home._open_house_screen()
 		_home._open_house_tray()
 		_home._set_shop_cat(_demo_harness._decor_demo_cat)
 	if _demo_harness._demo and _demo_harness._action_room_spike:
@@ -1074,7 +1084,7 @@ func _ready() -> void:
 			Net.atlas_today(_online._device_id)
 			Net.week_status(_online._device_id)
 	if _selftest:
-		if not _demo_harness._action_house_tray:
+		if not _demo_harness.house_capture_action():
 			_run_selftest()
 	else:
 		# Вход в игру: приветственный звук (не в selftest-прогоне).

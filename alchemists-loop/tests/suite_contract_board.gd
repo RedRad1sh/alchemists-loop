@@ -37,11 +37,7 @@ static func _materials_base_cost(g: Game, mats: Dictionary) -> int:
 	return total
 
 static func _decor_item(decor_id: String) -> Dictionary:
-	for cat in DecorData.DECOR:
-		for item in (cat as Dictionary).get("items", []):
-			if str((item as Dictionary).get("id", "")) == decor_id:
-				return (item as Dictionary)
-	return {}
+	return HouseItems.get_item(decor_id)
 
 # Сюита меняет живое состояние игры, поэтому каждый блок обязан снимать снимок
 # и восстанавливать его: иначе краснеют сюиты дальше по await-списку, а не та,
@@ -413,7 +409,7 @@ static func run(g: Game) -> void:
 			decor_ok = false
 		if str(ContractsBalance.DECOR_LABEL.get(String(id), "")) == "":
 			decor_ok = false
-	Selftest.check("§3.4 every decor id exists in DecorData as a reward-only window (cost 0)", decor_ok)
+	Selftest.check("§3.4 every decor id exists in HouseItems as a reward-only window (cost 0)", decor_ok)
 
 	# ---------------- заголовки для UI ----------------
 	var title_ok := true
@@ -1130,7 +1126,7 @@ static func run(g: Game) -> void:
 
 	# ---------------- §3.4 декор ----------------
 	Selftest.check("§3.4 decor_exists is true for a real reward id and false for a made-up one",
-		Contracts.decor_exists("window_contract") and Contracts.decor_exists("fireplace_ember")
+		Contracts.decor_exists("window_contract") and Contracts.decor_exists("planetarium_ember")
 		and not Contracts.decor_exists("window_does_not_exist"))
 
 	# Награда недельного gold несёт декор, дневная — нет.
@@ -2697,7 +2693,7 @@ static func _contracts_durability_checks(g: Game) -> void:
 	var house_u_prev: Array = g._home.house_unlocked.duplicate()
 	var house_p_prev: Array[Dictionary] = []
 	house_p_prev.assign(g._home.house_placements)
-	g._home.house_unlocked = ["bed", "shelf"]
+	g._home.house_unlocked = ["bed", "door"]
 	g._home.house_placements = HouseLayout.default_placements()
 	g._saves._save_game()
 	# Память вычищена НАМЕРЕННО: без этого no-op-загрузка оставила бы фикстуру
@@ -2707,7 +2703,7 @@ static func _contracts_durability_checks(g: Game) -> void:
 	g._home.house_placements.clear()
 	g._saves._load_game()
 	Selftest.check("§6.16 a restart keeps the house ownership and placements",
-		g._home.house_unlocked == ["bed", "shelf"]
+		g._home.house_unlocked == ["bed", "door"]
 		and g._home.house_placements.size() == 9)
 	g._home.house_unlocked = house_u_prev
 	g._home.house_placements = house_p_prev
@@ -2724,7 +2720,7 @@ static func _contracts_durability_checks(g: Game) -> void:
 		c._active_buffs.size() == 1 and int(buff_back.get("until", 0)) == now_u + 1800
 		and float(buff_back.get("power", 0.0)) == 2.0
 		and c.buff_power("spring_yield", now_u + 600) == 2.0)
-	# Task 5: house_owned больше не пишется в сейв (формат v6), поэтому после
+	# Task 5: владение хранится отдельно в house_unlocked (формат v6), поэтому после
 	# рестарта проверяется только журнал наград контрактов.
 	Selftest.check("§6.16 a restart keeps the decor journal",
 		c._unlocked_decor == ["window_seal"])

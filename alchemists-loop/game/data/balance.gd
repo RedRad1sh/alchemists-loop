@@ -91,7 +91,10 @@ const CIRCLE_RANKS := [
 	{"level": 6, "kind": "дней",  "threshold": 365, "title": "Сердце",   "shape": "star",     "color": "#ffd21f"},
 	{"level": 7, "kind": "очков", "threshold": 500, "title": "Пламенный", "shape": "flame",   "color": "#fff4d6"},
 ]
-const CIRCLE_DECOR_REWARDS := {30: "fireplace_ember", 100: "fireplace_log", 365: "fireplace_heart"}
+# Награды круга по стажу: 30 дней — «Тлеющий» (уголь), 100 — дверь гильдии,
+# 365 — резная кровать («Сердце» дома). Все три выдаются и поручениями β,
+# поэтому повторная выдача просто не даёт ничего нового (идемпотентно).
+const CIRCLE_DECOR_REWARDS := {30: "planetarium_ember", 100: "door_guild", 365: "bed_carved"}
 # недельный слой (v30): жила даёт очки + прожилки (+1 кап, кап 5/нед. на сервере)
 const FAIR_REGEN_EACH := 0.05  # сильная недельная награда: +0.05 регена/с за закрытый котёл (вклад ≥3)
 const FAIR_REGEN_CAP := 0.5    # потолок суммарного регена ярмарок
