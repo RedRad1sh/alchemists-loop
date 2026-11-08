@@ -1339,9 +1339,14 @@ func _buy_house() -> void:
 		return
 	g._engine._spend_ether(Game.HOUSE_COST)
 	_cosmetic_house = true
-	for cat in HouseItems.CATS:
-		_unlock_item(HouseItems.base_item(String(cat)))
-	house_placements = HouseLayout.default_placements()
+	# С домиком даётся только кровать; остальное игрок покупает или получает
+	# поручениями.
+	var bed := HouseItems.base_item("bed")
+	_unlock_item(bed)
+	house_placements.clear()
+	for rec in HouseLayout.default_placements():
+		if String(rec.get("id", "")) == bed:
+			house_placements.append(rec)
 	_apply_cosmetic()
 	_refresh_house_screen()
 	g._engine._refresh()

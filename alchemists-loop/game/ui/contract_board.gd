@@ -12,7 +12,7 @@ const BAND_DX := 4.0
 const NOTE_GAP := 8.0
 const CARD_GAP := 4.0
 const SIGN_SIZE := Vector2(300, 84)
-const CLOSE_SIZE := Vector2(118, 38)
+const CLOSE_SIZE := Vector2(112, 32)
 const SCROLL_STEP := 72.0
 const SCROLL_HINT_SIZE := Vector2(160, 24)
 const NOTE_SIZE := Vector2(132, 88)
@@ -45,11 +45,14 @@ const DECOR_MISSING_HINT := "в каталоге пока нет"
 const SIGN_INK := Color(0.93, 0.86, 0.70)
 const NOTE_INK := Color(0.16, 0.11, 0.07)
 # §D: текст не должен касаться кромки текстуры; §C: светлые чернила по латуни.
-const BTN_M := 10.0
+const BTN_M := 14.0
+# Поле контента по вертикали: кнопка на рельсе 32 px, кегль 13 — строке нужно 18.
+const BTN_MV := 6.0
+const BTN_FS := 13
 const PLATE_INK := Color(0.95, 0.88, 0.72)
 const PLATE_INK_DIM := Color(0.72, 0.66, 0.53)
-# Невытягиваемые поля plate_brass.png (224x64 @2x): 36 px держат гвоздик вместе
-# с гнездом, 10 px — латунную кромку и запечённую тень под ней.
+# Невытягиваемые поля plate_brass.png (224x64 @2x): 36 px держат скругление и
+# латунный ободок без растяжения, 10 px — кромку и запечённую тень под ней.
 const PLATE_SIDE_FIELD := 36.0
 const PLATE_EDGE_FIELD := 10.0
 
@@ -148,23 +151,24 @@ func _layer(fname: String, node_name: String) -> TextureRect:
 ## жёлтые кнопки темы на доске выглядели чужеродными наклейками поверх дерева.
 ## Статическая и с полем `m`: карточка контракта тоже рисует плашку (кнопка
 ## «Влить» в ряду жилы), а `ContractBoard._mm` карточка уже зовёт статически.
-static func style_plate(b: Button, m: float = BTN_M) -> void:
+static func style_plate(b: Button, m: float = BTN_M, mv: float = BTN_MV) -> void:
 	var sb := StyleBoxTexture.new()
 	sb.texture = ContractCard.tex("plate_brass.png")
 	sb.texture_margin_left = PLATE_SIDE_FIELD
 	sb.texture_margin_right = PLATE_SIDE_FIELD
 	sb.texture_margin_top = PLATE_EDGE_FIELD
 	sb.texture_margin_bottom = PLATE_EDGE_FIELD
-	for k in ["content_margin_left", "content_margin_top",
-			"content_margin_right", "content_margin_bottom"]:
-		sb.set(k, m)
+	sb.content_margin_left = m
+	sb.content_margin_right = m
+	sb.content_margin_top = mv
+	sb.content_margin_bottom = mv
 	var sbh: StyleBoxTexture = sb.duplicate()
 	sbh.modulate_color = Color(1.08, 1.08, 1.08)
 	var sbp: StyleBoxTexture = sb.duplicate()
 	sbp.modulate_color = Color(0.94, 0.94, 0.94)
 	# «1 px вниз» при нажатии: texture_offset в Godot 4 нет, сдвигаем поля контента.
-	sbp.content_margin_top = m - 1.0
-	sbp.content_margin_bottom = m + 1.0
+	sbp.content_margin_top = mv - 1.0
+	sbp.content_margin_bottom = mv + 1.0
 	var sbd: StyleBoxTexture = sb.duplicate()
 	sbd.modulate_color = Color(0.55, 0.55, 0.55)
 	for pair in [["normal", sb], ["hover", sbh], ["pressed", sbp], ["disabled", sbd]]:
@@ -174,6 +178,7 @@ static func style_plate(b: Button, m: float = BTN_M) -> void:
 			"font_hover_pressed_color"]:
 		b.add_theme_color_override(c, PLATE_INK)
 	b.add_theme_color_override("font_disabled_color", PLATE_INK_DIM)
+	ContractCard.paper_font(b, true)
 
 func _build_layers() -> void:
 	_bg = _layer("board_planks.png", "Planks")
@@ -208,13 +213,14 @@ func _build_layers() -> void:
 	_sign_word.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_sign_word.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_sign_word.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	# Парадный шрифт — тот же, что у заголовка шапки: доска не должна выглядеть
-	# приложенной к игре системным Manrope.
-	if g._font_runic != null:
-		_sign_word.add_theme_font_override("font", g._font_runic)
-	elif g._font_xbold != null:
-		_sign_word.add_theme_font_override("font", g._font_xbold)
+	# Вывеска — та же книжная антиква, что на листах: рунический шрифт шапки
+	# на тёмном дереве читался с трудом.
+	ContractCard.paper_font(_sign_word, true)
+	_sign_word.add_theme_font_size_override("font_size", 22)
 	_sign_word.add_theme_color_override("font_color", SIGN_INK)
+	_sign_word.add_theme_color_override("font_shadow_color", Color(0.05, 0.03, 0.01, 0.55))
+	_sign_word.add_theme_constant_override("shadow_offset_y", 1)
+	_sign_word.add_theme_constant_override("shadow_offset_x", 0)
 	_sign.add_child(_sign_word)
 
 	# Ряды — обычные Control, не контейнеры: карточка фиксированного размера, а контейнер
@@ -251,9 +257,10 @@ func _build_layers() -> void:
 	_hearth_box.add_theme_constant_override("separation", 8)
 	_hearth_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_shelf_hearth.add_child(_hearth_box)
-	_hearth_btn = g._small_button("", Vector2(168, 40), 2)
+	_hearth_btn = g._small_button("", Vector2(176, 38), 2)
 	_hearth_btn.name = "HearthBtn"
 	style_plate(_hearth_btn)
+	_hearth_btn.add_theme_font_size_override("font_size", BTN_FS)
 	_hearth_btn.pressed.connect(_on_hearth_pressed)
 	_hearth_box.add_child(_hearth_btn)
 	_hearth_flame = g._label("", 16)
@@ -337,6 +344,10 @@ func _build_layers() -> void:
 	_close_btn = g._small_button(CLOSE_TEXT, CLOSE_SIZE, 2)
 	_close_btn.name = "Close"
 	style_plate(_close_btn)
+	# _small_button держит минимум 38 px; на 40-пиксельном рельсе такая кнопка
+	# касалась кромок бруса.
+	_close_btn.custom_minimum_size = CLOSE_SIZE
+	_close_btn.add_theme_font_size_override("font_size", BTN_FS)
 	_close_btn.tooltip_text = CLOSE_TIP
 	_close_btn.z_index = Z_CLOSE
 	_close_btn.pressed.connect(_on_close)
@@ -371,6 +382,7 @@ func _rank_note(node_name: String, tip: String) -> TextureRect:
 	w.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	w.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	w.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	ContractCard.paper_font(w)
 	w.add_theme_color_override("font_color", NOTE_INK)
 	w.position = Vector2(4.0, 4.0)
 	w.size = RANK_NOTE - Vector2(8.0, 8.0)
@@ -433,10 +445,12 @@ func _relayout() -> void:
 	_mask_bottom.size = Vector2(_w, _h - view_bottom)
 	# Кнопка закрытия — в правом краю верхнего рельса: вывеска по центру
 	# (x 120..420), а правый уголок начинается с _w - CORNER.
-	_close_btn.position = Vector2(_w - CORNER - CLOSE_SIZE.x - 4.0, (RAIL - CLOSE_SIZE.y) / 2.0)
+	_close_btn.position = Vector2(_w - CORNER - CLOSE_SIZE.x - 6.0, (RAIL - CLOSE_SIZE.y) / 2.0)
 	_close_btn.size = CLOSE_SIZE
+	# На нижнем рельсе рамы, а не над рядом: листающийся контент под подсказку
+	# не заезжает, и «▼ листай вниз» не ложится на кнопку нижней карточки.
 	_scroll_hint.position = Vector2((_w - SCROLL_HINT_SIZE.x) / 2.0,
-		view_bottom - SCROLL_HINT_SIZE.y - 2.0)
+		_h - RAIL + (RAIL - SCROLL_HINT_SIZE.y) / 2.0)
 	_scroll_hint.size = SCROLL_HINT_SIZE
 	_refresh_scroll_hint()
 	_layout_notes()
@@ -448,7 +462,8 @@ func _layout_flow(top: float, inner: float) -> void:
 	_sign.size = SIGN_SIZE
 	_sign_word.size = SIGN_SIZE
 	_notes.position = Vector2(RAIL + BAND_DX, top + SIGN_SIZE.y + 16.0)
-	_notes.size = Vector2(inner - 2.0 * BAND_DX, 2.0 * (NOTE_SIZE.y + NOTE_GAP))
+	var band_w := inner - 2.0 * BAND_DX
+	_notes.size = Vector2(band_w, _notes_band_h(band_w))
 	_shelf_daily.position = Vector2(RAIL, _notes.position.y + _notes.size.y + 4.0)
 	_shelf_daily.size = Vector2(inner, SHELF_H)
 	_daily_row.position = Vector2(RAIL, _shelf_daily.position.y + SHELF_H)
@@ -571,6 +586,15 @@ func _on_hearth_pressed() -> void:
 		Juice.pop(_rank_symbol, UIStyle.GOLD)
 		Juice.ring(_rank_symbol, _rank_symbol.get_global_rect().get_center(), UIStyle.GOLD, 60.0)
 
+# Полоса записок растёт по числу рядов: без баффов пустой полосы над дневной
+# полкой нет вовсе, и контракты начинаются сразу под вывеской.
+func _notes_band_h(band_w: float) -> float:
+	var n: int = g._contracts.active_buffs().size()
+	if n == 0:
+		return 0.0
+	var per_row := maxi(1, int((band_w + NOTE_GAP) / (NOTE_SIZE.x + NOTE_GAP)))
+	return float(ceili(float(n) / float(per_row))) * (NOTE_SIZE.y + NOTE_GAP)
+
 func _layout_notes() -> void:
 	# Прокрутка зовёт _relayout на каждое событие пальца/колеса; без подписи
 	# полоса пересобирала бы записки 60 раз в секунду на ровном месте.
@@ -579,6 +603,9 @@ func _layout_notes() -> void:
 	if sig == _notes_sig_cache and _notes.get_child_count() == buffs.size():
 		return
 	_notes_sig_cache = sig
+	# Бафф истёк по таймеру — полоса сменила высоту, ряды под ней надо сдвинуть.
+	if not is_equal_approx(_notes.size.y, _notes_band_h(_notes.size.x)):
+		call_deferred("_relayout")
 	# remove_child + queue_free: освобождение отложено до конца кадра, и без remove_child
 	# полоса на один кадр осталась бы с двумя наборами записок.
 	for ch in _notes.get_children():
@@ -627,6 +654,7 @@ func _make_note(b: Dictionary) -> TextureButton:
 	w.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	w.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	w.clip_text = true
+	ContractCard.paper_font(w)
 	w.add_theme_color_override("font_color", NOTE_INK)
 	w.position = Vector2(6.0, 24.0)
 	w.size = Vector2(NOTE_SIZE.x - 12.0, 50.0)
@@ -737,8 +765,7 @@ func _show_reward(result: Dictionary) -> void:
 	title.name = "Title"
 	title.autowrap_mode = TextServer.AUTOWRAP_OFF
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if g._font_semi != null:
-		title.add_theme_font_override("font", g._font_semi)
+	ContractCard.paper_font(title, true)
 	title.add_theme_color_override("font_color", NOTE_INK)
 	title.position = Vector2(0.0, 18.0)
 	title.size = Vector2(POPUP_SIZE.x, 26.0)
@@ -749,6 +776,7 @@ func _show_reward(result: Dictionary) -> void:
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	body.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	body.clip_text = true
+	ContractCard.paper_font(body)
 	body.add_theme_color_override("font_color", NOTE_INK)
 	body.position = Vector2(18.0, 54.0)
 	body.size = Vector2(POPUP_SIZE.x - 36.0, POPUP_SIZE.y - 122.0)

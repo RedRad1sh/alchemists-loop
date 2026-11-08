@@ -9,11 +9,15 @@ var _refresh_pending := false
 var _refreshing := false
 var _stale_while_hidden := false
 var _poll_seconds := 0.0
+var _anim_seconds := 0.0
 var _live_hash := 0
 var _status := ""
 var _experiment_needed := false
 var _heading: Label
 var _mastery: Label
+var _mastery_bar: ProgressBar
+var _equipment_orbs: HFlowContainer
+var _autonomy_orbs: HFlowContainer
 var _equipment: Label
 var _equipment_reason: Label
 var _autonomy: Label
@@ -57,11 +61,18 @@ func refresh() -> void:
 	if next < Workshop.Rules.RANKS.size():
 		var upgrade: Dictionary = Workshop.Rules.RANKS[next]
 		_mastery.text += " / %d до ранга «%s»" % [upgrade["xp"], upgrade["name"]]
+		var prev_xp := int(rules["xp"])
+		_mastery_bar.max_value = maxf(1.0, float(int(upgrade["xp"]) - prev_xp))
+		_mastery_bar.value = clampf(float(workshop.xp - prev_xp), 0.0, _mastery_bar.max_value)
+		_mastery_bar.visible = true
 		_equipment.text = "Для постройки:\n%s" % _recipe_text(upgrade)
+		_refresh_material_orbs(_equipment_orbs, upgrade.get("materials", {}))
 		_equipment_reason.text = String(workshop.rank_availability(next).get("reason", ""))
 		_buy_equipment.text = "Построить: %d линии · очередь по %d" % [upgrade["lines"], upgrade["capacity"]]
 	else:
+		_mastery_bar.visible = false
 		_equipment.text = "Оборудование полностью построено."
+		_refresh_material_orbs(_equipment_orbs, {})
 		_equipment_reason.text = ""
 	_mastery.tooltip_text = "Создавай вещества, чтобы набирать мастерство. При постройке оно не расходуется."
 	var autonomy_next := workshop.autonomy_level + 1
@@ -69,8 +80,10 @@ func refresh() -> void:
 	if autonomy_next < Workshop.Rules.AUTONOMY.size():
 		var upgrade: Dictionary = Workshop.Rules.AUTONOMY[autonomy_next]
 		_autonomy.text += "\nУлучшение: до %d этапов\n%s" % [upgrade["stages"], _recipe_text(upgrade)]
+		_refresh_material_orbs(_autonomy_orbs, upgrade.get("materials", {}))
 		_autonomy_reason.text = String(workshop.autonomy_availability().get("reason", ""))
 	else:
+		_refresh_material_orbs(_autonomy_orbs, {})
 		_autonomy_reason.text = "Автономность улучшена до предела."
 	_seal.text = "Архивная печать: %d операций за этап (3/4/5)" % g._engine._stage_ops()
 	_seal.tooltip_text = "Печать улучшается отдельно от оборудования мастерской. Ранг печати: %d." % g._engine.mastery_rank
@@ -99,6 +112,7 @@ func refresh() -> void:
 	for button in _guide_buttons:
 		button.disabled = locked or known.is_empty()
 	_update_guide()
+	_animate_cards()
 	_live_hash = _resource_hash()
 	_refreshing = false
 
@@ -134,13 +148,17 @@ func _build() -> void:
 	add_child(_upgrades)
 	_heading = _label(_upgrades, "MasteryHeading", "Мастерство Мастерской", 22)
 	_mastery = _label(_upgrades, "MasteryInfo")
+	_mastery_bar = _progress_bar("MasteryProgress", 10.0)
+	_upgrades.add_child(_mastery_bar)
 	_label(_upgrades, "MasteryHint", "Создавай вещества — мастерство растёт, открывая новое оборудование.", 14)
 	_equipment = _label(_upgrades, "EquipmentRecipe", "", 14)
+	_equipment_orbs = _orb_flow(_upgrades, "EquipmentOrbs")
 	_equipment_reason = _label(_upgrades, "EquipmentAvailability", "", 14)
 	_buy_equipment = _button(_upgrades, "BuyEquipment", "Построить оборудование", _buy_rank)
 	_plan_rank = _button(_upgrades, "PlanRankMaterials", "Изготовить недостающие материалы", _plan_materials.bind("rank"))
 	_label(_upgrades, "AutonomyHeading", "Работа в отсутствие игрока", 20)
 	_autonomy = _label(_upgrades, "AutonomyInfo", "", 14)
+	_autonomy_orbs = _orb_flow(_upgrades, "AutonomyOrbs")
 	_autonomy_reason = _label(_upgrades, "AutonomyAvailability", "", 14)
 	_buy_autonomy = _button(_upgrades, "BuyAutonomy", "Продлить работу без меня", _buy_autonomy_command)
 	_plan_autonomy = _button(_upgrades, "PlanAutonomyMaterials", "Изготовить материалы улучшения", _plan_materials.bind("autonomy"))
@@ -203,6 +221,24 @@ func _build_card(index: int) -> void:
 	var info := _label(box, "LineInfo_%d" % (index + 1), "", 20)
 	var state := _label(box, "LineState_%d" % (index + 1), "", 14)
 	var suffix := "line_%d" % (index + 1)
+	# Что сейчас крафтится и сколько этапа прошло: орб цели, полоса, подпись.
+	var craft_row := HBoxContainer.new()
+	craft_row.name = "CraftRow_" + suffix
+	craft_row.add_theme_constant_override("separation", 8)
+	box.add_child(craft_row)
+	var orb_holder := Control.new()
+	orb_holder.name = "CraftOrb_" + suffix
+	orb_holder.custom_minimum_size = Vector2(36, 36)
+	orb_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	craft_row.add_child(orb_holder)
+	var progress := _progress_bar("CraftProgress_" + suffix, 12.0)
+	progress.max_value = 1.0
+	progress.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	craft_row.add_child(progress)
+	var craft_status := _label(craft_row, "CraftStatus_" + suffix, "", 13)
+	craft_status.autowrap_mode = TextServer.AUTOWRAP_OFF
+	craft_status.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	craft_status.custom_minimum_size.x = 78
 	_label(box, "RecipeLabel_" + suffix, "Что изготовить", 14)
 	var target := OptionButton.new()
 	target.name = "Target_" + suffix
@@ -246,8 +282,114 @@ func _build_card(index: int) -> void:
 	details.hide()
 	_cards.append({"card": card, "info": info, "state": state, "target": target, "mode": mode, "amount": amount,
 		"mode_hint": mode_hint, "details": details, "details_toggle": details_toggle,
-		"quote": quote, "add": add, "pause": pause, "queue": queue, "rows": {}, "signature": "", "targets": [], "recipe_needed": false})
+		"quote": quote, "add": add, "pause": pause, "queue": queue, "rows": {}, "signature": "", "targets": [], "recipe_needed": false,
+		"craft_row": craft_row, "orb_holder": orb_holder, "progress": progress, "craft_status": craft_status,
+		"orb_node": null, "orb_target": ""})
 	_drafts.append({"target": "", "mode": "batch", "amount": 1})
+
+
+func _progress_bar(node_name: String, height: float) -> ProgressBar:
+	var bar := ProgressBar.new()
+	bar.name = node_name
+	bar.show_percentage = false
+	bar.custom_minimum_size = Vector2(0, height)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.add_theme_stylebox_override("background", _bar_style(UIStyle.PANEL_HI))
+	bar.add_theme_stylebox_override("fill", _bar_style(UIStyle.TEAL))
+	return bar
+
+
+func _bar_style(color: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = color
+	sb.set_corner_radius_all(5)
+	return sb
+
+
+func _orb_flow(parent: Node, node_name: String) -> HFlowContainer:
+	var flow := HFlowContainer.new()
+	flow.name = node_name
+	flow.add_theme_constant_override("h_separation", 10)
+	flow.add_theme_constant_override("v_separation", 6)
+	parent.add_child(flow)
+	return flow
+
+
+func _refresh_material_orbs(container: HFlowContainer, materials: Dictionary) -> void:
+	for child in container.get_children():
+		container.remove_child(child)
+		child.queue_free()
+	container.visible = not materials.is_empty()
+	for item in materials:
+		_orb_need(container, String(item), int(materials[item]))
+
+
+## Орб материала с подписью «есть/нужно»; нехватка — красным.
+func _orb_need(parent: Node, item_id: String, need: int) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(row)
+	row.add_child(g._engine._mini_orb(item_id, 32))
+	var have := int(g._engine.inventory.get(item_id, 0))
+	var lbl := g._label("%d/%d" % [have, need], 12)
+	lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.tooltip_text = g._online._item_name(item_id)
+	lbl.add_theme_color_override("font_color", UIStyle.DANGER if have < need else UIStyle.TEXT_DIM)
+	row.add_child(lbl)
+
+
+static func _status_color(status: String) -> Color:
+	match status:
+		"running":
+			return UIStyle.TEAL
+		"paused_user":
+			return UIStyle.GOLD
+		"waiting_ether":
+			return UIStyle.GOLD_DIM
+		"waiting_ingredients", "waiting_recipe":
+			return Color(0.56, 0.48, 0.85)
+		"waiting_inventory":
+			return UIStyle.DANGER
+		_:
+			return UIStyle.LINE
+
+
+## Полоса этапа и орб цели в карточках линий; ~15 раз в секунду из _process.
+func _animate_cards() -> void:
+	if not is_instance_valid(g) or workshop == null:
+		return
+	var t := Time.get_ticks_msec() / 1000.0
+	for i in _cards.size():
+		var ui: Dictionary = _cards[i]
+		var line := _line_for_card(i)
+		var q: Array = line.get("queue", [])
+		var row: Control = ui["craft_row"]
+		row.visible = not q.is_empty()
+		if q.is_empty():
+			continue
+		var job: Dictionary = q[0]
+		var target := String(job.get("target", ""))
+		var status := "paused_user" if line.get("paused", false) else String(job.get("status", "idle"))
+		var interval: float = g._sigil.bench_interval(target)
+		var frac := clampf(float(line.get("phase_seconds", 0.0)) / maxf(interval, 0.001), 0.0, 1.0)
+		var bar: ProgressBar = ui["progress"]
+		bar.value = frac
+		bar.add_theme_stylebox_override("fill", _bar_style(_status_color(status)))
+		var holder: Control = ui["orb_holder"]
+		if ui["orb_target"] != target or not is_instance_valid(ui["orb_node"]):
+			if is_instance_valid(ui["orb_node"]):
+				(ui["orb_node"] as Node).queue_free()
+			var orb: Control = g._engine._mini_orb(target, 36)
+			holder.add_child(orb)
+			orb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			orb.pivot_offset = Vector2(18, 18)
+			ui["orb_node"] = orb
+			ui["orb_target"] = target
+		var orb_node: Control = ui["orb_node"]
+		orb_node.scale = Vector2.ONE * (1.0 + 0.12 * sin(t * 4.0)) if status == "running" else Vector2.ONE
+		(ui["craft_status"] as Label).text = "%s · %d%%" % [g._online._item_name(target), int(round(frac * 100.0))]
 
 func _toggle_line_details(index: int) -> void:
 	var ui: Dictionary = _cards[index]
@@ -269,7 +411,9 @@ func _button(parent: Node, node_name: String, text: String, action: Callable) ->
 	button.text = text
 	button.custom_minimum_size = Vector2(0, 48)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Autowrap и ellipsis схлопывают минимальную ширину кнопки до отступов stylebox.
+	button.autowrap_mode = TextServer.AUTOWRAP_OFF
+	button.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 	UIStyle.style_button(button, 0)
 	button.pressed.connect(action)
 	parent.add_child(button)
@@ -522,7 +666,12 @@ func _process(delta: float) -> void:
 	# Resource arrivals do not always emit Workshop.changed. Poll only their
 	# signature, never rebuild queues or write a save every frame.
 	_poll_seconds += delta
+	_anim_seconds += delta
 	if _poll_seconds >= 0.5 and is_instance_valid(g) and workshop != null:
 		_poll_seconds = 0.0
 		if _live_hash != _resource_hash():
 			_schedule_refresh()
+	if _anim_seconds >= 0.066:
+		_anim_seconds = 0.0
+		if is_visible_in_tree():
+			_animate_cards()

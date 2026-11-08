@@ -161,17 +161,10 @@ static func run(g: Game) -> void:
 		Net.sigil_collection_result.get_connections().size() >= 1)
 	Selftest.check("game awaits catalog", g.has_method("_await_catalog"))
 
-	# ---- Вход в Аркан Сигилов: кнопка шапки с иконкой карты ----
-	var arcana := g.find_child("ArcanaBtn", true, false) as Button
-	Selftest.check("arcana header entry exists", arcana != null)
-	if arcana != null:
-		var center := arcana.get_node_or_null("IconCenter")
-		var rect: TextureRect = center.get_child(0) as TextureRect if center != null \
-			and center.get_child_count() > 0 else null
-		Selftest.check("arcana header draws a card icon", rect != null
-			and rect.texture != null and rect.texture.resource_path.ends_with("gi_arcana.svg"))
-		Selftest.check("arcana header tooltip names it",
-			arcana.tooltip_text.contains("Аркан"))
+	# ---- Вход в Аркан Сигилов: колода на столе комнаты ----
+	var arcana := g._rooms._host.find_child("Prop_Deck", true, false) as Button
+	Selftest.check("arcana room deck entry exists", arcana != null
+		and arcana.pressed.get_connections().size() >= 1)
 	# Иконка обязана рисоваться даже в вырожденном размере (нулевой Control).
 	var tiny := TarotIcon.new()
 	g.add_child(tiny)
@@ -300,6 +293,7 @@ static func run(g: Game) -> void:
 	sm._on_collection_result({"ok": true, "cards": {}, "extras": []})
 
 	_sigil_transaction_checks(g)
+	_sigil_receipt_durability_checks(g)
 
 	# ---- Task 5: гигиена каталога — settled-флаги (M1), version-гейт (M2),
 	# guard кэша превью (D10) ----
@@ -426,7 +420,9 @@ static func run(g: Game) -> void:
 	var sb6_disk_snap := _sb5_file_text(sb6_disk_path)
 	sm._save_cached_image("clay", sb6_blank)
 
+	g._pages._open_spring_screen()
 	g._open_sigil_modal("crafts")
+	Selftest.check("opening sigils closes the spring screen", g._spring_screen == null)
 	# Аркан — книга: вкладки стали страницами BookPager (3 страницы).
 	var sb6_book: BookPager = g._sigil_book
 	var sb6_pages := 0
@@ -1080,6 +1076,341 @@ static func _sigil_transaction_checks(g: Game) -> void:
 		and ui._sigil_pending_craft == saved_pending and ui._pending_craft_result == saved_result
 		and sm._milestones_claimed == saved_milestones
 		and Net.sigil_craft_result.is_connected(sm._on_craft_result))
+
+
+## Квитанция незакрытого сигильного крафта — единственная запись о том, сколько
+## именно списано: по ней ресурсы возвращаются, если карта не пришла. Значит, она
+## обязана переживать перезапуск. Блок использует собственные ST-сейвы,
+## перезагружает мир настоящим _load_game() и в конце возвращает и мир, и пути.
+static func _sigil_receipt_durability_checks(g: Game) -> void:
+	var ui := g._sigil_ui
+	var sm := g._sigil
+	var engine := g._engine
+	var saved_paths: Array = [g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH]
+	var saved_frozen := g._saves._save_frozen
+	var saved_last_ts := g._last_ts
+	var saved_pending: Dictionary = ui._sigil_pending_craft.duplicate(true)
+	var saved_result: Dictionary = ui._pending_craft_result.duplicate(true)
+	var saved_ritual := ui._sigil_craft_ritual
+	var saved_screen := ui._sigil_craft_screen
+	var saved_craft_data: Dictionary = ui._sigil_craft_data.duplicate(true)
+	var saved_placed: Dictionary = ui._sigil_placed.duplicate(true)
+	var saved_status := engine.status_text
+	var saved_sage := engine.sage_gold
+	var saved_collection: Dictionary = sm._collection.duplicate(true)
+	var saved_milestones: Dictionary = sm._milestones_claimed.duplicate(true)
+	var saved_server: Dictionary = sm._server_collection.duplicate(true)
+	var saved_extras: Array = sm._server_extras.duplicate(true)
+	var saved_preview := sm._preview_cache.duplicate()
+	for path in saved_paths:
+		if FileAccess.file_exists(String(path)):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(String(path)))
+	g.SAVE_PATH = "user://alchemy_st_sigil_dur.json"
+	g.TEMP_PATH = "user://alchemy_st_sigil_dur.tmp"
+	g.BACKUP_PATH = "user://alchemy_st_sigil_dur.bak"
+	ui._close_sigil_craft_screen()
+	ui._close_sigil_craft_ritual()
+	ui._sigil_pending_craft = {}
+	ui._pending_craft_result = {}
+	sm._collection = {}
+	sm._milestones_claimed = {}
+	g._saves._save_frozen = false
+	var baseline_written := g._saves._save_game()
+	var baseline_data := g._saves._read_save(g.SAVE_PATH)
+	Selftest.check("sigil durability baseline save written",
+		baseline_written and not baseline_data.is_empty())
+	var receipt := {"id": "sigil_dur", "set": "fire", "rarity": "common",
+		"ether_cost": 50, "card_id": "dur_card", "charged_ether_cost": 50,
+		"ingredients": [{"item_id": "fire", "qty": 5}, {"item_id": "water", "qty": 7}]}
+
+	# ---- 1. точный дебет переживает перезапуск ----
+	engine.ether = 12
+	engine.ether_overflow = 3
+	engine.inventory = {"fire": 1, "water": 2}
+	ui._sigil_pending_craft = receipt.duplicate(true)
+	g._saves._save_game()
+	ui._sigil_pending_craft = {}
+	g._saves._load_game()
+	var r: Dictionary = ui._sigil_pending_craft
+	var raw_ings = r.get("ingredients", null)
+	var ings: Array = raw_ings if raw_ings is Array else []
+	Selftest.check("sigil durable receipt survives restart with exact debit",
+		str(r.get("id", "")) == "sigil_dur"
+		and int(r.get("charged_ether_cost", -1)) == 50
+		and ings.size() == 2
+		and str((ings[0] as Dictionary).get("item_id", "")) == "fire"
+		and int((ings[0] as Dictionary).get("qty", -1)) == 5
+		and str((ings[1] as Dictionary).get("item_id", "")) == "water"
+		and int((ings[1] as Dictionary).get("qty", -1)) == 7
+		and engine.ether == 12 and engine.ether_overflow == 3
+		and int(engine.inventory.get("fire", 0)) == 1
+		and int(engine.inventory.get("water", 0)) == 2)
+
+	# ---- 2. восстановленная квитанция — незакрытая транзакция: второй крафт не
+	# стартует и новый запрос на сервер не уходит ----
+	var requests := [0]
+	var observe := func(_result: Dictionary) -> void: requests[0] += 1
+	Net.sigil_craft_result.connect(observe)
+	engine.ether = 150
+	engine.inventory = {"fire": 50, "water": 50}
+	sm._preview_cache["sigil_dur_two"] = ImageTexture.create_from_image(
+		Image.create(4, 4, false, Image.FORMAT_RGBA8))
+	ui._open_sigil_craft({"id": "sigil_dur_two", "set": "fire", "rarity": "common",
+		"ether_cost": 10, "card_id": "dur_card_two", "ingredients": []})
+	Selftest.check("sigil restart keeps pending and blocks a second craft",
+		str(ui._sigil_pending_craft.get("id", "")) == "sigil_dur"
+		and ui._sigil_craft_screen == null and requests[0] == 0)
+	Net.sigil_craft_result.disconnect(observe)
+
+	# ---- 3. возврат после перезапуска идёт по сохранённому дебету, а не по
+	# текущей цене: скидка комплекта появилась уже после списания ----
+	engine.ether = 20
+	engine.ether_overflow = 0
+	engine.inventory = {"fire": 3, "water": 4}
+	ui._sigil_pending_craft = receipt.duplicate(true)
+	g._saves._save_game()
+	ui._sigil_pending_craft = {}
+	sm._milestones_claimed = {"fire": [6]}
+	g._saves._load_game()
+	Selftest.check("sigil restart refund uses saved charge not current price",
+		int(ui._sigil_pending_craft.get("charged_ether_cost", -1)) == 50
+		and sm.craft_ether_cost(ui._sigil_pending_craft) == 45)
+	ui._on_sigil_craft_failed("late_answer")
+	Selftest.check("sigil restart refund returns the saved debit exactly",
+		engine.ether + engine.ether_overflow == 70
+		and int(engine.inventory.get("fire", 0)) == 8
+		and int(engine.inventory.get("water", 0)) == 11
+		and ui._sigil_pending_craft.is_empty())
+
+	# ---- 4. повреждённая квитанция в сейве отбрасывается целиком: из записи
+	# неизвестной формы нельзя ни вернуть ресурсы, ни заблокировать крафт ----
+	engine.ether = 33
+	engine.ether_overflow = 0
+	engine.inventory = {"fire": 5}
+	ui._sigil_pending_craft = {}
+	g._saves._save_game()
+	for bad in [[], ["sigil_dur"], 7, "not-a-dict", {}, {"id": ""},
+			{"id": "sigil_dur", "ingredients": []},
+			{"id": "sigil_dur", "charged_ether_cost": "50", "ingredients": []},
+			{"id": "sigil_dur", "charged_ether_cost": -5, "ingredients": []},
+			{"id": "sigil_dur", "charged_ether_cost": 50, "ingredients": "nope"}]:
+		_dur_put_receipt(g, bad)
+		ui._sigil_pending_craft = {"id": "sentinel", "charged_ether_cost": 0, "ingredients": []}
+		g._saves._load_game()
+		Selftest.check("sigil malformed saved receipt rejected fail-closed " + JSON.stringify(bad),
+			ui._sigil_pending_craft.is_empty() and engine.ether == 33
+			and int(engine.inventory.get("fire", 0)) == 5)
+
+	# ---- 5. карта уже в коллекции: ответ прошлой сессии обработан, а сейв
+	# квитанцию не погасил. Перезагрузка закрывает транзакцию без возврата. ----
+	sm._collection = {"sigil_dur": {"seed": 1, "rarity": "common", "card_id": "dur_card",
+		"llm_name": "Проба", "lore": "", "discovered_at": 1.0}}
+	engine.ether = 18
+	engine.ether_overflow = 0
+	engine.inventory = {"fire": 0, "water": 0}
+	ui._sigil_pending_craft = receipt.duplicate(true)
+	g._saves._save_game()
+	ui._sigil_pending_craft = {}
+	g._saves._load_game()
+	Selftest.check("sigil reload reconciles a granted card without refund",
+		ui._sigil_pending_craft.is_empty() and engine.ether == 18
+		and engine.ether_overflow == 0 and int(engine.inventory.get("fire", 0)) == 0)
+
+	# ---- 6. дубликат ответа по тому же craft_id: квитанция уже погашена,
+	# второй ответ не пересобирает показ карты и не трогает ресурсы ----
+	sm._collection = {}
+	engine.ether = 30
+	engine.ether_overflow = 0
+	engine.inventory = {"fire": 3, "water": 4}
+	ui._sigil_pending_craft = receipt.duplicate(true)
+	ui._show_sigil_craft_ritual("common")
+	var ritual := ui._sigil_craft_ritual
+	ui._on_sigil_craft_completed("sigil_dur", "common", "Проба")
+	ui._on_sigil_craft_completed("sigil_dur", "common", "ДРУГОЕ")
+	var raw_payload = ritual._payload if ritual != null else null
+	var payload: Dictionary = raw_payload if raw_payload is Dictionary else {}
+	Selftest.check("sigil duplicate result cannot re-arm the reveal",
+		ritual != null and is_instance_valid(ritual)
+		and str(payload.get("llm_name", "")) == "Проба"
+		and str(ui._pending_craft_result.get("llm_name", "")) == "Проба"
+		and ui._sigil_pending_craft.is_empty()
+		and engine.ether == 30 and engine.ether_overflow == 0
+		and int(engine.inventory.get("fire", 0)) == 3 and sm._collection.is_empty())
+	ui._close_sigil_craft_ritual()
+
+	# ---- 7. сброс мира аннулирует незакрытую транзакцию: поздний отказ старого
+	# крафта не должен напечатать его списание в новый мир ----
+	engine.ether = 40
+	engine.ether_overflow = 0
+	engine.inventory = {"fire": 2, "water": 2}
+	ui._sigil_pending_craft = receipt.duplicate(true)
+	ui._show_sigil_craft_ritual("common")
+	var reset_ok := g._init_new_game()
+	var fresh_ether := engine.ether + engine.ether_overflow
+	var fresh_inventory := engine.inventory.duplicate(true)
+	ui._on_sigil_craft_failed("late_old_world")
+	Selftest.check("sigil new game clears the pending receipt",
+		reset_ok and ui._sigil_pending_craft.is_empty()
+		and ui._sigil_craft_ritual == null and ui._pending_craft_result.is_empty()
+		and engine.ether + engine.ether_overflow == fresh_ether
+		and engine.inventory == fresh_inventory)
+
+	# ---- 8. поздний ответ старого крафта после сброса не собирает карту в
+	# новом мире ----
+	engine.ether = 40
+	engine.inventory = {"fire": 2, "water": 2}
+	ui._sigil_pending_craft = receipt.duplicate(true)
+	ui._show_sigil_craft_ritual("common")
+	var reset_again := g._init_new_game()
+	ui._on_sigil_craft_completed("sigil_dur", "common", "Призрак")
+	Selftest.check("sigil stale result after reset cannot re-arm the reveal",
+		reset_again and ui._pending_craft_result.is_empty()
+		and ui._sigil_craft_ritual == null and ui._sigil_pending_craft.is_empty())
+
+	# ---- 9. престиж — тот же сброс мира: квитанция старого мира не переживает
+	# его, иначе поздний возврат идёт в новый мир ----
+	var many := {}
+	for key in g.ITEMS.keys():
+		many[String(key)] = 1
+	var pad := 0
+	while many.size() < 40:
+		pad += 1
+		many["dur_pad_%d" % pad] = 1
+	engine.inventory = many
+	engine.ether = 40
+	engine.ether_overflow = 0
+	ui._sigil_pending_craft = receipt.duplicate(true)
+	ui._show_sigil_craft_ritual("common")
+	g._hub._do_prestige()
+	var prestige_ether := engine.ether + engine.ether_overflow
+	ui._on_sigil_craft_failed("late_prestige")
+	ui._close_sigil_craft_ritual()
+	Selftest.check("sigil prestige clears the pending receipt",
+		engine.sage_gold > saved_sage and ui._sigil_pending_craft.is_empty()
+		and engine.ether + engine.ether_overflow == prestige_ether)
+
+	# ---- 10..12. восстановленную квитанцию закрывает авторитетная серверная
+	# коллекция: подтверждён отказ — возврат по сохранённому дебету, подтверждена
+	# карта — без возврата. Офлайн-ответ исхода не даёт: квитанция ждёт. ----
+	sm._collection = {}
+	engine.ether = 25
+	engine.ether_overflow = 0
+	engine.inventory = {"fire": 0, "water": 0}
+	ui._sigil_pending_craft = receipt.duplicate(true)
+	g._saves._save_game()
+	ui._sigil_pending_craft = {}
+	g._saves._load_game()
+	Net.sigil_collection_result.emit({"ok": false, "offline": true})
+	Selftest.check("sigil offline collection answer keeps the restored receipt",
+		str(ui._sigil_pending_craft.get("id", "")) == "sigil_dur" and engine.ether == 25)
+	Net.sigil_collection_result.emit({"ok": true,
+		"cards": {"dur_card": {"copies": 1, "first_at": "2026-10-13T00:00:00Z"}},
+		"extras": []})
+	sm._preview_cache["sigil_dur_next"] = ImageTexture.create_from_image(
+		Image.create(4, 4, false, Image.FORMAT_RGBA8))
+	ui._open_sigil_craft({"id": "sigil_dur_next", "set": "fire", "rarity": "common",
+		"ether_cost": 10, "card_id": "dur_card_next", "ingredients": []})
+	var reopened := ui._sigil_craft_screen != null
+	ui._close_sigil_craft_screen()
+	Selftest.check("sigil restored receipt closes when the server has the card",
+		ui._sigil_pending_craft.is_empty() and engine.ether == 25
+		and engine.ether_overflow == 0 and int(engine.inventory.get("fire", 0)) == 0
+		and reopened)
+
+	engine.ether = 25
+	engine.inventory = {"fire": 0, "water": 0}
+	ui._sigil_pending_craft = receipt.duplicate(true)
+	g._saves._save_game()
+	ui._sigil_pending_craft = {}
+	g._saves._load_game()
+	Net.sigil_collection_result.emit({"ok": true, "cards": {}, "extras": []})
+	Selftest.check("sigil restored receipt refunds when the server has no card",
+		ui._sigil_pending_craft.is_empty()
+		and engine.ether + engine.ether_overflow == 75
+		and int(engine.inventory.get("fire", 0)) == 5
+		and int(engine.inventory.get("water", 0)) == 7)
+
+	var chromatic := receipt.duplicate(true)
+	chromatic["id"] = "sigil_dur_chroma"
+	chromatic["card_id"] = ""
+	engine.ether = 25
+	engine.inventory = {"fire": 0, "water": 0}
+	ui._sigil_pending_craft = chromatic
+	g._saves._save_game()
+	ui._sigil_pending_craft = {}
+	g._saves._load_game()
+	Net.sigil_collection_result.emit({"ok": true, "cards": {},
+		"extras": [{"craft_id": "sigil_dur_chroma", "rarity": "chromatic",
+			"llm_name": "Проба", "crafted_at": "2026-10-13T00:00:00Z"}]})
+	Selftest.check("sigil restored chromatic receipt reconciles by craft id",
+		ui._sigil_pending_craft.is_empty() and engine.ether == 25
+		and int(engine.inventory.get("fire", 0)) == 0)
+
+	# ---- откат: мир возвращается настоящим _load_game() из baseline-сейва,
+	# затем снимаются пути и всё, что сейв не несёт ----
+	var restore_world := baseline_data.duplicate(true)
+	restore_world.erase("sigil_pending_craft")
+	_dur_write_save(g, restore_world)
+	g._saves._load_game()
+	for path in saved_paths:
+		var p := String(path)
+		if FileAccess.file_exists(p):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
+	g.SAVE_PATH = String(saved_paths[0])
+	g.TEMP_PATH = String(saved_paths[1])
+	g.BACKUP_PATH = String(saved_paths[2])
+	g._saves._save_frozen = saved_frozen
+	g._last_ts = saved_last_ts
+	ui._close_sigil_craft_screen()
+	ui._close_sigil_craft_ritual()
+	ui._sigil_pending_craft = saved_pending
+	ui._pending_craft_result = saved_result
+	ui._sigil_craft_screen = saved_screen
+	ui._sigil_craft_data = saved_craft_data
+	ui._sigil_placed = saved_placed
+	sm._collection = saved_collection
+	sm._milestones_claimed = saved_milestones
+	sm._server_collection = saved_server
+	sm._server_extras = saved_extras
+	sm._preview_cache = saved_preview
+	engine.status_text = saved_status
+	engine.sage_gold = saved_sage
+	engine._refresh()
+	# Сверка с самим снимком сейва, а не с памятью блока: _load_game фильтрует
+	# inventory по ITEMS, заполняет базовые вещества и клампит эфир по капам.
+	var base_inventory: Dictionary = baseline_data.get("inventory", {})
+	var restored_inventory_ok := true
+	for raw_key in base_inventory:
+		if int(engine.inventory.get(String(raw_key), -1)) != int(base_inventory[raw_key]):
+			restored_inventory_ok = false
+	Selftest.check("sigil durability fixture restores world and files",
+		engine.ether == int(baseline_data.get("ether", -1))
+		and engine.ether_overflow == int(baseline_data.get("ether_overflow", -1))
+		and restored_inventory_ok and engine.sage_gold == saved_sage
+		and ui._sigil_pending_craft == saved_pending and sm._collection == saved_collection
+		and g.SAVE_PATH == String(saved_paths[0]) and not FileAccess.file_exists(g.SAVE_PATH)
+		and Net.sigil_collection_result.is_connected(sm._on_collection_result))
+
+
+## Переписать квитанцию в только что записанном baseline-сейве: остальной мир
+## остаётся настоящим, а поле получает повреждённую форму.
+static func _dur_put_receipt(g: Game, raw: Variant) -> void:
+	var data := g._saves._read_save(g.SAVE_PATH)
+	if data.is_empty():
+		return
+	if raw == null:
+		data.erase("sigil_pending_craft")
+	else:
+		data["sigil_pending_craft"] = raw
+	_dur_write_save(g, data)
+
+
+static func _dur_write_save(g: Game, data: Dictionary) -> void:
+	var f := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(JSON.stringify(data, "\t", true, true))
+	f.close()
 
 
 ## Открываем настоящую доску, но сеем только её превью: рендер не нужен для debit.

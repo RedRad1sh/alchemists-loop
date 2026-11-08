@@ -31,13 +31,17 @@ const DETAIL_GAP := 4.0
 # Насколько можно увести курсор между нажатием и отпусканием, чтобы клик
 # всё ещё считался тапом по бумаге, а не началом перетаскивания доски.
 const TAP_SLOP := 10.0
+const REWARD_FS := 11
+const REWARD_FS_MIN := 9
+const VEIN_ROWS := 3
+const POUR_SIZE := Vector2(76, 28)
 
 const INK := Color(0.16, 0.11, 0.07)
 const STAMP_INK := Color(0.60, 0.24, 0.20)
 const TIER_INK := {
-	"bronze": Color(0.55, 0.33, 0.14),
-	"silver": Color(0.42, 0.47, 0.53),
-	"gold": Color(0.62, 0.45, 0.08),
+	"bronze": Color(0.45, 0.24, 0.10),
+	"silver": Color(0.27, 0.31, 0.37),
+	"gold": Color(0.44, 0.31, 0.05),
 }
 
 signal claimed(id: String)
@@ -62,6 +66,16 @@ var _last_y := 0.0
 
 static func tex(fname: String) -> Texture2D:
 	return load(ASSET_DIR + fname) as Texture2D
+
+## Текст на бумаге и дереве доски — книжная антиква: гротеск Manrope на листке
+## читался как интерфейсная заглушка.
+const PAPER_FONT := "res://assets/fonts/PTSerif-Regular.ttf"
+const PAPER_FONT_BOLD := "res://assets/fonts/PTSerif-Bold.ttf"
+
+static func paper_font(l: Control, bold: bool = false) -> void:
+	var f := load(PAPER_FONT_BOLD if bold else PAPER_FONT) as Font
+	if f != null:
+		l.add_theme_font_override("font", f)
 
 # Наклон по id, детерминированный между сборками: FNV-1a тот же, что у `_seed_for`
 # в доске, а `String.hash()` движок солёт иначе — и бумаги прыгали бы при каждом
@@ -132,6 +146,61 @@ func setup(c: Dictionary) -> void:
 	# обесцветила бы всю доску.
 	_fade.set_shader_parameter("amount", 1.0 if done else 0.0)
 	_fill_detail(id, String(c.get("type", "")))
+	_fit_body(stamp_top)
+
+## Тело и награда делят одну полосу между счётчиком и штампом. Награда садится
+## над штампом своей фактической высотой (кегль подбирается вниз до
+## REWARD_FS_MIN), тело получает остаток; ряды жилы, которые в остаток не
+## влезли, сворачиваются в «…ещё N» — ни наезда кнопки на текст, ни обрыва строки.
+func _fit_body(stamp_top: float) -> void:
+	var avail := stamp_top - 4.0 - DETAIL_TOP
+	var w := _reward.size.x
+	var fs := REWARD_FS
+	var need := 0.0
+	while true:
+		_reward.add_theme_font_size_override("font_size", fs)
+		need = _label_h(_reward, w)
+		if fs <= REWARD_FS_MIN or _detail_h() + DETAIL_GAP + need <= avail:
+			break
+		fs -= 1
+	_reward.size = Vector2(w, need)
+	_reward.position = Vector2(PAD, stamp_top - 4.0 - need)
+	var body_room := avail - need - DETAIL_GAP
+	if String(_c.get("type", "")) == "vein":
+		var rows := VEIN_ROWS
+		while rows > 0 and _detail_h() > body_room:
+			rows -= 1
+			_fill_vein(rows)
+	_detail.size = Vector2(_detail.size.x, maxf(0.0, body_room))
+
+# Высота Label так, как он сам её нарисует на ширине w: число строк его
+# собственной раскладки × его высота строки + межстрочный интервал темы.
+# get_multiline_string_size шрифта эти интервалы не учитывает и занижал высоту.
+static func _label_h(l: Label, w: float) -> float:
+	if l.text == "":
+		return 0.0
+	l.size = Vector2(w, l.size.y)
+	var lines := l.get_line_count()
+	var spacing := l.get_theme_constant("line_spacing")
+	var pad := 0.0
+	var sb := l.get_theme_stylebox("normal")
+	if sb != null:
+		pad = sb.get_minimum_size().y
+	return float(lines) * float(l.get_line_height()) + float(maxi(0, lines - 1)) * float(spacing) + pad
+
+# Высота тела на ширине полосы: до раскладки VBox у autowrap-Label ширина 0,
+# и его минимум по высоте раздут на строку на каждое слово.
+func _detail_h() -> float:
+	var h := 0.0
+	var n := 0
+	for ch in _detail.get_children():
+		var l := ch as Label
+		if l != null:
+			h += _label_h(l, _detail.size.x)
+		elif ch is Control:
+			h += (ch as Control).get_combined_minimum_size().y
+		n += 1
+	return h + float(maxi(0, n - 1)) * float(_detail.get_theme_constant("separation"))
 
 ## §D: заголо обязан влезть во внутреннюю полосу бумаги. Label с autowrap OFF
 ## считает минимальную ширину по натуральной ширине текста, а `size` в Godot
@@ -172,8 +241,7 @@ func _build() -> void:
 	_title.clip_text = true
 	_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if g._font_semi != null:
-		_title.add_theme_font_override("font", g._font_semi)
+	paper_font(_title, true)
 	_title.add_theme_color_override("font_color", INK)
 	_hang.add_child(_title)
 
@@ -181,6 +249,7 @@ func _build() -> void:
 	_count.name = "Count"
 	_count.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	paper_font(_count, true)
 	_count.add_theme_color_override("font_color", INK)
 	_hang.add_child(_count)
 
@@ -203,6 +272,7 @@ func _build() -> void:
 	# потому что «Быстрая варка» без процента и срока для игрока — загадка.
 	# PASS, а не STOP: тултип остаётся, а hover и тап уходят бумаге.
 	_reward.mouse_filter = Control.MOUSE_FILTER_PASS
+	paper_font(_reward)
 	_reward.add_theme_color_override("font_color", INK)
 	_hang.add_child(_reward)
 
@@ -237,6 +307,7 @@ func _build() -> void:
 	_stamp_word.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_stamp_word.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_stamp_word.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	paper_font(_stamp_word, true)
 	_stamp_word.add_theme_color_override("font_color", STAMP_INK)
 	# clip_text обязателен: до применения темы Label считает минимум по
 	# стандартному шрифту (16 px), и `size` клампится до 105 вместо 84 — слово
@@ -417,6 +488,7 @@ func _fill_detail(id: String, type: String) -> void:
 		var l := g._label(String(raw), 10)
 		l.name = "FairPot" if type == "fair" else "GoalDay"
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		paper_font(l)
 		l.add_theme_color_override("font_color", INK)
 		# Строка тела ловит мышь: у goal_day в tooltip — подсказка мира.
 		# PASS, а не STOP: тултип остаётся, hover и тап уходят бумаге.
@@ -429,9 +501,12 @@ func _fill_detail(id: String, type: String) -> void:
 
 # Жила: мини-капли VeinDrop текущего цикла; у registered — «Влить». Три ряда
 # влезают в weekly-полосу (184×244), остальные сворачиваются в «…ещё N».
-func _fill_vein() -> void:
+func _fill_vein(max_rows: int = VEIN_ROWS) -> void:
+	for ch in _detail.get_children():
+		_detail.remove_child(ch)
+		ch.queue_free()
 	var rows: Array = g._contracts.vein_drop_rows()
-	var shown := mini(rows.size(), 3)
+	var shown := mini(rows.size(), max_rows)
 	for i in range(shown):
 		var row_data := rows[i] as Dictionary
 		var st := String(row_data["status"])
@@ -450,6 +525,7 @@ func _fill_vein() -> void:
 		fl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		fl.autowrap_mode = TextServer.AUTOWRAP_OFF
 		fl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		paper_font(fl)
 		fl.add_theme_color_override("font_color", INK)
 		hbox.add_child(fl)
 		if st == "registered":
@@ -458,7 +534,7 @@ func _fill_vein() -> void:
 			pb.text = "Влить"
 			# 76 = 2 * 36 px полей плашки + 4 px растяжимой середины: меньше —
 			# и гвоздики девятипалой нарезки поедут в центр.
-			pb.custom_minimum_size = Vector2(76, 28)
+			pb.custom_minimum_size = POUR_SIZE
 			pb.focus_mode = Control.FOCUS_NONE
 			pb.add_theme_font_size_override("font_size", 10)
 			# 6 px, а не 4: §D-поле для подписи кнопки. При высоте 28 строка
@@ -470,6 +546,7 @@ func _fill_vein() -> void:
 	if rows.size() > shown:
 		var more := g._label("…ещё %d" % (rows.size() - shown), 9)
 		more.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		paper_font(more)
 		more.add_theme_color_override("font_color", INK)
 		_detail.add_child(more)
 

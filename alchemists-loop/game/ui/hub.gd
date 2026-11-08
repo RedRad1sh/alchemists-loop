@@ -9,6 +9,8 @@ var _up_btn: Button
 var _up_popup: Control
 var _up_dim: ColorRect
 var _up_rows: VBoxContainer
+var _up_qty := 1
+var _up_qty_btns: Array = []
 var _profile_dim: Control = null
 var _profile_popup: Control = null
 var _profile_avatar: Avatar = null
@@ -34,9 +36,6 @@ var _settings_dim: ColorRect = null
 var _settings_popup: CenterContainer = null
 var _credits_dim: ColorRect = null
 var _credits_popup: CenterContainer = null
-var _sfx_slider: HSlider = null
-var _music_slider: HSlider = null
-var _music_toggle: Button = null
 var _craftable_dim: ColorRect = null
 var _craftable_popup: CenterContainer = null
 var _craftable_list: VBoxContainer = null
@@ -340,32 +339,7 @@ func _build_settings_popup() -> void:
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	t.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	col.add_child(t)
-	_music_toggle = g._small_button("Музыка: вкл", Vector2(0, 42))
-	_music_toggle.pressed.connect(func() -> void:
-		var on := Sfx.toggle_music()
-		_music_toggle.text = "Музыка: вкл" if on else "Музыка: выкл"
-		g._saves._save_game())
-	col.add_child(_music_toggle)
-	col.add_child(g._label("Громкость эффектов", 13))
-	_sfx_slider = HSlider.new()
-	_sfx_slider.min_value = 0.0
-	_sfx_slider.max_value = 1.0
-	_sfx_slider.step = 0.05
-	_sfx_slider.value = Sfx.sfx_volume
-	_sfx_slider.value_changed.connect(func(v: float) -> void:
-		Sfx.set_sfx_volume(v)
-		g._saves._save_game())
-	col.add_child(_sfx_slider)
-	col.add_child(g._label("Громкость музыки", 13))
-	_music_slider = HSlider.new()
-	_music_slider.min_value = 0.0
-	_music_slider.max_value = 1.0
-	_music_slider.step = 0.05
-	_music_slider.value = Sfx.music_volume
-	_music_slider.value_changed.connect(func(v: float) -> void:
-		Sfx.set_music_volume(v)
-		g._saves._save_game())
-	col.add_child(_music_slider)
+	_build_sound_controls(col)
 	var hint := g._label("Настройки сохраняются автоматически.", 12)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_color_override("font_color", Color(0.6, 0.66, 0.72))
@@ -377,10 +351,43 @@ func _build_settings_popup() -> void:
 		Sfx.click())
 	col.add_child(close)
 
+## Музыка и громкости. Строятся и в попапе, и в разделе «Ещё»; значения
+## подтягиваются из Sfx при каждом показе, поэтому копии не расходятся.
+func _build_sound_controls(col: VBoxContainer) -> void:
+	var toggle := g._small_button("Музыка: вкл", Vector2(0, 42))
+	toggle.pressed.connect(func() -> void:
+		var on := Sfx.toggle_music()
+		toggle.text = "Музыка: вкл" if on else "Музыка: выкл"
+		g._saves._save_game())
+	col.add_child(toggle)
+	col.add_child(g._label("Громкость эффектов", 13))
+	var sfx := HSlider.new()
+	sfx.min_value = 0.0
+	sfx.max_value = 1.0
+	sfx.step = 0.05
+	sfx.value = Sfx.sfx_volume
+	sfx.value_changed.connect(func(v: float) -> void:
+		Sfx.set_sfx_volume(v)
+		g._saves._save_game())
+	col.add_child(sfx)
+	col.add_child(g._label("Громкость музыки", 13))
+	var music := HSlider.new()
+	music.min_value = 0.0
+	music.max_value = 1.0
+	music.step = 0.05
+	music.value = Sfx.music_volume
+	music.value_changed.connect(func(v: float) -> void:
+		Sfx.set_music_volume(v)
+		g._saves._save_game())
+	col.add_child(music)
+	col.visibility_changed.connect(func() -> void:
+		if not col.is_visible_in_tree():
+			return
+		toggle.text = "Музыка: вкл" if Sfx.music_on else "Музыка: выкл"
+		sfx.set_value_no_signal(Sfx.sfx_volume)
+		music.set_value_no_signal(Sfx.music_volume))
+
 func _open_settings() -> void:
-	_music_toggle.text = "Музыка: вкл" if Sfx.music_on else "Музыка: выкл"
-	_sfx_slider.value = Sfx.sfx_volume
-	_music_slider.value = Sfx.music_volume
 	Juice.open(_settings_dim, _settings_popup)
 	Sfx.click()
 
@@ -507,21 +514,23 @@ func _open_journal() -> void:
 	Juice.open(_journal_dim, _journal_popup)
 	Sfx.click()
 
-func _rebuild_journal_rows() -> void:
-	for child in _journal_list.get_children():
-		_journal_list.remove_child(child)
+func _rebuild_journal_rows(list: VBoxContainer = null) -> void:
+	if list == null:
+		list = _journal_list
+	for child in list.get_children():
+		list.remove_child(child)
 		child.queue_free()
 	if _log_events.is_empty():
 		var none := g._label("Пока пусто — сделай первую варку!", 13)
 		none.add_theme_color_override("font_color", Color(0.6, 0.66, 0.72))
-		_journal_list.add_child(none)
+		list.add_child(none)
 		return
 	for e in _log_events:
 		var d := e as Dictionary
 		var lbl := g._label("%s · %s" % [String(d.get("t", "")), String(d.get("text", ""))], 13)
 		lbl.add_theme_color_override("font_color", Color(0.85, 0.9, 0.95))
 		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_journal_list.add_child(lbl)
+		list.add_child(lbl)
 
 # ---------- R4: см. game/progress.gd (2238-2521) ----------
 
@@ -568,6 +577,19 @@ func _build_upgrade_popup() -> void:
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 	col.add_child(hint)
+
+	var qty_row := HBoxContainer.new()
+	qty_row.name = "UpQtyRow"
+	qty_row.add_theme_constant_override("separation", 6)
+	qty_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(qty_row)
+	_up_qty_btns.clear()
+	for q in [1, 10, 100]:
+		var qb := g._small_button("×%d" % q, Vector2(72, 48), 1)
+		qb.pressed.connect(_pick_up_qty.bind(q))
+		qty_row.add_child(qb)
+		_up_qty_btns.append(qb)
+	_sync_up_qty_chips()
 
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(0, 380)
@@ -708,6 +730,11 @@ func _do_prestige() -> void:
 	g._engine._experiment_pending_pair.clear()
 	# U11 (T14): престиж аннулирует и pending-записи мир-запросов в полёте.
 	g._online._pending_requests.clear()
+	# Квитанция незакрытого сигильного крафта — тоже часть старого мира.
+	g._sigil_ui._sigil_pending_craft = {}
+	g._sigil_ui._pending_craft_result = {}
+	g._sigil_ui._sigil_receipt_reconcile = false
+	g._sigil_ui._close_sigil_craft_ritual()
 	g._engine._source_taps = 0
 	g._engine.spring_on = false
 	g._engine.spring_source = "water"
@@ -732,6 +759,19 @@ func _do_prestige() -> void:
 	g._online._set_status("ПЕРЕГОНКА: +%d Золота мудрецов! Теперь у тебя %d." % [gain, g._engine.sage_gold])
 	_log_event("Перегонка: +%d Золота мудрецов (всего %d)" % [gain, g._engine.sage_gold])
 	Sfx.legendary()
+
+func _pick_up_qty(q: int) -> void:
+	_up_qty = q
+	_sync_up_qty_chips()
+	_rebuild_up_rows()
+	Sfx.click()
+
+func _sync_up_qty_chips() -> void:
+	var vals := [1, 10, 100]
+	for i in _up_qty_btns.size():
+		var qb: Button = _up_qty_btns[i]
+		if is_instance_valid(qb):
+			qb.modulate = Color.WHITE if vals[i] == _up_qty else Color(1, 1, 1, 0.55)
 
 func _rebuild_up_rows() -> void:
 	if _up_rows == null:
@@ -810,8 +850,17 @@ func _up_row(u: Dictionary) -> Button:
 		st.text = "максимум"
 		st.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	else:
-		var cost := g._engine._up_cost(id)
+		var n := maxi(1, mini(_up_qty, mx - lvl))
+		var cost := 0
+		for k in n:
+			cost += g._engine._up_cost_at(id, lvl + k)
 		st.text = "Стоимость: %d ⚡" % cost
+		if n > 1:
+			st.text += " за %d шт." % n
+		if id == "ether_regen":
+			st.text += " · итог +%.2f эфир/с" % (0.35 * n)
+		elif id == "ether_cap":
+			st.text += " · итог +%d к капу" % (50 * n)
 		st.add_theme_color_override("font_color", UIStyle.FLAME if g._engine._available_ether() >= cost else UIStyle.RUBY)
-		b.pressed.connect(g._engine._buy_upgrade.bind(id))
+		b.pressed.connect(g._engine._buy_upgrade.bind(id, n))
 	return b

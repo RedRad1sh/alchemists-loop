@@ -22,6 +22,9 @@ var _sigil_craft_data: Dictionary = {}
 var _sigil_placed: Dictionary = {}  ## element_id -> placed_count
 ## Списанные ресурсы до ответа сервера: нужны, чтобы вернуть их при отказе.
 var _sigil_pending_craft: Dictionary = {}
+## Квитанция восстановлена из сейва: её исход этому сеансу неизвестен, поэтому
+## она сверяется по авторитетной серверной коллекции, а не по ответу крафта.
+var _sigil_receipt_reconcile := false
 ## Board подтвердил: все элементы на круге — запускаем крафт (списание+сервер).
 var _sigil_craft_ritual: SigilCraftRitual = null
 var _pending_craft_result: Dictionary = {}
@@ -32,6 +35,8 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 		return
 	Sfx.click()
 	ContractBoard.close_any(main)
+	if is_instance_valid(main._spring_screen):
+		main._spring_screen._close()
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.84)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1633,8 +1638,10 @@ func _on_sigil_board_confirmed(craft: Dictionary) -> void:
 		var needed := int(d.get("qty", 0))
 		var have := int(main._engine.inventory.get(elem_id, 0))
 		main._engine.inventory[elem_id] = have - needed
+		main._engine._spring_burn(elem_id, needed)
 	_sigil_pending_craft = craft.duplicate(true)
 	_sigil_pending_craft["charged_ether_cost"] = ether_cost
+	_sigil_receipt_reconcile = false
 	_pending_craft_result = {}
 	main._saves._save_game()
 	Sfx.craft_start()
@@ -1647,10 +1654,14 @@ func _on_sigil_board_confirmed(craft: Dictionary) -> void:
 
 ## Сервер подтвердил крафт: показываем готовую карточку.
 func _on_sigil_craft_completed(craft_id: String, rarity: String, llm_name: String) -> void:
-	if not _sigil_pending_craft.is_empty() \
-			and str(_sigil_pending_craft.get("id", "")) != craft_id:
+	# Квитанция — единственный ключ, связывающий ответ с конкретным списанием.
+	# Без неё (успех уже погашен, мир сброшен, транзакция восстановлена из сейва)
+	# ответ чужой: он не должен ни пересобирать показ карты, ни менять ресурсы.
+	if _sigil_pending_craft.is_empty() \
+			or str(_sigil_pending_craft.get("id", "")) != craft_id:
 		return
 	_sigil_pending_craft = {}
+	_sigil_receipt_reconcile = false
 	# Сохраняем результат
 	_pending_craft_result = {"craft_id": craft_id, "rarity": rarity, "llm_name": llm_name}
 
@@ -1707,6 +1718,7 @@ func _on_sigil_craft_failed(err: String) -> void:
 		return
 	# Гасим квитанцию до возврата: повторный отказ уже ничего не начислит.
 	_sigil_pending_craft = {}
+	_sigil_receipt_reconcile = false
 	_pending_craft_result = {}
 	_close_sigil_craft_ritual()
 	# Флаги скидки могли измениться за время запроса. Возвращаем ровно дебет,
@@ -1720,6 +1732,35 @@ func _on_sigil_craft_failed(err: String) -> void:
 	main._engine._refresh()
 	main._engine.status_text = "Крафт не прошёл (%s) — ресурсы возвращены." % err
 	Sfx.error()
+
+## Серверная коллекция — единственный авторитетный источник о том, дошла ли
+## восстановленная из сейва транзакция. Подтверждённая карта гасит квитанцию без
+## возврата; подтверждённый отказ возвращает ровно сохранённый дебет. Пока ответа
+## нет (offline), квитанция ждёт: автоматический возврат по неподтверждённому
+## исходу напечатал бы ресурсы поверх уже выданной сервером карты.
+func _on_sigil_collection_reconcile(result: Dictionary) -> void:
+	if not _sigil_receipt_reconcile:
+		return
+	if _sigil_pending_craft.is_empty():
+		_sigil_receipt_reconcile = false
+		return
+	if not bool(result.get("ok", false)):
+		return
+	_sigil_receipt_reconcile = false
+	var craft_id := str(_sigil_pending_craft.get("id", ""))
+	var card_id := str(_sigil_pending_craft.get("card_id", ""))
+	var granted := false
+	if card_id != "":
+		granted = main._sigil.has_collected(card_id)
+	else:
+		# Хроматик card_id не имеет: сервер перечисляет его в extras по craft_id.
+		for extra in main._sigil._server_extras:
+			if extra is Dictionary and str((extra as Dictionary).get("craft_id", "")) == craft_id:
+				granted = true
+	if granted:
+		_sigil_pending_craft = {}
+		return
+	_on_sigil_craft_failed("reconciled")
 
 func _close_sigil_craft_screen() -> void:
 	if _sigil_craft_screen == null:
@@ -1851,6 +1892,9 @@ func _close_top_modal() -> bool:
 		return true
 	if _sigil_coll != null:
 		_close_sigil_collection()
+		return true
+	if is_instance_valid(main._spring_screen):
+		main._spring_screen._close()
 		return true
 	# Экран механики (z=16) — над комнатой, под модалками: Esc сначала
 	# возвращает из экрана в комнату, только потом гасит нижележащие попапы.

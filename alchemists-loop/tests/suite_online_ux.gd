@@ -12,7 +12,9 @@ class_name SuiteOnlineUx
 # - снятие вызова _show_network_pending в _register_pending_pair красит «badge shows»;
 # - снятие _hide_network_pending при опустевшем pending красит «badge hides»;
 # - снятие _hide_network_pending из prune красит «badge hides after prune timeout»;
-# - снятие net-гейта в _start_experiment красит «start experiment blocked offline»;
+# - снятие net-гейта для пары вне g.RECIPES красит «start experiment blocked offline
+#   for pair absent from RECIPES»; снятие локального разрешения красит
+#   «start experiment resolves locally known pair offline»;
 # - снятие pending-гейта красит «start experiment blocks double tap»;
 # - замена _choose_event_type_weighted на рандом без гейтов красит «choose event respects
 #   availability» (пустой пул → comet);
@@ -87,29 +89,78 @@ static func run(g: Game) -> void:
 	var st_pending_pair: Array = g._engine._experiment_pending_pair.duplicate()
 	var st_net_on: bool = g._online._net_enabled
 	var st_status: String = g._engine.status_text
+	var st_fire_water_known = g._engine.known_recipes.has(g._pair_key("fire", "water"))
 	g._engine._experiment_pending_pair.clear()
 	# оба реагента в запасе, эфир с запасом
 	g._engine.inventory["water"] = int(g._engine.inventory.get("water", 0)) + 2
 	g._engine.inventory["air"] = int(g._engine.inventory.get("air", 0)) + 2
 	g._engine.ether = maxi(g._engine.ether, 40)
 	var ether_expect: int = g._engine.ether + g._engine.ether_overflow
-	# офлайн: гейт связи срабатывает первым — реагенты и эфир целы
+	# офлайн: пара, которой нет в локальном g.RECIPES, обязана требовать связь —
+	# новый элемент клиент выдумать не может.
 	var st_avail: bool = Net.is_available()
 	Net._available = false
 	g._online._net_enabled = true
-	Selftest.check("start experiment blocked offline", not g._online._start_experiment("water", "air")
-		and int(g._engine.inventory.get("water", 0)) == st_inv.get("water", 0) + 2
+	var unknown_key := g._pair_key("glass", "steam")
+	g._engine.known_recipes.erase(unknown_key)
+	var st_glass: int = int(g._engine.inventory.get("glass", 0))
+	var st_steam: int = int(g._engine.inventory.get("steam", 0))
+	g._engine.inventory["glass"] = st_glass + 2
+	g._engine.inventory["steam"] = st_steam + 2
+	Selftest.check("start experiment blocked offline for pair absent from RECIPES",
+		not g._online._start_experiment("glass", "steam")
+		and int(g._engine.inventory.get("glass", 0)) == st_glass + 2
+		and int(g._engine.inventory.get("steam", 0)) == st_steam + 2
 		and g._engine.ether + g._engine.ether_overflow == ether_expect)
-	# двойной тап: слот pending занят — второй запрос не уходит
+	# двойной тап: слот pending занят — второй запрос не уходит. Пару берём ту же
+	# вне-RECIPES (glass+steam): локально разрешимой паре pending-слот не нужен,
+	# поэтому гейт проверяется именно на сетевом пути.
 	Net._available = true
 	g._online._pending_requests[g._pair_key("fire", "water")] = {
 		"a": "fire", "b": "water", "experiment": false, "at": Time.get_ticks_msec()}
-	Selftest.check("start experiment blocks double tap", not g._online._start_experiment("water", "air")
+	Selftest.check("start experiment blocks double tap", not g._online._start_experiment("glass", "steam")
 		and g._engine._experiment_pending_pair.size() == 0
-		and int(g._engine.inventory.get("air", 0)) == st_inv.get("air", 0) + 2)
+		and int(g._engine.inventory.get("glass", 0)) == st_glass + 2)
 	Net._available = st_avail
 	g._online._pending_requests.clear()
 	g._engine._experiment_pending_pair = st_pending_pair
+
+	# ---- 5b: локально разрешимая пара не требует связи с миром (дефект 2026-10-15) ----
+	# fire+water лежит в g.RECIPES (main.gd:254 → steam): ответ клиент знает сам,
+	# поэтому офлайн эксперимент обязан проварить локально, а не отказывать.
+	Net._available = false
+	var st5b_successes: int = g._engine.successes
+	var st5b_exp_count: int = g._engine._experiment_count
+	var st5b_exp_last: float = g._engine._experiment_last_at
+	var st5b_xp: int = g._workshop.xp
+	var st5b_unlocked: bool = g._workshop.unlocked
+	g._engine.known_recipes.erase(g._pair_key("fire", "water"))
+	g._engine.inventory["fire"] = int(g._engine.inventory.get("fire", 0)) + 2
+	var steam_before := int(g._engine.inventory.get("steam", 0))
+	var fire_before := int(g._engine.inventory.get("fire", 0))
+	var water_before := int(g._engine.inventory.get("water", 0))
+	var started_local := g._online._start_experiment("fire", "water")
+	Selftest.check("start experiment resolves locally known pair offline",
+		started_local
+		and int(g._engine.inventory.get("steam", 0)) == steam_before + 1
+		and int(g._engine.inventory.get("fire", 0)) == fire_before - 1
+		and int(g._engine.inventory.get("water", 0)) == water_before - 1
+		and g._engine.known_recipes.has(g._pair_key("fire", "water")))
+	Selftest.check("start experiment local pair does not claim world is offline",
+		not g._engine.status_text.contains("требует связи с миром"))
+	Selftest.check("start experiment local pair leaves no pending request",
+		g._online._pending_requests.is_empty()
+		and g._engine._experiment_pending_pair.is_empty())
+	Net._available = st_avail
+	g._engine.successes = st5b_successes
+	g._engine._experiment_count = st5b_exp_count
+	g._engine._experiment_last_at = st5b_exp_last
+	g._workshop.xp = st5b_xp
+	g._workshop.unlocked = st5b_unlocked
+	if st_fire_water_known:
+		g._engine.known_recipes[g._pair_key("fire", "water")] = true
+	else:
+		g._engine.known_recipes.erase(g._pair_key("fire", "water"))
 
 	# ---- 6: телеграф QTE (док §8–12) ----
 	var st_event_active: bool = g._online._event_active

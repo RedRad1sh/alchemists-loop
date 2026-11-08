@@ -455,28 +455,43 @@ func _try_net_candidate(a: String, b: String, manual: bool = false) -> Dictionar
 	return {"ok": true, "reason": "", "retry_in": 0.0}
 
 func _start_experiment(a: String, b: String) -> bool:
-	"""Явный Эксперимент: только 2 реагента в v1, сервер авторитетен (док §5)."""
-	if not _net_enabled or not Net.is_available():
-		var message := ("Эксперимент требует связи с миром: "
-			+ "новый элемент нельзя создать офлайн.")
-		_set_status(message)
-		_toast(message, NoticeKind.ERROR, 4.0)
-		_haptic_error()
-		Sfx.error()
-		return false
-	# U11 (T14): начинаем эксперимент только на свободный pending-слот — иначе
-	# реагенты были бы съедены, а ответ чужой пары применён к эксперименту.
-	_prune_pending_requests()
-	if not _pending_requests.is_empty():
-		var message := ("Предыдущий запрос ещё обрабатывается. "
-			+ "Дождись ответа мира.")
-		_set_status(message)
-		_toast(message, NoticeKind.WARNING, 3.0)
-		_haptic_error()
-		Sfx.error()
-		return false
+	"""Явный Эксперимент: только 2 реагента в v1, сервер авторитетен (док §5).
+	Пара, лежащая в локальном g.RECIPES, разрешается без сети: клиент знает
+	резерват сам, выдумывать новый элемент ему не нужно (дефект 2026-10-15)."""
+	var recipe := _find_recipe(a, b)
+	if recipe.is_empty():
+		if not _net_enabled or not Net.is_available():
+			var message := ("Эксперимент требует связи с миром: "
+				+ "новый элемент нельзя создать офлайн.")
+			_set_status(message)
+			_toast(message, NoticeKind.ERROR, 4.0)
+			_haptic_error()
+			Sfx.error()
+			return false
+		# U11 (T14): начинаем эксперимент только на свободный pending-слот — иначе
+		# реагенты были бы съедены, а ответ чужой пары применён к эксперименту.
+		# Локальной паре слот не нужен: она не регистрирует запрос и завершается
+		# в этом же вызове, коррелируемого ответа, который мог бы «приехать не
+		# туда», у неё нет по построению.
+		_prune_pending_requests()
+		if not _pending_requests.is_empty():
+			var message := ("Предыдущий запрос ещё обрабатывается. "
+				+ "Дождись ответа мира.")
+			_set_status(message)
+			_toast(message, NoticeKind.WARNING, 3.0)
+			_haptic_error()
+			Sfx.error()
+			return false
 	if not g._engine._begin_experiment(a, b):
 		return false
+	if not recipe.is_empty():
+		var output := String(recipe["out"])
+		g._engine._experiment_succeeded(output, a, b)
+		_set_status("Эксперимент удался: %s + %s = %s." % [_item_name(a), _item_name(b), _item_name(output)])
+		_toast("Мир уже знает эту пару: %s получен без запроса." % _item_name(output),
+			NoticeKind.INFO, 2.5)
+		_haptic_success()
+		return true
 	# Слот пуст и иных потребителей в этом кадре нет — регистрация успешна by construction.
 	if not _register_pending_pair(a, b, true):
 		g._engine._finish_experiment_inputs(a, b, true)
@@ -628,6 +643,12 @@ func _on_net_pair_result(pair_key: String, result: Dictionary) -> void:
 		# отправляем: пара останется кандидатом и повторится по cooldown.
 		if _register_pending_pair(a, b, is_experiment):
 			Net.discover(a, b, _net_nick, _device_id, is_experiment)
+		elif is_experiment:
+			# Bug 4: регистрация не удалась — возвращаем реагенты, иначе
+			# _experiment_pending_pair остаётся висеть и блокирует котёл.
+			g._engine._finish_experiment_inputs(a, b, true)
+			_set_status("Эксперимент не был отправлен: реагенты и эфир возвращены.")
+			g._saves._save_game()
 	else:
 		var msg := g._clean_str(result.get("message", ""))
 		if is_experiment:
@@ -1115,6 +1136,7 @@ func _floater_at(pos: Vector2, text: String, color: Color) -> void:
 	lb.text = text
 	lb.add_theme_font_size_override("font_size", 20)
 	lb.add_theme_color_override("font_color", color.lightened(0.15))
+	lb.set_meta("content_color", true)  # цвет вещества, а не хрома
 	lb.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	lb.add_theme_constant_override("outline_size", 8)
 	lb.position = pos + Vector2(-40, -20)

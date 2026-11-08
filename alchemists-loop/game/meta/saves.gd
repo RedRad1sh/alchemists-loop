@@ -71,6 +71,7 @@ func _save_game() -> bool:
 		"experiment_count": g._engine._experiment_count,
 		"experiment_last_at": g._engine._experiment_last_at,
 		"experiment_pending_pair": g._engine._experiment_pending_pair,
+		"sigil_pending_craft": g._sigil_pending_craft,
 		"craft_job": g._engine._craft_job,
 		"blueprints": g._engine._blueprints,
 		"workshop": workshop_state,
@@ -491,6 +492,27 @@ func _load_game() -> void:
 		var pending_b := String(saved_pending[1])
 		if g.ITEMS.has(pending_a) and g.ITEMS.has(pending_b):
 			g._engine._experiment_pending_pair = [pending_a, pending_b]
+	# Квитанция незакрытого сигильного крафта: по ней возврат списанного возможен
+	# только если она пережила перезапуск. Форма неизвестна — принимаем ровно то,
+	# из чего возврат определим (id, сохранённый дебет, список ингредиентов);
+	# остальное отбрасываем целиком, а не по полям.
+	var saved_receipt = data.get("sigil_pending_craft", null)
+	g._sigil_ui._sigil_pending_craft = {}
+	g._sigil_ui._pending_craft_result = {}
+	g._sigil_ui._sigil_receipt_reconcile = false
+	if saved_receipt is Dictionary and not (saved_receipt as Dictionary).is_empty():
+		var receipt: Dictionary = saved_receipt
+		var receipt_id := String(receipt.get("id", ""))
+		var charged = receipt.get("charged_ether_cost", null)
+		var ingredients = receipt.get("ingredients", null)
+		if receipt_id != "" and (charged is int or charged is float) \
+				and float(charged) >= 0.0 and ingredients is Array:
+			# Карта уже в локальной коллекции — ответ прошлой сессии обработан, а
+			# сейв квитанцию не погасил. Возврат по такой квитанции напечатал бы
+			# списание второй раз, поэтому её просто закрываем.
+			if not g._sigil.has_card(receipt_id):
+				g._sigil_ui._sigil_pending_craft = receipt.duplicate(true)
+				g._sigil_ui._sigil_receipt_reconcile = true
 	var saved_job = data.get("craft_job", {})
 	g._engine._craft_job = saved_job.duplicate(true) if saved_job is Dictionary else {}
 	var saved_blueprints = data.get("blueprints", {})
@@ -618,7 +640,11 @@ func _restore_spring_state(data: Dictionary) -> void:
 			g._engine.spring_sources = saved_sources.duplicate(true)
 
 func _spring_offline_gain(elapsed: float) -> int:
-	if elapsed < Game.OFFLINE_MIN_SEC:
+	if not is_finite(elapsed) or elapsed < Game.OFFLINE_MIN_SEC:
+		return 0
+	# Выключенный или ещё не открытый Родник за отсутствие ничего не даёт —
+	# сводка не должна обещать добычу, которой планировщик не начислит.
+	if not g._engine.spring_on or not g._engine._mode_unlocked("spring"):
 		return 0
 	var offline_lvl: int = g._engine.spring_levels.get("offline", 0)
 	var window: float = SpringBalance.OFFLINE_WINDOW_SEC[offline_lvl]

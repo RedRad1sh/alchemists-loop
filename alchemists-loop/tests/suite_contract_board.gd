@@ -2118,8 +2118,31 @@ static func _contract_board_checks(g: Game) -> void:
 				t9_rows += 1
 			elif t9_ch is Label and String((t9_ch as Label).text).begins_with("…ещё"):
 				t9_more_lbl = String((t9_ch as Label).text)
-	Selftest.check("vein card folds the fourth and fifth current-cycle finds into «…ещё N»",
-		t9_rows == 3 and t9_more_lbl == "…ещё 2")
+	# Сколько рядов влезает, решает высота полосы над наградой; остальное — в «…ещё N».
+	Selftest.check("vein card folds the current-cycle finds that do not fit into «…ещё N»",
+		t9_rows >= 1 and t9_rows <= 3 and t9_more_lbl == "…ещё %d" % (5 - t9_rows))
+	var fit_bad := _card_overflow(dr) + _card_overflow(wr)
+	if not fit_bad.is_empty():
+		print("  card overflow: ", fit_bad)
+	Selftest.check("card body and reward text stay inside their paper bands",
+		fit_bad.is_empty())
+	# Подсказка прокрутки не ложится на листающийся контент: иначе «▼ листай вниз»
+	# перекрывает «Влить» нижней карточки.
+	var hint := board.get_node_or_null("ScrollHint") as Control
+	var hint_clear := hint != null
+	# Сравниваем только с видимой полосой контента: под рамой и строкой ранга
+	# карточка закрыта масками и игроку не видна.
+	var rank := board.get_node_or_null("RankStrip") as Control
+	if hint != null and hint.visible and rank != null:
+		var hr := hint.get_global_rect()
+		var view_bottom := rank.get_global_rect().position.y
+		for row in [dr, wr]:
+			for raw_card in (row as Control).get_children():
+				var cr := (raw_card as Control).get_global_rect()
+				cr.end.y = minf(cr.end.y, view_bottom)
+				if (raw_card as Control).visible and cr.size.y > 0.0 and hr.intersects(cr):
+					hint_clear = false
+	Selftest.check("the scroll hint never lies over a contract card", hint_clear)
 	c._day_hint = t7_hint_saved
 	c._vein_finds = t7_finds_saved
 	c._cycle_cache = t7_cycle_saved
@@ -2132,6 +2155,8 @@ static func _contract_board_checks(g: Game) -> void:
 	await g.get_tree().process_frame
 	Selftest.check("§5.4 the notes band exists and stays empty when no buffs are active",
 		notes != null and notes.get_class() == "Control" and notes.get_child_count() == 0)
+	Selftest.check("an empty notes band takes no height above the daily shelf",
+		notes != null and is_zero_approx(notes.size.y))
 
 	# 12. Один бафф — одна записка.
 	c.grant_buff("brew_speed", 7200, 0.25, int(Time.get_unix_time_from_system()))
@@ -2139,6 +2164,8 @@ static func _contract_board_checks(g: Game) -> void:
 	await g.get_tree().process_frame
 	Selftest.check("§5.4 one active buff produces exactly one note in the band",
 		notes.get_child_count() == 1)
+	Selftest.check("one note row reserves exactly one row of height",
+		is_equal_approx(notes.size.y, ContractBoard.NOTE_SIZE.y + ContractBoard.NOTE_GAP))
 
 	# 13. Записка — бумага из PNG правильного размера.
 	var note := notes.get_child(0) if notes.get_child_count() > 0 else null
@@ -3197,6 +3224,38 @@ static func _ca_inner(img: Image, axis: String) -> float:
 	return acc / float(maxi(n, 1))
 
 
+# Карточки ряда, у которых тело заезжает на награду или текст награды не влезает
+# в свою полосу (наезд «Влить» на текст, обрыв «…Спешка в»).
+static func _card_overflow(row: Control) -> Array:
+	var bad: Array = []
+	if row == null:
+		return ["no row"]
+	for raw in row.get_children():
+		var card := raw as Control
+		if card == null or not card.visible:
+			continue
+		var detail := card.get_node_or_null("Hang/Detail") as Control
+		var reward := card.get_node_or_null("Hang/Reward") as Label
+		if detail == null or reward == null:
+			bad.append("%s: missing nodes" % card.name)
+			continue
+		# Фактическая раскладка, а не та же формула, что у карточки: иначе ошибка
+		# измерения в коде совпала бы с ошибкой в проверке.
+		var reward_top := reward.get_global_rect().position.y
+		for d in detail.find_children("*", "Control", true, false):
+			var dc := d as Control
+			if not dc.is_visible_in_tree():
+				continue
+			var r := dc.get_global_rect()
+			if r.end.y > reward_top + 0.5:
+				bad.append("%s: %s bottom %.0f > reward %.0f" % [card.name, dc.name, r.end.y, reward_top])
+				break
+		if reward.get_visible_line_count() < reward.get_line_count():
+			bad.append("%s: reward shows %d of %d lines" % [card.name,
+				reward.get_visible_line_count(), reward.get_line_count()])
+	return bad
+
+
 # Дельта между последним и первым рядом по оси axis — это шов тайла.
 static func _ca_seam(img: Image, axis: String) -> float:
 	var acc := 0.0
@@ -3804,10 +3863,10 @@ static func _contract_card_checks(g: Game) -> void:
 		and rew_w.text.contains(String(ContractsBalance.DECOR_LABEL["window_guild"]))
 		and not rew_w.text.contains(buff_title))
 
-	# 12. Ни один глиф не обязан быть в Manrope. Отрицательный контроль (✦ в шрифте нет) и
+	# 12. Каждый глиф листа есть в шрифте бумаги (PT Serif). Отрицательный контроль (✦ в шрифте нет) и
 	# положительный (кириллица «А» есть) стоят в одной проверке: без них проверка была бы
 	# зелёной при любой лжи has_char — в том числе при переставленных аргументах.
-	var fnt: Font = g._font_semi
+	var fnt: Font = load(ContractCard.PAPER_FONT_BOLD) as Font
 	var words := ""
 	for card in cards:
 		for key in ["_title", "_count", "_reward", "_stamp_word"]:

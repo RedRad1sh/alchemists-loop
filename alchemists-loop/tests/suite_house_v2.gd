@@ -663,13 +663,13 @@ static func _screen(g: Game) -> void:
 	Selftest.check("hv2 build rejects insufficient ether", not h._cosmetic_house and g._engine.ether == Game.HOUSE_COST - 1)
 	g._engine.ether = Game.HOUSE_COST
 	h._buy_house()
-	var base_ok := true
-	for cat in HouseItems.CATS:
-		base_ok = base_ok and h.house_unlocked.has(HouseItems.base_item(String(cat)))
-	Selftest.check("hv2 build spends ether and unlocks one base item per category", h._cosmetic_house and base_ok and g._engine._available_ether() == 0)
-	Selftest.check("hv2 build seeds layout B", h.house_placements.size() == 9)
+	Selftest.check("hv2 build spends ether and unlocks only the bed",
+			h._cosmetic_house and h.house_unlocked == [HouseItems.base_item("bed")]
+			and g._engine._available_ether() == 0)
+	Selftest.check("hv2 build places only the unlocked bed",
+			h.house_placements.size() == 1 and String(h.house_placements[0].get("id", "")) == "bed")
 	Selftest.check("hv2 build hides the overlay", h._house_overlay != null and not h._house_overlay.visible)
-	Selftest.check("hv2 build completes only the onboarding task", h.house_tasks_done == ["rug_under_bed"])
+	Selftest.check("hv2 build with a lone bed completes no task", h.house_tasks_done.is_empty())
 	h._open_house_screen()
 	h._open_house_tray()
 	await g.get_tree().create_timer(0.25).timeout
