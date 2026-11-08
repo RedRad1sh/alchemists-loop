@@ -43,7 +43,10 @@ func _interval(line: Dictionary) -> float:
 	var target := ""
 	if not line["queue"].is_empty(): target = String(line["queue"][0]["target"])
 	var interval: float = g._sigil.bench_interval(target)
-	return interval if is_finite(interval) and interval > EPS else Game.BENCH_INTERVAL
+	if not is_finite(interval) or interval <= EPS:
+		interval = Game.BENCH_INTERVAL
+	# Ускорение карт ограничено 90%, чтобы интервал не стал нулевым.
+	return interval * (1.0 - clampf(g._sigil.card_speed_bonus() / 100.0, 0.0, 0.9))
 
 func _token() -> Array:
 	return [_signature, _mutation]

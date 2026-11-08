@@ -10,7 +10,6 @@ var _mode_tabs: Dictionary = {}
 var _tools_flow: HFlowContainer = null
 var _tools_sub: VBoxContainer = null
 var _tools_sel := ""
-var _tools_hint: Label = null
 var _mode_pages: Dictionary = {}
 var _mode_chips: Dictionary = {}
 var _hint_btn: Button
@@ -216,12 +215,6 @@ func _build_lab(page: VBoxContainer) -> void:
 	g._engine._book_list.add_theme_constant_override("separation", 6)
 	g._engine._book_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	book_scroll.add_child(g._engine._book_list)
-
-	# 2.2. Родник — постоянная часть лаборатории; компактный блок.
-	var spring_box := VBoxContainer.new()
-	spring_box.add_theme_constant_override("separation", 4)
-	lab_content.add_child(spring_box)
-	_build_spring_page(spring_box)
 
 	# 2.3. Инвентарь реагентов — перетаскиваются в лунки A/B.
 	lab_content.add_child(g._label("Вещества — перетащи в лунки (A/B) у котла", 16))
@@ -608,6 +601,9 @@ func _open_device_screen(key: String, title: String) -> void:
 	if box == null:
 		return
 	g._screens.open(key, title, box)
+	if key == "letters":
+		g._riddles._fetch_letters()
+		g._riddles._fetch_atlas()
 
 
 func _open_cauldron_screen() -> void:
@@ -1208,9 +1204,7 @@ func _build_tools_page(page: VBoxContainer) -> void:
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 10)
 	pad.add_child(col)
-	_tools_hint = g._label("Инструменты открываются вместе с новыми веществами. Сколько бы их ни стало — всё здесь, в одной вкладке.", 13)
-	_tools_hint.add_theme_color_override("font_color", Color(0.62, 0.74, 0.82))
-	col.add_child(_tools_hint)
+	_build_more_sections(page, col)
 	_tools_flow = HFlowContainer.new()
 	_tools_flow.add_theme_constant_override("h_separation", 6)
 	_tools_flow.add_theme_constant_override("v_separation", 6)
@@ -1218,6 +1212,62 @@ func _build_tools_page(page: VBoxContainer) -> void:
 	_tools_sub = VBoxContainer.new()
 	_tools_sub.add_theme_constant_override("separation", 8)
 	col.add_child(_tools_sub)
+
+
+const MORE_HELP := [
+	"Комната — главный экран. Тап по котлу: эксперимент с двумя веществами. Новая пара даёт новое вещество и эфир.",
+	"Колода на столе — Аркан Сигилов, лист на доске — контракты дня и недели, свиток на полу — письма Светика.",
+	"Стрелка справа ведёт во вторую комнату: Родник, Верстак и Реторта работают без тебя, пока ты не в игре.",
+	"Эфир копится сам. Трать его на улучшения (значок в шапке) и подсказки Светика.",
+]
+const MORE_LICENSES := [
+	"Manrope, PT Serif — SIL Open Font License 1.1.",
+	"Divagon, Manasco — шрифты названий и лора.",
+	"Alchemist Runic — нарисован для игры, все права у проекта.",
+	"Иконки game-icons.net (Lorc, Delapouite, Faithtoken) — CC BY 3.0.",
+	"Kenney UI Pack — CC0.",
+]
+
+
+## «Ещё» — служебное: звук, короткая справка, лицензии и журнал. Механики
+## живут на экранах комнаты, сюда их больше не дублируем.
+func _build_more_sections(page: Control, col: VBoxContainer) -> void:
+	var settings := _more_section(col, "MoreSettings", "НАСТРОЙКИ")
+	g._hub._build_sound_controls(settings)
+	var help := _more_section(col, "MoreHelp", "КАК ИГРАТЬ")
+	for line in MORE_HELP:
+		help.add_child(_more_text(String(line)))
+	var about := g._small_button("О игре", Vector2(0, 40))
+	about.pressed.connect(g._hub._open_credits)
+	help.add_child(about)
+	var lic := _more_section(col, "MoreLicenses", "ЛИЦЕНЗИИ")
+	for line in MORE_LICENSES:
+		lic.add_child(_more_text(String(line)))
+	var journal := _more_section(col, "MoreJournal", "ЖУРНАЛ")
+	var rows := VBoxContainer.new()
+	rows.name = "MoreJournalRows"
+	rows.add_theme_constant_override("separation", 5)
+	journal.add_child(rows)
+	page.visibility_changed.connect(func() -> void:
+		if page.is_visible_in_tree():
+			g._hub._rebuild_journal_rows(rows))
+	g._hub._rebuild_journal_rows(rows)
+
+
+func _more_section(col: VBoxContainer, node_name: String, title: String) -> VBoxContainer:
+	col.add_child(UIWidgets.section(g, title))
+	var box := VBoxContainer.new()
+	box.name = node_name
+	box.add_theme_constant_override("separation", 6)
+	col.add_child(box)
+	return box
+
+
+func _more_text(text: String) -> Label:
+	var l := g._label(text, 13)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
+	return l
 
 
 func _ensure_modes() -> void:
@@ -1447,12 +1497,6 @@ func _refresh_experiment_page() -> void:
 	_experiment_info.text = line + "\n" + String(check.get("reason", "Готово к эксперименту."))
 	if is_instance_valid(_experiment_button):
 		_experiment_button.disabled = not bool(check.get("ok", false)) or g._engine._experiment_pending_pair.size() > 0
-
-func _build_spring_page(container: VBoxContainer) -> void:
-	var btn := Button.new()
-	btn.text = "Родник →"
-	btn.pressed.connect(_open_spring_screen)
-	container.add_child(btn)
 
 func _open_spring_screen() -> void:
 	ContractBoard.close_any(g)

@@ -436,6 +436,41 @@ func bench_interval(item_id: String) -> float:
 	return Game.BENCH_INTERVAL
 
 
+## Бонусы открытых карт по редкости (roadmap §8.2): копии не складываются.
+const CARD_SPEED_PCT := {"common": 0.25, "rare": 0.75, "epic": 1.25, "legendary": 2.0}
+const CARD_CAP := {"common": 1.25, "rare": 3.75, "epic": 6.25, "legendary": 10.0}
+const CARD_AUTONOMY := {"common": 0.5, "rare": 1.25, "epic": 2.5, "legendary": 3.75}
+## Доля LLM-множителя хроматика, которая идёт в скорость (speed_mult 1.2 → +10%).
+const CHROMA_SPEED_SHARE := 0.5
+
+
+func _card_bonus_sum(table: Dictionary) -> float:
+	var total := 0.0
+	for cid in _server_collection:
+		if copies_of(str(cid)) > 0:
+			total += float(table.get(str(card(str(cid)).get("rarity", "")), 0.0))
+	return total
+
+
+## Ускорение линий Мастерской в процентах.
+func card_speed_bonus() -> float:
+	var total := _card_bonus_sum(CARD_SPEED_PCT)
+	for extra in _server_extras:
+		if extra is Dictionary and str(extra.get("rarity", "")) == "chromatic":
+			var fx = (extra as Dictionary).get("effects", {})
+			if fx is Dictionary and (fx as Dictionary).has("speed_mult"):
+				total += maxf(0.0, float(fx["speed_mult"]) - 1.0) * 100.0 * CHROMA_SPEED_SHARE
+	return total
+
+
+func card_cap_bonus() -> int:
+	return int(round(_card_bonus_sum(CARD_CAP)))
+
+
+func card_autonomy_bonus() -> int:
+	return int(round(_card_bonus_sum(CARD_AUTONOMY)))
+
+
 ## Клейм майлстоуна набора. Ответ приходит сигналом sigil_milestone_result
 ## (коннект в main.gd) в _on_milestone_result.
 func request_milestone_claim(device_id: String, set_id: String, tier: int) -> void:

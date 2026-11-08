@@ -92,6 +92,40 @@ static func run(g: Game) -> void:
 	g.BREW_SECONDS = bs_saved
 	g._engine.ether = 5000
 	Selftest.check("upgrade mid level", g._engine._buy_upgrade("ether_cap") and g._engine._up_lvl("ether_cap") == 2)
+	# Оптовая покупка ×1/×10/×100: до максимума и пока хватает эфира.
+	if g._engine.has_method("_up_cost_at"):
+		var eng := g._engine
+		var cap_keep := eng._up_lvl("ether_cap")
+		var eth_keep := eng.ether
+		var over_keep := eng.ether_overflow
+		var cap_max := 0
+		for u in Game.UPGRADES:
+			if String(u["id"]) == "ether_cap":
+				cap_max = int(u["max"])
+		eng.upgrades["ether_cap"] = 0
+		eng.ether_overflow = 0
+		eng.ether = 100000000
+		var want := 0
+		for k in cap_max:
+			want += eng._up_cost_at("ether_cap", k)
+		Selftest.check("bulk buy stops at max", eng._buy_upgrade("ether_cap", 100)
+				and eng._up_lvl("ether_cap") == cap_max and eng.ether == 100000000 - want)
+		Selftest.check("bulk buy at max refused", not eng._buy_upgrade("ether_cap", 10)
+				and eng._up_lvl("ether_cap") == cap_max)
+		eng.upgrades["ether_cap"] = 0
+		eng.ether = eng._up_cost_at("ether_cap", 0) + eng._up_cost_at("ether_cap", 1) + 5
+		eng.ether_overflow = 0
+		Selftest.check("bulk buy limited by ether", eng._buy_upgrade("ether_cap", 10)
+				and eng._up_lvl("ether_cap") == 2 and eng.ether == 5)
+		g._hub._pick_up_qty(10)
+		Selftest.check("upgrade qty chip picks x10", g._hub._up_qty == 10)
+		g._hub._pick_up_qty(1)
+		eng.upgrades["ether_cap"] = cap_keep
+		eng.ether = eth_keep
+		eng.ether_overflow = over_keep
+		eng._refresh()
+	else:
+		Selftest.check("bulk buy stops at max", false)
 	for i in 3:
 		g._engine._buy_upgrade("source_yield")
 	Selftest.check("source yield maxed", g._engine._up_lvl("source_yield") == 3)
@@ -149,8 +183,12 @@ static func run(g: Game) -> void:
 	# доска v2 Task 5: вкладки «Круг»/«Неделя» сняты — MODES сократился с 9 до 7
 	Selftest.check("mode pages built", g._pages._mode_pages.size() == 7 and g._pages._mode_chips.size() == 7)
 	Selftest.check("mode tabs compat", g._pages._mode_tabs.size() == 7)
+	# Все механики — на экранах комнаты; фишек в «Ещё» не остаётся.
+	var any_chip := false
+	for k in g._pages._mode_chips:
+		any_chip = any_chip or (g._pages._mode_chips[k] as Button).visible
+	Selftest.check("more tab shows no mode chips", not any_chip)
 	Selftest.check("compact tools omit experiment", not (g._pages._mode_chips["experiment"] as Button).visible
-		and (g._pages._mode_chips["letters"] as Button).visible
 		and not (g._pages._mode_chips["spring"] as Button).visible
 		and not (g._pages._mode_chips["resonance"] as Button).visible
 		and not (g._pages._mode_chips["atlas"] as Button).visible)

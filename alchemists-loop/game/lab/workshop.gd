@@ -68,7 +68,7 @@ func queue_capacity() -> int:
 	return int(Rules.RANKS[rank]["capacity"])
 
 func offline_stage_limit() -> int:
-	return int(Rules.AUTONOMY[autonomy_level]["stages"])
+	return int(Rules.AUTONOMY[autonomy_level]["stages"]) + g._sigil.card_autonomy_bonus()
 
 func known_target_recipe(target: String) -> bool:
 	if not g.ITEMS.has(target) or target in Game.BASE_IDS:

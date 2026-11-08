@@ -286,7 +286,7 @@ static func _warm_texts(g: Game) -> void:
 	# прямоугольная рамка тап-зоны (Panel + StyleBoxFlat) — это и есть
 	# «ореол квадратный», она гасит warm и красит пин.
 	var warm := true
-	for pname in ["Prop_Deck", "Prop_Board", "Prop_Scroll"]:
+	for pname in ["Prop_Deck", "Prop_Board", "Prop_Letters"]:
 		var prop: Control = g._rooms._host.find_child(pname, true, false) as Control
 		var glow := prop.get_meta("glow", null) as Control if prop != null else null
 		var sprite := prop.find_child("Sprite", true, false) as TextureRect if prop != null else null

@@ -47,11 +47,14 @@ static func make_prop(icon: String, size_px: int) -> Button:
 
 ## Предмет из живописного набора комнаты: та же обводка, но спрайт — png-вырезка.
 ## Размер задаётся по картинке, а не квадратом.
-static func make_art_prop(art: String, px: Vector2) -> Button:
-	var btn := Button.new()
+## alpha_hit — ловить нажатие только по нарисованному предмету, а не по квадрату.
+static func make_art_prop(art: String, px: Vector2, alpha_hit := false) -> Button:
+	var btn: Button = AlphaHitButton.new() if alpha_hit else Button.new()
 	btn.name = "Prop_" + art
 	btn.custom_minimum_size = px
 	var tex := _png(ROOM_DIR + art + ".png")
+	if alpha_hit:
+		(btn as AlphaHitButton).set_hit_texture(tex)
 	_shell(btn, px, tex)
 	btn.add_child(_picture(tex, "✦", 22))
 	return btn

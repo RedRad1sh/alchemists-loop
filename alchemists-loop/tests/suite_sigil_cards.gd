@@ -161,17 +161,10 @@ static func run(g: Game) -> void:
 		Net.sigil_collection_result.get_connections().size() >= 1)
 	Selftest.check("game awaits catalog", g.has_method("_await_catalog"))
 
-	# ---- Вход в Аркан Сигилов: кнопка шапки с иконкой карты ----
-	var arcana := g.find_child("ArcanaBtn", true, false) as Button
-	Selftest.check("arcana header entry exists", arcana != null)
-	if arcana != null:
-		var center := arcana.get_node_or_null("IconCenter")
-		var rect: TextureRect = center.get_child(0) as TextureRect if center != null \
-			and center.get_child_count() > 0 else null
-		Selftest.check("arcana header draws a card icon", rect != null
-			and rect.texture != null and rect.texture.resource_path.ends_with("gi_arcana.svg"))
-		Selftest.check("arcana header tooltip names it",
-			arcana.tooltip_text.contains("Аркан"))
+	# ---- Вход в Аркан Сигилов: колода на столе комнаты ----
+	var arcana := g._rooms._host.find_child("Prop_Deck", true, false) as Button
+	Selftest.check("arcana room deck entry exists", arcana != null
+		and arcana.pressed.get_connections().size() >= 1)
 	# Иконка обязана рисоваться даже в вырожденном размере (нулевой Control).
 	var tiny := TarotIcon.new()
 	g.add_child(tiny)

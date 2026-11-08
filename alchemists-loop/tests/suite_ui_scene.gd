@@ -128,9 +128,16 @@ static func run(g: Game) -> void:
 			and sp.offset_top > 0.0 and sp.offset_bottom <= -BottomNav.NAV_H + 0.5)
 	var spanel := g.find_child("SocialPanel", true, false) as Control
 	await g.get_tree().process_frame
-	Selftest.check("friends panel is modal-sized, not the whole area", spanel != null
-			and spanel.size.x <= SocialUI.PANEL_MAX.x + 1.0
-			and spanel.size.y <= SocialUI.PANEL_MAX.y + 1.0)
+	# Друзья — раздел нижнего меню, как Мир и Рейтинг: панель на всю область
+	# раздела, без затемнения и окна по центру (претензия владельца: «модалка»).
+	var sdim := false
+	if sp != null:
+		for c in sp.get_children():
+			sdim = sdim or c is ColorRect
+	Selftest.check("friends is a full section, not a modal", spanel != null and sp != null
+			and not sdim
+			and spanel.size.x >= sp.size.x - 2.0 * SocialUI.SECTION_M - 1.0
+			and spanel.size.y >= sp.size.y - 2.0 * SocialUI.SECTION_M - 1.0)
 	# Иконка бара не прилипает к латунной рейке сверху.
 	var nav_icon := g._bottom_nav._items[0]["icon"] as Control
 	Selftest.check("nav icons sit below the rail with a gap",
@@ -139,10 +146,12 @@ static func run(g: Game) -> void:
 	Selftest.check("nav sibling closes friends panel",
 			not g._social_ui.is_open() and g._tabs_ref.current_tab == Game.TAB_RATING
 			and (g._bottom_nav._items[2]["mark"] as ColorRect).color.a == 0.0)
-	var arcana_btn := g.find_child("ArcanaBtn", true, false) as Button
-	if arcana_btn != null:
-		arcana_btn.pressed.emit()
-	Selftest.check("header arcana opens sigil arcana", arcana_btn != null
+	# Аркан открывается колодой на столе комнаты — значок в шапке был дублем.
+	Selftest.check("header has no arcana duplicate", g.find_child("ArcanaBtn", true, false) == null)
+	var deck_entry := g._rooms._host.find_child("Prop_Deck", true, false) as Button
+	if deck_entry != null:
+		deck_entry.pressed.emit()
+	Selftest.check("room deck opens sigil arcana", deck_entry != null
 			and g._sigil_ui._sigil_coll != null)
 	g._close_sigil_collection()
 	await g.get_tree().process_frame
@@ -170,7 +179,37 @@ static func run(g: Game) -> void:
 				if (c as Button).get_node_or_null("IconCenter") != null:
 					row_icons += 1
 	Selftest.check("header row uses icons instead of words", ether_row != null
-			and not worded and row_icons == 3)
+			and not worded and row_icons == 2)
+	# Звук и журнал переехали в «Ещё»: в шапке их иконок больше нет.
+	var head_icons: Array = []
+	for row in [g._hub._up_btn.get_parent(), ether_row]:
+		for c in (row as Node).get_children():
+			for tr in c.find_children("*", "TextureRect", true, false):
+				var tex := (tr as TextureRect).texture
+				if tex != null:
+					head_icons.append(tex.resource_path.get_file())
+	Selftest.check("header drops sound, journal and arcana icons",
+			not head_icons.has("gi_sound.svg") and not head_icons.has("gi_journal.svg")
+			and not head_icons.has("gi_arcana.svg") and head_icons.has("gi_upgrade.svg"))
+	# «Ещё» — настройки, справка, лицензии и журнал; устройств Мастерской и писем
+	# там больше нет — они на экранах комнаты.
+	g._tabs_ref.current_tab = Game.TAB_TOOLS
+	var more_page := g._tabs_ref.get_child(Game.TAB_TOOLS)
+	var more_ok := true
+	for sec in ["MoreSettings", "MoreHelp", "MoreLicenses", "MoreJournal"]:
+		more_ok = more_ok and more_page.find_child(sec, true, false) != null
+	Selftest.check("more tab holds settings, help, licenses and journal", more_ok)
+	var chip_shown := false
+	for k in ["bench", "retort", "letters"]:
+		var chip := g._pages._mode_chips.get(k) as Button
+		chip_shown = chip_shown or (chip != null and chip.visible)
+	Selftest.check("more tab drops workshop, retort and letters chips", not chip_shown)
+	# Родник — только на втором экране комнаты, в лаборатории входа нет.
+	var lab_spring := false
+	for b in g._tabs_ref.get_child(Game.TAB_LAB).find_children("*", "Button", true, false):
+		lab_spring = lab_spring or String((b as Button).text).contains("Родник")
+	Selftest.check("laboratory has no spring entry", not lab_spring
+			and g._rooms._props.has("spring"))
 	Selftest.check("header no longer duplicates board and arcana",
 			g.find_child("ContractsBtn", true, false) == null
 			and g.find_children("Tarot", "", true, false).is_empty())
@@ -182,9 +221,16 @@ static func run(g: Game) -> void:
 			and g._rooms._props.has("bench") and g._rooms._props.has("retort"))
 	var deck: Control = g._rooms._host.find_child("Prop_Deck", true, false) as Control
 	var board: Control = g._rooms._host.find_child("Prop_Board", true, false) as Control
-	var scroll_prop: Control = g._rooms._host.find_child("Prop_Scroll", true, false) as Control
+	var scroll_prop: Control = g._rooms._host.find_child("Prop_Letters", true, false) as Control
 	Selftest.check("scene props three", deck != null and board != null
 			and scroll_prop != null)
+	# Карта прогресса дублировала значок шапки — на её месте письма.
+	Selftest.check("letters replace the progress scroll in the room",
+			g._rooms._host.find_child("Prop_Scroll", true, false) == null)
+	if scroll_prop != null and g._engine._mode_unlocked("letters"):
+		(scroll_prop as Button).pressed.emit()
+		Selftest.check("room letters open the letters screen", g._screens.key() == "letters")
+		g._screens.close()
 	# Претензия владельца: «так и не появилось бледной обводки вокруг контуров
 	# предметов, я не понимаю, как игрок куда может кликнуть». Обводка — кольцо
 	# снаружи силуэта, в покое бледное, на наведении разгорается; табличек нет.
@@ -533,7 +579,98 @@ static func run(g: Game) -> void:
 		if (p as Control).visible:
 			props_hidden = false
 	Selftest.check("scene props hidden in workshop", props_hidden)
+	# Мастерская — своя нарисованная комната, а не плита лаборатории под иконками.
+	var ws_plate := g._rooms.get("_ws_plate") as TextureRect
+	Selftest.check("workshop has its own painted plate", ws_plate != null
+			and ws_plate.texture != null
+			and ws_plate.texture.resource_path.ends_with("workshop_plate.png")
+			and ws_plate.visible and not g._rooms._plate.visible
+			and ws_plate.get_global_rect().has_point(g.size * 0.5))
+	var ws_cutouts := true
+	var ws_inside := true
+	var nav_top := g.size.y - BottomNav.NAV_H
+	for key in ["spring", "bench", "retort"]:
+		var tool: Control = g._rooms._props[key]
+		var spr := tool.find_child("Sprite", true, false) as TextureRect
+		if spr == null or spr.texture == null or not spr.texture.resource_path.ends_with("prop_%s.png" % key) \
+				or tool.get_meta("glow", null) == null:
+			ws_cutouts = false
+		var c := tool.get_global_rect().get_center()
+		if not tool.visible or c.x < 0.0 or c.x > g.size.x or c.y < 0.0 or c.y > nav_top:
+			ws_inside = false
+	Selftest.check("workshop devices are painted cutouts", ws_cutouts)
+	Selftest.check("workshop devices stand inside the visible room", ws_inside)
+	# Стрелка «назад» лежит поверх устройств: иначе квадрат верстака перекрывал
+	# её и игрок застревал в Мастерской.
+	var arrows_on_top := true
+	for key in ["spring", "bench", "retort"]:
+		var t: Control = g._rooms._props[key]
+		if g._rooms._left_btn.get_index() < t.get_index() or g._rooms._right_btn.get_index() < t.get_index():
+			arrows_on_top = false
+	Selftest.check("room arrows are drawn above workshop devices", arrows_on_top)
+	# Родник по превью стоит у левой стены и заходит под стрелку «назад», поэтому
+	# возврат защищает не прозрачность предмета, а стрелка поверх всех устройств:
+	# она видима, кликабельна и лежит выше любого устройства в порядке отрисовки.
+	var back_nav_ok := g._rooms._left_btn.visible \
+			and g._rooms._left_btn.mouse_filter == Control.MOUSE_FILTER_STOP
+	for key in ["spring", "bench", "retort"]:
+		if g._rooms._left_btn.get_index() <= (g._rooms._props[key] as Control).get_index():
+			back_nav_ok = false
+	Selftest.check("back arrow stays clickable above the workshop devices", back_nav_ok)
+	# Клик — только по нарисованному предмету, прозрачные поля вырезки пропускают ввод.
+	var bench_btn: Control = g._rooms._props["bench"]
+	var bench_rect := bench_btn.get_global_rect()
+	var retort_rect := (g._rooms._props["retort"] as Control).get_global_rect()
+	var ws_rect := ws_plate.get_global_rect()
+	# Расстановка по layout_preview владельца: родник слева, высокая реторта по
+	# центру стоит на полу, верстак справа. Реторта больше НЕ на полке над верстаком.
+	Selftest.check("workshop devices follow the preview left-to-right order",
+			(g._rooms._props["spring"] as Control).get_global_rect().get_center().x
+			< (g._rooms._props["retort"] as Control).get_global_rect().get_center().x
+			and (g._rooms._props["retort"] as Control).get_global_rect().get_center().x
+			< bench_rect.get_center().x)
+	Selftest.check("retort stands tall on the floor between spring and bench",
+			retort_rect.size.y > bench_rect.size.y * 1.3
+			and (retort_rect.end.y - ws_rect.position.y) / ws_rect.size.y > 0.80
+			and retort_rect.position.y < bench_rect.position.y)
+	# Глубина сцены: реторта — дальний план и лежит ПОЗАДИ родника; родник, как
+	# ближний к зрителю предмет, рисуется поверх неё в месте перекрытия силуэтов.
+	Selftest.check("spring draws in front of the retort (scene depth)",
+			(g._rooms._props["spring"] as Control).get_index()
+			> (g._rooms._props["retort"] as Control).get_index())
+	Selftest.check("device hit area follows its silhouette", bench_btn.has_method("_has_point")
+			and not bool(bench_btn.call("_has_point", Vector2(2.0, 2.0)))
+			and bool(bench_btn.call("_has_point", bench_btn.size * Vector2(0.5, 0.6))))
+	# Обводка — та же шейдерная, что у предметов лаборатории.
+	var glow_ok := true
+	for key in ["spring", "bench", "retort"]:
+		var t: Control = g._rooms._props[key]
+		var gl := t.get_meta("glow", null) as TextureRect
+		if gl == null or not (gl.material is ShaderMaterial) \
+				or (gl.material as ShaderMaterial).shader.resource_path != SceneProps.OUTLINE_SHADER:
+			glow_ok = false
+	Selftest.check("workshop devices carry the same contour outline as lab props", glow_ok)
+	# Под окном у левой стены — Родник: верстак в этом ракурсе к стене не встаёт.
+	Selftest.check("spring stands by the left wall, left of the bench",
+			(g._rooms._props["spring"] as Control).get_global_rect().get_center().x
+			< (g._rooms._props["bench"] as Control).get_global_rect().get_center().x)
+	# Поворот камеры: обе плиты едут вместе, на стыке — косяк; в покое косяк скрыт.
+	var jamb := g._rooms.get("_jamb") as Control
+	if g._rooms.has_method("_set_pan") and jamb != null:
+		g._rooms.call("_set_pan", 0.5)
+		Selftest.check("camera turn slides both plates with a jamb seam",
+				g._rooms._plate.visible and ws_plate.visible and jamb.visible
+				and absf(g._rooms._plate.get_global_rect().position.x + g.size.x * 0.5) < 2.0
+				and absf(ws_plate.get_global_rect().position.x - g.size.x * 0.5) < 2.0
+				and absf(jamb.get_global_rect().get_center().x - g.size.x * 0.5) < 2.0)
+		g._rooms.call("_set_pan", 1.0)
+		Selftest.check("jamb hides at rest", not jamb.visible and not g._rooms._plate.visible)
+	else:
+		Selftest.check("camera turn slides both plates with a jamb seam", false)
 	g._rooms.set_room(0)
+	Selftest.check("lab plate back, workshop plate hidden",
+			g._rooms._plate.visible and ws_plate != null and not ws_plate.visible
+			and g._rooms._plate.get_global_rect() == Rect2(Vector2.ZERO, g.size))
 	Selftest.check("room back", g._rooms.room_index() == 0
 			and g._rooms._rooms[0].visible and not g._rooms._rooms[1].visible)
 	Selftest.check("scene props visible in lab", deck.visible)

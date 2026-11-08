@@ -292,10 +292,13 @@ func _up_lvl(id: String) -> int:
 	return int(upgrades.get(id, 0))
 
 func _up_cost(id: String) -> int:
+	return _up_cost_at(id, _up_lvl(id))
+
+func _up_cost_at(id: String, lvl: int) -> int:
 	var u := _up_def(id)
 	if u.is_empty():
 		return 1 << 29
-	return int(float(u["base"]) * pow(float(u["growth"]), _up_lvl(id)))
+	return int(float(u["base"]) * pow(float(u["growth"]), lvl))
 
 func _sage_multiplier() -> float:
 	# Prestige remains useful, but cannot make regeneration grow without bound.
@@ -306,7 +309,7 @@ func _max_ether() -> int:
 	return Game.MAX_ETHER + 50 * _up_lvl("ether_cap") + _collection_cap_bonus() \
 		+ 40 * sage_gold + g._progress_ui._quest_cap_bonus() + g._progress_ui._ach_cap_bonus() + g._resonance._res_cap_bonus() \
 		+ g._retort._essence_cap_bonus() + g._riddles._letter_cap_bonus() + g._riddles._atlas_cap_bonus() + g._contracts._mile_cap_bonus() \
-		+ g._contracts._vein_cap_total + g._sigil.milestone_cap_bonus()
+		+ g._contracts._vein_cap_total + g._sigil.milestone_cap_bonus() + g._sigil.card_cap_bonus()
 
 func spring_interval() -> float:
 	var speed_lvl: int = spring_levels.get("speed", 0)
@@ -634,7 +637,7 @@ func _buy_mastery() -> bool:
 	_refresh()
 	return true
 
-func _buy_upgrade(id: String) -> bool:
+func _buy_upgrade(id: String, qty: int = 1) -> bool:
 	if not _resource_mutation_allowed():
 		return false
 	var u := _up_def(id)
@@ -645,20 +648,24 @@ func _buy_upgrade(id: String) -> bool:
 		Sfx.error()
 		_refresh()
 		return false
-	var lvl := _up_lvl(id)
-	if lvl >= int(u["max"]):
-		status_text = "«%s» прокачана до максимума." % String(u["name"])
+	var bought := 0
+	for _i in maxi(qty, 1):
+		var lvl := _up_lvl(id)
+		if lvl >= int(u["max"]):
+			break
+		if not _spend_ether(_up_cost(id)):
+			break
+		upgrades[id] = lvl + 1
+		bought += 1
+	if bought == 0:
+		if _up_lvl(id) >= int(u["max"]):
+			status_text = "«%s» прокачана до максимума." % String(u["name"])
+		else:
+			status_text = "Не хватает эфира на «%s»: нужно %d, есть %d." % [u["name"], _up_cost(id), ether]
 		Sfx.error()
 		_refresh()
 		return false
-	var cost := _up_cost(id)
-	if not _spend_ether(cost):
-		status_text = "Не хватает эфира на «%s»: нужно %d, есть %d." % [u["name"], cost, ether]
-		Sfx.error()
-		_refresh()
-		return false
-	upgrades[id] = lvl + 1
-	status_text = "Улучшено: %s (ур. %d)." % [u["name"], lvl + 1]
+	status_text = "Улучшено: %s (ур. %d)." % [String(u["name"]), _up_lvl(id)]
 	g._progress_ui._ach_update()
 	Sfx.divide()
 	Input.vibrate_handheld(15)

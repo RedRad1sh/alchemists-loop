@@ -5,7 +5,7 @@ class_name SocialUI
 # переходы между уровнями и безопасные действия поверх кэша.
 
 const SPIRIT_INPUT_HINT := "Светик писем не читает — он же дух"
-const PANEL_MAX := Vector2(420.0, 640.0)
+const SECTION_M := 6.0
 
 var g: Game
 var _screen: Control = null
@@ -42,37 +42,16 @@ func build() -> void:
 	# полноэкранное окно — бар остаётся живым и переключает разделы.
 	root.offset_top = ScreenRouter.HEADER_H + 46.0
 	root.offset_bottom = -BottomNav.NAV_H
-	var dim := ColorRect.new()
-	dim.color = Color(0.03, 0.02, 0.015, 0.62)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	dim.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			if _confirm != null and _confirm.visible:
-				_confirm_close()
-			elif _peer != "":
-				_close_thread()
-			else:
-				close()
-	)
-	root.add_child(dim)
 
-	# Окно размером с остальные модалки (Улучшения ~380×640), а не во всю
-	# доступную площадь: поля пересчитываются от размера области.
+	# Раздел нижнего меню, как Мир и Рейтинг: панель на всю область, без
+	# затемнения и окна по центру; закрывает его соседний пункт бара.
 	var margin := MarginContainer.new()
 	margin.name = "SocialMargin"
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		margin.add_theme_constant_override(side, int(SECTION_M))
 	root.add_child(margin)
-	var fit := func() -> void:
-		var side := maxf(12.0, (root.size.x - PANEL_MAX.x) * 0.5)
-		var vert := maxf(12.0, (root.size.y - PANEL_MAX.y) * 0.5)
-		margin.add_theme_constant_override("margin_left", int(side))
-		margin.add_theme_constant_override("margin_right", int(side))
-		margin.add_theme_constant_override("margin_top", int(vert))
-		margin.add_theme_constant_override("margin_bottom", int(vert))
-	root.resized.connect(fit)
-	fit.call()
 
 	var panel := PanelContainer.new()
 	panel.name = "SocialPanel"
@@ -87,12 +66,6 @@ func build() -> void:
 	head.add_theme_constant_override("separation", 8)
 	box.add_child(head)
 	head.add_child(UIWidgets.section(g, "ДРУЗЬЯ"))
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(spacer)
-	var close_b := g._small_button("Закрыть", Vector2(116, 40), 1)
-	close_b.pressed.connect(close)
-	head.add_child(close_b)
 
 	_body = VBoxContainer.new()
 	_body.name = "SocialBody"

@@ -115,6 +115,20 @@ static func _screen(g: Game, w: Workshop, view: Node) -> void:
 	Selftest.check("workshop heading names production mastery", _text(view, "MasteryHeading") == "Мастерство Мастерской")
 	Selftest.check("workshop rank and next threshold visible", _text(view, "MasteryInfo").contains("Мастер")
 		and _text(view, "MasteryInfo").contains("170") and _text(view, "MasteryInfo").contains("400"))
+	# Мастерство — полоса от порога текущего ранга до следующего (100 → 400 при 170).
+	var mastery_bar := _node(view, "MasteryProgress") as ProgressBar
+	Selftest.check("workshop mastery bar spans current rank to next", mastery_bar != null
+		and is_equal_approx(mastery_bar.max_value, 300.0) and is_equal_approx(mastery_bar.value, 70.0))
+	# Материалы постройки — орбы «есть/нужно», а не строка текста.
+	var need_orbs := _node(view, "EquipmentOrbs") as Container
+	var need_text := ""
+	if need_orbs != null:
+		for lbl in need_orbs.find_children("*", "Label", true, false):
+			need_text += (lbl as Label).text + ";"
+	var glass_have := int(g._engine.inventory.get("glass", 0))
+	Selftest.check("workshop equipment materials shown as need orbs", need_orbs != null
+		and need_orbs.get_child_count() == Workshop.Rules.RANKS[2]["materials"].size()
+		and need_text.contains("%d/25" % glass_have))
 	var next: Dictionary = Workshop.Rules.RANKS[2]
 	Selftest.check("workshop next equipment authoritative price visible", _text(view, "EquipmentRecipe").contains(str(next["ether"]))
 		and _text(view, "EquipmentRecipe").contains("×25") and _text(view, "EquipmentRecipe").contains("×10"))
@@ -164,6 +178,20 @@ static func _screen(g: Game, w: Workshop, view: Node) -> void:
 		return
 	await g.get_tree().process_frame
 	Selftest.check("workshop refresh preserves executing controls", is_instance_valid(_node(view, "Add_line_1")))
+	# Карточка линии показывает, ЧТО крафтится (орб цели) и сколько этапа прошло.
+	var interval: float = g._sigil.bench_interval("steam")
+	var phase0: float = float(w.lines[0].get("phase_seconds", 0.0))
+	w.lines[0]["phase_seconds"] = interval * 0.25
+	if view.has_method("_animate_cards"):
+		view._animate_cards()
+	var stage_bar := _node(view, "CraftProgress_line_1") as ProgressBar
+	var orb_holder := _node(view, "CraftOrb_line_1") as Control
+	Selftest.check("workshop line card shows stage progress", stage_bar != null
+		and is_equal_approx(stage_bar.value, 0.25))
+	Selftest.check("workshop line card shows target orb", orb_holder != null and orb_holder.visible
+		and orb_holder.get_child_count() > 0
+		and _text(view, "CraftStatus_line_1").contains(g._online._item_name("steam")))
+	w.lines[0]["phase_seconds"] = phase0
 	var first := String(w.lines[0]["queue"][0]["id"])
 	_choose(view, "line_1", "stone", 5, true)
 	_press(view, "Add_line_1")

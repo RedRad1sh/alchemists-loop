@@ -14,6 +14,8 @@ var _gif_dir := ""
 var _gif_frame := 0
 var _shot_tab := -1
 var _shot_frame := 0
+var _room_pan := -1.0  # --roompan=0..1: камера между комнатами для кадра стыка
+var _shot_at := -1  # --shotframe=N: кадр съёмки вместо дефолтного
 var _geom := false
 var _geom_frame := 0
 var _probe := false
@@ -59,6 +61,9 @@ var _action_letter := false
 var _action_atlas := false
 var _action_experiment := false
 var _action_brewprofile := false
+var _action_spring := false
+var _spring_lvl := 0
+var _spring_src := ""
 var _action_contracts := false
 var _contract_state := ""
 var _action_social := false
@@ -658,10 +663,13 @@ func _tick_demo() -> bool:
 		if _shot_tab == 1 and not g._online._world_loaded and _shot_frame < 180:
 			return true
 		if (_action_contracts or _action_trade_list or _action_trade_build
-				or _action_trade_confirm or _action_trade_gift) and _shot_frame == 40:
+				or _action_trade_confirm or _action_trade_gift or _action_spring
+				or _action_master) and _shot_frame == 40:
 			# В прогоне согласия ещё не было: модалка легла бы поверх кадра приёмки.
 			g._shop._close_consent()
 		var shot_at := 120 if _action_experiment else (200 if _action_sigilcoll else 50)
+		if _shot_at >= 0:
+			shot_at = _shot_at
 		if _shot_frame >= shot_at:
 			var img := g.get_viewport().get_texture().get_image()
 			if img == null:

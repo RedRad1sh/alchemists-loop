@@ -161,6 +161,7 @@ static func run(g: Game) -> void:
 		await SuiteVeinCircle.run(g)
 		await SuiteSigilCards.run(g)
 		await SuiteSigilLore.run(g)
+		await SuiteSigilCardEffects.run(g)
 		await SuiteSocial.run(g)
 		await SuiteTrades.run(g)
 		await SuiteJuice.run(g)

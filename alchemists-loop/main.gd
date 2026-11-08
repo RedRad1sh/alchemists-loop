@@ -353,7 +353,6 @@ var _workshop: Workshop
 var _workshop_scheduler: RefCounted
 
 # ---------- UI ----------
-var _sound_btn: Button
 
 # --- оформление: Manrope + Kenney UI (9-slice) ---
 var _font_reg: Font = null
@@ -593,6 +592,8 @@ func _ready() -> void:
 			_demo_harness._action_experiment = true
 		elif a == "--action=brewprofile":
 			_demo_harness._action_brewprofile = true
+		elif a == "--action=spring":
+			_demo_harness._action_spring = true
 		elif a == "--action=social":
 			_demo_harness._action_social = true
 		elif a == "--action=social_requests":
@@ -636,6 +637,12 @@ func _ready() -> void:
 			_demo_harness._gif_dir = a.substr("--gif=".length())
 		elif a.begins_with("--shot="):
 			_demo_harness._shot_path = a.substr("--shot=".length())
+		elif a.begins_with("--roompan="):
+			# кадр середины поворота камеры между комнатами (0..1)
+			_demo_harness._room_pan = a.substr("--roompan=".length()).to_float()
+		elif a.begins_with("--shotframe="):
+			# Два прогона с разными кадрами дают пару фаз анимации.
+			_demo_harness._shot_at = a.substr("--shotframe=".length()).to_int()
 		elif a.begins_with("--tab="):
 			_demo_harness._shot_tab = a.substr("--tab=".length()).to_int()
 		elif a.begins_with("--scroll="):
@@ -657,6 +664,10 @@ func _ready() -> void:
 			_demo_harness._sigil_tab = a.substr("--sigiltab=".length())
 		elif a.begins_with("--contractstate="):
 			_demo_harness._contract_state = a.substr("--contractstate=".length())
+		elif a.begins_with("--springlvl="):
+			_demo_harness._spring_lvl = a.substr("--springlvl=".length()).to_int()
+		elif a.begins_with("--springsrc="):
+			_demo_harness._spring_src = a.substr("--springsrc=".length())
 	if _demo_harness.house_capture_action():
 		if not _selftest or not _demo_harness._demo or _demo_harness._shot_path == "":
 			push_error("house_tray requires --selftest --demo --shot")
@@ -845,6 +856,30 @@ func _ready() -> void:
 		_engine.inventory["water"] = 2
 		_engine.inventory["earth"] = 2
 		_hub._open_craftable()
+	if _demo_harness._demo and _demo_harness._action_spring:
+		# Кадр приёмки Родника: все оси на --springlvl=N, головной поток --springsrc=X.
+		var n := _demo_harness._spring_lvl
+		_engine.spring_levels = {
+			"speed": clampi(n, 0, SpringBalance.SPEED.size()),
+			"volume": clampi(n, 0, SpringBalance.VOLUME.size()),
+			"sources": clampi(n, 0, SpringBalance.SOURCES.size()),
+			"offline": clampi(n, 0, SpringBalance.OFFLINE.size()),
+		}
+		var srcs: Array = ["water"]
+		for extra in ["fire", "earth", "air"]:
+			if srcs.size() <= int(_engine.spring_levels["sources"]):
+				srcs.append(extra)
+		var head := _demo_harness._spring_src
+		if head != "":
+			srcs.erase(head)
+			srcs.push_front(head)
+			srcs.resize(mini(srcs.size(), 1 + int(_engine.spring_levels["sources"])))
+		_engine.spring_sources = srcs
+		_engine.spring_source = String(srcs[0])
+		_engine.inventory["plant"] = maxi(int(_engine.inventory.get("plant", 0)), 1)
+		_engine.spring_on = true
+		_engine._refresh()
+		_pages._open_spring_screen()
 	if _demo_harness._demo and (_demo_harness._action_house_tray or _demo_harness._action_house_touch):
 		_demo_harness._seed_house()
 	if _demo_harness._demo and _demo_harness._action_workshop and _tabs_ref != null:
@@ -855,7 +890,12 @@ func _ready() -> void:
 		_home._open_house_screen()
 	if _demo_harness._demo and _demo_harness._action_master:
 		# кадр приёмки комнаты 2: карусель открывается на Мастерской
-		_rooms.set_room(1)
+		if _demo_harness._room_pan >= 0.0:
+			_rooms._room_idx = 1 if _demo_harness._room_pan >= 0.5 else 0
+			_rooms._set_pan(_demo_harness._room_pan)
+			_rooms._refresh_chrome()
+		else:
+			_rooms.set_room(1)
 	if _demo_harness._demo and _demo_harness._action_device:
 		# кадр приёмки экрана устройства: комната 2 + экран верстака
 		_rooms.set_room(1)
@@ -997,25 +1037,16 @@ func _ready() -> void:
 			{"sub": "glass", "name": "Стекло", "started": now - 13.0 * 3600.0, "dur": 12.0 * 3600.0},
 			{"sub": "", "name": "", "started": 0.0, "dur": 0.0},
 		]
-		if _tabs_ref != null:
-			_tabs_ref.current_tab = TAB_TOOLS
-		_pages._ensure_modes()
-		_pages._select_mode("retort")
+		_demo_open_device("retort")
 		_retort._refresh_retort_page()
 		_engine._refresh()
 	if _demo_harness._demo and _demo_harness._action_retortpick:
-		if _tabs_ref != null:
-			_tabs_ref.current_tab = TAB_TOOLS
-		_pages._ensure_modes()
-		_pages._select_mode("retort")
+		_demo_open_device("retort")
 		_engine._refresh()
 		_retort._open_retort_picker(0)
 	if _demo_harness._demo and _demo_harness._action_letter:
 		_riddles._inject_letter_demo()
-		if _tabs_ref != null:
-			_tabs_ref.current_tab = TAB_TOOLS
-		_pages._ensure_modes()
-		_pages._select_mode("letters")
+		_demo_open_device("letters")
 		_riddles._refresh_letters_page()
 		_engine._refresh()
 	if _demo_harness._demo and _demo_harness._action_atlas:
@@ -1558,12 +1589,6 @@ func _build_ui() -> void:
 	_place_badge(_hub._up_btn)
 	_hub._up_btn.pressed.connect(_hub._open_upgrades)
 	head.add_child(_hub._up_btn)
-	_sound_btn = _icon_row_button("gi_sound", "Настройки звука")
-	_sound_btn.pressed.connect(_hub._open_settings)
-	head.add_child(_sound_btn)
-	var log_btn := _icon_row_button("gi_journal", "Журнал событий")
-	log_btn.pressed.connect(_hub._open_journal)
-	head.add_child(log_btn)
 	var me_btn := _header_button(0)
 	me_btn.tooltip_text = "Профиль: твоё имя и аватар"
 	me_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -1598,10 +1623,6 @@ func _build_ui() -> void:
 	market_btn.name = "ShopBtn"
 	market_btn.pressed.connect(_shop.open)
 	ether_row.add_child(market_btn)
-	var arcana_btn := _icon_row_button("gi_arcana", "Аркан Сигилов: крафт карт и коллекция")
-	arcana_btn.name = "ArcanaBtn"
-	arcana_btn.pressed.connect(func() -> void: _sigil_ui._open_sigil_modal())
-	ether_row.add_child(arcana_btn)
 	_engine._collection_label = _label("", 14)
 	_engine._collection_label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	root.add_child(_engine._collection_label)
@@ -2297,6 +2318,16 @@ func _await_daily_crafts(timeout: float) -> bool:
 
 func _await_catalog(timeout: float) -> bool:
 	return await _sigil_ui._await_catalog(timeout)
+
+## Устройства живут на экранах комнаты, а не в фишках «Ещё»: демо открывает
+## тот же экран, что и тап по предмету.
+func _demo_open_device(key: String) -> void:
+	if _tabs_ref != null:
+		_tabs_ref.current_tab = TAB_EXPERIMENT
+	_pages._ensure_modes()
+	_pages._tools_sel = key
+	_pages._apply_tools_selection()
+	_pages._open_device_screen(key, RoomCarousel.TOOL_TITLES.get(key, key))
 
 func _demo_seed_sigil_coll() -> void:
 	var day := Time.get_date_string_from_system()
