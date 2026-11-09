@@ -56,6 +56,12 @@ static var _runic: Font = null
 static func runic() -> Font:
 	if _runic == null and ResourceLoader.exists(RUNIC_PATH):
 		_runic = load(RUNIC_PATH) as Font
+		if _runic != null and ResourceLoader.exists("res://assets/fonts/Manrope-Bold.ttf"):
+			var fb := load("res://assets/fonts/Manrope-Bold.ttf") as Font
+			if fb != null and not _runic.fallbacks.has(fb):
+				var arr := _runic.fallbacks.duplicate()
+				arr.append(fb)
+				_runic.fallbacks = arr
 	return _runic
 
 

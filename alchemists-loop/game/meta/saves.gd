@@ -123,6 +123,7 @@ func _save_game() -> bool:
 		"last_ts": snapshot_ts,
 		"sage_gold": g._engine.sage_gold,
 		"journal": g._hub._log_events.slice(0, 20),
+		"locale": Locale.get_locale_code() if Locale != null else "ru",
 		"music_on": Sfx.music_on,
 		"sfx_vol": Sfx.sfx_volume,
 		"music_vol": Sfx.music_volume,
@@ -398,6 +399,11 @@ func _load_game() -> void:
 		for e in data["journal"]:
 			if typeof(e) == TYPE_DICTIONARY:
 				g._hub._log_events.append(e)
+	if Locale != null and String(Locale.get("_cli_lang")) == "":
+		if data.get("locale") is String and String(data["locale"]) != "":
+			Locale.apply_locale(String(data["locale"]), true)
+		elif UserData != null and UserData.has_method("get_locale"):
+			Locale.apply_locale(UserData.get_locale(), false)
 	if data.get("music_on") is bool:
 		if bool(data["music_on"]) != Sfx.music_on:
 			Sfx.toggle_music()

@@ -1027,7 +1027,8 @@ func _world_filtered_ids() -> Array:
 	for item_id in ids:
 		var sid := String(item_id)
 		var author := String(_server_authors.get(sid, ""))
-		if _item_name(sid).to_lower().contains(q) or sid.to_lower().contains(q) or (author != "" and author.to_lower().contains(q)):
+		var ru_nm := _item_name(sid)
+		if ru_nm.to_lower().contains(q) or g.tr(ru_nm).to_lower().contains(q) or sid.to_lower().contains(q) or (author != "" and author.to_lower().contains(q)):
 			out.append(sid)
 	return out
 
@@ -1148,7 +1149,9 @@ func _matches_search(item_id: String) -> bool:
 	var q := _search_query()
 	if q == "":
 		return true
-	return _item_name(item_id).to_lower().contains(q) or item_id.to_lower().contains(q)
+	var ru_nm := _item_name(item_id)
+	var en_nm := g.tr(ru_nm).to_lower()
+	return ru_nm.to_lower().contains(q) or en_nm.contains(q) or item_id.to_lower().contains(q)
 
 func _init_colors() -> void:
 	for raw_id in g.ITEMS:

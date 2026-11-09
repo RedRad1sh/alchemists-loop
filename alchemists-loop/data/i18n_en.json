@@ -1,0 +1,3692 @@
+{
+  "exact": {
+    "Огонь": "Fire",
+    "Жар и пламя — первостихия.": "Heat and flame — a primal element.",
+    "Вода": "Water",
+    "Текучая влага — первостихия.": "Flowing moisture — a primal element.",
+    "Земля": "Earth",
+    "Почва и камень — первостихия.": "Soil and stone — a primal element.",
+    "Воздух": "Air",
+    "Ветер и небо — первостихия.": "Wind and sky — a primal element.",
+    "Пар": "Steam",
+    "Вода, обращённая огнём в пар.": "Water turned into vapor by fire.",
+    "Камень": "Stone",
+    "Земля, обожжённая огнём в породу.": "Earth baked into rock by fire.",
+    "Глина": "Clay",
+    "Мокрая земля, годная для лепки.": "Wet earth fit for shaping.",
+    "Пыль": "Dust",
+    "Земля, растёртая ветром в порошок.": "Earth ground into powder by the wind.",
+    "Искра": "Spark",
+    "Маленький огонёк, готовый разгореться.": "A tiny ember ready to flare up.",
+    "Туман": "Mist",
+    "Дымка из воды и воздуха.": "A haze of water and air.",
+    "Кирпич": "Brick",
+    "Обожжённая глина — стройматериал.": "Fired clay — a building block.",
+    "Песок": "Sand",
+    "Камень, истёртый ветром в крупинки.": "Stone worn into grains by the wind.",
+    "Росток": "Sprout",
+    "Первая жизнь, пробившаяся из глины.": "First life breaking through the clay.",
+    "Облако": "Cloud",
+    "Пар, собравшийся в небе тучей.": "Steam gathered high in the sky.",
+    "Лёд": "Ice",
+    "Вода, замёрзшая на вершине горы.": "Water frozen atop a mountain peak.",
+    "Гора": "Mountain",
+    "Каменная громада.": "A towering mass of stone.",
+    "Грязь": "Mud",
+    "Земля, размокшая в воде.": "Earth soaked soft in water.",
+    "Металл": "Metal",
+    "Руда, выбитая из камня искрой.": "Ore struck from stone by a spark.",
+    "Жизнь": "Life",
+    "Искра, ожившая в воде.": "A spark awakened in water.",
+    "Дым": "Smoke",
+    "Пыль, поднятая огнём в воздух.": "Dust lifted into the air by fire.",
+    "Лава": "Lava",
+    "Расплавленный огнём камень.": "Stone melted by fire.",
+    "Стекло": "Glass",
+    "Песок, сплавленный огнём в прозрачность.": "Sand fused clear by fire.",
+    "Небо": "Sky",
+    "Высь над облаками.": "The expanse above the clouds.",
+    "Дождь": "Rain",
+    "Вода, пролившаяся из тучи.": "Water pouring down from a cloud.",
+    "Гроза": "Storm",
+    "Туча, полная молний и грома.": "A dark cloud heavy with thunder and lightning.",
+    "Град": "Hail",
+    "Ледяные зёрна, падающие из тучи.": "Icy pellets falling from a cloud.",
+    "Снег": "Snow",
+    "Лёд, унесённый ветром в небо.": "Ice carried skyward by the wind.",
+    "Вулкан": "Volcano",
+    "Гора, извергающая лаву.": "A mountain erupting with lava.",
+    "Обсидиан": "Obsidian",
+    "Лава, застывшая в воде в стекло.": "Lava quenched in water into dark glass.",
+    "Магма": "Magma",
+    "Лава, копившаяся в толще земли.": "Lava pooled deep beneath the earth.",
+    "Пепел": "Ash",
+    "Пепел — всё, что осталось от огня.": "Ash — all that remains after the fire.",
+    "Золото": "Gold",
+    "Металл, закалённый огнём — мечта алхимика.": "Fire-tempered metal — the alchemist's dream.",
+    "Болото": "Swamp",
+    "Грязь, заросшая растениями.": "Mud overgrown with plants.",
+    "Рыба": "Fish",
+    "Жизнь, обжившая воду.": "Life that made water its home.",
+    "Птица": "Bird",
+    "Жизнь, поднявшаяся в воздух.": "Life that took to the air.",
+    "Зверь": "Beast",
+    "Жизнь, ступившая на землю.": "Life walking upon the earth.",
+    "Человек": "Human",
+    "Жизнь, слепленная из глины.": "Life shaped from clay.",
+    "Семя": "Seed",
+    "Семя, уроненное ростком в пыль.": "A seed dropped into the dust.",
+    "Трава": "Grass",
+    "Росток, покрывший землю.": "Sprouts carpeting the earth.",
+    "Гриб": "Mushroom",
+    "Гриб, выросший на болоте.": "A fungus sprung from the swamp.",
+    "Молния": "Lightning",
+    "Разряд, бьющий из грозовой тучи.": "A bolt striking from a storm cloud.",
+    "Смерч": "Tornado",
+    "Вихрь из пыли и ветра.": "A whirlwind of dust and air.",
+    "Инструмент": "Tool",
+    "Камень, приспособленный человеком.": "Stone shaped to fit a human hand.",
+    "Дерево": "Tree",
+    "Семя, проросшее в земле.": "A seed rooted deep in the earth.",
+    "Солнце": "Sun",
+    "Огонь, зажжённый в небе.": "Fire kindled in the sky.",
+    "Кристалл": "Crystal",
+    "Стекло, сложившееся в самоцвет.": "Glass grown into a faceted gem.",
+    "Песчаная буря": "Sandstorm",
+    "Буря, несущая песок.": "A gale carrying clouds of sand.",
+    "Лес": "Forest",
+    "Множество деревьев, ставшее лесом.": "Many trees gathered into a woods.",
+    "Древесина": "Wood",
+    "Древесина — материал из дерева.": "Timber cut from a tree.",
+    "Цветок": "Flower",
+    "Растение, расцветшее под солнцем.": "A plant blooming beneath the sun.",
+    "Радуга": "Rainbow",
+    "Свет, преломлённый в дожде.": "Light refracted through falling rain.",
+    "Пустыня": "Desert",
+    "Песок, иссушённый солнцем.": "Sand parched beneath the sun.",
+    "Лодка": "Boat",
+    "Древесина, поплывшая по воде.": "Timber set afloat upon the water.",
+    "Уголь": "Coal",
+    "Древесина, обожжённая без пламени.": "Wood charred without open flame.",
+    "Стена": "Wall",
+    "Кирпичи, сложенные в преграду.": "Bricks laid into a barrier.",
+    "Дом": "House",
+    "Стены под крышей — жилище.": "Walls beneath a roof — a dwelling.",
+    "Ребёнок": "Child",
+    "Новая жизнь, рождённая людьми.": "New life born to humankind.",
+    "Ржавчина": "Rust",
+    "Металл, разъеденный водой.": "Metal corroded by water.",
+    "Лезвие": "Blade",
+    "Металл, заточенный воздухом.": "Metal honed sharp by the wind.",
+    "Монета": "Coin",
+    "Золото, принятое огнём форму круга.": "Gold cast into a round disc by fire.",
+    "Статуя": "Statue",
+    "Камень, принявший облик под рукой золотых дел мастера.": "Stone given form by a master's hand.",
+    "Свет": "Light",
+    "Солнце, преломлённое в воде.": "Sunlight refracted through water.",
+    "Доска": "Plank",
+    "Древесина, обработанная инструментом.": "Wood worked flat with a tool.",
+    "Бочка": "Barrel",
+    "Доски, собранные в ёмкость.": "Planks bound into a vessel.",
+    "Еда": "Food",
+    "Рыба, приготовленная на огне.": "Fish cooked over an open fire.",
+    "Кожа": "Leather",
+    "Шкура зверя, обработанная инструментом.": "Beast hide cured and worked by hand.",
+    "Кузнец": "Blacksmith",
+    "Человек, обуздавший огонь.": "A human who tamed the forge fire.",
+    "Пловец": "Swimmer",
+    "Человек, покоривший воду.": "A human at home in the waves.",
+    "Мыслитель": "Thinker",
+    "Человек, поднявший взор к небу.": "A human gazing up at the sky.",
+    "Фермер": "Farmer",
+    "Человек, обрабатывающий землю.": "A human tending the soil.",
+    "Яйцо": "Egg",
+    "Птица, отложенная на камне.": "New life nestled in a shell on stone.",
+    "Фрукт": "Fruit",
+    "Цветок, напоённый водой до зрелости.": "A blossom ripened with water.",
+    "Вино": "Wine",
+    "Фрукт, перебродивший на огне.": "Fruit fermented with gentle warmth.",
+    "Керамика": "Ceramics",
+    "Грязь, обожжённая до твёрдости.": "Clay fired until hard and ringing.",
+    "Цепь": "Chain",
+    "Металл, скованный в звенья.": "Metal forged into interlocking links.",
+    "Валун": "Boulder",
+    "Два камня, ставшие одним.": "Two stones fused into one.",
+    "Туман густой": "Thick Fog",
+    "Облака, опустившиеся на землю.": "Clouds settled low upon the ground.",
+    "Топь": "Mire",
+    "Дождь, впитанный землёй без ухода.": "Rain trapped in boggy ground.",
+    "Ручей": "Stream",
+    "Снег, оживший от огня.": "Snow melted into a running brook.",
+    "Остров": "Island",
+    "Вулкан, поднявшийся из воды.": "A volcano risen above the waves.",
+    "Потоп": "Flood",
+    "Гроза, обрушившая все воды на землю.": "A storm unleashing torrents across the land.",
+    "Фульгурит": "Fulgurite",
+    "Молния, попавшая в песок.": "Lightning fused into desert sand.",
+    "Охота": "Hunt",
+    "Лес, ставший домом для зверя и человека.": "Forest shared by beast and hunter.",
+    "Деревня": "Village",
+    "Лес, расчищенный человеком.": "A clearing settled by people.",
+    "Город": "Town",
+    "Деревни, сложившиеся вместе.": "Villages grown together into one.",
+    "Игрушка": "Toy",
+    "Ребёнок, играющий инструментом.": "A plaything crafted for a child.",
+    "Дракон": "Dragon",
+    "Птица и зверь, ставшие легендой.": "Bird and beast woven into legend.",
+    "Топор": "Axe",
+    "Металл, насаженный на древесину.": "Metal hafted onto sturdy wood.",
+    "Молот": "Hammer",
+    "Камень, привязанный к древесине.": "Heavy stone bound to a wooden handle.",
+    "Машина": "Machine",
+    "Инструменты, собранные в механизм.": "Tools assembled into a mechanism.",
+    "Душа": "Soul",
+    "Жизнь, очищенная от тела.": "Life distilled beyond the body.",
+    "Голем": "Golem",
+    "Камень, оживлённый душой.": "Stone awakened by a soul.",
+    "Смог": "Smog",
+    "Дым, ставший удушьем.": "Thick smoke hanging heavy in the air.",
+    "Щелок": "Lye",
+    "Пепел, растворённый в воде.": "Ash leached in water.",
+    "Мыло": "Soap",
+    "Щелок, выпаренный огнём.": "Lye boiled down over fire.",
+    "Саман": "Adobe",
+    "Грязь, высушенная солнцем в кирпич.": "Mud sun-dried into brick.",
+    "Хижина": "Cabin",
+    "Дом, построенный из кирпича.": "A small dwelling built of brick.",
+    "Крепость": "Fortress",
+    "Стены, ставшие неприступными.": "Walls raised into an impregnable stronghold.",
+    "Линза": "Lens",
+    "Стекло, отшлифованное огнём.": "Glass polished smooth by fire.",
+    "Телескоп": "Telescope",
+    "Линза, направленная на солнце.": "A lens turned toward the heavens.",
+    "Украшение": "Jewelry",
+    "Кристалл, оправленный в металл.": "A crystal set in worked metal.",
+    "Король": "King",
+    "Человек, облечённый золотом.": "A ruler crowned in gold.",
+    "Сокровище": "Treasure",
+    "Монеты, сложенные в сундук.": "Coins heaped inside a chest.",
+    "Краска": "Dye",
+    "Радуга, пойманная в воде.": "A rainbow captured in water.",
+    "Стадо": "Herd",
+    "Звери, идущие вместе.": "Beasts roaming together.",
+    "Косяк": "Shoal",
+    "Рыбы, плывущие вместе.": "Fish swimming as one.",
+    "Роща": "Grove",
+    "Деревья, вставшие вместе.": "Trees standing close together.",
+    "Сад": "Garden",
+    "Цветы, посаженные рядом.": "Flowers planted side by side.",
+    "Росток молодой": "Young Shoot",
+    "Семя, накормленное водой.": "A seed nourished by fresh water.",
+    "Язык: Русский": "Language: English",
+    "Language: English": "Language: English",
+    "ПЕТЛЯ АЛХИМИКА": "ALCHEMIST'S LOOP",
+    "Alchemist's Loop — Бета": "Alchemist's Loop — Beta",
+    "Задания Светика, достижения, комплекты, заказы": "Lumi's quests, achievements, sets & orders",
+    "Улучшения": "Upgrades",
+    "Профиль: твоё имя и аватар": "Profile: your name & avatar",
+    "Дом Светика: построй домик, обставь его, смени тему и ауру": "Lumi's House: build, furnish, change theme & aura",
+    "Лавка: покупки, награды за просмотр и приватность": "Shop: purchases, ad rewards & privacy",
+    "Аркан Сигилов: крафт карт и коллекция": "Sigil Arcana: card crafting & collection",
+    "Настройки звука": "Sound & language settings",
+    "Журнал событий": "Event journal",
+    "Нажми, чтобы открыть задания и достижения": "Tap to open quests and achievements",
+    "Эксперимент": "Experiment",
+    "Лаборатория": "Laboratory",
+    "Мир": "World",
+    "Рейтинг": "Ranking",
+    "Инструменты": "Tools",
+    "Стол": "Table",
+    "Друзья": "Friends",
+    "Ещё": "More",
+    "← В комнату": "← To Room",
+    "← Назад": "← Back",
+    "← назад": "← back",
+    "Все": "All",
+    "Добыть со всех источников сразу": "Harvest from all sources at once",
+    "ВАРИТЬ": "BREW",
+    "Варить": "Brew",
+    "АВТОВАРКА": "AUTO-BREW",
+    "Повторить последнюю пару": "Repeat last pair",
+    "Сбросить ингредиенты из лунок": "Clear ingredients from slots",
+    "Стоп": "Stop",
+    "Остановить этап; промежуточные предметы и задание производства сохранятся": "Stop stage; intermediate items and production job will be kept",
+    "НОВЫЙ РЕЦЕПТ!": "NEW RECIPE!",
+    "ЕЖЕДНЕВНАЯ ЦЕЛЬ!": "DAILY GOAL!",
+    "Забрать": "Claim",
+    "Закрыть": "Close",
+    "Отмена": "Cancel",
+    "Отменить": "Cancel",
+    "Сохранить": "Save",
+    "Готово": "Done",
+    "Готово.": "Done.",
+    "Назад": "Back",
+    "Обновить": "Refresh",
+    "Повторить": "Retry",
+    "Очистить": "Clear",
+    "Удалить": "Remove",
+    "Принять": "Accept",
+    "Отклонить": "Decline",
+    "Изменить": "Edit",
+    "Найти": "Find",
+    "Отправить": "Send",
+    "МАСТЕРСКАЯ": "WORKSHOP",
+    "Автоматика лаборатории: устройства созревают без тебя. Новые открываются вместе с веществами.": "Lab automation: devices work while you're away. New ones unlock as you discover elements.",
+    "Родник": "Spring",
+    "Верстак": "Workbench",
+    "Реторта": "Retort",
+    "Письма": "Letters",
+    "Производство": "Production",
+    "Отголоски": "Echoes",
+    "Атлас": "Atlas",
+    "Эксперимент живёт в основной вкладке: перенеси реагенты на стол и в котёл. Кэшированные ответы не тратят внешний запрос.": "Experiment lives on the main tab: place reagents onto the table and into the cauldron. Cached pairs don't spend an external request.",
+    "Родник стоит во второй комнате.": "The Spring stands in the second room.",
+    "Мастерская открывается после Человека и сохраняется через Перегонку: развивай мастерство, строй оборудование, ставь партии и общий запас в очереди независимых линий. Запасы ограничены общим пределом стека.": "The Workshop unlocks after Human and persists through Distillation: build mastery and equipment, queue batches or stock targets across independent lines. Stock is capped by the stack limit.",
+    "Отголоски мира теперь находятся на странице Мир.": "World Echoes now live on the World page.",
+    "Ночная реторта: положи вещество на 8–24 часа — к утру созреет эссенция с вечным бонусом к капу.": "Night Retort: infuse an element for 8–24 hours — by morning an essence matures with a permanent cap bonus.",
+    "Атлас объединён с Письмами Светика.": "The Atlas is combined with Lumi's Letters.",
+    "Письма Светика: ежедневная загадка и общемировая страница Атласа теперь собраны в одном письме. Разгадай их варкой; вехи дают постоянный бонус к капу.": "Lumi's Letters: the daily riddle and the global Atlas page are gathered in one scroll. Solve them by brewing; milestones grant permanent cap bonuses.",
+    "Инструменты открываются вместе с новыми веществами. Сколько бы их ни стало — всё здесь, в одной вкладке.": "Tools unlock alongside new elements. However many there are, they all live in one place.",
+    "Стихия Огня": "Element of Fire",
+    "Стихия Воды": "Element of Water",
+    "Стихия Воздуха": "Element of Air",
+    "Стихия Земли": "Element of Earth",
+    "Поток эфира": "Ether Flow",
+    "+0.35 эфира в секунду": "+0.35 ether per second",
+    "Ёмкость эфира": "Ether Capacity",
+    "+50 к максимуму эфира": "+50 max ether",
+    "Скороварка": "Swift Brew",
+    "каждая варка на 10% быстрее": "every brew is 10% faster",
+    "Щедрые источники": "Generous Sources",
+    "каждая 8/7/6/5-я добыча даёт +1 сверху": "every 8th/7th/6th/5th harvest yields +1 extra",
+    "Дары": "Gifts",
+    "случайное открытое вещество +1 каждые 2 минуты": "+1 random discovered element every 2 minutes",
+    "Алхимик": "Alchemist",
+    "Новичок": "Novice",
+    "Уголёк": "Ember",
+    "Тлеющий": "Smoldering",
+    "Полено": "Hearthlog",
+    "Горящий": "Blazing",
+    "Сердце": "Heartfire",
+    "Пламенный": "Radiant Flame",
+    "Подмастерье": "Apprentice",
+    "Мастер": "Master",
+    "Инженер": "Engineer",
+    "Архитектор": "Architect",
+    "дней": "days",
+    "дня": "days",
+    "день": "day",
+    "очков": "pts",
+    "Первая пара": "First Pair",
+    "Свари Пар: Огонь + Вода.": "Brew Steam: Fire + Water.",
+    "Лепка": "Molding",
+    "Свари Глину: Земля + Вода.": "Brew Clay: Earth + Water.",
+    "Коллекционер": "Collector",
+    "Открой 6 веществ.": "Discover 6 elements.",
+    "На облака": "To the Clouds",
+    "Свари Облако: Пар + Воздух.": "Brew Cloud: Steam + Air.",
+    "Редкость": "Rarity",
+    "Получи редкое или выше вещество.": "Obtain a Rare or higher element.",
+    "Дыхание жизни": "Breath of Life",
+    "Свари Жизнь: Искра + Вода.": "Brew Life: Spark + Water.",
+    "Свари Человека: Жизнь + Глина.": "Brew Human: Life + Clay.",
+    "Книга открыта": "Open Book",
+    "Узнай 10 рецептов.": "Learn 10 recipes.",
+    "Друг Светика": "Lumi's Friend",
+    "Достигни 2-го уровня дружбы со Светиком.": "Reach Friendship Lv. 2 with Lumi.",
+    "Эпическая глубина": "Epic Depth",
+    "Получи эпическое или легендарное вещество.": "Obtain an Epic or Legendary element.",
+    "Хранитель знаний": "Lorekeeper",
+    "Открой 30 веществ.": "Discover 30 elements.",
+    "Начинающий алхимик": "Budding Alchemist",
+    "Знаток": "Connoisseur",
+    "Архимаг": "Archmage",
+    "Первые пузыри": "First Bubbles",
+    "Книжник": "Scholar",
+    "Библиотекарь": "Librarian",
+    "Атлас рецептов": "Recipe Atlas",
+    "Варщик": "Brewer",
+    "Котёл не спит": "Sleepless Cauldron",
+    "Полсотни": "Half-Hundred",
+    "Упорный": "Persistent",
+    "Пытливый ум": "Curious Mind",
+    "Рядом с магией": "Close to Magic",
+    "Первооткрыватель": "Trailblazer",
+    "Пионер": "Pioneer",
+    "Гроссмейстер": "Grandmaster",
+    "Целеустремлённый": "Focused",
+    "Мастер целей": "Goal Master",
+    "Легенда в котле": "Legend in the Pot",
+    "Душевный друг": "Kindred Spirit",
+    "Неразлучные": "Inseparable",
+    "Вложения": "Investments",
+    "Инвестор": "Investor",
+    "Повелитель стихий": "Master of Elements",
+    "Все четыре комплекта": "All Four Sets",
+    "Первый сигил": "First Sigil",
+    "Десяток карт": "Ten Cards",
+    "Половина комплекта": "Half a Set",
+    "Комплект собран": "Set Complete",
+    "Полный круг": "Full Circle",
+    "Редкая порода": "Rare Breed",
+    "Эпический оттиск": "Epic Imprint",
+    "Легендарный сигил": "Legendary Sigil",
+    "Вне комплекта": "Off-Set",
+    "ЗАДАНИЯ СВЕТИКА": "LUMI'S QUESTS",
+    "ЗАКАЗЫ ГИЛЬДИИ": "GUILD ORDERS",
+    "Заказы": "Orders",
+    "Заказы появятся завтра.": "New orders arrive tomorrow.",
+    "КАРТА ПРОГРЕССА": "PROGRESS MAP",
+    "КОМПЛЕКТЫ СТИХИЙ": "ELEMENT SETS",
+    "Карта": "Map",
+    "Комплекты": "Sets",
+    "Светик": "Lumi",
+    "Бонус за все заказы: +100 ⚡ и +5 дружбы — получен!": "All-orders bonus: +100 ⚡ and +5 friendship — claimed!",
+    "Получи легендарное вещество": "Obtain a Legendary element",
+    "Собери все четыре комплекта": "Complete all four element sets",
+    "Собери карту легендарной редкости": "Collect a Legendary sigil card",
+    "Собери карту обычной редкости": "Collect a Common sigil card",
+    "Собери карту редкой редкости": "Collect a Rare sigil card",
+    "Собери карту эпической редкости": "Collect an Epic sigil card",
+    "Собери комплект целиком": "Complete a full sigil set",
+    "Собери первый сигил": "Craft your first sigil",
+    "Собери хроматический сигил": "Collect a Chromatic sigil",
+    "АТЛАС АЛХИМИКА": "ALCHEMIST'S ATLAS",
+    "ВЕЩЕСТВА": "ELEMENTS",
+    "ВЫПОЛНЕНО": "COMPLETED",
+    "Выбери знак на карте": "Select a node on the map",
+    "ДРУЖБА": "FRIENDSHIP",
+    "Достижение": "Achievement",
+    "Достижений пока нет": "No achievements yet",
+    "ЗАКРЫТО · сначала предыдущая веха": "LOCKED · complete previous milestone first",
+    "КОТЁЛ И МАСТЕРСТВО": "CAULDRON & MASTERY",
+    "Коснись знака: здесь цель, прогресс и награда. Перетаскивай карту, чтобы прокручивать.": "Tap a node to view its goal, progress, and reward. Drag to pan the map.",
+    "ЛЕГЕНДЫ": "LEGENDS",
+    "НОВЫЕ ПУТИ": "NEW PATHS",
+    "Новые пути появятся вместе с игровыми достижениями.": "New paths unlock as you earn achievements.",
+    "ОТГОЛОСКИ": "ECHOES",
+    "ОТГОЛОСКИ МИРА": "WORLD ECHOES",
+    "ОТКРЫТИЯ МИРА": "WORLD DISCOVERIES",
+    "ПЕРВООТКРЫТИЯ": "WORLD FIRSTS",
+    "Продолжай варить и открывать новое": "Keep brewing and discovering",
+    "РЕЦЕПТЫ": "RECIPES",
+    "СВЕТИК": "LUMI",
+    "СЛЕДУЮЩАЯ ВЕХА": "NEXT MILESTONE",
+    "СТИХИИ И УЛУЧШЕНИЯ": "ELEMENTS & UPGRADES",
+    "ТУМАНЫ": "MISTS",
+    "УДАЧНЫЕ ВАРКИ": "SUCCESSFUL BREWS",
+    "УЛУЧШЕНИЯ": "UPGRADES",
+    "ЦЕЛИ ДНЯ": "DAILY GOALS",
+    "\nЭта ступень откроется после предыдущей в своей ветке.": "\nUnlocks after completing the previous step in this branch.",
+    "Бронза": "Bronze",
+    "Серебро": "Silver",
+    "Быстрая варка": "Swift Brew",
+    "Варка": "Brewing",
+    "Витраж гильдии": "Guild Stained Glass",
+    "Витраж с печатью": "Seal Stained Glass",
+    "Контрактный витраж": "Contract Stained Glass",
+    "Глубокая варка": "Deep Brew",
+    "Дешёвый крафт": "Thrifty Craft",
+    "Дневной контракт": "Daily Contract",
+    "Жила недели": "Weekly Vein",
+    "Заказы гильдии": "Guild Orders",
+    "Комплект Аркана": "Arcana Set",
+    "Крафт Аркана": "Arcana Craft",
+    "Недельный контракт": "Weekly Contract",
+    "Открытие": "Discovery",
+    "Перегонка": "Distillation",
+    "Полноводный родник": "Bountiful Spring",
+    "Прилив эфира": "Ether Surge",
+    "Разнообразие открытий": "Varied Discoveries",
+    "Редкая варка": "Rare Brew",
+    "Спешка в мастерской": "Workshop Haste",
+    "Улучшение": "Upgrade",
+    "Цель дня": "Daily Goal",
+    "Цепочка варок": "Brew Chain",
+    "Ярмарка гильдии": "Guild Fair",
+    "варка в котле идёт быстрее": "cauldron brewing is faster",
+    "крафт Аркана тратит меньше эфира": "Arcana crafting costs less ether",
+    "линии Мастерской проходят этапы быстрее": "Workshop lines finish stages faster",
+    "родник даёт больше материала за такт": "the Spring yields more per tick",
+    "эфир копится быстрее": "ether regenerates faster",
+    "Контрактная доска": "Contract Board",
+    "Закрыть доску и вернуться в Дом": "Close board and return to Room",
+    "Вехи дней: закрывай дневные контракты — дни считаются в круг": "Day milestones: complete daily contracts to advance your circle days",
+    "Вехи очков: тир закрытого контракта приносит вечные очки": "Point milestones: completed contract tiers grant permanent points",
+    "Забрано ✓": "Claimed ✓",
+    "Получено": "Claimed",
+    "ИСПОЛНЕНО": "FULFILLED",
+    "Склад забит: часть награды не влезла": "Storage cap reached: part of the reward overflowed",
+    "в каталоге пока нет": "not in catalog yet",
+    "▲ наверх": "▲ top",
+    "▲▼ листай": "▲▼ scroll",
+    "▼ листай вниз": "▼ scroll down",
+    "Влить": "Pour",
+    "Материалы: ": "Materials: ",
+    "влита ✓": "poured ✓",
+    "ждёт мира": "awaiting world",
+    "Аура «Очаг» для дома Светика разблокирована!": "Hearth Aura unlocked for Lumi's House!",
+    "Вливание ждёт связи с миром.": "Pouring requires connection to the world.",
+    "Забирать пока нечего: котёл варится или вклад уже забран.": "Nothing to claim yet: cauldron is still brewing or already claimed.",
+    "Мир не ответил — награда котла подождёт.": "World didn't respond — cauldron reward will wait.",
+    "Свари что-нибудь из «Мха»": "Brew something from \"Moss\"",
+    "Светик в восторге!": "Lumi is delighted!",
+    "Тьма": "Darkness",
+    "Ярмарка ждёт связи с миром.": "Guild Fair awaits connection to the world.",
+    "жила": "vein",
+    "ярмарка": "fair",
+    " и ": " and ",
+    "Кобальт": "Cobalt",
+    "Угли": "Embers",
+    "Мох": "Moss",
+    "Аметист": "Amethyst",
+    "Янтарь": "Amber",
+    "Роза": "Rose",
+    "Аква": "Aqua",
+    "Фиалка": "Violet",
+    "Очаг": "Hearth",
+    "Доски": "Planks",
+    "Паркет": "Parquet",
+    "Известь": "Plaster",
+    "Классическое окно": "Classic Window",
+    "Окно с гардой": "Guarded Window",
+    "Дубовая дверь": "Oak Door",
+    "Дверь гильдии": "Guild Door",
+    "Рабочий стол алхимика": "Alchemist's Desk",
+    "Старый стол оружейника": "Armorer's Old Table",
+    "Стол с травами": "Herb Table",
+    "Прилавок торговца": "Merchant's Counter",
+    "Тканый ковёр": "Woven Rug",
+    "Круглый ковёр": "Round Rug",
+    "Плетёный ковёр": "Braided Rug",
+    "Придорожный коврик": "Wayside Mat",
+    "Полевой ковёр": "Meadow Rug",
+    "Мховый ковёр": "Moss Rug",
+    "Приливный ковёр": "Tidal Rug",
+    "Вечерний ковёр": "Dusk Rug",
+    "Угольный ковёр": "Charcoal Rug",
+    "Пепельный ковёр": "Ashen Rug",
+    "Кровать": "Bed",
+    "Резная кровать": "Carved Bed",
+    "Планетарий": "Orrery",
+    "Планетарий «Уголь»": "Ember Orrery",
+    "Заведи ковёр под кровать": "Tuck a rug under the bed",
+    "Поставь кровать под окно": "Place the bed beneath a window",
+    "Поставь стол у окна": "Set a table by the window",
+    "Постели ковёр у двери": "Lay a rug by the door",
+    "Поставь планетарий на ковёр": "Place the orrery on a rug",
+    "Поставь планетарий к столу": "Place the orrery next to a table",
+    "ДОМ СВЕТИКА": "LUMI'S HOUSE",
+    "Двери": "Doors",
+    "Окна": "Windows",
+    "Столы": "Tables",
+    "Ковры": "Rugs",
+    "Кровати": "Beds",
+    "Украшения": "Decor",
+    "Домик": "Cottage",
+    "Домик Светика ещё не построен": "Lumi's cottage isn't built yet",
+    "Домик построен ✓": "Cottage built ✓",
+    "За поручение": "Task reward",
+    "Закрыть обстановку": "Close room editor",
+    "Засвидетельствовать визит": "Sign Guestbook",
+    "Здесь не помещается.": "Doesn't fit here.",
+    "Клик — выбрать · колесо — масштаб · правая кнопка — сдвиг": "Click to select · wheel to zoom · right-drag to pan",
+    "Тап — выбрать · два пальца — масштаб и сдвиг": "Tap to select · pinch & drag with two fingers",
+    "Листай вбок · тяни купленное вверх в комнату": "Swipe sideways · drag owned items up into the room",
+    "Тяни купленное в комнату · покупка отдельно": "Drag owned items into the room · buy separately",
+    "Отпусти, чтобы поставить · верни вниз, чтобы отменить": "Release to place · drag back down to cancel",
+    "«Отразить»/«Убрать» внизу · тяни предмет · Del — убрать": "\"Flip\"/\"Store\" below · drag to move · Del to store",
+    "«Отразить»/«Убрать» внизу · тяни предмет · тап мимо — снять": "\"Flip\"/\"Store\" below · drag to move · tap outside to deselect",
+    "Обстановка": "Furnish",
+    "Уют": "Comfort",
+    "Отразить": "Flip",
+    "Убрать": "Store",
+    "Поставить": "Place",
+    "Очаг · веха 365": "Hearth · 365d milestone",
+    "ПАЛИТРА": "PALETTE",
+    "Палитра": "Palette",
+    "Палитра ✓": "Palette ✓",
+    "Пламя витрины": "Showcase Flame",
+    "Пока никто не заглядывал.": "No visitors yet.",
+    "Пол": "Floor",
+    "Пол домика": "Room Floor",
+    "Стены": "Walls",
+    "Стены домика": "Room Walls",
+    "Поручения Светика": "Lumi's Requests",
+    "Поставь мебель как он просит — и получишь то, что не купить.": "Arrange furniture as Lumi asks to earn exclusive pieces.",
+    "Сначала построй домик Светика.": "Build Lumi's cottage first.",
+    "Тема лаборатории (фон)": "Lab Theme (Backdrop)",
+    "Аура Светика": "Lumi's Aura",
+    "Аура «Очаг» — награда вехи: 365 дней у очага Дневного круга.": "Hearth Aura is a milestone reward for 365 days at the Hearth.",
+    "Цвета домика (палитра)": "Room Colors (Palette)",
+    "аура Светика": "Lumi's aura",
+    "пол": "floor",
+    "стены": "walls",
+    "фон": "backdrop",
+    "цель мира — после связи": "world goal — once online",
+    "мир: ": "world: ",
+    "НАСТРОЙКИ": "SETTINGS",
+    "Настройки сохраняются автоматически.": "Settings are saved automatically.",
+    "Музыка: вкл": "Music: On",
+    "Музыка: выкл": "Music: Off",
+    "Громкость эффектов": "SFX Volume",
+    "Громкость музыки": "Music Volume",
+    "О ИГРЕ / CREDITS": "ABOUT / CREDITS",
+    "О игре / Credits": "About / Credits",
+    "О игре": "About",
+    "Версия: MVP": "Version: MVP",
+    "Алхимический Сигил": "Alchemical Sigil",
+    "Лор: зелье, сплавленное из огня и тени…": "Lore: a draught fused from fire and shadow…",
+    "Шрифты: Manrope (UI), Divagon (названия), Manasco (лор), Alchemist Runic (заголовок)": "Fonts: Manrope (UI), Divagon (titles), Manasco (lore), Alchemist Runic (header)",
+    "ПРОФИЛЬ АЛХИМИКА": "ALCHEMIST PROFILE",
+    "Это твоё имя в мире: его видят в ленте первооткрытий и в зале славы. Аватар рисуется из имени.": "Your public name in the discovery feed and Hall of Fame. Your avatar is generated from your name.",
+    "Имя алхимика…": "Alchemist name…",
+    "Имя должно быть 2–24 символа (буквы, цифры, пробел, дефис).": "Name must be 2–24 characters (letters, digits, space, hyphen).",
+    "Отправляю имя…": "Saving name…",
+    "Сервер не ответил, имя не принято.": "Server did not respond; name not updated.",
+    "Имя не принято.": "Name rejected.",
+    "Имя не принято: ": "Name rejected: ",
+    "ЧТО ВАРИТЬ СЕЙЧАС?": "WHAT TO BREW NEXT?",
+    "Пары из твоих запасов, которые ты ещё не пробовал. Тап — и они встанут в котёл.": "Untried pairs from your current stock. Tap one to load it into the cauldron.",
+    "Все доступные пары уже опробованы.\nОткрой новые вещества в Эксперименте или добудь их из источников.": "All available pairs have been tried.\nDiscover new elements in Experiment or harvest more from sources.",
+    "ЖУРНАЛ АЛХИМИКА": "ALCHEMIST'S JOURNAL",
+    "ЖУРНАЛ": "JOURNAL",
+    "КАК ИГРАТЬ": "HOW TO PLAY",
+    "ЛИЦЕНЗИИ": "LICENSES",
+    "Пока пусто — сделай первую варку!": "Empty so far — complete your first brew!",
+    "Покупается за эфир и действует вечно. Излишек над капом попадает в резерв и тратится здесь.": "Bought with ether and active forever. Ether above cap flows into reserve and can be spent here.",
+    "⚗ Перегонка": "⚗ Distillation",
+    "ПЕРЕГОНКА": "DISTILLATION",
+    "Перегнать": "Distill",
+    "Перегонка недоступна: идёт варка, производство или ждёт ответа эксперимент. Дождись завершения.": "Distillation unavailable while brewing, producing, or awaiting an experiment reply.",
+    "максимум": "maxed",
+    "Комната — главный экран. Тап по котлу: эксперимент с двумя веществами. Новая пара даёт новое вещество и эфир.": "The Room is your main hub. Tap the cauldron to experiment with two elements. A new pair yields a discovery and ether.",
+    "Колода на столе — Аркан Сигилов, лист на доске — контракты дня и недели, свиток на полу — письма Светика.": "Deck on the table — Sigil Arcana; note on the board — daily & weekly contracts; scroll on the floor — Lumi's letters.",
+    "Стрелка справа ведёт во вторую комнату: Родник, Верстак и Реторта работают без тебя, пока ты не в игре.": "The right arrow leads to the Workshop room: Spring, Workbench, and Retort keep running while you're offline.",
+    "Эфир копится сам. Трать его на улучшения (значок в шапке) и подсказки Светика.": "Ether regenerates over time. Spend it on upgrades (header icon) and Lumi's hints.",
+    "Divagon, Manasco — шрифты названий и лора.": "Divagon, Manasco — display and lore typefaces.",
+    "Alchemist Runic — нарисован для игры, все права у проекта.": "Alchemist Runic — custom-drawn for the game, all rights reserved.",
+    "Иконки game-icons.net (Lorc, Delapouite, Faithtoken) — CC BY 3.0.": "Icons from game-icons.net (Lorc, Delapouite, Faithtoken) — CC BY 3.0.",
+    "первостихия": "primal",
+    "обычное": "common",
+    "редкое": "rare",
+    "эпическое": "epic",
+    "легендарное": "legendary",
+    "инвентарь": "inventory",
+    "ингредиенты": "ingredients",
+    "невозможно": "impossible",
+    "рецепт": "recipe",
+    "эфир": "ether",
+    "эти вещества не сочетаются": "these elements do not combine",
+    "не сочетаются": "do not combine",
+    "⚠ длинная цепочка · ": "⚠ long chain · ",
+    "Новые рецепты по пути: ": "New recipes along the way: ",
+    " Новый титул записан в архиве.": " New title recorded in the archive.",
+    "Автоварка: остановлю после текущего шага…": "Auto-brew: stopping after current step…",
+    "Все ингредиенты возьмутся из запаса.": "All ingredients will be taken from stock.",
+    "Выбери два известных вещества.": "Select two known elements.",
+    "Дневной лимит экспериментов исчерпан.": "Daily experiment limit reached.",
+    "Для эксперимента нужны оба реагента в запасе.": "Both reagents are required in stock for an experiment.",
+    "Добыто со всех источников сразу.": "Harvested from all sources.",
+    "Друзья, заявки и личные сообщения": "Friends, requests & direct messages",
+    "Ингредиенты не дожили до котла: варка отменена без списания.": "Ingredients missed the cauldron: brew cancelled without cost.",
+    "Котёл завершает текущую операцию.": "Cauldron is finishing the current operation.",
+    "Котёл занят варкой или производством — дождись завершения.": "Cauldron is busy brewing or producing — wait until it finishes.",
+    "Котёл занят варкой — ингредиенты пока не поменять.": "Cauldron is busy brewing — cannot swap ingredients right now.",
+    "Котёл занят варкой — лунки пока не трогать.": "Cauldron is busy brewing — slots are locked right now.",
+    "Котёл занят варкой — подожди немного, потом добывай.": "Cauldron is busy brewing — wait a moment before harvesting.",
+    "Котёл занят варкой — подожди немного.": "Cauldron is busy brewing — wait a moment.",
+    "Котёл занят производством — дождись завершения этапа.": "Cauldron is busy producing — wait for the stage to finish.",
+    "Котёл занят: дождись завершения текущей варки или производства.": "Cauldron is busy: wait for the current brew or production stage.",
+    "Котёл светится. Туман собирается над водой…": "The cauldron glows. Mist gathers over the water…",
+    "Лунка освобождена.": "Slot cleared.",
+    "Лунка пуста: тапни по веществу в запасе или перетащи его сюда.": "Slot empty: tap an element in stock or drag it here.",
+    "Лунки заняты. Тапни по лунке, чтобы убрать, или перетащи новое вещество поверх.": "Slots full. Tap a slot to clear it, or drag a new element on top.",
+    "Лунки очищены.": "Slots cleared.",
+    "Не хватает ингредиентов для этой пары.": "Not enough ingredients for this pair.",
+    "Положи в лунки два ингредиента.": "Place two ingredients into the slots.",
+    "Предыдущий эксперимент ещё обрабатывается — дождись ответа мира.": "Previous experiment is still processing — await the world's reply.",
+    "Скрыто туманом — свари что-нибудь новое": "Veiled in mist — brew something new",
+    "Собери ингредиенты и свари первое вещество.": "Gather ingredients and brew your first element.",
+    "Туман рассеялся…": "The mist cleared…",
+    "Туман рассеялся… Мир занят другой парой, эта подождёт.": "The mist cleared… The world is busy with another pair; try again shortly.",
+    "Туман рассеялся… Мир проверяет пару…": "The mist cleared… The world is checking this pair…",
+    "Туман рассеялся… Мира нет на связи, спросить пару не у кого.": "The mist cleared… World offline; cannot query this pair right now.",
+    "Туман скрывает это вещество — его нельзя использовать.": "Mist veils this element — it cannot be used yet.",
+    "Туман скрывает это вещество. Попробуй другие пары в котле…": "Mist veils this element. Try other pairs in the cauldron…",
+    "Эксперимент недоступен.": "Experiment unavailable.",
+    "Эта комбинация уже записана в книге рецептов.": "This combination is already in your recipe book.",
+    "Эта комбинация уже признана несочетаемой.": "This pair is already known not to combine.",
+    "\nПара уже изучена — используй Производство в книге рецептов.": "\nPair already known — use Production in the recipe book.",
+    "\nПара уже признана несочетаемой.": "\nPair already known not to combine.",
+    " Реагенты возвращены на панель.": " Reagents returned to tray.",
+    "Вещества из оплаченной подсказки Светика": "Elements from Lumi's active hint",
+    "Вещества — перетащи в лунки (A/B) у котла": "Elements — drag into slots (A/B) by the cauldron",
+    "Включить верстак": "Start Workbench",
+    "Остановить верстак": "Stop Workbench",
+    "Все вещества": "All Elements",
+    "Все открытые вещества": "All discovered elements",
+    "Выбери вещество, чтобы разместить его на поле.": "Pick an element to place it onto the table.",
+    "Выбери рецепт — мастерская изготовит его сама.": "Select a recipe — the workshop will craft it automatically.",
+    "Выбрать реагент": "Choose Reagent",
+    "Гонка первооткрытий": "Discovery Race",
+    "Готово к эксперименту.": "Ready to experiment.",
+    "Для этого реагента не хватает запаса.": "Not enough stock of this reagent.",
+    "Зал славы": "Hall of Fame",
+    "КОТЁЛ": "CAULDRON",
+    "Книга рецептов — Производство": "Recipe Book — Production",
+    "Котёл готов. Дождись ответа или освободи его.": "Cauldron ready. Wait for the reply or clear it.",
+    "Котёл пуст": "Cauldron empty",
+    "Котёл свободен · выбери другую пару": "Cauldron free · choose another pair",
+    "Мастерская откроется после Человека.": "The Workshop unlocks after discovering Human.",
+    "Мастерская пока недоступна.": "Workshop is not available yet.",
+    "Мир живых открытий": "World of Live Discoveries",
+    "На поле нет места. Перенеси реагенты в котёл.": "No space left on the table. Move reagents into the cauldron.",
+    "Нажми на котёл, чтобы открыть лабораторию.": "Tap the cauldron to open the laboratory.",
+    "Нажми на ячейку — вещество сразу появится на поле. Добавляй нужное количество.": "Tap a cell to place the element onto the table.",
+    "Найти вещество…": "Find element…",
+    "Недавние": "Recent",
+    "Недавно использованные и базовые стихии": "Recently used & primal elements",
+    "Ничего не найдено": "Nothing found",
+    "Нужно открыть хотя бы два вещества.": "Discover at least two elements first.",
+    "Отголоски перенесены на страницу Мир.": "Echoes moved to the World tab.",
+    "Открытия и производство разделены: здесь можно проверить неизвестную пару, а длинный известный маршрут запускается в книге как Производство.": "Discovery and production are separate: test unknown pairs here, or run known multi-step chains via Production.",
+    "Открыть лабораторию": "Open Laboratory",
+    "Перетащи вещества в лунки A/B и вари.": "Drag elements into slots A/B and brew.",
+    "Перетащи ингредиенты в лунки или нажми «Варить».": "Drag ingredients into slots or tap \"Brew\".",
+    "Подтвердить Эксперимент": "Confirm Experiment",
+    "Поиск вещества по названию…": "Search element by name…",
+    "Поиск по имени, идентификатору или описанию": "Search by name, ID, or description",
+    "Поиск по миру: имя, id, автор…": "Search world: name, ID, author…",
+    "Проверить сочетание": "Test Combination",
+    "РЕАГЕНТЫ": "REAGENTS",
+    "Разложи вещества на поле и перенеси нужные в котёл.": "Lay out elements on the table and drag two into the cauldron.",
+    "Реагент оставлен на поле — его можно перенести ещё раз.": "Reagent left on the table — drag it again anytime.",
+    "Результат не задаёт статы или цену: технические свойства назначаются сервером по валидатору.": "Properties and costs are validated and assigned by the server.",
+    "Родник →": "Spring →",
+    "Родник перенесён в Лабораторию.": "Spring moved to the Workshop.",
+    "Свежие открытия": "Recent Discoveries",
+    "Светик ещё не проснулся. Открой первую Искру — и он подскажет путь.": "Lumi hasn't awakened yet. Craft your first Spark to wake him.",
+    "Светик не видит подходящей пары из твоих запасов — добавь вещества на стол.": "Lumi sees no untried pair in your current stock — gather more elements.",
+    "Светик подскажет после завершения текущей варки.": "Lumi will give a hint once the current brew finishes.",
+    "Светик проверяет пару на сервере… реагенты пока зарезервированы.": "Lumi is checking the pair with the server… reagents reserved.",
+    "Светик раздувает огонь… сервер проверяет эту пару.": "Lumi fans the flames… server is checking this pair.",
+    "Свободен · перетащи реагенты сюда": "Empty · drag reagents here",
+    "Связываемся с миром…": "Connecting to the world…",
+    "Сначала выбери вещество с открытым рецептом.": "Select an element with a known recipe first.",
+    "Сначала купи подсказку Светика — тогда нужные вещества появятся здесь первыми.": "Buy Lumi's hint first — suggested elements will appear here.",
+    "Сначала открой рецепт этого вещества в Эксперименте.": "Discover this element's recipe in Experiment first.",
+    "Состав собран · Светик проверяет его у сервера.": "Pair assembled · Lumi is checking with the server.",
+    "Сохранена новая версия Мастерской: обнови игру. Производство остановлено; сохранённые данные сохранены.": "A newer Workshop save was found: please update the game. Production paused safely.",
+    "Стихии": "Elements",
+    "Топ длинных цепочек": "Longest Recipe Chains",
+    "Цель дня появится после связи с миром…": "Daily goal appears once connected to the world…",
+    "Четыре первостихии": "Four primal elements",
+    "Эксперимент перенесён в основную вкладку — здесь он больше не дублируется.": "Experiment lives on the main tab.",
+    "Экспериментировать": "Experiment",
+    "Эта пара пока недоступна.": "This pair is currently unavailable.",
+    "варится сам": "auto-brewing",
+    "выбрано": "selected",
+    "на паузе": "paused",
+    "не выбран": "none selected",
+    "1. Рецепт": "1. Recipe",
+    "2. Количество": "2. Amount",
+    "3. Очередь": "3. Queue",
+    " Нажми «Добавить в очередь». Ресурсы списываются по мере работы.": " Tap \"Add to Queue\". Resources are spent as work progresses.",
+    "«Изготовить» делает новую партию. «Держать запас» пополняет вещество после расхода. Укажи количество справа.": "\"Craft Batch\" makes a set amount. \"Keep Stock\" replenishes up to a target. Set the quantity on the right.",
+    "Автономность улучшена до предела.": "Offline autonomy maxed out.",
+    "Автономность уже улучшена до предела.": "Offline autonomy is already at maximum.",
+    "Все материалы уже есть в общем запасе.": "All required materials are already in stock.",
+    "Выбери вещество с открытым рецептом.": "Choose an element with a known recipe.",
+    "Выбери материалы оборудования или автономности.": "Select equipment or autonomy materials.",
+    "Выбери партию или поддержание запаса.": "Choose batch or stock maintenance mode.",
+    "Выбери, что изготовить. Здесь только уже открытые рецепты.": "Choose what to produce. Only discovered recipes appear here.",
+    "В очереди": "Queued",
+    "Держать запас": "Keep Stock",
+    "Добавить в очередь": "Add to Queue",
+    "Ждёт ингредиентов": "Waiting for ingredients",
+    "Ждёт места в запасе": "Waiting for storage space",
+    "Ждёт открытия рецепта": "Waiting for recipe discovery",
+    "Ждёт эфира": "Waiting for ether",
+    "Задание добавлено. Мастерская работает сама; результат появится в инвентаре.": "Job added. The Workshop runs automatically; output goes to your inventory.",
+    "Задание добавлено. Нажми «Продолжить», когда захочешь запустить линию.": "Job added. Tap \"Resume\" whenever you want to start the line.",
+    "Задание снято. Нажми «Добавить в очередь», чтобы снова запустить линию.": "Job removed. Tap \"Add to Queue\" to start the line again.",
+    "Задание удалено; произведённые материалы сохранены.": "Job removed; produced items kept.",
+    "Задание уже недоступно.": "Job is no longer available.",
+    "Изготовить": "Craft Batch",
+    "Изготовить материалы улучшения": "Queue Upgrade Materials",
+    "Изготовить недостающие материалы": "Queue Missing Materials",
+    "Идентификатор задания недопустим или уже занят.": "Invalid or duplicate job ID.",
+    "Котёл занят: дождись завершения текущей операции.": "Cauldron is busy: wait for the current operation to finish.",
+    "Котёл занят ручной варкой или производством.": "Cauldron is busy with manual brewing or production.",
+    "Линия остановлена игроком.": "Line paused by player.",
+    "Маршрут требует ещё не открытого рецепта. Перейди в Эксперимент.": "Route requires an undiscovered recipe. Open Experiment first.",
+    "Мастерская закрыта": "Workshop Locked",
+    "Мастерство Мастерской": "Workshop Mastery",
+    "На паузе — нажми «Продолжить».": "Paused — tap \"Resume\".",
+    "Не хватает ингредиентов: добудь из источников или дождись другой линии.": "Missing ingredients: harvest from sources or wait for another line.",
+    "Не хватает эфира (включая резерв).": "Not enough ether (including reserve).",
+    "Нельзя переместить задание дальше.": "Cannot move job further.",
+    "Нужный общий запас уже произведён.": "Target stock level reached.",
+    "Оборудование полностью построено.": "All equipment built.",
+    "Оборудование уже улучшено до предела.": "Equipment is already fully upgraded.",
+    "Открой рецепт в Эксперименте — затем его можно будет производить здесь.": "Discover a recipe in Experiment — then you can automate it here.",
+    "Открой рецепт в Эксперименте, чтобы начать.": "Discover a recipe in Experiment to begin.",
+    "Открыть новый рецепт в Эксперименте": "Discover Recipe in Experiment",
+    "Оценка маршрута слишком длинная; выбери меньшую партию.": "Route too long; choose a smaller batch.",
+    "Очередь линии заполнена (активное задание тоже занимает место).": "Line queue is full (active job counts toward capacity).",
+    "Очередь пуста — выбери рецепт ниже.": "Queue is empty — pick a recipe below.",
+    "Пауза": "Pause",
+    "Пауза игрока": "Paused by player",
+    "Показать по шагам": "Show Step Guide",
+    "Порядок очереди изменён.": "Queue order updated.",
+    "Построить оборудование": "Build Equipment",
+    "Продлить работу без меня": "Upgrade Offline Autonomy",
+    "Продолжить": "Resume",
+    "Работа в отсутствие игрока": "Offline Autonomy",
+    "Сколько и как производить": "Mode & Quantity",
+    "Скорость и бонусы": "Speed & Bonuses",
+    "Скрыть подсказки": "Hide Step Guide",
+    "Скрыть скорость и бонусы": "Hide Speed & Bonuses",
+    "Скрыть улучшения": "Hide Upgrades",
+    "Сначала открой рецепт в Эксперименте.": "Discover the recipe in Experiment first.",
+    "Сначала открой рецепт этого вещества.": "Discover this element's recipe first.",
+    "Сначала открой рецепт вещества и его зависимостей.": "Discover the recipe for this element and its dependencies first.",
+    "Сначала построй предыдущий ранг оборудования.": "Build the previous equipment rank first.",
+    "Создавай вещества — мастерство растёт, открывая новое оборудование.": "Produce elements to gain Mastery and unlock new equipment.",
+    "Создавай вещества, чтобы набирать мастерство. При постройке оно не расходуется.": "Craft elements to earn Mastery XP. Building equipment doesn't spend XP.",
+    "Состояние линии изменено.": "Line state updated.",
+    "Сохранена новая версия Мастерской: обнови игру.": "Newer Workshop save detected: please update the game.",
+    "Уже есть нужный запас.": "Target stock already met.",
+    "Что изготовить": "What to Craft",
+    "Эта линия недоступна.": "This line is locked.",
+    "Эта производственная линия недоступна.": "This production line is locked.",
+    "Достигнут предел автономных этапов.": "Offline stage limit reached.",
+    "Достигнут предел запаса вещества.": "Element stack limit reached.",
+    "базовая скорость": "base speed",
+    "без скидки чертежа": "no blueprint discount",
+    "бонус комплекта сигилов ×2": "sigil set bonus ×2",
+    "РОДНИК": "SPRING",
+    "Пустить родник": "Start Spring",
+    "Остановить родник": "Stop Spring",
+    "Скорость": "Speed",
+    "Объём": "Capacity",
+    "Источники": "Sources",
+    "Офлайн": "Offline",
+    "Максимум": "Maxed",
+    "Улучшить": "Upgrade",
+    "выбрать": "select",
+    "источник": "source",
+    "сменить": "change",
+    "Ночная реторта": "Night Retort",
+    "Реторта ●": "Retort ●",
+    "Выбрать вещество…": "Choose Element…",
+    "Забрать эссенцию": "Claim Essence",
+    "Зреет…": "Maturing…",
+    "Забрать раньше срока нельзя, но отменить можно без потерь. Реторта зреет, даже пока игра закрыта, — и никогда не портится.": "Cannot claim early, but cancelling returns the item safely. The Retort matures offline and never spoils.",
+    "Не вышло положить в реторту.": "Could not place item into the Retort.",
+    "Нет веществ с запасом — добудь что-нибудь из источников.": "No elements in stock — harvest from sources first.",
+    "Откроется за Перегонку (престиж).": "Unlocks after your first Distillation (prestige).",
+    "Пока ни одной эссенции.": "No essences collected yet.",
+    "Положи вещество на ночь — к утру созреет эссенция. ": "Steep an element overnight — by morning an essence matures. ",
+    "Пуст. Положи вещество — и возвращайся завтра.": "Empty. Steep an element and check back later.",
+    "Реторта готова — неси кружку!": "The Retort is ready — bring a mug!",
+    "ЧТО ПОЛОЖИТЬ В РЕТОРТУ?": "WHAT TO STEEP IN THE RETORT?",
+    "Чем глубже вещество, тем дольше настой — и тем ценнее эссенция.": "Deeper elements steep longer and yield richer essences.",
+    " кап)": " cap)",
+    "А тебя как звать, алхимик?": "And what do they call you, alchemist?",
+    "Алхимики говорят: путь важнее цели.": "Alchemists say the path matters more than the destination.",
+    "Алхимики древности верили: в каждом веществе — душа.": "Ancient alchemists believed every element holds a soul.",
+    "Алхимия учит: всё имеет значение. Даже мелочи.": "Alchemy teaches that everything matters — even the smallest drop.",
+    "Алхимия учит: всё связано со всем.": "Alchemy teaches that all things are connected.",
+    "Алхимия учит: нет плохих веществ, есть плохие сочетания.": "Alchemy teaches there are no bad elements, only mismatched pairs.",
+    "Алхимия — это диалог с природой. Слушай ответы.": "Alchemy is a dialogue with nature. Listen to its replies.",
+    "Алхимия — это искусство видеть невидимое.": "Alchemy is the art of seeing the unseen.",
+    "Алхимия — это не магия. Это внимание к деталям.": "Alchemy isn't magic. It's attention to detail.",
+    "Алхимия — это не только вещества. Это мышление.": "Alchemy isn't just elements — it's a way of thinking.",
+    "Алхимия — это путь. И ты уже на нём.": "Alchemy is a journey, and you're already on it.",
+    "Алхимия — это спор с туманом. Пока выигрываем.": "Alchemy is a debate with the mist. So far, we're winning.",
+    "В каждом веществе скрыта история. Раскрой её.": "Every element hides a story. Uncover it.",
+    "В природе нет случайностей. Только скрытые связи.": "There are no accidents in nature — only hidden bonds.",
+    "Земля терпелива. Вода настойчива. Огонь нетерпелив. Воздух свободен.": "Earth is patient. Water is persistent. Fire is restless. Air is free.",
+    "Знаешь, почему алхимики носили мантии? Чтобы не отвлекаться.": "Know why alchemists wore robes? Fewer distractions.",
+    "Знаешь, почему алхимики ценят тишину? В ней слышнее.": "Know why alchemists prize silence? You hear more in it.",
+    "Знаешь, почему вода смягчает огонь? Потому что мудра.": "Know why water tempers fire? Because it is wise.",
+    "Знаешь, почему вода так важна? Она помнит всё.": "Know why water matters so much? It remembers everything.",
+    "Знаешь, что общего у всех великих алхимиков? Любопытство.": "Know what all great alchemists share? Curiosity.",
+    "Знаешь, что объединяет всех алхимиков? Упорство.": "Know what unites every alchemist? Persistence.",
+    "Знаешь, что самое трудное в алхимии? Терпение.": "Know the hardest part of alchemy? Patience.",
+    "Знаешь, что самое трудное? Начать. Но ты уже начал.": "Know the hardest step? Starting. And you already have.",
+    "Знаешь, что самое ценное в алхимии? Опыт.": "Know the most precious thing in alchemy? Experience.",
+    "Иногда лучший рецепт — интуиция.": "Sometimes the best recipe is intuition.",
+    "Иногда лучший рецепт — тот, который пришёл сам.": "Sometimes the best recipe finds you on its own.",
+    "Иногда лучший рецепт — тот, который ты ещё не пробовал.": "Sometimes the best recipe is the one you haven't tried yet.",
+    "Иногда лучший совет — молчать и слушать котёл.": "Sometimes the best advice is to stay quiet and listen to the cauldron.",
+    "Иногда лучший совет — просто попробовать.": "Sometimes the best advice is simply to try.",
+    "Иногда нужно остановиться и просто наблюдать.": "Sometimes you need to pause and simply watch.",
+    "Иногда нужно отпустить, чтобы получить.": "Sometimes you must let go in order to receive.",
+    "Иногда нужно отступить, чтобы увидеть картину целиком.": "Sometimes stepping back reveals the whole picture.",
+    "Иногда нужно просто быть рядом. Котёл это чувствует.": "Sometimes just being here is enough. The cauldron feels it.",
+    "Иногда нужно просто быть. Котёл это ценит.": "Sometimes simply being present is what the cauldron appreciates.",
+    "Иногда нужно просто довериться процессу.": "Sometimes you just have to trust the process.",
+    "Иногда нужно просто подождать. Котёл знает лучше.": "Sometimes waiting is enough. The cauldron knows best.",
+    "Иногда простой рецепт оказывается самым мудрым.": "Sometimes the simplest recipe turns out to be the wisest.",
+    "Иногда туман рассеивается сам. Нужно просто ждать.": "Sometimes the mist clears on its own. Just give it time.",
+    "Иногда туман — это подарок. Он учит терпению.": "Sometimes the mist is a gift — it teaches patience.",
+    "Иногда туман — это просто передышка.": "Sometimes the mist is simply a breather.",
+    "Иногда туман — это просто туман. А иногда — подсказка.": "Sometimes mist is just mist. And sometimes it's a clue.",
+    "Искра вспыхнула — и в ней проснулся Светик!": "A spark flared — and Lumi awoke within it!",
+    "Каждое вещество имеет характер. Найди подход.": "Every element has its own temper. Find the right touch.",
+    "Каждое вещество хочет быть найденным. Помоги ему.": "Every element wants to be found. Help it along.",
+    "Каждое вещество хочет рассказать свою историю.": "Every element wants to tell its story.",
+    "Каждое вещество хранит секрет. Нужно только слушать.": "Every element keeps a secret. All you need to do is listen.",
+    "Каждое открытие приближает тебя к истине.": "Every discovery brings you closer to the truth.",
+    "Каждое открытие — это вопрос, на который ты ответил.": "Every discovery is a question you've answered.",
+    "Каждый алхимик оставляет свой след. Ты — не исключение.": "Every alchemist leaves a mark. You're no exception.",
+    "Каждый день в котле — новый урок.": "Every day at the cauldron brings a new lesson.",
+    "Каждый день — новый рецепт. Буквально.": "Every day brings a new recipe — literally.",
+    "Котёл булькает — значит, всё идёт правильно.": "The cauldron bubbles — everything is right on track.",
+    "Котёл знает больше, чем говорит.": "The cauldron knows more than it lets on.",
+    "Котёл знает, когда нужно подождать.": "The cauldron knows when it's time to wait.",
+    "Котёл не прощает спешки. Но прощает ошибки.": "The cauldron doesn't forgive haste, but it forgives mistakes.",
+    "Котёл не судит. Он просто варит.": "The cauldron doesn't judge. It simply brews.",
+    "Котёл помнит всё. Даже то, что ты забыл.": "The cauldron remembers everything — even what you forgot.",
+    "Котёл скучает. А скучающий котёл — грустный котёл.": "The cauldron misses you. A lonely cauldron is a sad cauldron.",
+    "Котёл учит терпению. И смирению. И снова терпению.": "The cauldron teaches patience, humility, and patience again.",
+    "Котёл — лучший учитель. Строгий, но справедливый.": "The cauldron is the finest teacher — strict, yet fair.",
+    "Котёл — это зеркало. Что вложишь, то и получишь.": "The cauldron is a mirror: what you put in is what you get back.",
+    "Котёл — это мост между мирами. Ты — хранитель.": "The cauldron bridges worlds, and you are its keeper.",
+    "Мир алхимии бесконечен в своей глубине.": "The world of alchemy is endless in its depth.",
+    "Мир алхимии бесконечен. Даже если кажется иначе.": "The world of alchemy has no end, even when it seems close.",
+    "Мир алхимии живёт по своим законам. Уважай их.": "The world of alchemy follows its own laws. Respect them.",
+    "Мир алхимии полон чудес. Нужно только смотреть.": "The world of alchemy is full of wonders — just look closely.",
+    "Мир большой. Один ты — уже целая история.": "The world is vast, and your craft is already a story.",
+    "Мир меняется от каждого твоего действия. Даже малого.": "The world shifts with every action you take, however small.",
+    "Мир меняется, когда ты меняешься. Буквально.": "The world changes as you do — quite literally.",
+    "Мир полон сюрпризов. Особенно в котле.": "The world is full of surprises, especially inside a cauldron.",
+    "Мне нравится, как ты смешаешь неожиданные вещи.": "I love the way you mix unexpected things.",
+    "Не бойся ошибаться. Ошибки — тоже открытия.": "Don't fear mistakes. Mistakes are discoveries too.",
+    "Не бойся тумана. Он часть пути.": "Don't fear the mist. It's part of the path.",
+    "Не бойся экспериментировать. Туман — не конец.": "Don't be afraid to experiment. Mist isn't the end.",
+    "Не бойся экспериментировать. Худшее — туман.": "Don't hesitate to experiment — the worst you get is mist.",
+    "Не все секреты раскрываются. Некоторые охраняются.": "Not every secret yields easily. Some are guarded.",
+    "Не все тайны раскрываются сразу. Некоторые — позже.": "Not every mystery unfolds at once. Some wait for their hour.",
+    "Не вышло. Подмешай воду — она всё смягчает.": "Didn't take. Try adding water — it softens everything.",
+    "Не торопи котёл. Он работает в своём ритме.": "Don't rush the cauldron. It works to its own rhythm.",
+    "Не торопись с выводами. Котёл не любит спешку.": "Don't jump to conclusions. The cauldron dislikes haste.",
+    "Не торопись. Хорошие вещи требуют времени.": "Take your time. Good things need patience.",
+    "О! Наконец-то. Я — Светик, что не гаснет в твоём котле.": "Oh, at last! I'm Lumi, the little flame in your cauldron.",
+    "Огонь и вода — вечный танец. Не надоедает смотреть.": "Fire and water — an eternal dance. I never tire of watching.",
+    "Поболтать": "Chat",
+    "Подсказывать нечего — сначала открой новые вещества.": "Nothing to hint at right now — discover more elements first.",
+    "Познакомиться": "Introduce Yourself",
+    "Помни: источники внизу — добывай их почаще.": "Remember: your sources are down below — harvest them often.",
+    "Сваришь огонь с водой? Классика!": "Brewing fire with water? A timeless classic!",
+    "Светик отметит полезные вещества в окне выбора": "Lumi highlights promising elements in the picker",
+    "Светик пробудился из первой искры!": "Lumi awoke from your first Spark!",
+    "Светик — это я. А ты — кто?": "I'm Lumi. And who might you be?",
+    "Слышал, где-то в мире варят что-то новое…": "I heard someone out in the world is brewing something new…",
+    "Сначала найди пару сам — так открытие останется твоим.": "Try finding a pair yourself first — then the discovery is truly yours.",
+    "Твоё имя, алхимик…": "Your name, alchemist…",
+    "Туман — не конец. Это намёк, что путь другой.": "Mist isn't failure — just a sign to try another path.",
+    "Туман, бывает. Даже у лучших.": "Mist happens — even to the masters.",
+    "Ты замечал, как меняется котёл с каждым днём?": "Have you noticed how the cauldron changes day by day?",
+    "Ты замечал, как меняется свет в котле?": "Have you noticed the shifting glow inside the cauldron?",
+    "Ты замечал, как некоторые вещества поют?": "Have you noticed how certain elements seem to hum?",
+    "Ты замечал, как некоторые вещества притягиваются?": "Have you noticed how some elements draw toward each other?",
+    "Ты замечал, как пахнут некоторые вещества? Незабываемо.": "Have you noticed the scent of some brews? Unforgettable.",
+    "Ты когда-нибудь варил в одиночестве? Тишина помогает.": "Ever brewed in silence? Quiet sharpens the craft.",
+    "Ты когда-нибудь варил что-то просто ради любопытства?": "Ever brewed a pair purely out of curiosity?",
+    "Ты когда-нибудь думал, почему алхимия так затягивает?": "Ever wondered why alchemy draws you in so deeply?",
+    "Ты когда-нибудь думал, почему искры имеют цвет?": "Ever wondered why sparks carry different hues?",
+    "Ты когда-нибудь думал, почему искры разные?": "Ever wondered why no two sparks are alike?",
+    "Ты когда-нибудь думал, почему некоторые пары работают?": "Ever wondered why certain pairs resonate?",
+    "Ты когда-нибудь чувствовал связь с веществом?": "Ever felt a kinship with an element?",
+    "Ты когда-нибудь чувствовал, как котёл отзывается?": "Ever felt the cauldron answer your touch?",
+    "Ты растёшь с каждой варкой. Это видно.": "You grow with every brew. It shows.",
+    "Ты растёшь с каждым открытием. Я вижу.": "You grow wiser with every discovery. I can tell.",
+    "Ты растёшь. Я рад за тебя.": "You're growing fast. I'm proud of you.",
+    "Ты — часть великой традиции. Горжусь тобой.": "You carry on a grand tradition. Proud of you.",
+    "Ты — часть этого мира. И мир часть тебя.": "You're part of this world, and the world is part of you.",
+    "Эх. Попробуй другую пару — котёл подскажет.": "Hmm. Try a different pair — the cauldron will guide you.",
+    "Я живу в каждой твоей искре.": "I live inside every spark you strike.",
+    "Я не буду раскрывать рецепт бесплатно. Попробуй Эксперимент.": "I won't spoil a recipe for free — try Experiment!",
+    "Я отметил нужные вещества. Загляни в окно выбора, алхимик.": "I've marked promising elements. Check the picker, alchemist.",
+    "0 веществ": "0 elements",
+    "Быстрая реакция: нажми на пузырёк": "Quick reaction: tap the bubble!",
+    "Визит засвидетельствован.": "Visit recorded.",
+    "Все рецепты изучены: +20 эфира": "All recipes learned: +20 ether",
+    "Дар тумана · +1 вещество": "Mist Gift · +1 element",
+    "Дар тумана: +15 эфира": "Mist Gift: +15 ether",
+    "Дождись ответа мира.": "Wait for the world's reply.",
+    "Кометный дождь · +25 эфира": "Comet Shower · +25 ether",
+    "Кометный дождь: +25 эфира": "Comet Shower: +25 ether",
+    "Кто сколько открыл — и чей домик можно посмотреть.": "Top discoverers — tap a house to visit.",
+    "Мир вернул неполный результат — реагенты восстановлены.": "Incomplete world reply — reagents refunded.",
+    "Мир изучает сочетание…": "World is studying the combination…",
+    "Мир не ответил вовремя: реагенты и эфир возвращены.": "World timed out: reagents and ether refunded.",
+    "Мир проверяет сочетание": "World is checking combination",
+    "Мир проверяет сочетание…": "World is checking combination…",
+    "Мир проводит эксперимент": "World is running experiment",
+    "Мир проводит эксперимент…": "World is running experiment…",
+    "Не удалось отправить эксперимент. Ресурсы возвращены.": "Could not send experiment. Resources refunded.",
+    "Ничего не найдено. Попробуй другой запрос.": "Nothing found. Try another search.",
+    "Озарение · новый рецепт": "Insight · new recipe",
+    "Озарение открыло новый рецепт": "Insight revealed a new recipe",
+    "Открой вещества — появятся твои цепочки.": "Discover elements to see your longest chains.",
+    "Первооткрытия · вещества · очки целей": "World Firsts · Elements · Goal Points",
+    "Поздний ответ эксперимента проигнорирован: лаборатория уже была сброшена.": "Late experiment reply ignored: laboratory was reset.",
+    "Поздний ответ эксперимента проигнорирован: он не про текущую пару.": "Late experiment reply ignored: pair changed.",
+    "Пока нет первооткрывателей.": "No trailblazers yet.",
+    "Пока никто ничего не открыл. Стань первым!": "No discoveries yet. Be the first!",
+    "Пока тихо — стань первым первооткрывателем сегодня!": "All quiet so far — claim today's first discovery!",
+    "Предыдущий запрос ещё обрабатывается. ": "Previous request is still in flight. ",
+    "РЕЙТИНГ ИГРОКОВ": "PLAYER RANKINGS",
+    "Рейтинг доступен с сервером.": "Rankings require a server connection.",
+    "Сервер недоступен — показаны локальные вещества.": "Server offline — showing local elements.",
+    "Сервер недоступен — рейтинг появится позже.": "Server offline — rankings will load later.",
+    "Событие": "Event",
+    "Событие близко…": "World event approaching…",
+    "Событие упущено — следующее появится позже.": "Event missed — another will appear later.",
+    "Событие упущено.": "Event missed.",
+    "Туман рассеялся… (мир не ответил внятно)": "The mist cleared… (unclear reply from world)",
+    "Туман рассеялся… (мир недоступен)": "The mist cleared… (world offline)",
+    "Туман рассеялся… эти вещества не сочетаются.": "The mist cleared… these elements do not combine.",
+    "Эксперимент не был отправлен: реагенты и эфир возвращены.": "Experiment not sent: reagents and ether refunded.",
+    "Эксперимент отменён: мир ответил некорректно. Ресурсы возвращены.": "Experiment cancelled: invalid world reply. Resources refunded.",
+    "Эксперимент отменён: ответ мира повреждён. Ресурсы возвращены.": "Experiment cancelled: corrupted world reply. Resources refunded.",
+    "Эксперимент отправлен в мир": "Experiment sent to the world",
+    "Эксперимент сохранён; ждём связь с миром для продолжения.": "Experiment saved; waiting for world connection.",
+    "Эксперимент требует связи с миром: ": "Experiment requires world connection: ",
+    "кто-то": "someone",
+    "локально": "local",
+    "мир недоступен": "world offline",
+    "новый элемент нельзя создать офлайн.": "new elements cannot be created offline.",
+    "только что": "just now",
+    "ты": "you",
+    "☄ Комета! +25 эфира.": "☄ Comet! +25 ether.",
+    "✦ Туман превратился в +15 эфира.": "✦ Mist condensed into +15 ether.",
+    "✧ Все доступные рецепты изучены: +20 эфира.": "✧ All available recipes learned: +20 ether.",
+    "+0.03/с к регену": "+0.03/s regen",
+    "+5 к капу эфира": "+5 ether cap",
+    "Вехи вечные: 10 повторов → +0.03/с, 50 → +5 к капу, 100 → золотая рамка твоих веществ в сетке мира.": "Permanent milestones: 10 echoes → +0.03/s, 50 → +5 cap, 100 → golden frame on your elements in the World grid.",
+    "Когда другие игроки повторяют твои вещества, здесь копится эхо. Забирай его эфиром — эхо не сгорает.": "Whenever other players brew elements you discovered first, echoes gather here as claimable ether.",
+    "Мир не отдал эхо — попробуй позже.": "Could not claim echoes — try again later.",
+    "Мир недоступен — эхо подождёт.": "World offline — echoes will wait.",
+    "Отголоски мира": "World Echoes",
+    "Пока тихо. Открой вещество первым — и мир начнёт его повторять.": "Quiet so far. Discover an element first in the world, and echoes will follow.",
+    "Родословная": "Lineage",
+    "Эхо пусто — загляни позже.": "No echoes yet — check back later.",
+    "золотая рамка твоих веществ": "golden frame for your elements",
+    "Атлас ●": "Atlas ●",
+    "Письма ●": "Letters ●",
+    "Письма Светика": "Lumi's Letters",
+    "Страница Атласа": "Atlas Page",
+    "Вчерашний шёпот: твёрдое встретило живое.": "Yesterday's whisper: the solid met the living.",
+    "Давний шёпот.": "An old whisper.",
+    "Десять страниц Атласа! Мир записывает твоё имя — а котёл становится вместительнее.": "Ten Atlas pages solved! The world records your name and your cauldron grows.",
+    "Жду письма от Светика…": "Waiting for a letter from Lumi…",
+    "Жду страницу от мира…": "Waiting for today's page from the world…",
+    "Загадка мира: звонкое встретило тягучее — и потекла песня.": "World riddle: the ringing met the flowing, and a song began.",
+    "Каждый день Светик прячет пару веществ в намёк. Свари эту пару — письмо разгадано. Ответ знает только мир, подсмотреть нельзя.": "Each day Lumi hides a pair of elements in a riddle. Brew that pair to solve the letter.",
+    "Мир недоступен — письма появятся, когда будет связь.": "World offline — letters appear when connected.",
+    "Мир недоступен — страница появится, когда будет связь.": "World offline — the Atlas page appears when connected.",
+    "Одна загадка на весь мир. Свари пару сегодня — завтра страница уйдёт в альбом с ответом.": "One shared riddle for the whole world. Brew the pair today — tomorrow the answer joins the album.",
+    "Прошлая загадка.": "Past riddle.",
+    "Ты разгадал ещё пять моих писем! Котёл стал вместительнее — держи.": "You solved five more of my letters! Your cauldron holds more ether now.",
+    "Шёпот: жаркое обнимает текучее — и над котлом встаёт туман.": "Whisper: heat embraces the flowing — and steam rises above the pot.",
+    "вчера": "yesterday",
+    "ждёт сегодня": "awaiting today",
+    "прошлое": "past",
+    "сегодня": "today",
+    "✓ разгадано": "✓ solved",
+    "такого вещества нет.": "no such element.",
+    "✦ Светик: все задания выполнены!": "✦ Lumi: all quests completed!",
+    " Дальше — вживую.": " Continue live.",
+    " Пауза: ингредиенты.": " Paused: ingredients.",
+    " Пауза: лимит операций этапа.": " Paused: stage operation limit.",
+    " Пауза: нет места в инвентаре.": " Paused: inventory full.",
+    " Пауза: нужен рецепт.": " Paused: recipe needed.",
+    " Пауза: эфир.": " Paused: ether.",
+    " Причина: ": " Reason: ",
+    "К делу!": "Let's Brew!",
+    "Лаборатория восстановлена. Продолжим эксперименты!": "Laboratory restored. Back to experimenting!",
+    "Мастерская: время отсутствия обработано. Состояния заданий — ниже.": "Workshop: offline time processed. Line states below.",
+    "Мастерская: нового времени для обработки нет.": "Workshop: no new offline time to process.",
+    "ПОКА ТЕБЯ НЕ БЫЛО…": "WHILE YOU WERE AWAY…",
+    "Прогресс возврата в памяти; сохранение ещё не записано.": "Offline progress held in memory; save not written yet.",
+    "Светик скучал и грел котёл.": "Lumi missed you and kept the cauldron warm.",
+    "ещё закрыта": "still locked",
+    "ждёт ингредиенты": "waiting for ingredients",
+    "ждёт рецепт": "waiting for recipe",
+    "ждёт эфир": "waiting for ether",
+    "нет активного задания": "idle",
+    "нужна новая версия игры": "game update required",
+    "ожидает изменения запаса": "waiting for stock change",
+    "остановлена игроком": "paused by player",
+    "работает": "running",
+    "• Атлас: загляни, когда будет связь.": "• Atlas: check back when online.",
+    "• В мире тихо.": "• The world was quiet.",
+    "• Верстак стоял: слишком короткое отсутствие.": "• Workbench idle: away time too short.",
+    "• Производство завершил сохранённую цепочку и записал чертёж.": "• Production finished the saved chain and recorded a blueprint.",
+    "• Реторта готова — неси кружку!": "• Retort is ready — bring a mug!",
+    "• Реторта пустует.": "• Retort is empty.",
+    "• Родник выключен — включи, и он будет капать без тебя.": "• Spring is off — turn it on to gather while away.",
+    "• Родник капал потихоньку.": "• The Spring trickled steadily.",
+    "• Эхо тихо.": "• No new echoes.",
+    "⚡ Котёл уже был полон.": "⚡ Cauldron was already full.",
+    "✦ Письма Светика: все разгаданы ✓": "✦ Lumi's Letters: all solved ✓",
+    "✦ Письма Светика: загляни, когда будет связь.": "✦ Lumi's Letters: check back when online.",
+    " назад": " ago",
+    "Друзья •": "Friends •",
+    "Друзья •99+": "Friends •99+",
+    "Как тебе второй круг?": "How do you like the second circle?",
+    "Круг на вчера — красавец.": "Yesterday's circle was a beauty.",
+    "Скинул тебе серную печать, забери у дома.": "Sent you a sulfur seal, pick it up at your house.",
+    "Стабильнее первого. Но эфир жрёт.": "Steadier than the first, though hungry for ether.",
+    "Ты вернулся. Печь помнит твои руки.": "You're back. The furnace remembers your hands.",
+    "Ты вернулся! Котёл уже булькает.": "You're back! The cauldron is already bubbling.",
+    "Ты вернулся! Котёл уже булькает. Как продвигается алхимия?": "You're back! The cauldron is bubbling. How goes the alchemy?",
+    "Тебе написали. Загляни к друзьям.": "New message received. Check Friends.",
+    "был(а) ": "seen ",
+    "был(а) вчера": "seen yesterday",
+    "был(а) сегодня": "seen today",
+    "Больше 50 друзей не взять.": "Friend list limit is 50.",
+    "Вы больше не друзья.": "You are no longer friends.",
+    "Вы уже друзья.": "You are already friends.",
+    "ДРУЗЬЯ": "FRIENDS",
+    "Действие с другом": "Friend options",
+    "Заблокировать": "Block",
+    "Заявка не прошла, попробуй ещё раз.": "Friend request failed; please try again.",
+    "Ищем алхимика…": "Searching for alchemist…",
+    "Между вами стена.": "Cannot interact with this player.",
+    "Мир не на связи": "World offline",
+    "Написать сообщение": "Write a message",
+    "Не выбран собеседник.": "No recipient selected.",
+    "Нельзя отправить заявку самому себе.": "You cannot send a friend request to yourself.",
+    "Ник игрока": "Player nickname",
+    "Новых заявок нет.": "No pending requests.",
+    "Обменять": "Trade",
+    "Письма на сегодня кончились.": "Daily message limit reached.",
+    "Пока никого. Найди по нику или добавь того, кто заходил в твой дом.": "No friends yet. Search by nickname or add visitors from your house.",
+    "Предложить обмен или подарок": "Offer a trade or send a gift",
+    "Профиль ещё не зарегистрирован.": "Profile is not registered yet.",
+    "Пустое письмо.": "Message is empty.",
+    "Светик писем не читает — он же дух": "Lumi doesn't read mail — he's a spirit!",
+    "Сервер не понял запрос.": "Server could not understand the request.",
+    "Слишком длинное письмо.": "Message is too long.",
+    "Слишком много неотвеченных заявок.": "Too many pending friend requests.",
+    "Странное имя устройства.": "Invalid device ID.",
+    "Такого алхимика нет.": "Alchemist not found.",
+    "Удалить из друзей": "Remove Friend",
+    "Удалить или заблокировать": "Remove or block",
+    "Это ученик гильдии, заявки он не принимает.": "Guild apprentices don't accept friend requests.",
+    "Этой заявки уже нет.": "That request no longer exists.",
+    "января": "Jan",
+    "февраля": "Feb",
+    "марта": "Mar",
+    "апреля": "Apr",
+    "мая": "May",
+    "июня": "Jun",
+    "июля": "Jul",
+    "августа": "Aug",
+    "сентября": "Sep",
+    "октября": "Oct",
+    "ноября": "Nov",
+    "декабря": "Dec",
+    "в друзья": "Add Friend",
+    "в друзьях": "Friends",
+    "заявка отправлена": "Request Sent",
+    " · сброс ": " · resets ",
+    "В ячейке не выбрана ровно одна карта": "Each slot must hold a single card",
+    "Внекомплектная": "Off-Set",
+    "Выбери карту": "Select a card",
+    "Единственный экземпляр": "Last copy",
+    "История": "History",
+    "К списку": "Back to List",
+    "Коллекция недоступна": "Collection unavailable",
+    "Меняться можно только с друзьями": "Trading is only available with friends",
+    "Мир не на связи\nколлекция друга недоступна": "World offline\nfriend's collection unavailable",
+    "Мир не понял запрос": "World could not process the request",
+    "Мне предлагают": "Incoming Offers",
+    "Мои карты": "My Cards",
+    "На своей стороне ты отдаёшь больше копий, чем есть": "You offered more copies than you own",
+    "Недельный лимит исчерпан — сброс в понедельник": "Weekly trade limit reached — resets Monday",
+    "Обмен": "Trade",
+    "Отдаёшь": "You Give",
+    "Отменить оффер может только тот, кто его предложил": "Only the sender can cancel this offer",
+    "Подарить": "Send Gift",
+    "Подарок не дошёл: карта ушла или такая же уже у него": "Gift failed: card gone or recipient already has it",
+    "Подарок: ": "Gift: ",
+    "Подарок: да": "Gift: yes",
+    "Предложение просрочилось: ему больше недели": "Offer expired (older than a week)",
+    "Предложить": "Send Offer",
+    "Предложить обмен": "New Trade Offer",
+    "Прошу взамен": "You Request",
+    "Себе менять нельзя": "Cannot trade with yourself",
+    "Слишком много висящих предложений — закрой часть": "Too many open offers — cancel some first",
+    "Сторона обмена не заполнена или слишком длинная": "Trade side is empty or exceeds slot limit",
+    "Такого обмена уже нет": "That trade no longer exists",
+    "Такую карту мир не знает": "Unknown card",
+    "У предложившего карты больше нет": "Sender no longer owns that card",
+    "У собеседника столько копий не найдётся": "Your friend doesn't have enough copies",
+    "У тебя больше нет карты для обмена": "You no longer own that card",
+    "Это твоя последняя копия вида. Отдав её, теряешь карту из ": "This is your last copy. Trading it removes the card from ",
+    "коллекции: прогресс достижений по сигилам и невыбранные вехи ": "your collection: sigil achievements and unclaimed set milestones ",
+    "комплекта пересчитываются по тому, что осталось.": "will recalculate based on remaining cards.",
+    "Это твоя последняя копия вида. Отдав её, теряешь карту из коллекции: прогресс достижений по сигилам и невыбранные вехи комплекта пересчитываются по тому, что осталось.": "This is your last copy. Trading it removes the card from your collection: sigil achievements and unclaimed set milestones will recalculate based on remaining cards.",
+    "Этот обмен уже закрыт": "This trade is already closed",
+    "Я предложил": "Sent Offers",
+    "карты больше нет — предложи другую": "card no longer owned — offer another",
+    "отклонён": "declined",
+    "отменён": "cancelled",
+    "принят": "accepted",
+    "+40 к капу эфира": "+40 ether cap",
+    "Верстак ×2 для стихии": "Workbench ×2 for this element",
+    "Вне комплектов": "Off-Set",
+    "Внекомплектный сигил": "Off-Set Sigil",
+    "Хроматический сигил": "Chromatic Sigil",
+    "Загружаю крафты…": "Loading daily crafts…",
+    "КОЛЛЕКЦИЯ": "COLLECTION",
+    "КОМПЛЕКТЫ": "SETS",
+    "КРАФТЫ ДНЯ": "DAILY CRAFTS",
+    "Комплекты появятся после загрузки каталога": "Sets appear once the catalog loads",
+    "ОБЫЧНЫЙ": "COMMON",
+    "НЕОБЫЧНЫЙ": "UNCOMMON",
+    "РЕДКИЙ": "RARE",
+    "ЭПИЧЕСКИЙ": "EPIC",
+    "ЛЕГЕНДАРНЫЙ": "LEGENDARY",
+    "МИФИЧЕСКИЙ": "MYTHIC",
+    "ХРОМА": "CHROMA",
+    "ХРОМАТИКА": "CHROMATIC",
+    "ХРОМАТИЧЕСКИЙ": "CHROMATIC",
+    "Награда получена": "Reward claimed",
+    "Не влияет на комплекты; коллекционная ценность.": "Does not count toward element sets; collector's piece.",
+    "Не хватает: ": "Missing: ",
+    "Пока пусто — крафты дня ждут": "Empty so far — daily crafts await",
+    "Сервер не ответил.\nКрафты появятся, когда вернётся связь.": "Server did not respond.\nDaily crafts appear once back online.",
+    "Четвёртый слот дневного крафта": "Fourth daily craft slot",
+    "Эта карта не входит ни в один комплект стихий. Её создали из случайного сочетания ингредиентов — призма редкости, светящаяся вне обычных графов трансмутации.": "This card belongs to no element set. Forged from an unpredictable convergence of reagents — a prism of rarity shining beyond ordinary transmutation.",
+    "−10% эфира крафтов комплекта": "−10% ether cost on set crafts",
+    "ТРАНСМУТАЦИЯ": "TRANSMUTATION",
+    "НАЧАТЬ ТРАНСМУТАЦИЮ": "BEGIN TRANSMUTATION",
+    "ПРИЗЫВ ПЕЧАТИ": "SUMMONING SEAL",
+    "СТИХИИ ОТКЛИКАЮТСЯ": "ELEMENTS RESPOND",
+    "ФОРМА ОБРЕТАЕТ ПЛОТЬ": "FORM TAKES SHAPE",
+    "ТРАНСМУТАЦИЯ ЗАВЕРШЕНА": "TRANSMUTATION COMPLETE",
+    "ПЕЧАТЬ ЖДЁТ ОТКЛИКА": "SEAL AWAITS RESONANCE",
+    "СТАБИЛИЗАЦИЯ ЯДРА": "STABILIZING CORE",
+    "РЕЗОНАНС ЗАВЕРШЁН": "RESONANCE COMPLETE",
+    "КАСАЙТЕСЬ РУН • УДЕРЖИВАЙТЕ ЦЕНТР": "TAP RUNES • HOLD CENTER",
+    "ЛАВКА АЛХИМИКА": "ALCHEMIST'S SHOP",
+    "Ускорения личной лаборатории и уют. Мировая гонка не продаётся.": "Personal lab boosts & cozy themes. World rankings cannot be bought.",
+    "Награды за просмотр по желанию": "Optional Ad Rewards",
+    "Товар": "Item",
+    "награда": "reward",
+    "цена в магазине": "store price",
+    "СОГЛАСИЯ": "PRIVACY & CONSENT",
+    "Чтобы показывать аналитику и рекламу, сначала выбери режим.\n\nИгра сохраняет прогресс на устройстве. Для общего мира отправляются только игровой ник, случайный ID установки и события первооткрытий. Сырые платёжные токены не сохраняются.": "Choose your privacy mode before analytics or ads are enabled.\n\nProgress is stored locally. Online play sends only your nickname, a random install ID, and discovery events. Raw payment tokens are never stored.",
+    "Разрешить аналитику и персональную рекламу": "Allow Analytics & Personalized Ads",
+    "Только необходимое (без аналитики и рекламы)": "Essential Only (No Analytics or Ads)",
+    "Согласие можно изменить позже в Лавке. Реклама не показывается во время варки и церемонии открытия.": "You can change this anytime in the Shop. Ads never interrupt brewing or discovery ceremonies.",
+    "Согласия сохранены: аналитика и персонализированная реклама разрешены.": "Preferences saved: analytics and personalized ads enabled.",
+    "Сохранён режим без аналитики и персонализированной рекламы.": "Preferences saved: essential mode without analytics or personalized ads.",
+    "Настроить согласия и приватность": "Privacy & Consent Settings",
+    "Политика конфиденциальности": "Privacy Policy",
+    "Ссылка на политику ещё не настроена: ALCHEMY_PRIVACY_URL.": "Privacy policy URL is not configured yet: ALCHEMY_PRIVACY_URL.",
+    "Экспортировать мои данные": "Export My Data",
+    "Не удалось создать экспорт.": "Failed to create data export.",
+    "Локальный экспорт готов; запрашиваем серверную копию…": "Local export ready; requesting server copy…",
+    "Локальный экспорт готов; серверный экспорт недоступен.": "Local export ready; server copy unavailable.",
+    "Сервер ответил, но файл экспорта не удалось создать.": "Server replied, but export file could not be written.",
+    "Удалить данные: журнал покупок останется": "Delete Data (Purchase Journal Kept)",
+    "Нажми ещё раз — покупки останутся в журнале": "Tap Again to Confirm — Purchases Stay Logged",
+    "Будут удалены локальный прогресс, согласия и ID установки. Мировые вещества останутся, авторство будет анонимизировано сервером. На устройстве сохранится журнал уже выданных покупок (отпечаток чека, SKU и время) — это платёжная защита от повторной выдачи, а не прогресс.": "Deletes local progress, consent settings, and install ID. World discoveries remain, anonymized on the server. A hashed receipt log stays on device solely to prevent duplicate consumable grants.",
+    "Серверные данные удалены; локальные данные тоже очищены.": "Server data deleted and local data cleared.",
+    "Локальные данные очищены, но сервер пока недоступен — повтори удаление позже.": "Local data cleared, but server is offline — retry server deletion later.",
+    "Локальные данные удалены, журнал покупок сохранён. Перезапусти игру для новой установки.": "Local data deleted; purchase log preserved. Restart the game for a fresh install.",
+    "Повторяю удаление с сервера…": "Retrying server data deletion…",
+    "Покупка пока недоступна: подключи выбранный Android-плагин и тестовый аккаунт.": "Purchases unavailable: connect the Android billing plugin and test account.",
+    "Награда за просмотр сейчас недоступна. Проверь согласие, сеть и тестовый рекламный идентификатор.": "Rewarded ad unavailable right now. Check consent, connection, and ad setup.",
+    "Мешок эфира": "Ether Pouch",
+    "+500 эфира для личных варок и улучшений": "+500 ether for personal brews and upgrades",
+    "Большой мешок эфира": "Large Ether Pouch",
+    "+1500 эфира для личной лаборатории": "+1500 ether for your personal laboratory",
+    "Золото мудрецов": "Sage's Gold",
+    "+1 золото престижа. Не влияет на шанс мирового первооткрытия": "+1 prestige gold. Does not affect world-first discovery odds",
+    "Том лаборатории": "Laboratory Tome",
+    "500 эфира, 1 золото мудрецов и янтарная тема": "500 ether, 1 Sage's Gold, and the Amber theme",
+    "Тихая лаборатория": "Quiet Laboratory",
+    "Отключает межэкранную рекламу. Rewarded остаётся только по желанию": "Removes interstitial ads. Optional rewarded ads remain available",
+    "Раздуть огонь": "Stoke the Fire",
+    "Удвоить добычу источников на 60 секунд": "Double source harvest for 60 seconds",
+    "Вторая искра": "Second Spark",
+    "+12 эфира — ровно на одну варку": "+12 ether — enough for one brew",
+    "локальный режим": "local mode",
+    "сервер не ответил": "server did not respond",
+    "сервер не настроен": "server not configured",
+    "нет ответа от сервера": "no response from server",
+    "не удалось отправить запрос": "failed to send request",
+    "сервер вернул не-JSON ответ": "server returned non-JSON response",
+    "Локальный режим: подключи Android-плагин для покупок": "Local mode: connect Android billing plugin for purchases",
+    "Магазин не подтвердил покупку": "Store did not confirm purchase",
+    "Не удалось начислить покупку": "Failed to grant purchase",
+    "Очередь проверки чеков заполнена — повторим при следующем запуске": "Receipt verification queue full — will retry next launch",
+    "Покупка ещё не подтверждена магазином": "Purchase not yet confirmed by store",
+    "Покупка пришла с неизвестным SKU": "Purchase arrived with unknown SKU",
+    "Товар не найден в каталоге": "Product not found in catalog",
+    "Товар уже восстановлен": "Product already restored",
+    "У покупки нет идентификатора": "Purchase is missing an ID",
+    " Магазин не подтвердил списание — повторим при следующем запуске.": " Store has not confirmed consumption yet — will retry on next launch.",
+    " Сервер проверки чеков не ответил: выдача только в отладочной сборке.": " Receipt server offline: granted in debug build only.",
+    "Interstitial-реклама недоступна без согласия": "Interstitial ads unavailable without consent",
+    "Rewarded-реклама недоступна": "Rewarded ad unavailable",
+    "Rewarded-реклама недоступна без согласия": "Rewarded ads unavailable without consent",
+    "В рекламном плагине не найден rewarded-метод": "Rewarded ad method missing in plugin",
+    "Ожидается согласие на рекламу": "Awaiting ad consent",
+    "Реклама в debug-режиме": "Ads in debug mode",
+    "Реклама готова": "Ads ready",
+    "Реклама закрыта до награды": "Ad closed before reward",
+    "Рекламный плагин не подключён": "Ad plugin not connected",
+    "Согласие на рекламу отклонено": "Ad consent declined",
+    "Google Play Billing plugin не подключён": "Google Play Billing plugin not connected",
+    "Google Play Billing готов": "Google Play Billing ready",
+    "Google Play Billing недоступен": "Google Play Billing unavailable",
+    "В плагине Google Play не найден метод покупки": "Purchase method missing in Google Play plugin",
+    "Не удалось разобрать покупку Google Play": "Could not parse Google Play purchase",
+    "Плагин вернул неизвестный формат покупки": "Plugin returned unknown purchase format",
+    "У плагина нет метода запуска соединения": "Plugin missing startConnection method",
+    "RuStore Pay plugin не подключён": "RuStore Pay plugin not connected",
+    "RuStore Pay готов": "RuStore Pay ready",
+    "RuStore Pay недоступен": "RuStore Pay unavailable",
+    "RuStore вернул неизвестный формат покупки": "RuStore returned unknown purchase format",
+    "В плагине RuStore не найден метод покупки": "Purchase method missing in RuStore plugin",
+    "Не удалось разобрать покупку RuStore": "Could not parse RuStore purchase",
+    "Начать заново нельзя: идёт варка, производство или ждёт ответа эксперимент. Дождись завершения.": "Cannot restart while brewing, producing, or awaiting an experiment reply.",
+    "Ник уже занят": "Nickname already taken",
+    "Ник должен быть 2–24 символа и без спецсимволов": "Nickname must be 2–24 characters without special symbols",
+    "Ник должен быть 2–24 символа: буквы, цифры, пробел, дефис или подчёркивание": "Nickname must be 2–24 characters: letters, digits, space, hyphen, or underscore",
+    "Пара в обработке — повторите запрос": "Pair is being processed — please try again",
+    "Пара в обработке — подождите": "Pair is being processed — please wait",
+    "Цель дня не готова — повторите попытку": "Daily goal not ready — please try again",
+    "Не удалось зарегистрировать игрока — повторите попытку": "Could not register player — please try again",
+    "Домик слишком большой": "House layout exceeds size limit",
+    "Себя не навестишь": "You cannot visit your own house",
+    "Анонимный алхимик": "Anonymous Alchemist",
+    "Мир сейчас не может оценить эту пару — попробуйте позже.": "The world cannot evaluate this pair right now — try again later.",
+    "Мировой лимит экспериментов на сегодня исчерпан.": "Global daily experiment limit reached.",
+    "Мировой лимит писем на сегодня исчерпан.": "Global daily letter limit reached.",
+    "Дневной лимит писем исчерпан.": "Daily letter limit reached.",
+    "Дневной лимит генераций атласа исчерпан.": "Daily Atlas generation limit reached.",
+    "Ингредиент ещё не открыт этим игроком": "Ingredient not yet discovered by this player",
+    "Профиль уже удалён": "Profile already deleted",
+    "понедельник": "Monday",
+    "вторник": "Tuesday",
+    "среда": "Wednesday",
+    "четверг": "Thursday",
+    "пятница": "Friday",
+    "суббота": "Saturday",
+    "воскресенье": "Sunday",
+    "Серный круг": "Sulfur Circle",
+    "Лазурный виток": "Azure Coil",
+    "Кобальтовая тропа": "Cobalt Trail",
+    "Пепельный язык": "Ashen Tongue",
+    "Туманный янтарь": "Misty Amber",
+    "Лунная роса": "Moon Dew",
+    "Тихая искра": "Quiet Spark",
+    "Сигил «Горний Зов»": "Sigil \"High Call\"",
+    "осадок и прессовка": "sediment & pressing",
+    "плавка и закалка": "smelting & tempering",
+    "горный венец": "mountain crest",
+    " · +0.50 ⚡/с навсегда": " · +0.50 ⚡/s forever",
+    " · +50 к капу эфира": " · +50 ether cap",
+    " · +0.75 ⚡/с, титул Архимаг": " · +0.75 ⚡/s, Archmage title",
+    "Эфира для оборудования уже недостаточно.": "Not enough ether for equipment.",
+    "Эфира для автономности уже недостаточно.": "Not enough ether for autonomy.",
+    "Открыто вещество «Стекло»": "Discovered element \"Glass\"",
+    "Достижение: Первооткрыватель": "Achievement: Trailblazer",
+    "Задание Светика: Первая пара": "Lumi's Quest: First Pair",
+    "Комплект стихии: Огонь": "Element Set: Fire",
+    "Перегонка: +2 Золота мудрецов": "Distillation: +2 Sage's Gold",
+    "огонь": "fire",
+    "вода": "water",
+    "воздух": "air",
+    "земля": "earth",
+    "Николя": "Nicolas",
+    "Аня": "Anna",
+    "Варя": "Varya",
+    "Мирра": "Mirra",
+    "Люмина": "Lumina",
+    "Бор": "Bor",
+    "Некто": "Someone",
+    "Положи вещество на ночь — к утру созреет эссенция. Первые 8 уникальных эссенций дают +1 к капу навсегда каждая.": "Steep an element overnight — by morning an essence matures. The first 8 unique essences grant +1 permanent ether cap each.",
+    "Подарок": "Gift",
+    "СДАНО": "DONE"
+  },
+  "nl_patterns": [
+    {
+      "rx": "(?s)^Котёл\\ перегонит\\ лабораторию\\ в\\ чистое\\ золото\\ мудрецов\\.\\\n\\\nТеряешь:\\ вещества,\\ рецепты,\\ улучшения,\\ текущий\\ эфир\\ и\\ задания\\ линий\\.\\\nСохраняешь:\\ мастерство\\ Мастерской,\\ оборудование\\ и\\ автономность,\\ резерв,\\ архивные\\ печати,\\ достижения,\\ комплекты,\\ дружбу\\ Светика,\\ имя\\.\\\n\\\nПолучишь:\\ \\+(-?\\d+)\\ Золота\\ мудрецов\\ \\(навсегда\\)\\.$",
+      "en": "Distill your laboratory into pure Sage's Gold.\n\nReset: elements, recipes, upgrades, active ether, and line queues.\nKept: Workshop mastery, equipment & autonomy, ether reserve, Archive Seals, achievements, sets, Lumi's friendship, and nickname.\n\nGain: +{0} Sage's Gold (permanent).",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Потратить\\ (-?\\d+)\\ ⚡\\ и\\ по\\ одному\\ реагенту\\?\\\n\\\n(.+?)\\ \\+\\ (.+?)\\\n\\\nРезультат\\ определит\\ сервер;\\ характеристики,\\ стоимость\\ и\\ награды\\ не\\ задаются\\ внешним\\ генератором\\.$",
+      "en": "Spend {0} ⚡ and one of each reagent?\n\n{1} + {2}\n\nThe server determines the outcome; stats, cost, and rewards are validated by the server.",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Веществ\\ (-?\\d+)/(-?\\d+)\\ ·\\ Рецептов\\ (-?\\d+)/(-?\\d+)\\\nДостижения\\ (-?\\d+)/(-?\\d+)\\ ·\\ Комплекты\\ (-?\\d+)/4\\\nЗолото\\ мудрецов\\ (-?\\d+)\\ ·\\ Дружба\\ ур\\.\\ (-?\\d+)\\\nМировых\\ открытий:\\ (-?\\d+)\\\nТитул:\\ (.+)$",
+      "en": "Elements {0}/{1} · Recipes {2}/{3}\nAchievements {4}/{5} · Sets {6}/4\nSage's Gold {7} · Friendship Lv. {8}\nWorld Firsts: {9}\nTitle: {10}",
+      "n": 11
+    },
+    {
+      "rx": "(?s)^✦\\ Архивная\\ печать\\ ·\\ ранг\\ (-?\\d+)\\\n(-?\\d+)\\ ⚡\\ из\\ эфира\\ или\\ резерва\\\n(.+)$",
+      "en": "✦ Archive Seal · Rank {0}\n{1} ⚡ from ether or reserve\n{2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^\\\nХэш\\ пары:\\ v1/(.+?)\\ ·\\ сначала\\ проверится\\ серверный\\ кэш\\.$",
+      "en": "\nPair hash: v1/{0} · server cache checked first.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Озарение\\ открыло\\ рецепт:\\\n(.+?)\\ \\+\\ (.+?)\\ →\\ (.+)$",
+      "en": "Insight revealed a recipe:\n{0} + {1} → {2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Этап\\ каждые\\ (-?\\d+(?:\\.\\d+)?)\\ с\\ ·\\ (-?\\d+)\\ операций\\\n(.+?)\\ ·\\ (.+)$",
+      "en": "Stage every {0}s · {1} ops\n{2} · {3}",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^\\\nУлучшение:\\ до\\ (-?\\d+)\\ этапов\\\n(.+)$",
+      "en": "\nUpgrade: up to {0} stages\n{1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^\\\n(.+?)\\ \\+\\ (.+?)\\ →\\ (.+?)\\\n\\+(-?\\d+)\\ эфира$",
+      "en": "\n{0} + {1} → {2}\n+{3} ether",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^\\\n(.+?)\\ ·\\ награда\\ \\+(-?\\d+)\\ ⚡$",
+      "en": "\n{0} · reward +{1} ⚡",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Для\\ постройки:\\\n(.+)$",
+      "en": "Required to build:\n{0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^(.+?)\\ \\+\\ (.+?)\\ →\\ (.+?)\\\nавтор:\\ (.+)$",
+      "en": "{0} + {1} → {2}\nby: {3}",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^(.+?)\\\nПрогресс:\\ (-?\\d+)/(-?\\d+)$",
+      "en": "{0}\nProgress: {1}/{2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^\\\nавтор:\\ (.+)$",
+      "en": "\nby: {0}",
+      "n": 1
+    }
+  ],
+  "high_patterns": [
+    {
+      "rx": "(?s)^Мастерская:\\ базовый\\ этап\\ каждой\\ линии\\ —\\ (-?\\d+)\\ с\\ и\\ (-?\\d+)\\ операций\\ \\(Архивная\\ печать\\)\\.\\ Партия\\ производит\\ заданное\\ количество;\\ поддержание\\ запаса\\ проверяет\\ общий\\ инвентарь\\ до\\ общего\\ предела\\ стека\\ ×(-?\\d+)\\.\\ Эфир\\ списывается\\ перед\\ каждой\\ операцией,\\ включая\\ резерв;\\ скидка\\ чертежа\\ и\\ бонус\\ скорости\\ комплекта\\ учитываются\\ на\\ линии\\.$",
+      "en": "Workshop: each line stage takes {0}s and runs {1} ops (Archive Seal). Batch crafts a set amount; Keep Stock maintains inventory up to stack cap ×{2}. Ether is spent per operation (including reserve); blueprint discounts and set speed bonuses apply.",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Цепочка\\ слишком\\ длинная\\ для\\ локального\\ плана\\ \\((-?\\d+)\\ операций\\)\\.\\ Открой\\ ближайший\\ узел\\ через\\ Эксперимент\\.$",
+      "en": "Chain too long for local plan ({0} ops). Discover a closer intermediate element via Experiment.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^(-?\\d+)\\ операций\\ ·\\ следующая:\\ (-?\\d+)\\ эфира\\.\\ Ресурсы\\ списываются\\ по\\ мере\\ работы;\\ оценка\\ может\\ измениться\\.$",
+      "en": "{0} ops · next: {1} ether. Resources are spent as work progresses; estimate may vary.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^•\\ Линия\\ ([^\\n]+?)([^\\n]+?):\\ (-?\\d+)\\ операций;\\ целевой\\ выход:\\ ([^\\n]+?);\\ Мастерство\\ Мастерской\\ \\+(-?\\d+);\\ в\\ очереди:\\ (-?\\d+)\\.\\ Состояние:\\ ([^\\n]+?)\\.$",
+      "en": "• Line {0}{1}: {2} ops; output: {3}; Workshop Mastery +{4}; queued: {5}. State: {6}.",
+      "n": 7
+    },
+    {
+      "rx": "(?s)^Для\\ всех\\ недостающих\\ материалов\\ нужно\\ (-?\\d+)\\ свободных\\ мест;\\ доступно\\ (-?\\d+)\\.\\ Освободи\\ очередь\\.$",
+      "en": "Need {0} free queue slots for missing materials; {1} available. Free up the queue.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^(-?\\d+)\\ активного\\ \\+\\ (-?\\d+)\\ резерва\\.\\ Списывается\\ по\\ мере\\ работы;\\ очередь\\ не\\ резервирует\\ ресурсы\\.$",
+      "en": "{0} active + {1} reserve. Spent as work progresses; queued jobs do not lock resources.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Пока\\ тебя\\ не\\ было:\\ (-?\\d+)\\ операций,\\ (-?\\d+)\\ целевых\\ веществ,\\ \\+(-?\\d+)\\ мастерства\\ Мастерской\\.$",
+      "en": "While you were away: {0} ops, {1} target items, +{2} Workshop Mastery.",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Печать\\ улучшается\\ отдельно\\ от\\ оборудования\\ мастерской\\.\\ Ранг\\ печати:\\ (-?\\d+)\\.$",
+      "en": "Archive Seal upgrades separately from workshop equipment. Seal Rank: {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Тише…\\ слышишь\\?\\ Мир\\ тебя\\ запомнил\\.\\ «([^\\n]+?)»\\ —\\ твоё,\\ первое\\ во\\ всех\\ петлях!$",
+      "en": "Listen… the world remembers you. \"{0}\" is yours — the very first across all loops!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Локальный\\ котёл\\ закрыт:\\ \\+(-?\\d+(?:\\.\\d+)?)\\ к\\ регену\\ навсегда\\.\\ Без\\ мира\\ —\\ вполовину\\.$",
+      "en": "Local cauldron completed: +{0}/s regen forever (half offline rate).",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)([^\\n]+?)Варок:\\ (-?\\d+)\\ ·\\ всего\\ эфир:\\ (-?\\d+)\\ ·\\ сейчас\\ этап:\\ (-?\\d+)\\ ⚡\\ ·\\ можно\\ продолжить\\ позже$",
+      "en": "{0}{1}Brews: {2} · total ether: {3} · current stage: {4} ⚡ · resumable anytime",
+      "n": 5
+    },
+    {
+      "rx": "(?s)^Недостающие\\ материалы\\ запланированы:\\ (-?\\d+)\\ заданий\\ поддержания\\ запаса\\.$",
+      "en": "Missing materials queued: {0} stock maintenance job(s).",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Очаг\\ вспыхнул!\\ \\+(-?\\d+)\\ ⚡\\ \\(серия\\ (-?\\d+)\\)\\.\\ Заглядывай\\ завтра\\ —\\ угли\\ не\\ гаснут\\.$",
+      "en": "The Hearth flared! +{0} ⚡ (streak {1}). Come back tomorrow — the embers stay warm.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Этап\\ завершён:\\ (-?\\d+)/(-?\\d+)\\ операций\\.\\ Нажми\\ цель\\ ещё\\ раз,\\ чтобы\\ продолжить\\.$",
+      "en": "Stage complete: {0}/{1} ops. Tap the target again to continue.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^SigilLore:\\ ([^\\n]+?)\\#(-?\\d+)\\ —\\ не\\ нашёлся\\ warning\\ под\\ ртуть,\\ оставлен\\ исходный$",
+      "en": "SigilLore: {0}#{1} — no mercury warning found, keeping default",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^SigilGeneratorRegistry:\\ тип\\ '([^\\n]+?)'\\ не\\ зарегистрирован,\\ беру\\ object$",
+      "en": "SigilGeneratorRegistry: type '{0}' not registered, using object",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Лимит:\\ (-?\\d+)\\ наград\\ за\\ просмотр\\ в\\ день,\\ пауза\\ между\\ показами\\ —\\ (-?\\d+)\\ с\\.$",
+      "en": "Limit: {0} ad rewards per day, {1}s cooldown between ads.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Страница\\ Атласа\\ разгадана!\\ Твоих\\ страниц:\\ (-?\\d+)\\ \\(веха\\ —\\ каждые\\ (-?\\d+)\\)\\.$",
+      "en": "Atlas page solved! Your pages: {0} (milestone every {1}).",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^•\\ Ручная\\ цепочка:\\ (-?\\d+)\\ операций,\\ (-?\\d+)\\ целевых\\ выходов;\\ состояние:\\ ([^\\n]+?)\\.$",
+      "en": "• Manual chain: {0} ops, {1} target outputs; state: {2}.",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Туман\\ рассеялся:\\ «([^\\n]+?)»\\ и\\ «([^\\n]+?)»\\ не\\ сочетаются\\ —\\ элемент\\ не\\ создан\\.$",
+      "en": "The mist cleared: \"{0}\" and \"{1}\" do not combine.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Сброс\\ →\\ \\+(-?\\d+)\\ Золота\\ мудрецов\\ \\(сейчас\\ (-?\\d+)\\)\\.\\ Регенерация\\ ×(-?\\d+(?:\\.\\d+)?),\\ кап\\ \\+(-?\\d+)\\.$",
+      "en": "Reset → +{0} Sage's Gold (have {1}). Regen ×{2}, cap +{3}.",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^Первые\\ (-?\\d+)\\ уникальных\\ эссенций\\ дают\\ \\+(-?\\d+)\\ к\\ капу\\ навсегда\\ каждая\\.$",
+      "en": "The first {0} unique essences grant +{1} permanent ether cap each.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Светик\\ шепчет:\\ попробуй\\ «([^\\n]+?)»\\ \\+\\ «([^\\n]+?)»\\.\\ Результат\\ откроешь\\ сам\\.$",
+      "en": "Lumi whispers: try \"{0}\" + \"{1}\". Discover the result yourself!",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ —\\ ЭПИЧЕСКОЕ\\ вещество!\\ Такое\\ не\\ каждый\\ день\\ рождается\\.$",
+      "en": "\"{0}\" — an EPIC element! Not every day sees such a birth.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Производство\\ завершён:\\ ([^\\n]+?)\\ \\+1\\.\\ Маршрут\\ сохранён\\ как\\ чертёж\\.$",
+      "en": "Production complete: {0} +1. Route saved as blueprint.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^В\\ лунку:\\ ([^\\n]+?)\\.\\ Можно\\ варить\\ или\\ добавить\\ второй\\ ингредиент\\.$",
+      "en": "In slot: {0}. Brew now or add a second ingredient.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^SigilItemAdapter:\\ (-?\\d+)\\ категорий,\\ (-?\\d+)\\ тегов,\\ (-?\\d+)\\ ручных\\ привязок$",
+      "en": "SigilItemAdapter: {0} categories, {1} tags, {2} manual bindings",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Локальный\\ котёл:\\ свари\\ (-?\\d+)\\ разных\\ вещества\\ за\\ неделю\\ \\((-?\\d+)/(-?\\d+)\\)\\.$",
+      "en": "Local cauldron: brew {0} distinct elements this week ({1}/{2}).",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ появился\\ на\\ поле\\.\\ При\\ желании\\ перенеси\\ его\\ в\\ котёл\\.$",
+      "en": "\"{0}\" placed on the table. Drag it into the cauldron whenever ready.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Мудрецы\\ приняли\\ твой\\ дар:\\ \\+([^\\n]+?)\\ золота\\.\\ Путь\\ снова\\ открыт\\.$",
+      "en": "The Sages accepted your offering: +{0} gold. The path opens anew.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Отпусти\\ ([^\\n]+?)\\ над\\ лункой\\ A\\ или\\ B,\\ или\\ просто\\ тапни\\ по\\ нему\\.$",
+      "en": "Drop {0} onto slot A or B, or simply tap it.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Перегонка!\\ \\+([^\\n]+?)\\ золота\\ мудрецов\\.\\ Начнём\\ с\\ чистого\\ котла!$",
+      "en": "Distillation! +{0} Sage's Gold. A fresh start at a clean cauldron!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ —\\ ЛЕГЕНДАРНОЕ!\\ Сам\\ туман\\ расступился\\ перед\\ тобой\\.$",
+      "en": "\"{0}\" — LEGENDARY! Even the mist parted before you.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Подмастерья\\ гильдии\\ сегодня\\ варили\\ «([^\\n]+?)»:\\ \\+1\\ отголосок\\.$",
+      "en": "Guild apprentices brewed \"{0}\" today: +1 echo.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Цепочка\\ сохранена:\\ следующий\\ этап\\ требует\\ около\\ (-?\\d+)\\ ⚡\\.$",
+      "en": "Chain saved: next stage needs ~{0} ⚡.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Производство:\\ этап\\ (-?\\d+)/(-?\\d+)\\ завершён\\ —\\ продолжу\\ через\\ (-?\\d+)\\ с\\.$",
+      "en": "Production: stage {0}/{1} complete — resuming in {2}s.",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Котёл\\ очищен:\\ (-?\\d+)\\ реагент\\(а\\)\\ снова\\ доступны\\ в\\ выборе\\.$",
+      "en": "Cauldron cleared: {0} reagent(s) returned to picker.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Сначала\\ продолжи\\ или\\ останови\\ Производство\\ для\\ «([^\\n]+?)»\\.$",
+      "en": "Resume or stop Production for \"{0}\" first.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Рад\\ знакомству,\\ ([^\\n]+?)!\\ Я\\ —\\ ([^\\n]+?)\\.\\ Теперь\\ котёл\\ у\\ нас\\ общий\\.$",
+      "en": "Nice to meet you, {0}! I'm {1}. We share this cauldron now.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Эксперимент\\ отправлен\\ в\\ лабораторный\\ журнал:\\ ([^\\n]+?)\\ \\+\\ ([^\\n]+?)…$",
+      "en": "Experiment logged: {0} + {1}…",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^⚡\\ Котёл\\ добавил\\ \\+(-?\\d+)\\ эфира;\\ производство\\ потратило\\ (-?\\d+)\\.$",
+      "en": "⚡ Cauldron generated +{0} ether; production spent {1}.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Легенда\\ в\\ твоём\\ котле:\\ «([^\\n]+?)»!\\ Награда\\ —\\ королевская\\.$",
+      "en": "A legend in your cauldron: \"{0}\"! A royal reward.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Не\\ хватает\\ эфира:\\ открытие\\ этой\\ глубины\\ стоит\\ (-?\\d+)\\ ⚡\\.$",
+      "en": "Not enough ether: discovering at this depth costs {0} ⚡.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Туман\\ рассеялся…\\ Мир\\ посмотрит\\ эту\\ пару\\ через\\ (-?\\d+)\\ с\\.$",
+      "en": "The mist cleared… You can query this pair again in {0}s.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^SigilRenderService:\\ не\\ удалось\\ сохранить\\ ([^\\n]+?)\\ \\(err\\ (-?\\d+)\\)$",
+      "en": "SigilRenderService: failed to save {0} (err {1})",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Откроется\\ за\\ Печать\\ мастерства:\\ ранг\\ (-?\\d+)\\ \\(сейчас\\ (-?\\d+)\\)\\.$",
+      "en": "Unlocks at Archive Seal Rank {0} (currently {1}).",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^✦\\ Веха\\ писем!\\ \\+(-?\\d+)\\ к\\ капу\\ эфира\\ навсегда\\ \\(всего\\ \\+(-?\\d+)\\)\\.$",
+      "en": "✦ Letters Milestone! +{0} permanent ether cap (+{1} total).",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ в\\ котле\\.\\ Можно\\ добавить\\ ещё\\ вещества\\ на\\ поле\\.$",
+      "en": "\"{0}\" is in the cauldron. You can place more elements on the table.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Ты\\ вернулся!\\ Котёл\\ всё\\ это\\ время\\ копил\\ эфир:\\ ([^\\n]+?)\\ ⚡\\.$",
+      "en": "You're back! The cauldron gathered {0} ⚡ while you were away.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Цепочка\\ сохранена:\\ (-?\\d+)/(-?\\d+)\\ операций\\.\\ Причина\\ паузы:\\ ([^\\n]+?)\\.$",
+      "en": "Chain saved: {0}/{1} ops. Paused: {2}.",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Веха\\ Атласа!\\ \\+(-?\\d+)\\ к\\ капу\\ эфира\\ навсегда\\ \\(всего\\ \\+(-?\\d+)\\)\\.$",
+      "en": "Atlas Milestone! +{0} permanent ether cap (+{1} total).",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Ярмарка\\ без\\ мира:\\ \\+(-?\\d+(?:\\.\\d+)?)\\ регена\\ навсегда\\ \\(вполовину\\)$",
+      "en": "Offline Fair: +{0}/s regen forever (half rate)",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Sfx:\\ музыка\\ не\\ найдена:\\ ([^\\n]+?)\\ —\\ процедурный\\ fallback$",
+      "en": "Sfx: music not found: {0} — procedural fallback",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Верстак\\ остановился:\\ ([^\\n]+?);\\ продолжит\\ с\\ этого\\ места\\.$",
+      "en": "Workbench paused: {0}; will resume from here.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Для\\ печати\\ мастерства\\ нужно\\ (-?\\d+)\\ ⚡\\ \\(эфир\\ \\+\\ резерв\\)\\.$",
+      "en": "Archive Seal requires {0} ⚡ (ether + reserve).",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^«Перегонка»\\ откроется\\ на\\ (-?\\d+)\\ веществах\\ \\(сейчас\\ (-?\\d+)\\)\\.$",
+      "en": "Distillation unlocks at {0} elements (currently {1}).",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Цепочка\\ сохранена\\ после\\ остановки:\\ (-?\\d+)/(-?\\d+)\\ операций\\.$",
+      "en": "Chain saved after stop: {0}/{1} operations.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^✦\\ Письмо\\ Светика\\ \\(([^\\n]+?)\\)\\ разгадано!\\ Веха\\ —\\ каждые\\ (-?\\d+)\\.$",
+      "en": "✦ Lumi's Letter ({0}) solved! Milestone every {1}.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ ·\\ линия\\ продолжит\\ сама,\\ когда\\ появится\\ нужное$",
+      "en": "{0} · line will resume automatically once ready",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Мастерская:\\ обработка\\ времени\\ остановилась\\ \\(([^\\n]+?)\\)\\.$",
+      "en": "Workshop: offline processing stopped ({0}).",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Ранг\\ (-?\\d+):\\ новый\\ титул\\ в\\ архиве,\\ выгода\\ —\\ со\\ 2\\-го\\.$",
+      "en": "Rank {0}: new archive title; bonuses start at Rank 2.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Сервер\\ недоступен\\ ·\\ показаны\\ данные\\ от\\ (-?\\d+)s\\ назад$",
+      "en": "Server offline · showing cached data from {0}s ago",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Следующий\\ эксперимент\\ будет\\ доступен\\ через\\ (-?\\d+)\\ с\\.$",
+      "en": "Next experiment available in {0}s.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Эксперимент\\ удался:\\ открыто\\ новое\\ вещество\\ «([^\\n]+?)»\\.$",
+      "en": "Experiment succeeded: discovered \"{0}\".",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^SigilLore:\\ ([^\\n]+?)\\#(-?\\d+)\\ —\\ конфликт\\ сосудов\\ ([^\\n]+?)/([^\\n]+?)\\ не\\ разрешён$",
+      "en": "SigilLore: {0}#{1} — vessel conflict {2}/{3} unresolved",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^Кастомный\\ цвет\\ \\(([^\\n]+?)\\)\\ стоит\\ (-?\\d+)\\ ⚡\\ —\\ пока\\ не\\ хватает\\.$",
+      "en": "Custom color ({0}) costs {1} ⚡ — not enough ether.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^ПЕРЕГОНКА:\\ \\+(-?\\d+)\\ Золота\\ мудрецов!\\ Теперь\\ у\\ тебя\\ (-?\\d+)\\.$",
+      "en": "DISTILLATION: +{0} Sage's Gold! You now have {1}.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^В\\ комнате\\ тесно:\\ больше\\ (-?\\d+)\\ предметов\\ не\\ влезет\\.$",
+      "en": "Room is full: maximum {0} items placed.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Задание\\ «([^\\n]+?)»\\ готово!\\ Возьми\\ награду\\ —\\ заслужил\\.$",
+      "en": "Quest \"{0}\" complete! Enjoy your reward.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Мир\\ уже\\ знает\\ эту\\ пару:\\ ([^\\n]+?)\\ получен\\ без\\ запроса\\.$",
+      "en": "World already knows this pair: {0} obtained from cache.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^ПЕРВОЭКСПЕРИМЕНТ:\\ ([^\\n]+?)\\ —\\ мир\\ записал\\ тебя\\ первым!$",
+      "en": "FIRST EXPERIMENT: {0} — the world recorded you as the discoverer!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^•\\ Производство\\ ждёт\\ продолжения:\\ (-?\\d+)/(-?\\d+)\\ операций\\.$",
+      "en": "• Production awaiting resume: {0}/{1} ops.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^ЕЖЕДНЕВНАЯ\\ ЦЕЛЬ\\ «([^\\n]+?)»\\ выполнена!\\ Держи\\ награду\\.$",
+      "en": "DAILY GOAL \"{0}\" completed! Claim your reward.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Комплект\\ «([^\\n]+?)»\\ собран!\\ Стихия\\ подчинилась\\ тебе\\.$",
+      "en": "Set \"{0}\" complete! The element bends to your craft.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^ПЕРВООТКРЫТИЕ\\ «([^\\n]+?)»!\\ Твоё\\ имя\\ теперь\\ в\\ истории!$",
+      "en": "WORLD FIRST \"{0}\"! Your name is written in history!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Тема\\ «([^\\n]+?)»\\ применена\\.\\ Лаборатория\\ стала\\ уютнее!$",
+      "en": "Theme \"{0}\" applied. The laboratory feels cozier!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Моих\\ страниц:\\ (-?\\d+)\\ ·\\ вехи:\\ (-?\\d+)\\ \\(\\+(-?\\d+)\\ к\\ капу\\ навсегда\\)$",
+      "en": "My pages: {0} · milestones: {1} (+{2} permanent cap)",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Эхо\\ к\\ получению:\\ (-?\\d+)\\ \\(кап\\ (-?\\d+)\\)\\ ·\\ всего\\ повторов:\\ (-?\\d+)$",
+      "en": "Claimable echoes: {0} (cap {1}) · total repeats: {2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Коллекция:\\ (-?\\d+)/(-?\\d+)\\ ·\\ купленное\\ ставится\\ бесплатно$",
+      "en": "Collection: {0}/{1} · owned items place for free",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^•\\ Атлас:\\ загадка\\ дня\\ ждёт\\ —\\ разгадали\\ уже\\ (-?\\d+)\\.$",
+      "en": "• Atlas: today's riddle awaits — solved by {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Котёл\\ ярмарки\\ закрыт!\\ \\+(-?\\d+(?:\\.\\d+)?)\\ к\\ регену\\ навсегда\\.$",
+      "en": "Fair Cauldron completed! +{0}/s regen forever.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Продолжаем\\ незавершённый\\ эксперимент:\\ ([^\\n]+?)\\ \\+\\ ([^\\n]+?)…$",
+      "en": "Resuming pending experiment: {0} + {1}…",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ для\\ гильдии\\ —\\ сварено\\.\\ Отличная\\ работа\\.$",
+      "en": "\"{0}\" brewed for the Guild. Fine work.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ —\\ вся\\ стихия\\ в\\ твоей\\ книге\\.\\ Впечатляет!$",
+      "en": "\"{0}\" — the whole element set is in your book. Impressive!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Архивная\\ печать:\\ (-?\\d+)\\ операций\\ за\\ этап\\ \\(3/4/5\\)$",
+      "en": "Archive Seal: {0} ops per stage (3/4/5)",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Производство\\ «([^\\n]+?)»:\\ этап\\ (-?\\d+)\\ ·\\ шаг\\ (-?\\d+)/(-?\\d+)\\ —\\ ([^\\n]+?)\\ \\+\\ ([^\\n]+?)\\ \\(\\~(-?\\d+)с\\)$",
+      "en": "Producing \"{0}\": stage {1} · step {2}/{3} — {4} + {5} (~{6}s)",
+      "n": 7
+    },
+    {
+      "rx": "(?s)^Для\\ повтора\\ не\\ хватает\\ ингредиентов:\\ ([^\\n]+?)\\ \\+\\ ([^\\n]+?)\\.$",
+      "en": "Missing ingredients to repeat: {0} + {1}.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Поручение\\ Светика\\ выполнено:\\ ([^\\n]+?)\\ —\\ подарок:\\ ([^\\n]+)$",
+      "en": "Lumi's request completed: {0} — reward: {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ выполнено!\\ Светик\\ искрится\\ от\\ радости\\.$",
+      "en": "\"{0}\" completed! Lumi sparkles with joy.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Вклад\\ в\\ котёл\\ ярмарки\\ засчитан!\\ \\(твоих:\\ (-?\\d+)\\)$",
+      "en": "Fair Cauldron contribution counted! (yours: {0})",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Страницу\\ атласа\\ можно\\ запросить\\ через\\ (-?\\d+)\\ с\\.$",
+      "en": "Next Atlas page request in {0}s.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Веществ\\ открыто:\\ (-?\\d+)\\ /\\ (-?\\d+)\\ \\ \\ ·\\ \\ \\ Рецептов:\\ (-?\\d+)\\ /\\ (-?\\d+)([^\\n]+)$",
+      "en": "Elements: {0} / {1}   ·   Recipes: {2} / {3}{4}",
+      "n": 5
+    },
+    {
+      "rx": "(?s)^Веществ\\ открыто:\\ (-?\\d+)\\ /\\ (-?\\d+)\\ \\ \\ ·\\ \\ \\ Рецептов:\\ (-?\\d+)\\ /\\ (-?\\d+)$",
+      "en": "Elements: {0} / {1}   ·   Recipes: {2} / {3}",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^Подмастерье:\\ ([^\\n]+?)\\ ·\\ «([^\\n]+?)»\\ ·\\ рецептов\\ доступно:\\ (-?\\d+)$",
+      "en": "Apprentice: {0} · \"{1}\" · available recipes: {2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Разгадано:\\ (-?\\d+)\\ ·\\ вехи:\\ (-?\\d+)\\ \\(\\+(-?\\d+)\\ к\\ капу\\ навсегда\\)$",
+      "en": "Solved: {0} · milestones: {1} (+{2} permanent cap)",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^поддерживать\\ общий\\ запас\\ (-?\\d+)/(-?\\d+);\\ произведено\\ (-?\\d+)$",
+      "en": "keep stock {0}/{1}; produced {2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ веществ\\ в\\ атласе!\\ Ты\\ растёшь\\ на\\ глазах\\.$",
+      "en": "{0} elements in the Atlas! You're growing fast.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Заказ\\ гильдии\\ на\\ «([^\\n]+?)»\\ готов\\.\\ Золото\\ течёт!$",
+      "en": "Guild order for \"{0}\" fulfilled!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Имя\\ сохранено:\\ ([^\\n]+?)\\.\\ Его\\ видят\\ все\\ алхимики!$",
+      "en": "Name saved: {0}. Visible to all alchemists!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Крафт\\ не\\ прошёл\\ \\(([^\\n]+?)\\)\\ —\\ ресурсы\\ возвращены\\.$",
+      "en": "Craft failed ({0}) — resources refunded.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Откроется\\ за\\ 3\\ уникальные\\ эссенции\\ \\((-?\\d+)/3\\)\\.$",
+      "en": "Unlocks at 3 unique essences ({0}/3).",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Перенеси\\ «([^\\n]+?)»\\ в\\ котёл\\ или\\ отпусти\\ на\\ поле\\.$",
+      "en": "Drag \"{0}\" into the cauldron or release it on the table.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^С\\ возвращением!\\ Пока\\ тебя\\ не\\ было\\ —\\ \\+([^\\n]+?)\\ ⚡\\.$",
+      "en": "Welcome back! While you were away: +{0} ⚡.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Сначала\\ открой\\ рецепт\\ «([^\\n]+?)»\\ в\\ Эксперименте\\.$",
+      "en": "Discover the recipe for \"{0}\" in Experiment first.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Ты\\ первым\\ в\\ мире\\ получил\\ вещество\\ из\\ «([^\\n]+?)»!$",
+      "en": "You were first in the world to brew an element from \"{0}\"!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^ДОСТИЖЕНИЕ:\\ ([^\\n]+?)\\ \\(\\+(-?\\d+)\\ ⚡,\\ \\+(-?\\d+)\\ кап,\\ \\+(-?\\d+(?:\\.\\d+)?)/с\\ навсегда\\)$",
+      "en": "ACHIEVEMENT: {0} (+{1} ⚡, +{2} cap, +{3}/s forever)",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^ДОСТИЖЕНИЯ:\\ ([^\\n]+?)\\ \\(\\+(-?\\d+)\\ ⚡,\\ \\+(-?\\d+)\\ кап,\\ \\+(-?\\d+(?:\\.\\d+)?)/с\\ навсегда\\)$",
+      "en": "ACHIEVEMENTS: {0} (+{1} ⚡, +{2} cap, +{3}/s forever)",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^ВЕХА\\ ОТГОЛОСКОВ:\\ (-?\\d+)\\ повторов\\ —\\ ([^\\n]+?)\\ навсегда!$",
+      "en": "ECHO MILESTONE: {0} repeats — {1} forever!",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Ritual\\ demo:\\ ([^\\n]+?)\\ \\(тап\\ по\\ экрану\\ —\\ закрыть\\)$",
+      "en": "Ritual demo: {0} (tap screen to close)",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Переписка\\ с\\ ([^\\n]+?)\\ будет\\ удалена\\ у\\ вас\\ обоих\\.$",
+      "en": "Chat history with {0} will be deleted for both of you.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Прожилка\\ в\\ жиле\\ «([^\\n]+?)»!\\ \\+1\\ к\\ капу\\ навсегда\\.$",
+      "en": "Vein streak in \"{0}\"! +1 permanent ether cap.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^•\\ Атлас:\\ страница\\ разгадана\\ ✓\\ \\(всего\\ (-?\\d+)\\)\\.$",
+      "en": "• Atlas: today's page solved ✓ ({0} total).",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Награда:\\ \\+(-?\\d+)\\ ⚡\\ ·\\ навсегда\\ \\+(-?\\d+)\\ к\\ капу\\ и\\ \\+(-?\\d+(?:\\.\\d+)?)/с$",
+      "en": "Reward: +{0} ⚡ · permanent +{1} cap & +{2}/s",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Не\\ хватает\\ эфира\\ на\\ «([^\\n]+?)»:\\ нужно\\ (-?\\d+),\\ есть\\ (-?\\d+)\\.$",
+      "en": "Not enough ether for \"{0}\": need {1}, have {2}.",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Цель\\ дня:\\ ([^\\n]+?)\\ ·\\ выполнено:\\ (-?\\d+)\\ ·\\ твои\\ очки:\\ (-?\\d+)$",
+      "en": "Daily Goal: {0} · completions: {1} · your pts: {2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Дружба:\\ ур\\.\\ (-?\\d+)\\ ·\\ (-?\\d+)\\ очков\\ —\\ лучшие\\ друзья!$",
+      "en": "Friendship: Lv. {0} · {1} pts — best friends!",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Кастомный\\ цвет\\ \\(([^\\n]+?)\\)\\ разблокирован\\ за\\ (-?\\d+)\\ ⚡!$",
+      "en": "Custom color ({0}) unlocked for {1} ⚡!",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Нужно\\ открыть:\\ ([^\\n]+?)\\ \\+\\ ([^\\n]+?)\\ \\(через\\ Эксперимент\\)$",
+      "en": "Need to discover: {0} + {1} (via Experiment)",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^•\\ Эхо:\\ (-?\\d+)\\ к\\ получению\\ ·\\ повторов\\ всего\\ (-?\\d+)\\.$",
+      "en": "• Echoes: {0} claimable · {1} total repeats.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Количество\\ должно\\ быть\\ целым\\ от\\ 1\\ до\\ (-?\\d+)\\.$",
+      "en": "Quantity must be a whole number from 1 to {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Поручение\\ выполнено:\\ ([^\\n]+?)\\.\\ Светик\\ доволен\\.$",
+      "en": "Request completed: {0}. Lumi is pleased.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Привет!\\ Я\\ —\\ ([^\\n]+?)\\.\\ Давай\\ сварим\\ что\\-нибудь!$",
+      "en": "Hi! I'm {0}. Let's brew something together!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^В\\ мире\\ известно\\ (-?\\d+)\\ веществ\\ \\(локально\\ (-?\\d+)\\)\\.$",
+      "en": "{0} elements known in the world ({1} local).",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Ежедневная\\ цель\\ «([^\\n]+?)»\\ выполнена:\\ \\+(-?\\d+)\\ эфира$",
+      "en": "Daily Goal \"{0}\" completed: +{1} ether",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Перегонка:\\ \\+(-?\\d+)\\ Золота\\ мудрецов\\ \\(всего\\ (-?\\d+)\\)$",
+      "en": "Distillation: +{0} Sage's Gold ({1} total)",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Тише…\\ «([^\\n]+?)»\\.\\ Мир\\ станет\\ чуть\\ интереснее\\.$",
+      "en": "Hush… \"{0}\". The world just grew a little more interesting.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Эксперимент\\ можно\\ отправить\\ через\\ (-?\\d+)\\ с\\.$",
+      "en": "Next experiment in {0}s.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^•\\ Верстак\\ в\\ фоне\\ \\(вполсилы\\):\\ \\+(-?\\d+)\\ варок\\.$",
+      "en": "• Workbench offline (half speed): +{0} brews.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Дружба:\\ ур\\.\\ (-?\\d+)\\ ·\\ (-?\\d+)\\ очков\\ ·\\ до\\ ур\\.\\ (-?\\d+)\\ ещё\\ (-?\\d+)$",
+      "en": "Friendship: Lv. {0} · {1} pts · {3} more to Lv. {2}",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^Sfx:\\ не\\ удалось\\ нарезать\\ ([^\\n]+?)\\ \\(событие\\ ([^\\n]+?)\\)$",
+      "en": "Sfx: failed to slice {0} (event {1})",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Пополнять\\ до\\ (-?\\d+)\\ шт\\.\\ ·\\ сейчас\\ в\\ запасе\\ (-?\\d+)$",
+      "en": "Keep stock at {0} pcs. · currently {1} in stock",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^✦\\ Писем\\ ждут\\ разгадки:\\ (-?\\d+)\\.\\ Сегодня:\\ «([^\\n]+?)»$",
+      "en": "✦ Unsolved letters: {0}. Today: \"{1}\"",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ —\\ запишем\\ в\\ летопись\\ лаборатории\\.$",
+      "en": "\"{0}\" — recorded in the laboratory chronicles.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Достижение\\ «([^\\n]+?)»!\\ Котёл\\ гордится\\ тобой\\.$",
+      "en": "Achievement \"{0}\"! The cauldron is proud of you.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Не\\ хватает\\ эфира:\\ материал\\ стоит\\ (-?\\d+)\\ ⚡\\.$",
+      "en": "Not enough ether: material costs {0} ⚡.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Работа\\ без\\ тебя:\\ до\\ (-?\\d+)\\ этапов\\ на\\ линию$",
+      "en": "Offline autonomy: up to {0} stages per line",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Ранг\\ (-?\\d+):\\ этап\\ автоварки\\ (-?\\d+)\\ →\\ (-?\\d+)\\ операций\\.$",
+      "en": "Rank {0}: auto-brew stage {1} → {2} operations.",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Цель\\ дня:\\ ([^\\n]+?)\\ ·\\ выполнено:\\ (-?\\d+)\\ ·\\ первый:\\ ([^\\n]+)$",
+      "en": "Daily Goal: {0} · completions: {1} · first: {2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ откроется\\ вместе\\ с\\ веществом\\ «([^\\n]+?)»\\.$",
+      "en": "\"{0}\" unlocks with \"{1}\".",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Выбери\\ режим\\ и\\ количество\\ от\\ 1\\ до\\ (-?\\d+)\\.$",
+      "en": "Select mode and quantity from 1 to {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Достигни\\ (-?\\d+)\\ уровня\\ дружбы\\ со\\ Светиком$",
+      "en": "Reach Friendship Lv. {0} with Lumi",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^ЕЖЕДНЕВНАЯ\\ ЦЕЛЬ\\ ВЫПОЛНЕНА:\\ \\+(-?\\d+)\\ эфира!$",
+      "en": "DAILY GOAL COMPLETED: +{0} ether!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Первооткрытие\\ через\\ Эксперимент:\\ «([^\\n]+?)»$",
+      "en": "World First via Experiment: \"{0}\"",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Печать\\ мастерства\\ укреплена:\\ ранг\\ (-?\\d+)\\.$",
+      "en": "Archive Seal strengthened: Rank {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Цель\\ дня\\ «([^\\n]+?)»\\ закрыта\\.\\ Котёл\\ доволен!$",
+      "en": "Daily Goal \"{0}\" completed. The cauldron is pleased!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Цель\\ дня\\ выполнена:\\ вещество\\ из\\ «([^\\n]+?)»!$",
+      "en": "Daily Goal completed: brewed from \"{0}\"!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Ранг\\ (-?\\d+):\\ реторта\\ зреет\\ на\\ (-?\\d+)\\ %\\ быстрее\\.$",
+      "en": "Rank {0}: Retort matures {1}% faster.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Эссенций\\ собрано:\\ (-?\\d+)\\ ·\\ бонус\\ капа:\\ \\+(-?\\d+)$",
+      "en": "Essences collected: {0} · cap bonus: +{1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Мы\\ стали\\ ближе!\\ Дружба\\ —\\ уровень\\ (-?\\d+)\\.$",
+      "en": "We've grown closer! Friendship Lv. {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Ого,\\ «([^\\n]+?)»!\\ Глубина\\ награждает\\ щедро\\.$",
+      "en": "Whoa, \"{0}\"! Depth rewards generously.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^ЗАДАНИЕ:\\ ([^\\n]+?)\\ —\\ \\+(-?\\d+)\\ кап\\ и\\ \\+(-?\\d+(?:\\.\\d+)?)/с\\ навсегда!$",
+      "en": "QUEST: {0} — +{1} cap & +{2}/s forever!",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Изготовить\\ (-?\\d+)\\ шт\\.\\ ·\\ примерно\\ (-?\\d+)\\ эфира$",
+      "en": "Craft {0} pcs. · ~{1} ether",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Эта\\ пара\\ уже\\ открыта:\\ ([^\\n]+?)\\ \\(автор:\\ ([^\\n]+?)\\)\\.$",
+      "en": "This pair is already discovered: {0} (by {1}).",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^В\\ запасе\\ нет\\ свободной\\ порции\\ «([^\\n]+?)»\\.$",
+      "en": "No free copy of \"{0}\" in stock.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^ВСЕ\\ ЗАКАЗЫ\\ ГИЛЬДИИ\\ ВЫПОЛНЕНЫ:\\ \\+(-?\\d+)\\ ⚡$",
+      "en": "ALL GUILD ORDERS COMPLETED: +{0} ⚡",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Веха:\\ ([^\\n]+?)!\\ Держи\\ награду\\ —\\ заслужил\\.$",
+      "en": "Milestone: {0}! Here's your well-earned reward.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Все\\ заказы\\ гильдии\\ выполнены:\\ \\+(-?\\d+)\\ ⚡$",
+      "en": "All Guild orders completed: +{0} ⚡",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Не\\ хватает\\ эфира:\\ домик\\ стоит\\ (-?\\d+)\\ ⚡\\.$",
+      "en": "Not enough ether: cottage costs {0} ⚡.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Поддерживать\\ (-?\\d+)\\ шт\\.\\ в\\ общем\\ запасе\\.$",
+      "en": "Maintain {0} pcs. in stock.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^С\\ возвращением([^\\n]+?)!\\ Котёл\\ соскучился\\.$",
+      "en": "Welcome back{0}! The cauldron missed you.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^С\\ возвращением!\\ Котёл\\ соскучился\\.$",
+      "en": "Welcome back! The cauldron missed you.",
+      "n": 0
+    },
+    {
+      "rx": "(?s)^Sfx:\\ файл\\ не\\ найден:\\ ([^\\n]+?)\\ \\(событие\\ ([^\\n]+?)\\)$",
+      "en": "Sfx: file not found: {0} (event {1})",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Верстак\\ завершил:\\ ([^\\n]+?)\\ \\+1\\ \\(шагов:\\ (-?\\d+)\\)\\.$",
+      "en": "Workbench finished: {0} +1 ({1} steps).",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^ЗАКАЗ\\ ГИЛЬДИИ:\\ «([^\\n]+?)»\\ выполнен\\ \\(\\+(-?\\d+)\\ ⚡\\)$",
+      "en": "GUILD ORDER: \"{0}\" fulfilled (+{1} ⚡)",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Заказ\\ гильдии:\\ «([^\\n]+?)»\\ выполнен\\ \\(\\+(-?\\d+)\\ ⚡\\)$",
+      "en": "Guild Order: \"{0}\" fulfilled (+{1} ⚡)",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^•\\ В\\ реторте\\ зреет:\\ (-?\\d+)\\ \\(осталось\\ ([^\\n]+?)\\)\\.$",
+      "en": "• Steeped in Retort: {0} ({1} left).",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ —\\ новенькое\\ в\\ книге\\.\\ Горжусь!$",
+      "en": "\"{0}\" — a brand new entry in your book. Proud of you!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Аура\\ «([^\\n]+?)»\\ зажглась\\ вокруг\\ Светика!$",
+      "en": "\"{0}\" Aura now shines around Lumi!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Не\\ хватает\\ эфира:\\ аура\\ стоит\\ (-?\\d+)\\ ⚡\\.$",
+      "en": "Not enough ether: aura costs {0} ⚡.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Не\\ хватает\\ эфира:\\ тема\\ стоит\\ (-?\\d+)\\ ⚡\\.$",
+      "en": "Not enough ether: theme costs {0} ⚡.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Письмо\\ можно\\ запросить\\ через\\ (-?\\d+)\\ с\\.$",
+      "en": "Next letter request in {0}s.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Реторта\\ побулькивает,\\ осталось\\ ([^\\n]+?)!$",
+      "en": "The Retort is bubbling — {0} left!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Реторта:\\ «([^\\n]+?)»\\ возвращено\\ в\\ запасы\\.$",
+      "en": "Retort: \"{0}\" returned to stock.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^•\\ Производство\\ в\\ фоне:\\ \\+(-?\\d+)\\ шаг\\(а\\)\\.$",
+      "en": "• Background production: +{0} step(s).",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Построить:\\ (-?\\d+)\\ линии\\ ·\\ очередь\\ по\\ (-?\\d+)$",
+      "en": "Build: {0} lines · queue cap {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^ЭССЕНЦИЯ\\ «([^\\n]+?)»:\\ \\+(-?\\d+)\\ к\\ капу\\ навсегда!$",
+      "en": "ESSENCE OF \"{0}\": +{1} permanent cap!",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^([^\\n]+?):\\ платёжный\\ плагин\\ не\\ подключён$",
+      "en": "{0}: billing plugin not connected",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ мы\\ уже\\ знаем\\.\\ Котёл\\ доволен\\.$",
+      "en": "We already know \"{0}\". The cauldron is pleased.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ настоялось!\\ Эссенция\\ готова\\.$",
+      "en": "\"{0}\" has steeped! Essence is ready.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Подарок\\ \\(([^\\n]+?)\\):\\ без\\ встречной\\ карты$",
+      "en": "Gift ({0}): no return card requested",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Подмастерья:\\ \\+1\\ отголосок\\ за\\ «([^\\n]+?)»$",
+      "en": "Apprentices: +1 echo for \"{0}\"",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Ранг\\ (-?\\d+):\\ четвёртый\\ сосуд\\ реторты\\.$",
+      "en": "Rank {0}: unlocks the 4th Retort vessel.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Эксперимент\\ не\\ дал\\ результата:\\ ([^\\n]+)$",
+      "en": "Experiment yielded no result: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^•\\ Из\\ твоих\\ открытий\\ родилось:\\ (-?\\d+)\\.$",
+      "en": "• Born from your discoveries: {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Верстак\\ варит\\ «([^\\n]+?)»:\\ шаг\\ (-?\\d+)/(-?\\d+)\\ —\\ ([^\\n]+?)\\ \\+\\ ([^\\n]+?)…$",
+      "en": "Workbench brewing \"{0}\": step {1}/{2} — {3} + {4}…",
+      "n": 5
+    },
+    {
+      "rx": "(?s)^Находка\\ в\\ жиле\\ «([^\\n]+?)»:\\ \\+(-?\\d+)\\ очк\\.\\ дня!$",
+      "en": "Vein find in \"{0}\": +{1} goal pts!",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Хроматик\\ в\\ слоте\\ 0:\\ ([^\\n]+?)\\ \\(rarity=([^\\n]+?)\\)$",
+      "en": "Chromatic in slot 0: {0} (rarity={1})",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Лимит\\ (-?\\d+)\\ визитов\\ в\\ день\\ исчерпан$",
+      "en": "Daily limit of {0} visits reached",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Набери\\ (-?\\d+)\\ повторов\\ чужих\\ веществ$",
+      "en": "Accumulate {0} echoes from other players",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Нужно\\ (-?\\d+)\\ эфира\\ \\(включая\\ резерв\\)\\.$",
+      "en": "Requires {0} ether (including reserve).",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Ого,\\ «([^\\n]+?)»!\\ Смотри,\\ как\\ искрится\\.$",
+      "en": "Ooh, \"{0}\"! Look at it sparkle.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Первооткрытие:\\ «([^\\n]+?)»\\ —\\ ты\\ первый!$",
+      "en": "World First: \"{0}\" — you were first!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Сервер\\ не\\ подтвердил\\ покупку:\\ ([^\\n]+)$",
+      "en": "Server did not verify purchase: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Эта\\ пара\\ уже\\ открыта\\ в\\ мире:\\ ([^\\n]+?)!$",
+      "en": "This pair is already discovered in the world: {0}!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Веха\\ отголосков:\\ (-?\\d+)\\ повторов\\ \\(([^\\n]+?)\\)$",
+      "en": "Echo Milestone: {0} repeats ({1})",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Не\\ хватает\\ ингредиентов:\\ ([^\\n]+?)\\ \\+\\ ([^\\n]+?)\\.$",
+      "en": "Missing ingredients: {0} + {1}.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Попробуй:\\ ([^\\n]+?)\\ \\+\\ ([^\\n]+?)\\ —\\ жми\\ «ВАРИТЬ»\\.$",
+      "en": "Try: {0} + {1} — tap \"BREW\".",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^\\ «([^\\n]+?)»\\ готов\\ и\\ записан\\ в\\ чертёж\\.$",
+      "en": " \"{0}\" is ready and saved as a blueprint.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Атлас\\ полнится:\\ уже\\ ([^\\n]+?)\\ веществ\\.$",
+      "en": "The Atlas grows: {0} elements discovered.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Готово:\\ покупка\\ применена\\ —\\ ([^\\n]+?)\\.$",
+      "en": "Done: purchase applied — {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Нужно\\ (-?\\d+)\\ мастерства\\ Мастерской\\.$",
+      "en": "Requires {0} Workshop Mastery.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Подмастерья\\ сегодня\\ варили\\ «([^\\n]+?)»$",
+      "en": "Apprentices brewed \"{0}\" today",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Построить\\ домик\\ Светика\\ \\(−(-?\\d+)\\ ⚡\\)$",
+      "en": "Build Lumi's Cottage (−{0} ⚡)",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Собери\\ (-?\\d+)\\ карт\\ одного\\ комплекта$",
+      "en": "Collect {0} cards in a single set",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^нужен\\ открытый\\ рецепт\\ для\\ «([^\\n]+?)»\\.$",
+      "en": "requires discovered recipe for \"{0}\".",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Достижения\\ (-?\\d+)/(-?\\d+)\\ \\ ·\\ \\ отголоски\\ (-?\\d+)/(-?\\d+)$",
+      "en": "Achievements {0}/{1}  ·  Echoes {2}/{3}",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^открытий\\ (-?\\d+)\\ ·\\ веществ\\ (-?\\d+)\\ ·\\ очки\\ (-?\\d+)([^\\n]+)$",
+      "en": "firsts {0} · elements {1} · pts {2}{3}",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^открытий\\ (-?\\d+)\\ ·\\ веществ\\ (-?\\d+)\\ ·\\ очки\\ (-?\\d+)$",
+      "en": "firsts {0} · elements {1} · pts {2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Не\\ хватает\\ эфира:\\ «([^\\n]+?)»\\ стоит\\ (-?\\d+)\\.$",
+      "en": "Not enough ether: \"{0}\" costs {1}.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Обменов\\ на\\ этой\\ неделе:\\ (-?\\d+)\\ из\\ (-?\\d+)$",
+      "en": "Trades this week: {0} of {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ куплено\\.\\ Можно\\ поставить\\.$",
+      "en": "\"{0}\" purchased. Ready to place.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Задание\\ добавлено\\ на\\ линию\\ (-?\\d+)\\.$",
+      "en": "Job added to Line {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Из\\ твоих\\ открытий\\ родилось:\\ (-?\\d+)$",
+      "en": "Born from your discoveries: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Нужно\\ добыть\\ из\\ источников:\\ ([^\\n]+)$",
+      "en": "Harvest from sources: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Опять\\ «([^\\n]+?)»\\?\\ Надёжное\\ вещество\\.$",
+      "en": "\"{0}\" again? A dependable element.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Открываем\\ платёжную\\ форму:\\ ([^\\n]+?)…$",
+      "en": "Opening checkout: {0}…",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^•\\ Мир\\ открыл\\ (-?\\d+)\\ новых\\ веществ\\.$",
+      "en": "• The world discovered {0} new elements.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^−10%\\ эфира\\ крафтов\\ комплекта$",
+      "en": "−10% ether cost on set crafts",
+      "n": 0
+    },
+    {
+      "rx": "(?s)^Лимит:\\ (-?\\d+)/(-?\\d+)\\ сегодня\\ ·\\ эфир:\\ (-?\\d+)\\ ⚡$",
+      "en": "Limit: {0}/{1} today · ether: {2} ⚡",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Эксперимент\\ удался:\\ ([^\\n]+?)\\ \\+\\ ([^\\n]+?)\\ =\\ ([^\\n]+?)\\.$",
+      "en": "Experiment succeeded: {0} + {1} = {2}.",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Ярмарка\\ ([^\\n]+?):\\ \\+(-?\\d+(?:\\.\\d+)?)\\ регена\\ навсегда$",
+      "en": "Fair {0}: +{1}/s regen forever",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^ВЕХА\\ АТЛАСА:\\ (-?\\d+)\\ веществ\\ ·\\ \\+(-?\\d+)\\ ⚡$",
+      "en": "ATLAS MILESTONE: {0} elements · +{1} ⚡",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Забрано\\ отголосков:\\ (-?\\d+)\\ \\(\\+(-?\\d+)\\ ⚡\\)\\.$",
+      "en": "Echoes claimed: {0} (+{1} ⚡).",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Награда\\ рекламы\\ получена:\\ ([^\\n]+?)\\.$",
+      "en": "Ad reward claimed: {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Прожилка\\ дошла\\ до\\ капа!\\ \\+(-?\\d+)\\ ⚡$",
+      "en": "Vein streak cap reached! +{0} ⚡",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^каждая\\ варка\\ на\\ 10%\\ быстрее$",
+      "en": "every brew is 10% faster",
+      "n": 0
+    },
+    {
+      "rx": "(?s)^Покупка\\ не\\ завершена([^\\n]+?):\\ ([^\\n]+?)\\ \\(([^\\n]+?)\\)\\.$",
+      "en": "Purchase incomplete{0}: {1} ({2}).",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ ·\\ следующий\\ этап\\ через\\ (-?\\d+)\\ с$",
+      "en": "{0} · next stage in {1}s",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^ПЕРВООТКРЫТИЕ:\\ ([^\\n]+?)\\ \\(автор:\\ ([^\\n]+?)\\)!$",
+      "en": "WORLD FIRST: {0} (by {1})!",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Повтор:\\ ([^\\n]+?)\\ \\+\\ ([^\\n]+?)\\.\\ Жми\\ «ВАРИТЬ»\\.$",
+      "en": "Repeat: {0} + {1}. Tap \"BREW\".",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Покупка\\ не\\ завершена:\\ ([^\\n]+?)\\ \\(([^\\n]+?)\\)\\.$",
+      "en": "Purchase incomplete: {0} ({1}).",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Реторта:\\ «([^\\n]+?)»\\ настаивается\\ ([^\\n]+?)\\.$",
+      "en": "Retort: \"{0}\" steeping for {1}.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Эссенция\\ «([^\\n]+?)»\\ \\(повтор\\):\\ \\+(-?\\d+)\\ ⚡\\.$",
+      "en": "Essence of \"{0}\" (repeat): +{1} ⚡.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ прокачана\\ до\\ максимума\\.$",
+      "en": "\"{0}\" is already maxed out.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Вещество,\\ рождённое\\ из\\ «([^\\n]+?)»\\.$",
+      "en": "An element born from \"{0}\".",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Для\\ эксперимента\\ нужно\\ (-?\\d+)\\ ⚡\\.$",
+      "en": "Experiment requires {0} ⚡.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^За\\ неделю\\ тебя\\ навестили:\\ (-?\\d+)$",
+      "en": "Visited this week: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^За\\ неделю\\ тебя\\ навестили:\\ ([^\\n]+)$",
+      "en": "Visited this week: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^РАЗМЕСТИ\\ ВСЕ\\ ЭЛЕМЕНТЫ\\ \\((-?\\d+)/(-?\\d+)\\)$",
+      "en": "PLACE ALL ELEMENTS ({0}/{1})",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^РЕЗОНАНС\\ (-?\\d+)/(-?\\d+)\\ •\\ ЖДЁТ\\ ОТКЛИКА$",
+      "en": "RESONANCE {0}/{1} • AWAITING RESPONSE",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^\\ \\ \\ ·\\ \\ \\ Атлас:\\ награда\\ на\\ (-?\\d+)$",
+      "en": "   ·   Atlas: reward at {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Не\\ хватает\\ эфира:\\ нужно\\ (-?\\d+)\\.$",
+      "en": "Not enough ether: need {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Серверный\\ экспорт\\ готов:\\ ([^\\n]+)$",
+      "en": "Server export ready: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Соверши\\ (-?\\d+)\\ мировых\\ открытий$",
+      "en": "Make {0} World First discoveries",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Веха\\ Дневного\\ круга:\\ (-?\\d+)\\ ([^\\n]+?)!\\ ([^\\n]+)$",
+      "en": "Hearth Circle Milestone: {0} {1}! {2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^·\\ ([^\\n]+?)\\ —\\ цепочка\\ из\\ (-?\\d+)\\ звеньев$",
+      "en": "· {0} — {1}-step chain",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Варок:\\ (-?\\d+)\\ \\ \\ ·\\ \\ \\ Успешных:\\ (-?\\d+)$",
+      "en": "Brews: {0}   ·   Successful: {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Реторта:\\ заложено\\ «([^\\n]+?)»\\ на\\ ([^\\n]+)$",
+      "en": "Retort: steeped \"{0}\" for {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ —\\ тапнуть,\\ чтобы\\ добыть$",
+      "en": "{0} — tap to harvest",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Выполни\\ цель\\ дня\\ (-?\\d+)\\ раз\\(а\\)$",
+      "en": "Complete the Daily Goal {0} time(s)",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Ещё\\ один\\ шаг\\ позади:\\ «([^\\n]+?)»\\.$",
+      "en": "Another step completed: \"{0}\".",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Сначала\\ открой\\ рецепт:\\ ([^\\n]+?)\\.$",
+      "en": "Discover the recipe first: {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Собери\\ (-?\\d+)\\ комплекта\\ стихий$",
+      "en": "Complete {0} element sets",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^⚡\\ Котёл\\ накопил\\ \\+(-?\\d+)\\ эфира\\.$",
+      "en": "⚡ Cauldron gathered +{0} ether.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^✦\\ Писем\\ ждут\\ разгадки:\\ (-?\\d+)\\.$",
+      "en": "✦ Unsolved letters: {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ булькает…\\ осталось\\ ([^\\n]+?)\\.$",
+      "en": "\"{0}\" is steeping… {1} left.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Эксперимент\\ начат:\\ ([^\\n]+?)\\ \\+\\ ([^\\n]+?)\\.$",
+      "en": "Experiment started: {0} + {1}.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Ярмарка\\ ([^\\n]+?):\\ утешение\\ \\+(-?\\d+)\\ ⚡\\.$",
+      "en": "Fair {0}: consolation +{1} ⚡.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^([^\\n]+?):\\ домик\\ ещё\\ не\\ построен$",
+      "en": "{0}: cottage not built yet",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^SigilAssets:\\ не\\ найден\\ ([^\\n]+)$",
+      "en": "SigilAssets: {0} not found",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Добудь\\ из\\ источников:\\ ([^\\n]+?)\\.$",
+      "en": "Harvest from sources: {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Купи\\ (-?\\d+)\\ уровней\\ улучшений$",
+      "en": "Buy {0} upgrade levels",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Проведи\\ (-?\\d+)\\ успешных\\ варок$",
+      "en": "Complete {0} successful brews",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Светику\\ нужен\\ эфир:\\ (-?\\d+)\\ ⚡\\.$",
+      "en": "Lumi needs {0} ⚡ for a hint.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^добудь\\ из\\ источников:\\ ([^\\n]+?)\\.$",
+      "en": "harvest from sources: {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^\\ ·\\ навсегда\\ \\+(-?\\d+)\\ кап,\\ \\+(-?\\d+(?:\\.\\d+)?)/с$",
+      "en": " · permanent +{0} cap, +{1}/s",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^•\\ Родник\\ накапал\\ \\+(-?\\d+)\\ «([^\\n]+?)»\\.$",
+      "en": "• Spring gathered +{0} \"{1}\".",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Подсказка\\ Светика\\ ·\\ (-?\\d+)\\ ⚡$",
+      "en": "Lumi's Hint · {0} ⚡",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Линия\\ (-?\\d+)\\ ·\\ Недоступна:\\ ([^\\n]+)$",
+      "en": "Line {0} · Locked: {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Не\\ хватает\\ ([^\\n]+?):\\ нужно\\ ×(-?\\d+)\\.$",
+      "en": "Not enough {0}: need ×{1}.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Сегодня([^\\n]+?)\\ ·\\ разгадали:\\ (-?\\d+)$",
+      "en": "Today{0} · solved by: {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Улучшения\\ ·\\ ([^\\n]+?)\\ ·\\ (-?\\d+)\\ линии$",
+      "en": "Upgrades · {0} · {1} lines",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^•\\ Родник:\\ \\+(-?\\d+)\\ доставок([^\\n]+?)\\.$",
+      "en": "• Spring: +{0} deliveries{1}.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Не\\ хватает\\ ([^\\n]+?)\\ в\\ запасе\\.$",
+      "en": "Not enough {0} in stock.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Откроется\\ вместе\\ с\\ «([^\\n]+?)»$",
+      "en": "Unlocks with \"{0}\"",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Построить\\ домик\\ \\(−(-?\\d+)\\ ⚡\\)$",
+      "en": "Build Cottage (−{0} ⚡)",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Сегодня\\ ·\\ разгадали:\\ (-?\\d+)$",
+      "en": "Today · solved by: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Эксперимент\\ отложен:\\ ([^\\n]+)$",
+      "en": "Experiment deferred: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^•\\ Родник:\\ \\+(-?\\d+)\\ доставок\\.$",
+      "en": "• Spring: +{0} deliveries.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^•\\ Рейтинг\\ \\#(-?\\d+)\\ \\(был\\ \\#(-?\\d+)\\)\\ ([^\\n]+)$",
+      "en": "• Ranking #{0} (was #{1}) {2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^АКТИВИРУЙТЕ\\ РУНЫ\\ •\\ (-?\\d+)/(-?\\d+)$",
+      "en": "ACTIVATE RUNES • {0}/{1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Реторта:\\ эссенция\\ «([^\\n]+?)»([^\\n]+)$",
+      "en": "Retort: essence of \"{0}\"{1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Самое\\ звонкое:\\ «([^\\n]+?)»\\ —\\ (-?\\d+)$",
+      "en": "Most echoed: \"{0}\" — {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^✦\\ Гильдия:\\ заказов\\ (-?\\d+)/(-?\\d+)$",
+      "en": "✦ Guild: orders {0}/{1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^SKU\\ не\\ настроен\\ для\\ ([^\\n]+)$",
+      "en": "SKU not configured for {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Выполнено\\ операций:\\ (-?\\d+)$",
+      "en": "Operations completed: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Гости\\ принесли\\ тебе\\ ([^\\n]+)$",
+      "en": "Visitors brought you {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Покупка\\ применена:\\ ([^\\n]+?)\\.$",
+      "en": "Purchase applied: {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Реторта:\\ эссенция\\ «([^\\n]+?)»$",
+      "en": "Retort: essence of \"{0}\"",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Только\\ между\\ нами:\\ ([^\\n]+?)\\.$",
+      "en": "Just between us: {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^✧\\ Озарение:\\ ([^\\n]+?)\\ \\+\\ ([^\\n]+?)\\ →\\ ([^\\n]+?)!$",
+      "en": "✧ Insight: {0} + {1} → {2}!",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^\\+(-?\\d+(?:\\.\\d+)?)\\ к\\ регену\\ навсегда$",
+      "en": "+{0}/s regen forever",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Рождено\\ из\\ «([^\\n]+?)»\\ и\\ «([^\\n]+?)»\\.$",
+      "en": "Born from \"{0}\" and \"{1}\".",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^\\ Возвращено\\ (-?\\d+)\\ эфира\\.$",
+      "en": " Refunded {0} ether.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Копий\\ в\\ коллекции:\\ (-?\\d+)$",
+      "en": "Copies owned: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Награда\\ получена:\\ ([^\\n]+?)\\.$",
+      "en": "Reward claimed: {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Открыто\\ вещество\\ «([^\\n]+?)»$",
+      "en": "Discovered element \"{0}\"",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ —\\ ([^\\n]+?)\\ \\(\\+([^\\n]+?)\\),\\ осталось\\ ([^\\n]+)$",
+      "en": "{0} — {1} (+{2}), {3} left",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^РУНА\\ (-?\\d+)\\ •\\ РЕЗОНАНС\\ (-?\\d+)/(-?\\d+)$",
+      "en": "RUNE {0} • RESONANCE {1}/{2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Котёл:\\ (-?\\d+)/(-?\\d+)\\ ·\\ твоих:\\ (-?\\d+)$",
+      "en": "Cauldron: {0}/{1} · yours: {2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Линия\\ (-?\\d+)\\ ·\\ очередь\\ (-?\\d+)/(-?\\d+)$",
+      "en": "Line {0} · queue {1}/{2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Ты:\\ \\#(-?\\d+)\\ ([^\\n]+?)\\ —\\ открытий\\ (-?\\d+)$",
+      "en": "You: #{0} {1} — {2} discoveries",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Локальный\\ котёл:\\ (-?\\d+)/(-?\\d+)$",
+      "en": "Local cauldron: {0}/{1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Улучшено:\\ ([^\\n]+?)\\ \\(ур\\.\\ (-?\\d+)\\)\\.$",
+      "en": "Upgraded: {0} (Lv. {1}).",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Новая\\ партия:\\ (-?\\d+)\\ шт\\.$",
+      "en": "New batch: {0} pcs.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Родник:\\ \\+(-?\\d+)\\ доставок$",
+      "en": "Spring: +{0} deliveries",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^✦\\ Дар\\ тумана:\\ ([^\\n]+?)\\ \\+1\\.$",
+      "en": "✦ Mist Gift: {0} +1.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Эссенция\\ «([^\\n]+?)»:\\ \\+(-?\\d+)\\ ⚡\\.$",
+      "en": "Essence of \"{0}\": +{1} ⚡.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^\\+(-?\\d+)\\ к\\ капу\\ навсегда$",
+      "en": "+{0} cap forever",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^ВременныйРеагент_(-?\\d+)$",
+      "en": "TempReagent_{0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Задание\\ Светика:\\ ([^\\n]+)$",
+      "en": "Lumi's Quest: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Комплект\\ стихии:\\ ([^\\n]+)$",
+      "en": "Element Set: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Мировое\\ событие:\\ ([^\\n]+)$",
+      "en": "World Event: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Несём\\ «([^\\n]+?)»\\ к\\ котлу…$",
+      "en": "Carrying \"{0}\" to the cauldron…",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Получи\\ (-?\\d+)\\ «туманов»$",
+      "en": "Encounter {0} mists",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ открыл\\ «([^\\n]+?)»\\ \\(([^\\n]+?)\\)\\ ·\\ ([^\\n]+)$",
+      "en": "{0} discovered \"{1}\" ({2}) · {3}",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^Веха\\ круга:\\ (-?\\d+)\\ ([^\\n]+?)\\ \\(([^\\n]+?)\\)$",
+      "en": "Circle Milestone: {0} {1} ({2})",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^\\ ·\\ итог\\ \\+(-?\\d+(?:\\.\\d+)?)\\ эфир/с$",
+      "en": " · total +{0} ether/s",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ \\+\\ ([^\\n]+?)\\ ·\\ проверяем…$",
+      "en": "{0} + {1} · checking…",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^КОМПЛЕКТ:\\ ([^\\n]+?)\\ \\(\\+(-?\\d+)\\ ⚡\\)$",
+      "en": "SET COMPLETE: {0} (+{1} ⚡)",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^\\ ·\\ итог\\ \\+(-?\\d+)\\ к\\ капу$",
+      "en": " · total +{0} cap",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Держи\\ ниточку:\\ ([^\\n]+?)\\.$",
+      "en": "Here's a thread to follow: {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Доступно\\ эфира:\\ (-?\\d+)$",
+      "en": "Available ether: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Мир\\ не\\ ответил:\\ ([^\\n]+)$",
+      "en": "World did not respond: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^…открыт\\ рецепт:\\ ([^\\n]+)$",
+      "en": "…recipe discovered: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^⚡(-?\\d+)/(-?\\d+)\\ ·\\ рез:(-?\\d+)\\ ·\\ \\+(-?\\d+(?:\\.\\d+)?)/с$",
+      "en": "⚡{0}/{1} · res:{2} · +{3}/s",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^свари\\ «([^\\n]+?)»\\ из\\ ([^\\n]+?)\\ и\\ ([^\\n]+)$",
+      "en": "brew \"{0}\" from {1} and {2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^\\ /\\ (-?\\d+)\\ до\\ ранга\\ «([^\\n]+?)»$",
+      "en": " / {0} to \"{1}\" rank",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^([^\\n]+?):\\ магазин\\ готов$",
+      "en": "{0}: store ready",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Дар\\ тумана:\\ ([^\\n]+?)\\ \\+1$",
+      "en": "Mist Gift: {0} +1",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Изготовить\\ (-?\\d+)\\ шт\\.$",
+      "en": "Craft {0} pcs.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^НОВЫЙ\\ РЕЦЕПТ:\\ ([^\\n]+?)!$",
+      "en": "NEW RECIPE: {0}!",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Открой\\ (-?\\d+)\\ веществ$",
+      "en": "Discover {0} elements",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Собери\\ (-?\\d+)\\ сигилов$",
+      "en": "Collect {0} sigils",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Тебя\\ не\\ было:\\ ([^\\n]+?)\\.$",
+      "en": "Time away: {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^У\\ друга\\ копий:\\ (-?\\d+)$",
+      "en": "Friend's copies: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Узнай\\ (-?\\d+)\\ рецептов$",
+      "en": "Learn {0} recipes",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Экспорт\\ готов:\\ ([^\\n]+)$",
+      "en": "Export ready: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^построй\\ ранг\\ «([^\\n]+?)»$",
+      "en": "build rank \"{0}\"",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^(-?\\d+)–(-?\\d+)\\ из\\ (-?\\d+)\\ ·\\ стр\\.\\ (-?\\d+)/(-?\\d+)$",
+      "en": "{0}–{1} of {2} · p. {3}/{4}",
+      "n": 5
+    },
+    {
+      "rx": "(?s)^✦\\ Светик:\\ ([^\\n]+?)\\ —\\ (-?\\d+)/(-?\\d+)$",
+      "en": "✦ Lumi: {0} — {1}/{2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ ·\\ мастерство\\ (-?\\d+)$",
+      "en": "{0} · mastery {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ ·\\ награда\\ \\+(-?\\d+)\\ ⚡$",
+      "en": "{0} · reward +{1} ⚡",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^был\\(а\\)\\ (-?\\d+)\\ ([^\\n]+?)\\ назад$",
+      "en": "seen {0} {1} ago",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^\\ ·\\ перерыв:\\ (-?\\d+)\\ с$",
+      "en": " · cooldown: {0}s",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ —\\ украсит\\ Дом$",
+      "en": "{0} — for Lumi's House",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Нужен\\ ранг\\ «([^\\n]+?)»\\.$",
+      "en": "Requires rank \"{0}\".",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Слот\\ (-?\\d+)\\ —\\ закрыт$",
+      "en": "Vessel {0} — Locked",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Шёпот\\ котла:\\ ([^\\n]+?)\\.$",
+      "en": "Cauldron's whisper: {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^\\ ·\\ доступно:\\ (-?\\d+)$",
+      "en": " · available: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^(-?\\d+)\\ повторов\\ эха$",
+      "en": "{0} echo repeats",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Стоимость:\\ (-?\\d+)\\ ⚡$",
+      "en": "Cost: {0} ⚡",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Чертёж:\\ −(-?\\d+)%\\ ·\\ $",
+      "en": "Blueprint: −{0}% · ",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?):\\ домика\\ нет$",
+      "en": "{0}: no cottage",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Вехи\\ очков:\\ ([^\\n]+)$",
+      "en": "Points: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Достижение:\\ ([^\\n]+)$",
+      "en": "Achievement: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Забрать:\\ \\+(-?\\d+)\\ ⚡$",
+      "en": "Claim: +{0} ⚡",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Палитра\\ ·\\ (-?\\d+)\\ ⚡$",
+      "en": "Palette · {0} ⚡",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Полешко:\\ \\+(-?\\d+)\\ ⚡$",
+      "en": "Hearth Log: +{0} ⚡",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Посмотреть:\\ ([^\\n]+)$",
+      "en": "Watch Ad: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^•\\ Рейтинг\\ \\#(-?\\d+)\\.$",
+      "en": "• Ranking #{0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^В\\ лунку\\ ([^\\n]+?):\\ ([^\\n]+?)\\.$",
+      "en": "Slot {0}: {1}.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Добыто:\\ ([^\\n]+?)\\ \\+(-?\\d+)\\.$",
+      "en": "Harvested: {0} +{1}.",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Автоварка:\\ ([^\\n]+)$",
+      "en": "Auto-brew: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Вехи\\ дней:\\ ([^\\n]+)$",
+      "en": "Days: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Готово\\ ·\\ (-?\\d+)\\ ⚡$",
+      "en": "Apply · {0} ⚡",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Купить\\ ·\\ (-?\\d+)\\ ⚡$",
+      "en": "Buy · {0} ⚡",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Успех:\\ ([^\\n]+?)\\ \\+1\\.$",
+      "en": "Success: {0} +1.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ ×(-?\\d+)\\ \\(есть\\ (-?\\d+)\\)$",
+      "en": "{0} ×{1} (have {2})",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^Колбы:\\ (-?\\d+)\\ ·\\ ([^\\n]+)$",
+      "en": "Flasks: {0} · {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^\\ ·\\ гостей\\ (-?\\d+)$",
+      "en": " · {0} guests",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^\\ ·\\ новых:\\ (-?\\d+)$",
+      "en": " · new: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^(-?\\d+)\\ мин\\ назад$",
+      "en": "{0}m ago",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Дары:\\ ([^\\n]+?)\\ \\+1\\.$",
+      "en": "Gifts: {0} +1.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Комплект:\\ ([^\\n]+)$",
+      "en": "Set: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Получена:\\ ([^\\n]+)$",
+      "en": "Obtained: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Стены\\ ·\\ (-?\\d+)\\ ⚡$",
+      "en": "Walls · {0} ⚡",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Стихия\\ «([^\\n]+?)»\\.$",
+      "en": "Element of \"{0}\".",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^•\\ Свари\\ «([^\\n]+?)»$",
+      "en": "• Brew \"{0}\"",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^•\\ Светик:\\ ([^\\n]+)$",
+      "en": "• Lumi: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^✓\\ Свари\\ «([^\\n]+?)»$",
+      "en": "✓ Brew \"{0}\"",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ —\\ ([^\\n]+?)\\ \\(\\+(-?\\d+)%,\\ ([^\\n]+?)\\)$",
+      "en": "{0} — {1} (+{2}%, {3})",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ \\ \\+\\ \\ «([^\\n]+?)»$",
+      "en": "\"{0}\"  +  \"{1}\"",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Альбом\\ \\(([^\\n]+?)\\)([^\\n]+)$",
+      "en": "Album ({0}){1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^(-?\\d+)\\ дн\\ назад$",
+      "en": "{0}d ago",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ сентября$",
+      "en": "Sep {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Альбом\\ \\(([^\\n]+?)\\)$",
+      "en": "Album ({0})",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^В\\ котле:\\ ([^\\n]+)$",
+      "en": "In cauldron: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Друзья\\ \\((-?\\d+)\\)$",
+      "en": "Friends ({0})",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Заявки\\ \\((-?\\d+)\\)$",
+      "en": "Requests ({0})",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Купить\\ ·\\ ([^\\n]+)$",
+      "en": "Buy · {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Награда:\\ ([^\\n]+)$",
+      "en": "Reward: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Письмо\\ ·\\ ([^\\n]+)$",
+      "en": "Letter · {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Собраны:\\ ([^\\n]+)$",
+      "en": "Collected: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ ·\\ ур\\.\\ (-?\\d+)/(-?\\d+)$",
+      "en": "{0} · Lv. {1}/{2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^партия\\ (-?\\d+)/(-?\\d+)$",
+      "en": "batch {0}/{1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^чертёж\\ −(-?\\d+)%$",
+      "en": "blueprint −{0}%",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^\\ за\\ (-?\\d+)\\ шт\\.$",
+      "en": " for {0} pcs.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^(-?\\d+)\\ ч\\ назад$",
+      "en": "{0}h ago",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ августа$",
+      "en": "Aug {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ декабря$",
+      "en": "Dec {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ октября$",
+      "en": "Oct {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ февраля$",
+      "en": "Feb {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^\\+(-?\\d+)\\ дружбы$",
+      "en": "+{0} friendship",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Друзья\\ •([^\\n]+)$",
+      "en": "Friends •{0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Линия\\ (-?\\d+)\\.\\ $",
+      "en": "Line {0}. ",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Пол\\ ·\\ (-?\\d+)\\ ⚡$",
+      "en": "Floor · {0} ⚡",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Сигил\\ «([^\\n]+?)»$",
+      "en": "Sigil \"{0}\"",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^копии:\\ ×(-?\\d+)$",
+      "en": "copies: ×{0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^сначала\\ ([^\\n]+)$",
+      "en": "requires {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^(-?\\d+)\\ ч\\ (-?\\d+)\\ мин$",
+      "en": "{0}h {1}m",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^·\\ «([^\\n]+?)»\\ —\\ ([^\\n]+)$",
+      "en": "· \"{0}\" — {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^(-?\\d+)\\ за\\ тик$",
+      "en": "{0} per tick",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ апреля$",
+      "en": "Apr {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ ноября$",
+      "en": "Nov {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ января$",
+      "en": "Jan {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Домик:\\ ([^\\n]+)$",
+      "en": "House: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Карты:\\ ([^\\n]+)$",
+      "en": "Cards: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^автор:\\ ([^\\n]+)$",
+      "en": "by: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^…и\\ ещё\\ (-?\\d+)$",
+      "en": "…and {0} more",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^•\\ ([^\\n]+?)\\ —\\ (-?\\d+)/(-?\\d+)$",
+      "en": "• {0} — {1}/{2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^(-?\\d+)\\ эфира$",
+      "en": "{0} ether",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ марта$",
+      "en": "Mar {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Вехи:\\ ([^\\n]+)$",
+      "en": "Milestones: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Стены\\ ([^\\n]+)$",
+      "en": "Walls {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^сброс\\ ([^\\n]+)$",
+      "en": "resets {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ \\+(-?\\d+)%\\ ·\\ ([^\\n]+)$",
+      "en": "{0} +{1}% · {2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ ·\\ (-?\\d+)\\ с$",
+      "en": "{0} · {1}s",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ июля$",
+      "en": "Jul {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ июня$",
+      "en": "Jun {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Дни:\\ ([^\\n]+)$",
+      "en": "Days: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Слот\\ (-?\\d+)$",
+      "en": "Vessel {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^мир:\\ ([^\\n]+)$",
+      "en": "world: {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^эфир\\ (-?\\d+)$",
+      "en": "ether {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^…ещё\\ (-?\\d+)$",
+      "en": "…+{0} more",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ \\((-?\\d+)/(-?\\d+)\\)$",
+      "en": "{0} ({1}/{2})",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^(-?\\d+)\\ мин$",
+      "en": "{0}m",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ мая$",
+      "en": "May {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Пол\\ ([^\\n]+)$",
+      "en": "Floor {0}",
+      "n": 1
+    }
+  ],
+  "low_patterns": [
+    {
+      "rx": "(?s)^([^\\n]+?)\\ \\ (-?\\d+)/(-?\\d+)$",
+      "en": "{0}  {1}/{2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^до\\ (-?\\d+)$",
+      "en": "up to {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^(-?\\d+(?:\\.\\d+)?)\\ с$",
+      "en": "{0}s",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^(-?\\d+(?:\\.\\d+)?)\\ с$",
+      "en": "{0}s",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ ×(-?\\d+)$",
+      "en": "{0} ×{1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^(-?\\d+)\\ с$",
+      "en": "{0}s",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^(-?\\d+)\\ ч$",
+      "en": "{0}h",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ ✓$",
+      "en": "{0} ✓",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»$",
+      "en": "\"{0}\"",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^✓\\ ([^\\n]+)$",
+      "en": "✓ {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^\\+([^\\n]+)$",
+      "en": "+{0}",
+      "n": 1
+    }
+  ]
+}

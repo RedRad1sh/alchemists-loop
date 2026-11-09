@@ -719,9 +719,11 @@ func _experiment_search_matches(item_id: String) -> bool:
 		return true
 	var spec: Dictionary = g.ITEMS.get(item_id, {})
 	var category := String(Game.CATEGORY_OF.get(item_id, spec.get("category", "")))
-	var haystack := _experiment_normalize_search("%s %s %s %s %s" % [
-		g._online._item_name(item_id), item_id,
-		String(spec.get("d", "")), category, _experiment_search_aliases(item_id)])
+	var ru_nm := g._online._item_name(item_id)
+	var ru_d := String(spec.get("d", ""))
+	var haystack := _experiment_normalize_search("%s %s %s %s %s %s %s" % [
+		ru_nm, g.tr(ru_nm), item_id,
+		ru_d, g.tr(ru_d), category, _experiment_search_aliases(item_id)])
 	for term in query.split(" ", false):
 		if term != "" and not haystack.contains(term):
 			return false

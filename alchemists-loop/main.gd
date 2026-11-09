@@ -1486,6 +1486,10 @@ func _build_ui() -> void:
 	# "display", которое никто не регистрировал, поэтому карточки молча падали
 	# в default_font, то есть в Manrope.
 	if _font_runic != null:
+		if _font_bold != null and not _font_runic.fallbacks.has(_font_bold):
+			var fb_arr := _font_runic.fallbacks.duplicate()
+			fb_arr.append(_font_bold)
+			_font_runic.fallbacks = fb_arr
 		th.set_font("runic", "Label", _font_runic)
 	theme = th
 
