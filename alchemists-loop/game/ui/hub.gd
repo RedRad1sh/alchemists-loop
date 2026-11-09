@@ -354,6 +354,20 @@ func _build_settings_popup() -> void:
 ## Музыка и громкости. Строятся и в попапе, и в разделе «Ещё»; значения
 ## подтягиваются из Sfx при каждом показе, поэтому копии не расходятся.
 func _build_sound_controls(col: VBoxContainer) -> void:
+	var lang_btn := g._small_button("Language: English" if (Locale != null and Locale.is_english()) else "Язык: Русский", Vector2(0, 42))
+	lang_btn.name = "LangToggle"
+	lang_btn.pressed.connect(func() -> void:
+		if Locale != null:
+			Locale.toggle_locale()
+		lang_btn.text = "Language: English" if (Locale != null and Locale.is_english()) else "Язык: Русский"
+		_on_locale_switched()
+		g._saves._save_game()
+		Sfx.click())
+	if Locale != null:
+		Locale.locale_changed.connect(func(_loc: String) -> void:
+			if is_instance_valid(lang_btn):
+				lang_btn.text = "Language: English" if Locale.is_english() else "Язык: Русский")
+	col.add_child(lang_btn)
 	var toggle := g._small_button("Музыка: вкл", Vector2(0, 42))
 	toggle.pressed.connect(func() -> void:
 		var on := Sfx.toggle_music()
@@ -383,9 +397,26 @@ func _build_sound_controls(col: VBoxContainer) -> void:
 	col.visibility_changed.connect(func() -> void:
 		if not col.is_visible_in_tree():
 			return
+		lang_btn.text = "Language: English" if (Locale != null and Locale.is_english()) else "Язык: Русский"
 		toggle.text = "Музыка: вкл" if Sfx.music_on else "Музыка: выкл"
 		sfx.set_value_no_signal(Sfx.sfx_volume)
 		music.set_value_no_signal(Sfx.music_volume))
+
+
+func _on_locale_switched() -> void:
+	g._engine._refresh()
+	var board := g.find_child("ContractBoard", true, false) as ContractBoard
+	if board != null and board.has_method("refresh"):
+		board.refresh()
+	if g._spring_screen != null and is_instance_valid(g._spring_screen) and g._spring_screen.has_method("refresh"):
+		g._spring_screen.call("refresh")
+	if g._retort != null:
+		g._retort._refresh_retort_page()
+	if g._resonance != null:
+		g._resonance._refresh_resonance_page()
+	if g._riddles != null:
+		g._riddles._refresh_letters_page()
+		g._riddles._refresh_atlas_page()
 
 func _open_settings() -> void:
 	Juice.open(_settings_dim, _settings_popup)

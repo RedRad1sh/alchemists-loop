@@ -1085,6 +1085,8 @@ func _cell(side: String, e: Dictionary, pending: Array) -> TextureButton:
 ## натуральной ширине текста, и подпись в 48-px полосу ложилась на 104 px — за
 ## край кожи (кадр trade_build). Возвращает [кегль, строка].
 func _fit_name(text: String, w: float) -> Array:
+	if Locale != null and Locale.is_english():
+		text = g.tr(text)
 	var f := g.get_theme_default_font()
 	for s in [INK_FS, 8, 7]:
 		if f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, s).x <= w:

@@ -61,6 +61,7 @@ var _w := 0.0
 var _h := 0.0
 var _bg: TextureRect
 var _strip_bg: TextureRect
+var _strip_shelf: TextureRect
 var _strip_shadow: ColorRect
 var _strip_cut: ColorRect
 var _rails: Array = []
@@ -310,6 +311,13 @@ func _build_layers() -> void:
 	_strip_cut.color = Color(1.0, 0.86, 0.62, 0.16)
 	_strip_cut.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_rank_strip.add_child(_strip_cut)
+	_strip_shelf = TextureRect.new()
+	_strip_shelf.name = "StripShelf"
+	_strip_shelf.texture = ContractCard.tex("shelf_bar.png")
+	_strip_shelf.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_strip_shelf.stretch_mode = TextureRect.STRETCH_SCALE
+	_strip_shelf.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rank_strip.add_child(_strip_shelf)
 	_rank_symbol = CircleRankSymbol.new()
 	_rank_symbol.name = "RankSymbol"
 	_rank_symbol.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -384,8 +392,9 @@ func _rank_note(node_name: String, tip: String) -> TextureRect:
 	w.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	ContractCard.paper_font(w)
 	w.add_theme_color_override("font_color", NOTE_INK)
-	w.position = Vector2(4.0, 4.0)
-	w.size = RANK_NOTE - Vector2(8.0, 8.0)
+	w.clip_text = true
+	w.position = Vector2(14.0, 6.0)
+	w.size = RANK_NOTE - Vector2(28.0, 12.0)
 	r.add_child(w)
 	return r
 
@@ -430,6 +439,8 @@ func _relayout() -> void:
 	_strip_shadow.size = Vector2(inner, 2.0)
 	_strip_cut.position = Vector2(0.0, 0.0)
 	_strip_cut.size = Vector2(inner, 1.0)
+	_strip_shelf.position = Vector2(0.0, -10.0)
+	_strip_shelf.size = Vector2(inner, 12.0)
 	_rank_symbol.position = Vector2(2.0, (RANK_H - 48.0) / 2.0)
 	_rank_symbol.size = Vector2(48.0, 48.0)
 	_mile_pts.position = Vector2(inner - RANK_NOTE.x, (RANK_H - RANK_NOTE.y) / 2.0)
@@ -576,6 +587,22 @@ func _refresh_rank() -> void:
 	_rank_title.text = c.rank_title(lvl)
 	_mile_days_word.text = "Вехи дней: %s" % c.mile_strip("дней", Game.CIRCLE_DAY_MILES, c._mdays)
 	_mile_pts_word.text = "Вехи очков: %s" % c.mile_strip("очков", Game.CIRCLE_PTS_MILES, c._mpts)
+	_fit_note_label(_mile_days_word, 10, 7)
+	_fit_note_label(_mile_pts_word, 10, 7)
+
+
+static func _fit_note_label(l: Label, max_fs: int, min_fs: int) -> void:
+	if l == null:
+		return
+	var f := l.get_theme_font("font")
+	if f == null or l.size.x <= 0.0:
+		return
+	var shown := l.atr(l.text)
+	for fs in range(max_fs, min_fs - 1, -1):
+		if f.get_string_size(shown, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= l.size.x:
+			l.add_theme_font_size_override("font_size", fs)
+			return
+	l.add_theme_font_size_override("font_size", min_fs)
 
 func _on_hearth_pressed() -> void:
 	Sfx.click()
@@ -656,8 +683,8 @@ func _make_note(b: Dictionary) -> TextureButton:
 	w.clip_text = true
 	ContractCard.paper_font(w)
 	w.add_theme_color_override("font_color", NOTE_INK)
-	w.position = Vector2(6.0, 24.0)
-	w.size = Vector2(NOTE_SIZE.x - 12.0, 50.0)
+	w.position = Vector2(12.0, 20.0)
+	w.size = Vector2(NOTE_SIZE.x - 24.0, 58.0)
 	note.add_child(w)
 
 	# Гвоздь поверх записки — тот же приём, что у бумаг Task 9: приколотый лист,
@@ -686,9 +713,11 @@ func _on_note_pressed(note: Node) -> void:
 	if w == null:
 		return
 	if bool(note.get_meta("shown_detail", false)):
+		w.add_theme_font_size_override("font_size", 13)
 		w.text = String(note.get_meta("time"))
 		note.set_meta("shown_detail", false)
 		return
+	w.add_theme_font_size_override("font_size", 10)
 	w.text = "%s\n%s · %s" % [String(note.get_meta("title")),
 		String(note.get_meta("effect")), String(note.get_meta("pct"))]
 	note.set_meta("shown_detail", true)

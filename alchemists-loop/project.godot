@@ -25,6 +25,7 @@ config/rustore_deeplink_scheme=""
 [autoload]
 
 UserData="*res://autoload/user_data.gd"
+Locale="*res://autoload/locale_tr.gd"
 App="*res://autoload/app.gd"
 Analytics="*res://autoload/analytics.gd"
 Monetization="*res://autoload/monetization.gd"
