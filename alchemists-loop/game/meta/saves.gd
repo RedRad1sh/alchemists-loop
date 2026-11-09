@@ -268,6 +268,7 @@ func _load_game() -> void:
 	if data.is_empty():
 		data = _read_save(g.BACKUP_PATH)
 	if data.is_empty():
+		_quarantine_rejected_save()
 		return
 	var frozen := _save_frozen
 	_save_frozen = true
@@ -867,6 +868,17 @@ func _read_save(path: String) -> Dictionary:
 	# Версия фиксируется после успешной валидации, чтобы не отбрасывать прогресс.
 	data["version"] = Game.SAVE_VERSION
 	return data
+
+# Сейв есть, но не прочитан (битый JSON, чужой device_id, версия из будущего):
+# автосейв новой игры иначе молча затёр бы его вместе с бэкапом.
+func _quarantine_rejected_save() -> void:
+	var src := g.SAVE_PATH if FileAccess.file_exists(g.SAVE_PATH) else g.BACKUP_PATH
+	if not FileAccess.file_exists(src):
+		return
+	var dst := "%s/%s.rejected.%d.json" % [g.SAVE_PATH.get_base_dir(),
+		g.SAVE_PATH.get_file().get_basename(), int(Time.get_unix_time_from_system())]
+	if DirAccess.copy_absolute(ProjectSettings.globalize_path(src), ProjectSettings.globalize_path(dst)) != OK:
+		push_warning("Не удалось отложить непрочитанное сохранение.")
 
 func _delete_local_save() -> void:
 	_save_frozen = true

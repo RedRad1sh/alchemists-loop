@@ -160,6 +160,7 @@ class TestVerifiedFlow:
             "ok": True, "verified": True, "status": "processed",
             "reason": "verified",
             "receipt_hash": hashlib.sha256(TOKEN.encode("utf-8")).hexdigest(),
+            "already_granted": False,
         }
         assert vendor.calls == [("google_play", SKU, TOKEN)]
         assert len(rows) == 1
@@ -181,6 +182,37 @@ class TestVerifiedFlow:
         assert again.json()["verified"] is True
         assert len(vendor.calls) == 1
         assert len(rows) == 1
+
+    def test_repeat_after_grant_ack_reports_already_granted(self, tmp_path, monkeypatch):
+        """Клиентский журнал теряется при вайпе: повтор processed-чека после
+        подтверждённой выдачи обязан сказать «уже выдано», а не «выдавай»."""
+        srv, client = _client(tmp_path, monkeypatch)
+        _gate_on(srv, monkeypatch)
+        _vendor(srv, monkeypatch)
+        with client:
+            first = _verify(client).json()
+            before_ack = _verify(client).json()
+            ack = client.post("/api/receipt/granted", json={
+                "device_id": DEVICE, "receipt_hash": _sha(TOKEN)})
+            after_ack = _verify(client).json()
+        assert first["already_granted"] is False and before_ack["already_granted"] is False
+        assert ack.status_code == 200 and ack.json()["ok"] is True
+        assert after_ack["verified"] is True and after_ack["already_granted"] is True
+
+    def test_grant_ack_requires_processed_receipt_of_same_device(self, tmp_path, monkeypatch):
+        srv, client = _client(tmp_path, monkeypatch)
+        _gate_on(srv, monkeypatch)
+        _vendor(srv, monkeypatch)
+        with client:
+            unknown = client.post("/api/receipt/granted", json={
+                "device_id": DEVICE, "receipt_hash": _sha(TOKEN)})
+            _verify(client)
+            foreign = client.post("/api/receipt/granted", json={
+                "device_id": "device-2", "receipt_hash": _sha(TOKEN)})
+            still = _verify(client).json()
+        assert unknown.json()["ok"] is False
+        assert foreign.json()["ok"] is False
+        assert still["already_granted"] is False
 
     def test_same_receipt_from_other_device_is_rejected(self, tmp_path, monkeypatch):
         srv, client = _client(tmp_path, monkeypatch)

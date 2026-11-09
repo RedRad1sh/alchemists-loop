@@ -232,6 +232,55 @@ class TestFair:
             g2 = c.post("/api/fair/claim", json={"device_id": "dev-c"}).json()
             assert g2["grants"] == []  # повторный забор пуст
 
+    def test_parallel_claims_grant_once_without_error(self, tmp_path, monkeypatch):
+        # Оба запроса читают «забора ещё нет» до записи соседа; второй не должен
+        # падать на PK fair_claims, и награда выдаётся ровно один раз.
+        import sqlite3
+        import threading
+        c = _client_for(tmp_path, monkeypatch)
+        with c:
+            st = c.get("/api/week/status", params={"device_id": "dev-r"}).json()
+            week, tag, goal = st["week"], st["fair"]["tag"], st["fair"]["goal"]
+            for a, b in self._ensure_tag_pairs(str(tmp_path / "week.db"), tag, 3):
+                c.post("/api/fair/brew", json={"device_id": "dev-r", "a": a, "b": b})
+            db = sqlite3.connect(str(tmp_path / "week.db"))
+            db.execute("UPDATE fair_weeks SET progress = ? WHERE week = ?", (goal, week))
+            db.commit()
+            db.close()
+        gate = threading.Barrier(2, timeout=3)
+
+        class _GatedConn(sqlite3.Connection):
+            def execute(self, sql, *args):
+                cur = super().execute(sql, *args)
+                if sql.lstrip().startswith("SELECT 1 FROM fair_claims"):
+                    try:
+                        gate.wait()
+                    except threading.BrokenBarrierError:
+                        pass
+                return cur
+
+        def _gated_db():
+            conn = sqlite3.connect(srv.DB_PATH, timeout=5, factory=_GatedConn)
+            conn.row_factory = sqlite3.Row
+            return conn
+
+        monkeypatch.setattr(srv, "get_db", _gated_db)
+        results, errors = [], []
+
+        def _worker():
+            try:
+                results.append(srv.fair_claim(srv.FairClaimRequest(device_id="dev-r")).grants)
+            except Exception as exc:  # noqa: BLE001 — сама ошибка и есть дефект
+                errors.append(exc)
+
+        threads = [threading.Thread(target=_worker) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(15)
+        assert errors == []
+        assert sum(len(g) for g in results) == 1
+
     def test_claim_consolation_open_pot(self, tmp_path, monkeypatch):
         c = _client_for(tmp_path, monkeypatch)
         with c:

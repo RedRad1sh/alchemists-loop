@@ -266,7 +266,7 @@ def _accrual_ceiling(elapsed: float, declared_rate: float) -> float:
     Чистая функция, сервер ничего не перетирает (Part C opaque): результат только
     возвращается клиенту как кап. Отрицательный/нулевой elapsed (часы вперёд,
     clamp'енный сервером) → 0: накопить в будущее нельзя."""
-    if elapsed <= 0:
+    if elapsed <= 0 or not math.isfinite(elapsed) or math.isnan(declared_rate) or declared_rate <= 0:
         return 0.0
     rate = declared_rate if declared_rate < MAX_ACCRUAL_RATE_PER_SEC else MAX_ACCRUAL_RATE_PER_SEC
     return elapsed * rate
@@ -958,6 +958,12 @@ class ReceiptVerifyResponse(BaseModel):
                             # receipt_device_mismatch | receipt_sku_mismatch |
                             # receipt_provider_mismatch | unknown_* | empty_*
     receipt_hash: str = ""  # SHA-256 токена: клиент сверяет ответ со своим запросом
+    already_granted: bool = False  # клиент ранее подтвердил начисление (/receipt/granted)
+
+
+class ReceiptGrantedRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    receipt_hash: str = Field(..., min_length=64, max_length=64)
 
 
 class VeinFindRequest(BaseModel):
@@ -1442,7 +1448,18 @@ def init_db():
             tier INTEGER NOT NULL, claimed_at TEXT NOT NULL,
             PRIMARY KEY (device_id, set_id, tier)
         )""")
-        # F2 (по конвенции init_db для старых БД, дубль см. в schema.sql):
+        # Слот дня, уже обращённый в карту. Строка sigil_crafts уезжает к
+        # другу при подарке/обмене, а клейм остаётся — иначе повторный craft
+        # того же слота выдал бы новую копию.
+        conn.execute("""CREATE TABLE IF NOT EXISTS sigil_claims (
+            device_id TEXT NOT NULL, craft_id TEXT NOT NULL,
+            claimed_at TEXT NOT NULL,
+            PRIMARY KEY (device_id, craft_id)
+        )""")
+        conn.execute(
+            "INSERT OR IGNORE INTO sigil_claims (device_id, craft_id, claimed_at)"
+            " SELECT device_id, craft_id, crafted_at FROM sigil_crafts"
+        )
         # F2 (по конвенции init_db для старых БД, дубль см. в schema.sql):
         # частичный UNIQUE — не более одного открытого (active/spread) цикла.
         # Константа-ключ: все подходящие строки делят один ключ индекса.
@@ -1635,9 +1652,13 @@ def init_db():
                    status TEXT NOT NULL DEFAULT 'pending',
                    first_seen_at REAL NOT NULL,
                    processed_at REAL,
-                   last_seen_at REAL NOT NULL
+                   last_seen_at REAL NOT NULL,
+                   granted_at REAL
                )"""
         )
+        rcols = {r["name"] for r in conn.execute("PRAGMA table_info(receipts)").fetchall()}
+        if "granted_at" not in rcols:
+            conn.execute("ALTER TABLE receipts ADD COLUMN granted_at REAL")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_receipts_device ON receipts(device_id)")
         # T02: авторство по device_id + players.nick UNIQUE (миграция старых БД,
         # идемпотентна: PRAGMA-проверки колонок/индексов, дедуп по суффиксу).
@@ -1726,6 +1747,12 @@ def _element_authored_by(conn: sqlite3.Connection, device_id: str, slug: str) ->
         "WHERE r.discoverer_device = ? AND o.slug = ?",
         (device_id, slug),
     ).fetchone() is not None
+
+
+def _device_owns(conn: sqlite3.Connection, device_id: str, slug: str) -> bool:
+    """Тот же критерий, что у гейта /api/discover: базовый каталог, грант или авторство."""
+    return slug in BASE_SLUGS or _element_granted(conn, device_id, slug) \
+        or _element_authored_by(conn, device_id, slug)
 
 
 def _grants_for(conn: sqlite3.Connection, device_id: str) -> list[dict]:
@@ -2577,6 +2604,11 @@ def _reserve_llm_generation(
     # искажает только кулдаун, не границу дня.
     now = time.time()
     day = _today()
+    # Чтение и запись счётчика — одна write-транзакция: иначе параллельные
+    # запросы из threadpool читают один и тот же attempts и проходят лимит все.
+    if conn.in_transaction:
+        conn.commit()
+    conn.execute("BEGIN IMMEDIATE")
     row = conn.execute(
         f"SELECT attempts, last_at FROM {limits_table} WHERE day = ? AND device_id = ?",
         (day, device_id),
@@ -2584,15 +2616,18 @@ def _reserve_llm_generation(
     attempts = int(row["attempts"]) if row else 0
     last_at = float(row["last_at"]) if row else 0.0
     if now - last_at < max(0.0, cooldown_sec):
+        conn.rollback()
         wait = max(1, int(math.ceil(cooldown_sec - (now - last_at))))
         return False, cooldown_msg % wait
     if daily_limit > 0 and attempts >= daily_limit:
+        conn.rollback()
         return False, daily_msg
     global_row = conn.execute(
         f"SELECT attempts FROM {global_table} WHERE day = ?", (day,)
     ).fetchone()
     global_attempts = int(global_row["attempts"]) if global_row else 0
     if global_daily_limit > 0 and global_attempts >= global_daily_limit:
+        conn.rollback()
         return False, global_msg
     conn.execute(
         f"INSERT INTO {limits_table}(day, device_id, attempts, last_at) VALUES (?, ?, 1, ?) "
@@ -3540,8 +3575,7 @@ def discover(req: DiscoverRequest):
         # которого нет в device_grants. Выдуманный slug, которого нет в elements,
         # уже мягко отсекается ниже как not_combinable (world-first из него не сделать).
         for ing in (req.a, req.b):
-            if ing in BASE_SLUGS or _element_granted(conn, req.device_id, ing) \
-                    or _element_authored_by(conn, req.device_id, ing):
+            if _device_owns(conn, req.device_id, ing):
                 continue
             if conn.execute("SELECT 1 FROM elements WHERE slug = ?", (ing,)).fetchone():
                 return DiscoverResponse(
@@ -4281,7 +4315,7 @@ def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
     try:
         player = conn.execute("SELECT nick FROM players WHERE device_id = ?", (device_id,)).fetchone()
         if player is None:
-            return {"ok": True, "deleted": False, "message": "Профиль уже удалён"}
+            return {"ok": True, "deleted": False, "device_id": device_id, "message": "Профиль уже удалён"}
         nick = player["nick"]
         # T02: чистим авторство СВОЕГО устройства и легаси-строк, чей ник ещё
         # не привязан к device. Раньше WHERE nick задевал всех
@@ -4318,8 +4352,8 @@ def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
         # собеседником, чьё ребро уже удалено (сиротская строка), иначе
         # переживает аккаунт — спека §7 требует чистить и по `from_device`.
         conn.execute("DELETE FROM messages WHERE from_device = ?", (device_id,))
-        conn.execute("DELETE FROM friend_edges WHERE a_device = ? OR b_device = ?",
-                     (device_id, device_id))
+        conn.execute("DELETE FROM friend_edges WHERE a_device = ? OR b_device = ? OR requester_device = ?",
+                     (device_id, device_id, device_id))
         conn.execute("DELETE FROM blocks WHERE blocker_device = ? OR blocked_device = ?",
                      (device_id, device_id))
         conn.execute("DELETE FROM spirit_messages WHERE device_id = ?", (device_id,))
@@ -4338,9 +4372,25 @@ def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
             # F3 (приватность): цикл-модель жилы добавила свои таблицы —
             # личные находки, прожилки и журнал вливаний тоже чистим.
             "personal_discoveries", "vein_streaks", "vein_pour_log",
-            "trade_counts",
+            "trade_counts", "device_grants",
+            "sigil_crafts", "sigil_daily", "sigil_milestones",
+            "experiment_limits", "letter_limits", "atlas_limits",
         ]:
             conn.execute(f"DELETE FROM {table} WHERE device_id = ?", (device_id,))
+        # Клеймы слотов прошлых дней уже ничего не сторожат (craft_id начинается
+        # с дня оффера); сегодняшние держим до конца суток, иначе «подарить →
+        # удалить аккаунт → скрафтить снова» чеканило бы копию.
+        conn.execute("DELETE FROM sigil_claims WHERE device_id = ? AND substr(craft_id, 1, 11) != ?",
+                     (device_id, _now_dt().date().isoformat() + "_"))
+        # Следы в чужих счётчиках (гости дома, дедуп резонанса) обезличиваются,
+        # а не стираются: иначе удаление одного игрока уменьшало бы чужие
+        # счётчики. Случайный токен не выводится из device_id.
+        anon = "anon:" + uuid.uuid4().hex
+        conn.execute("DELETE FROM house_visits WHERE host_device = ?", (device_id,))
+        conn.execute("UPDATE house_visits SET visitor_device = ? WHERE visitor_device = ?",
+                     (anon, device_id))
+        conn.execute("UPDATE resonance_seen SET brewer_key = ? WHERE brewer_key = ?",
+                     (anon, device_id))
         conn.execute("DELETE FROM players WHERE device_id = ?", (device_id,))
         conn.commit()
         return {"ok": True, "deleted": True, "device_id": device_id}
@@ -4425,18 +4475,37 @@ def sync_package(req: SyncPackageRequest):
     try:
         accepted = 0
         rejected = 0
-        for rec in req.part_b.recipes:
-            res = _grant_recipe(
-                conn, req.device_id, rec.pair_key, rec.a, rec.b, rec.out, "local_learn"
-            )
-            if res > 0:
-                accepted += 1        # новый грант
-            elif res < 0:
-                rejected += 1        # отказ корроборации
-            # res == 0 — дубликат: ни accepted, ни rejected (идемпотентность)
+        # local_learn принимает пару, только если оба её входа (по каталогу, не
+        # по заявлению) у устройства уже есть — иначе грант выхода давал бы
+        # ингредиенты, которых игрок не варил. Повторяем проходы до неподвижной
+        # точки: цепочка в пакете может прийти в любом порядке.
+        pending = list(req.part_b.recipes)
+        progressed = True
+        while pending and progressed:
+            progressed = False
+            rest = []
+            for rec in pending:
+                cat = _catalog_def(conn, rec.pair_key)
+                if cat is not None and not (_device_owns(conn, req.device_id, cat[0])
+                                            and _device_owns(conn, req.device_id, cat[1])):
+                    rest.append(rec)
+                    continue
+                res = _grant_recipe(
+                    conn, req.device_id, rec.pair_key, rec.a, rec.b, rec.out, "local_learn"
+                )
+                if res > 0:
+                    accepted += 1        # новый грант
+                    progressed = True
+                elif res < 0:
+                    rejected += 1        # отказ корроборации
+                # res == 0 — дубликат: ни accepted, ни rejected (идемпотентность)
+            pending = rest
+        rejected += len(pending)         # входы так и не появились у устройства
         # Recovery (Part C): инвентарь → определения материализованных пар →
-        # грант account_export (пара точно в recipes, корроборация гарантирована).
-        recovered = _recovered_defs(conn, req.part_c.inventory_slugs)
+        # грант account_export. Только для элементов, которыми устройство уже
+        # владеет: заявленный инвентарь сам по себе прав не даёт.
+        owned_slugs = [s for s in req.part_c.inventory_slugs if _device_owns(conn, req.device_id, s)]
+        recovered = _recovered_defs(conn, owned_slugs)
         for d in recovered:
             _grant_recipe(
                 conn, req.device_id, d["pair_key"], d["a"], d["b"], d["out"], "account_export"
@@ -6699,15 +6768,17 @@ def fair_claim(req: FairClaimRequest):
             if w == week and _fair_virtual(f["progress"], f["goal"], days) < f["goal"]:
                 continue  # текущий котёл ещё варится
             closed = _fair_virtual(f["progress"], f["goal"], days) >= f["goal"]
-            if closed and contrib >= FAIR_MIN_CONTRIB:
-                grants.append({"week": w, "kind": "regen", "amount": 0})
-                conn.execute("INSERT INTO fair_claims (week, device_id, kind) VALUES (?, ?, 'regen')",
-                             (w, req.device_id))
-            else:
-                amount = FAIR_CONSOLATION * min(contrib, FAIR_CONSOLATION_CAP)
-                grants.append({"week": w, "kind": "ether", "amount": amount})
-                conn.execute("INSERT INTO fair_claims (week, device_id, kind) VALUES (?, ?, 'ether')",
-                             (w, req.device_id))
+            kind = "regen" if closed and contrib >= FAIR_MIN_CONTRIB else "ether"
+            # Параллельный забор уже мог вставить строку после нашего SELECT:
+            # выдаёт награду только тот, чья вставка реально прошла.
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO fair_claims (week, device_id, kind) VALUES (?, ?, ?)",
+                (w, req.device_id, kind),
+            )
+            if cur.rowcount == 0:
+                continue
+            amount = 0 if kind == "regen" else FAIR_CONSOLATION * min(contrib, FAIR_CONSOLATION_CAP)
+            grants.append({"week": w, "kind": kind, "amount": amount})
         conn.commit()
         return FairClaimResponse(ok=True, grants=grants)
     finally:
@@ -6870,6 +6941,7 @@ def receipt_verify(req: ReceiptVerifyRequest):
             return ReceiptVerifyResponse(
                 ok=True, verified=True, status="processed",
                 reason="verified", receipt_hash=receipt_hash,
+                already_granted=row["granted_at"] is not None,
             )
         verdict = _validate_receipt_with_vendor(provider, sku, token)
         reason = str(verdict.get("reason") or "vendor_rejected")
@@ -6899,6 +6971,24 @@ def receipt_verify(req: ReceiptVerifyRequest):
             ok=False, verified=False, status=str(row["status"]),
             reason=reason, receipt_hash=receipt_hash,
         )
+    finally:
+        conn.close()
+
+
+@app.post("/api/receipt/granted")
+def receipt_granted(req: ReceiptGrantedRequest):
+    """Клиент начислил товар по processed-чеку и записал сейв. Отметка нужна потому,
+    что клиентский журнал выдачи стирается вайпом/переустановкой с тем же id, а
+    processed-эхо иначе снова разрешило бы выдачу consumable."""
+    conn = get_db()
+    try:
+        cur = conn.execute(
+            "UPDATE receipts SET granted_at = COALESCE(granted_at, ?)"
+            " WHERE receipt_hash = ? AND device_id = ? AND status = 'processed'",
+            (time.time(), req.receipt_hash, req.device_id.strip()),
+        )
+        conn.commit()
+        return {"ok": cur.rowcount > 0, "receipt_hash": req.receipt_hash}
     finally:
         conn.close()
 
@@ -7287,6 +7377,19 @@ def sigil_craft(req: SigilCraftRequest):
         # перечитывает чужую строку и отвечает из неё — идемпотентно, без 500.
         conn.execute("BEGIN IMMEDIATE")
         try:
+            newly_claimed = conn.execute(
+                "INSERT OR IGNORE INTO sigil_claims (device_id, craft_id, claimed_at)"
+                " VALUES (?, ?, ?)",
+                (req.device_id, req.craft_id, _now_iso()),
+            ).rowcount == 1
+            if not newly_claimed and conn.execute(
+                    "SELECT 1 FROM sigil_crafts WHERE device_id = ? AND craft_id = ?",
+                    (req.device_id, req.craft_id)).fetchone() is None:
+                # Слот уже обращён в карту, а карта ушла (подарок/обмен).
+                conn.rollback()
+                return SigilCraftResponse(
+                    ok=False, craft_id=req.craft_id, error="craft_already_claimed"
+                )
             cur = conn.execute(
                 "INSERT OR IGNORE INTO sigil_crafts"
                 " (device_id, craft_id, rarity, llm_name, is_chromatic, card_id, seed, lore, ingredients_json, crafted_at)"
@@ -7676,4 +7779,7 @@ if __name__ == "__main__":
     
     print(f"Запуск сервера на http://{SERVER_URL}")
     print(f"База данных: {DB_PATH}")
-    uvicorn.run("server:app", host="0.0.0.0", port=8080, reload=True)
+    # systemd запускает этот файл напрямую: dev-reloader в проде перезапускал бы
+    # воркер посреди запросов на любую запись в каталоге.
+    uvicorn.run("server:app", host="0.0.0.0", port=8080,
+                reload=os.getenv("ALCHEMY_DEV_RELOAD") == "1")

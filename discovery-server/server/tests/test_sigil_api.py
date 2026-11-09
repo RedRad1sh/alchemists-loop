@@ -443,6 +443,25 @@ class TestCraft:
         coll = client.get("/api/sigil/collection", params={"device_id": "dev-a"}).json()
         assert coll["cards"][target["card_id"]]["copies"] == 1
 
+    def test_recraft_after_card_left_does_not_mint_copy(self, tmp_path, monkeypatch):
+        # Подарок/обмен переносит строку sigil_crafts другому устройству
+        # (_trade_move_crafts). Слот дня от этого не должен освобождаться.
+        s = _srv(tmp_path, monkeypatch)
+        client = _mini(s, tmp_path, monkeypatch)
+        target = next(c for c in _offer(client, "dev-a") if c["card_id"])
+        assert client.post("/api/sigil/craft",
+                           json={"device_id": "dev-a", "craft_id": target["id"]}).json()["ok"]
+        conn = sqlite3.connect(s.DB_PATH)
+        conn.execute("UPDATE sigil_crafts SET device_id = 'dev-b' WHERE device_id = 'dev-a'")
+        conn.commit()
+        conn.close()
+        again = client.post("/api/sigil/craft",
+                            json={"device_id": "dev-a", "craft_id": target["id"]}).json()
+        assert again["ok"] is False
+        assert again["error"] == "craft_already_claimed"
+        coll = client.get("/api/sigil/collection", params={"device_id": "dev-a"}).json()
+        assert target["card_id"] not in coll["cards"]
+
     def test_copies_accumulate(self, tmp_path, monkeypatch):
         s = _srv(tmp_path, monkeypatch)
         client = _mini(s, tmp_path, monkeypatch)

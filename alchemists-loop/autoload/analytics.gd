@@ -31,7 +31,7 @@ func _isolate_selftest_paths() -> void:
 	# перевода в Selftest.run, и без этой ветки очередь легла бы в настоящий файл.
 	# Двойник стирается сразу: остаток прошлого прерванного прогона не должен
 	# попасть в сверки очереди внутри сюит.
-	if not SelftestMode.enabled():
+	if not SelftestMode.isolated():
 		return
 	QUEUE_PATH = ST_QUEUE_PATH
 	if FileAccess.file_exists(QUEUE_PATH):

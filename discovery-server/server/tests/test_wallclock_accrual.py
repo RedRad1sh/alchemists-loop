@@ -33,3 +33,10 @@ def test_nonpositive_elapsed_yields_zero_ceiling():
     # часы сдвинуты вперёд → elapsed clamp'ится в 0 → потолок 0
     assert srv._accrual_ceiling(0.0, 1.0) == 0.0
     assert srv._accrual_ceiling(-5.0, 1.0) == 0.0
+
+
+def test_invalid_declared_rate_yields_zero_ceiling():
+    # NaN не должен проходить как «максимум», а минус — давать отрицательный кап.
+    assert srv._accrual_ceiling(100.0, float("nan")) == 0.0
+    assert srv._accrual_ceiling(100.0, -1.0) == 0.0
+    assert srv._accrual_ceiling(100.0, float("-inf")) == 0.0

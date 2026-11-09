@@ -48,6 +48,15 @@ static func run(g: Game) -> void:
 		g._online._toast("Тост %d" % i, 0)
 	Selftest.check("toast adds panel and caps at 4",
 		g._online._toast_stack.get_child_count() == 4)
+	# Таймер закрытия обязан жить и умирать вместе со своей панелью: глобальный
+	# SceneTreeTimer пережил бы вытесненную панель и позвал лямбду с освобождённым
+	# захватом («Lambda capture … was freed» на каждый вытесненный тост).
+	var orphan_timers := 0
+	for p in g._online._toast_stack.get_children():
+		var own := (p as Node).find_children("*", "Timer", false, false)
+		if own.size() != 1:
+			orphan_timers += 1
+	Selftest.check("toast dismiss timer is owned by its panel", orphan_timers == 0)
 	# mouse_filter стека не перехватывает клики игры.
 	Selftest.check("toast stack ignores mouse",
 		g._online._toast_stack.mouse_filter == Control.MOUSE_FILTER_IGNORE)

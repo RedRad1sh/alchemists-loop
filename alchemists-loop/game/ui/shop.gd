@@ -8,6 +8,8 @@ class_name Shop
 # T22: журнал уже выданных покупок переживает удаление локальных данных (он в
 # отдельном файле, см. autoload/user_data.gd), поэтому кнопка это обещает.
 const DELETE_BUTTON_LABEL := "Удалить данные: журнал покупок останется"
+const LOCAL_EXPORT_PATH := "user://alchemists_loop_export.json"
+const SERVER_EXPORT_PATH := "user://alchemists_loop_server_export.json"
 
 var g: Game
 var _dim: ColorRect
@@ -258,7 +260,7 @@ func _export_data() -> void:
 		file.close()
 		if parsed is Dictionary:
 			game_data = parsed
-	var path := "user://alchemists_loop_export.json"
+	var path := LOCAL_EXPORT_PATH
 	var out := FileAccess.open(path, FileAccess.WRITE)
 	if out == null:
 		_status.text = "Не удалось создать экспорт."
@@ -281,7 +283,7 @@ func _on_account_export_result(result: Dictionary) -> void:
 	if result.get("ok", false) != true:
 		_status.text = "Локальный экспорт готов; серверный экспорт недоступен."
 		return
-	var path := "user://alchemists_loop_server_export.json"
+	var path := SERVER_EXPORT_PATH
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file != null:
 		file.store_string(JSON.stringify(result, "\t"))
@@ -300,12 +302,17 @@ func _delete_data() -> void:
 	# #8: маркер незавершённого серверного удаления переживает вайп. Если он
 	# остался (сервер был недоступен в прошлый раз) — повторный нажим шлёт
 	# DELETE по сохранённому device_id, а не по уже стёртой локальной идентичности.
-	var pending := UserData.get_account_delete_pending()
-	if pending != "":
-		if g._online._net_enabled:
-			Net.delete_account(pending)
+	var pending := UserData.get_account_delete_pending_ids()
+	if not pending.is_empty() and g._online._device_id == "":
+		# Вайп уже прошёл в этой сессии — остаётся только повтор серверной части.
+		# Не гейтим _net_enabled: вайп его уже сбросил. Статус ставим ДО вызова —
+		# без сервера Net отвечает синхронно, и ответ честно перепишет его.
 		_status.text = "Повторяю удаление с сервера…"
+		for id in pending:
+			Net.delete_account(id)
 		return
+	# Новая установка: недоставленное удаление прошлой не отнимает право на
+	# локальный вайп — его повторяет старт игры и следующий нажим.
 	if not _delete_armed:
 		_delete_armed = true
 		_delete_button.text = "Нажми ещё раз — покупки останутся в журнале"
@@ -318,6 +325,10 @@ func _delete_data() -> void:
 		Net.delete_account(device_id)
 	g._saves._delete_local_save()
 	UserData.delete_all_local_data()
+	for path in [LOCAL_EXPORT_PATH, SERVER_EXPORT_PATH]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	g._sigil.wipe_local_data()
 	Analytics.clear_local_queue()
 	g._online._forget_net_identity()
 	_status.text = "Локальные данные удалены, журнал покупок сохранён. Перезапусти игру для новой установки."

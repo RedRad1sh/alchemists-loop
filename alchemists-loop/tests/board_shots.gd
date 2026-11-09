@@ -16,7 +16,13 @@ func _ready() -> void:
 		push_error("BOARD-SHOTS: main.tscn не инстанцируется в Game")
 		get_tree().quit(1)
 		return
+	# Демо-доска, баффы и штамп не должны попасть в настоящий сейв: пути
+	# подменяются до _ready (он грузит и пишет сейв), запись глушится после.
+	_game.SAVE_PATH = "user://alchemy_shot_save.json"
+	_game.TEMP_PATH = "user://alchemy_shot_save.tmp"
+	_game.BACKUP_PATH = "user://alchemy_shot_save.bak"
 	add_child(_game)
+	_game._saves._save_frozen = true
 	for i in 3:
 		await get_tree().process_frame
 	if _game._shop != null and _game._shop.has_method("_close_consent"):

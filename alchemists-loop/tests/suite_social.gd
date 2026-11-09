@@ -27,6 +27,7 @@ static func run(g: Game) -> void:
 	_async_arrivals(g)
 	_inbox_arrival(g)
 	_badge_sum(g)
+	_peer_routing(g)
 
 static func _net_requests(_g: Game) -> void:
 	# вызов реальных методов: в ST Net синхронно сливает очередь в offline,
@@ -85,6 +86,32 @@ static func _dispatch_emits(_g: Game) -> void:
 	Selftest.check("dispatch emits friend_remove", int(counts.get("friend_remove", 0)) == 1)
 	Selftest.check("dispatch emits friend_block", int(counts.get("friend_block", 0)) == 1)
 	Selftest.check("dispatch emits friend_unblock", int(counts.get("friend_unblock", 0)) == 1)
+	# Ответ ленты/отправки несёт собеседника ИЗ ЗАПРОСА: очередь Net
+	# последовательная, но игрок успевает открыть другую ленту, пока ответ в пути.
+	var tagged := {}
+	var tag_spy := func(r: Dictionary) -> void: tagged[String(r.get("for", ""))] = String(r.get("_peer", ""))
+	Net.messages_result.connect(tag_spy)
+	Net.message_send_result.connect(tag_spy)
+	Net._dispatch({"kind": "messages", "peer": "dev-q"}, {"for": "messages"})
+	Net._dispatch({"kind": "message_send", "peer": "dev-w"}, {"for": "message_send"})
+	Net.messages_result.disconnect(tag_spy)
+	Net.message_send_result.disconnect(tag_spy)
+	Selftest.check("messages result carries requested peer", tagged.get("messages", "") == "dev-q")
+	Selftest.check("send result carries requested peer", tagged.get("message_send", "") == "dev-w")
+	var held := SuiteTrades.HoldingNet.new()
+	var mq := SuiteTrades.HoldingNet.one(held, "messages", ["me", "dev-q", 0])
+	var sq := SuiteTrades.HoldingNet.one(held, "message_send", ["me", "dev-w", "x"])
+	Selftest.check("net messages request remembers peer",
+		String(mq.get("peer", "")) == "dev-q" and String(sq.get("peer", "")) == "dev-w")
+	held.free()
+	# Админ-команда chroma slot: ответ обязан прийти в тот сигнал, на который
+	# подписан SigilManager, иначе консоль ждёт вечно.
+	var chroma := {"n": 0}
+	var chroma_spy := func(_r: Dictionary) -> void: chroma["n"] = int(chroma["n"]) + 1
+	Net.sigil_admin_chroma_slot_result.connect(chroma_spy)
+	Net._dispatch({"kind": "sigil_admin_chroma_slot"}, {})
+	Net.sigil_admin_chroma_slot_result.disconnect(chroma_spy)
+	Selftest.check("dispatch emits sigil_admin_chroma_slot_result", int(chroma["n"]) == 1)
 
 static func _pure_logic(g: Game) -> void:
 	# Мутации: сменить порог «99+», сломать «вчера», обрезать пословно не по
@@ -656,7 +683,7 @@ static func _refusal_422(g: Game) -> void:
 	if ui == null or ui._err_line == null:
 		Selftest.check("422 err-line surfaces wired", false)
 		return
-	var respond_cb := Callable(g, "_on_friend_respond")
+	var respond_cb := Callable(g, "_on_social_action_result")
 	var respond_was := Net.friend_respond_result.is_connected(respond_cb)
 	if not respond_was:
 		Net.friend_respond_result.connect(respond_cb)
@@ -728,6 +755,36 @@ static func _toast(g: Game) -> void:
 		and ui._body.find_children("SocialSegments", "", true, false).size() == 1
 		and ui._body.find_children("FriendRow_*", "", true, false).size() == 3)
 	ui.close()
+
+
+static func _peer_routing(g: Game) -> void:
+	# Игрок открыл ленту A, вернулся и открыл B, пока ответ для A ещё в пути:
+	# ответ обязан лечь в A, а не в «текущего» собеседника.
+	var s := Social.new(g)
+	s.load_thread("dev-b")
+	s.on_messages({"ok": true, "_peer": "dev-a", "messages": [
+		{"id": 5, "from_me": false, "body": "для A", "sent_at": ""}]})
+	Selftest.check("late thread reply lands in its own peer",
+		s.thread("dev-a").size() == 1 and s.thread("dev-b").is_empty())
+	# Отправка A, затем открытие B: успех A снимает pending у A и не трогает B.
+	s.optimistic_send("dev-a", "письмо A")
+	s.send_message("dev-b", "письмо B")
+	s.on_send({"ok": true, "_peer": "dev-a"})
+	var b_pending := s.thread("dev-b").filter(func(m): return m.get("pending", false))
+	var a_pending := s.thread("dev-a").filter(func(m): return m.get("pending", false))
+	Selftest.check("send ack clears only its own peer pending",
+		a_pending.is_empty() and b_pending.size() == 1)
+	s.on_send({"ok": false, "offline": true, "_peer": "dev-b"})
+	Selftest.check("send refusal rolls back its own peer",
+		s.thread("dev-b").filter(func(m): return m.get("pending", false)).is_empty())
+	# Сервер ставит read_at на GET /messages: после загрузки ленты инбокс обязан
+	# перезапроситься, иначе бейдж «Друзья» висит до повторного открытия экрана.
+	var pulls := {"n": 0}
+	var spy := func(_r: Dictionary) -> void: pulls["n"] = int(pulls["n"]) + 1
+	Net.social_inbox_result.connect(spy)
+	s.on_messages({"ok": true, "_peer": "dev-a", "messages": []})
+	Net.social_inbox_result.disconnect(spy)
+	Selftest.check("opened thread refreshes inbox for unread badge", int(pulls["n"]) == 1)
 
 
 static func _async_arrivals(g: Game) -> void:

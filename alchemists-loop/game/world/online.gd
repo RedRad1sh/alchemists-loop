@@ -919,6 +919,12 @@ func _load_device_id() -> String:
 	# user://device_id читается один раз для миграции, затем переносится в
 	# UserData.
 	if UserData != null:
+		# Испорченный/потерянный UserData иначе выдал бы новый id, и envelope
+		# отверг бы собственный сейв этого устройства как чужой.
+		if not UserData.has_device_id():
+			var from_save := _device_id_from_save()
+			if from_save != "":
+				UserData.adopt_device_id(from_save)
 		var id := UserData.get_or_create_device_id()
 		if id != "":
 			return id
@@ -930,6 +936,21 @@ func _load_device_id() -> String:
 			if old_id != "":
 				return old_id
 	return "install_" + ("%s:%s" % [Time.get_unix_time_from_system(), randi()]).sha256_text().substr(0, 32)
+
+func _device_id_from_save() -> String:
+	for path in [g.SAVE_PATH, g.BACKUP_PATH]:
+		if not FileAccess.file_exists(path):
+			continue
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			continue
+		var parsed: Variant = JSON.parse_string(file.get_as_text())
+		file.close()
+		if parsed is Dictionary and (parsed as Dictionary).get("device_id") is String:
+			var id := String((parsed as Dictionary)["device_id"]).strip_edges()
+			if id != "":
+				return id
+	return ""
 
 # ---------------------------------------------------------------------------
 # #8: «Удалить локальные данные» внутри живой сессии.
@@ -945,17 +966,19 @@ func _forget_net_identity() -> void:
 func _retry_pending_account_delete(net: Object = null) -> void:
 	if net == null:
 		net = Net
-	var pending := UserData.get_account_delete_pending()
-	if pending == "":
-		return
-	net.delete_account(pending)
+	for pending in UserData.get_account_delete_pending_ids():
+		net.delete_account(pending)
 
 func _on_account_delete_result(result: Dictionary) -> void:
-	if result.get("ok", false) == true:
-		var pending := UserData.get_account_delete_pending()
-		var deleted_id := String(result.get("device_id", ""))
-		if deleted_id == "" or deleted_id == pending:
-			UserData.clear_account_delete_pending()
+	if result.get("ok", false) != true:
+		return
+	# Старый сервер не возвращает id в ответе: очередь Net — FIFO, ретраи шлются
+	# по порядку списка, значит ответ относится к первому id.
+	var deleted_id := String(result.get("device_id", ""))
+	if deleted_id == "":
+		deleted_id = UserData.get_account_delete_pending()
+	if deleted_id != "":
+		UserData.clear_account_delete_pending(deleted_id)
 
 func _on_net_world_result(result: Dictionary) -> void:
 	if result.get("ok", false) != true:
@@ -1843,8 +1866,14 @@ func _toast(text: String, kind: int = NoticeKind.INFO, duration := 3.0,
 				on_tap.call()
 				dismiss.call()
 		)
-	var timer := g.get_tree().create_timer(duration)
-	timer.timeout.connect(dismiss, CONNECT_ONE_SHOT)
+	# Таймер — ребёнок панели: вытесненная панель уносит его с собой, и лямбда
+	# не зовётся с освобождённым захватом (SceneTreeTimer пережил бы панель).
+	var timer := Timer.new()
+	timer.one_shot = true
+	timer.wait_time = duration
+	timer.autostart = true
+	timer.timeout.connect(dismiss)
+	panel.add_child(timer)
 
 
 static func _find_toast_label(panel: PanelContainer) -> Label:
