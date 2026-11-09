@@ -11,6 +11,9 @@ config_version=5
 [application]
 
 config/name="Alchemist's Loop — MVP"
+config/name.beta="Alchemist's Loop — Бета"
+config/use_custom_user_dir.beta=true
+config/custom_user_dir_name.beta="AlchemistsLoopBeta"
 config/description="Локальный MVP кликера-алхимика: источники, котёл, рецепты, книга."
 config/version="0.2.0"
 run/main_scene="res://main.tscn"
@@ -27,6 +30,7 @@ config/rustore_deeplink_scheme=""
 UserData="*res://autoload/user_data.gd"
 App="*res://autoload/app.gd"
 Analytics="*res://autoload/analytics.gd"
+BetaAccess="*res://autoload/beta_access.gd"
 Monetization="*res://autoload/monetization.gd"
 Sfx="*res://autoload/sfx.gd"
 Net="*res://autoload/net.gd"

@@ -51,12 +51,26 @@ var _pending_placement := ""
 var _verify_requests: Array = []
 # Чеки, начисленные в памяти, но ещё не попавшие в записанный сейв.
 var _granted_unsaved: Dictionary = {}
+var _beta_receipts: Dictionary = {}
 
 func _ready() -> void:
 	_load_catalog()
 	call_deferred("_boot")
 
 func _boot() -> void:
+	if BetaAccess.enabled:
+		store_id = "beta_test"
+		provider_label = "Тестовые покупки, без оплаты"
+		_adapter = null
+		_ads = null
+		billing_available = true
+		ads_available = false
+		if not Net.beta_purchase_result.is_connected(_on_beta_purchase):
+			Net.beta_purchase_result.connect(_on_beta_purchase)
+			Net.beta_purchase_granted_result.connect(_on_beta_purchase_granted)
+		_booted = true
+		initialized.emit(store_id, billing_available, ads_available)
+		return
 	store_id = App.store_id
 	provider_label = App.provider_label()
 	# Net — autoload, идущий после Monetization в project.godot: в _ready() его
@@ -142,6 +156,8 @@ func get_product(product_id: String) -> Dictionary:
 	return catalog.get(product_id, {})
 
 func status_text() -> String:
+	if BetaAccess.enabled:
+		return "Бета: тестовые покупки, без оплаты" if BetaAccess.can_send_gameplay() else "Бета: для тестовых покупок нужен инвайт"
 	if store_id == App.STORE_STANDALONE:
 		return "Локальный режим: подключи Android-плагин для покупок"
 	if not billing_available:
@@ -159,6 +175,18 @@ func purchase(product_id: String) -> bool:
 	if String(product.get("type", "")) == "non_consumable" and is_product_owned(product_id):
 		purchase_failed.emit(product_id, "already_owned", "Товар уже восстановлен")
 		return false
+	if BetaAccess.enabled:
+		if not BetaAccess.can_send_gameplay() or not BetaAccess.server_confirmed:
+			purchase_failed.emit(product_id, "beta_access_required", "Для тестовой покупки войди на beta-сервер")
+			return false
+		var operation_id := BetaAccess.begin_purchase(product_id)
+		if operation_id == "":
+			purchase_failed.emit(product_id, "save_failed", "Не удалось сохранить тестовую покупку")
+			return false
+		_pending_product = product_id
+		purchase_started.emit(product_id)
+		Net.beta_purchase(product_id, operation_id)
+		return true
 	if _adapter == null or not billing_available:
 		purchase_failed.emit(product_id, "provider_unavailable", status_text())
 		return false
@@ -187,6 +215,11 @@ func _drop_pending_if_any(product_id: String) -> void:
 	UserData.clear_pending_purchase(product_id)
 
 func restore() -> void:
+	if BetaAccess.enabled:
+		if BetaAccess.can_send_gameplay() and BetaAccess.server_confirmed:
+			for product_id in BetaAccess.purchases.keys():
+				Net.beta_purchase(String(product_id), BetaAccess.pending_purchase(String(product_id)))
+		return
 	# Путь повтора незакрытых покупок — только restore (удалённый до бута
 	# _apply_pending_entitlements ничего не начислял и был ложной точкой входа):
 	# незавершённые покупки не начисляются без подтверждённого callback от стора,
@@ -398,11 +431,17 @@ func _finish_purchase(request: Dictionary, unverified: bool, server_granted := f
 		if saved:
 			_granted_unsaved.erase(key)
 			_mark_purchase_granted(provider, sku, token, product_id)
-			if not unverified and Net != null:
+			if not unverified and Net != null and provider != "beta_test":
 				Net.receipt_granted(UserData.get_or_create_device_id(), token.sha256_text())
 		else:
 			push_warning("Monetization: сейв с покупкой не записан — магазину не подтверждаем, повторим.")
 	# Шаг 2 — подтверждение магазина с ЧТЕНИЕМ результата.
+	if provider == "beta_test" and BetaAccess.enabled:
+		if _game != null:
+			_game._engine.status_text = "Тестовая покупка сохранена, без списаний." if saved else "Тестовая награда ждёт записи сохранения."
+		if saved:
+			Net.beta_purchase_granted(BetaAccess.pending_purchase(product_id))
+		return
 	var confirmed := saved and _confirm_purchase_with_store(token, sku, product_type == "consumable")
 	_report_purchase(product_id, unverified, confirmed)
 	# Шаг 3 — журнал «полностью завершено» и снятие pending только после
@@ -429,6 +468,43 @@ func _finish_purchase(request: Dictionary, unverified: bool, server_granted := f
 		"sku": product_id, "store": provider, "type": product_type,
 	})
 	_pending_product = ""
+
+func _on_beta_purchase(result: Dictionary) -> void:
+	if not BetaAccess.enabled or not BetaAccess.can_send_gameplay():
+		return
+	var product_id := String(result.get("product_id", ""))
+	var operation_id := BetaAccess.pending_purchase(product_id)
+	if operation_id == "" or String(result.get("operation_id", "")) != operation_id:
+		return
+	if result.get("ok", false) != true or result.get("beta", false) != true or result.get("provider", "") != "beta_test":
+		purchase_failed.emit(product_id, "beta_purchase_failed", "Тестовая покупка не подтверждена. Нажми «Восстановить» для повтора.")
+		return
+	var receipt_token := String(result.get("token", ""))
+	if receipt_token == "":
+		return
+	_beta_receipts[operation_id] = receipt_token
+	if UserData.has_processed_purchase("beta_test", receipt_token, product_id):
+		Net.beta_purchase_granted(operation_id)
+		return
+	_finish_purchase({"provider": "beta_test", "sku": product_id, "token": receipt_token, "product_id": product_id},
+		false, result.get("already_granted", false) == true)
+
+func _on_beta_purchase_granted(result: Dictionary) -> void:
+	if not BetaAccess.enabled or result.get("ok", false) != true:
+		return
+	var operation_id := String(result.get("operation_id", ""))
+	for product_id in BetaAccess.purchases.keys():
+		if BetaAccess.pending_purchase(String(product_id)) != operation_id:
+			continue
+		var receipt_token := String(_beta_receipts.get(operation_id, ""))
+		if receipt_token == "" or not UserData.mark_processed_purchase("beta_test", receipt_token, String(product_id)):
+			return
+		UserData.clear_pending_purchase(String(product_id))
+		_beta_receipts.erase(operation_id)
+		BetaAccess.finish_purchase(String(product_id))
+		purchase_succeeded.emit(String(product_id), "beta_test")
+		_pending_product = ""
+		break
 
 func _receipt_validator_unavailable(result: Dictionary) -> bool:
 	if result.get("offline", false) == true:

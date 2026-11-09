@@ -53,6 +53,9 @@ signal fair_brew_result(result: Dictionary)
 signal fair_claim_result(result: Dictionary)
 signal receipt_verify_result(result: Dictionary)
 signal receipt_granted_result(result: Dictionary)
+signal beta_activate_result(result: Dictionary)
+signal beta_purchase_result(result: Dictionary)
+signal beta_purchase_granted_result(result: Dictionary)
 signal account_export_result(result: Dictionary)
 signal account_delete_result(result: Dictionary)
 signal vein_find_result(pair_key: String, cycle_id: String, result: Dictionary)
@@ -100,6 +103,10 @@ func _ready() -> void:
 		OS.is_debug_build())
 	_http = HTTPRequest.new()
 	_http.timeout = 6.0
+	if BetaAccess.enabled:
+		base_url = BetaAccess.server_url if BetaAccess._transport_allowed(BetaAccess.server_url) else ""
+		_http.max_redirects = 0
+		beta_activate_result.connect(BetaAccess.accept_activation)
 	add_child(_http)
 	_http.request_completed.connect(_on_completed)
 	# в selftest сеть не трогаем (герметичный прогон); пустой base_url = «сервера
@@ -170,6 +177,7 @@ func delete_account(device_id: String) -> void:
 		"kind": "account_delete",
 		"path": "/account?device_id=" + device_id.uri_encode(),
 		"method": HTTPClient.METHOD_DELETE,
+		"delete_token": BetaAccess.deletion_token(device_id) if BetaAccess.enabled else "",
 	})
 
 func rejected() -> void:
@@ -422,12 +430,27 @@ func receipt_granted(device_id: String, receipt_hash: String) -> void:
 		"body": {"device_id": device_id, "receipt_hash": receipt_hash},
 	})
 
+func beta_activate(code: String, device_id: String, attempt_secret: String) -> void:
+	_enqueue({"kind": "beta_activate", "path": "/beta/activate", "body": {
+		"code": code, "device_id": device_id, "attempt_secret": attempt_secret, "identity_secret": BetaAccess.identity_secret}})
+
+func beta_purchase(product_id: String, operation_id: String) -> void:
+	_enqueue({"kind": "beta_purchase", "path": "/beta/purchase", "body": {
+		"device_id": UserData.get_or_create_device_id(), "product_id": product_id, "operation_id": operation_id}})
+
+func beta_purchase_granted(operation_id: String) -> void:
+	_enqueue({"kind": "beta_purchase_granted", "path": "/beta/purchase/granted", "body": {
+		"device_id": UserData.get_or_create_device_id(), "operation_id": operation_id}})
+
 func _pair_key(a: String, b: String) -> String:
 	var p := PackedStringArray([a, b])
 	p.sort()
 	return "|".join(p)
 
 func _enqueue(req: Dictionary) -> void:
+	if BetaAccess.enabled and String(req.get("kind", "")) not in ["ping", "beta_activate"] and not BetaAccess.can_send_gameplay() and String(req.get("delete_token", "")) == "":
+		_dispatch(req, {"ok": false, "auth_required": true, "error": "beta_access_required", "http_status": 401})
+		return
 	_queue.append(req)
 	if _inflight.is_empty():
 		_send_next()
@@ -481,8 +504,17 @@ func _send_next() -> void:
 	if _queue.is_empty():
 		return
 	var req: Dictionary = _queue.pop_front()
+	if BetaAccess.enabled and String(req.get("kind", "")) not in ["ping", "beta_activate"] and not BetaAccess.can_send_gameplay() and String(req.get("delete_token", "")) == "":
+		_dispatch(req, {"ok": false, "auth_required": true, "error": "beta_access_required", "http_status": 401})
+		_send_next()
+		return
 	var built := _build_request(req)
 	var headers := PackedStringArray(["Content-Type: application/json"])
+	if BetaAccess.enabled:
+		if String(req.get("delete_token", "")) != "" and String(req.get("kind", "")) == "account_delete" and base_url == BetaAccess.server_url:
+			headers.append("Authorization: Bearer " + String(req["delete_token"]))
+		else:
+			headers.append_array(BetaAccess.auth_headers(base_url))
 	# Trusted editor tooling only. Never persist or package the token in the game.
 	if OS.has_feature("editor") and String(req.get("path", "")).begins_with("/admin/sigil/"):
 		var token := OS.get_environment("ADMIN_API_TOKEN")
@@ -549,8 +581,26 @@ func _on_completed(result: int, response_code: int, _headers: PackedStringArray,
 		# и «t28 net ignores non string detail» (снятие typeof-гейта или записи
 		# detail без проверки — словарь/мусорное тело ушло бы вверх вместо отказа).
 		var body := _parse(data)
+		if BetaAccess.enabled and body.get("error") is String:
+			parsed["beta_error"] = body["error"]
 		if typeof(body.get("detail", null)) == TYPE_STRING:
 			parsed["detail"] = String(body["detail"])
+	parsed["http_status"] = response_code
+	if BetaAccess.enabled and response_code == 429:
+		for header in _headers:
+			if header.get_slice(":", 0).to_lower() == "retry-after":
+				var seconds := header.substr(header.find(":") + 1).strip_edges()
+				if seconds.is_valid_int():
+					parsed["retry_after"] = clampi(int(seconds), 1, 86400)
+	if BetaAccess.enabled:
+		if response_code == 401 and String(req.get("kind", "")) not in ["beta_activate", "account_delete"]:
+			BetaAccess.access_revoked()
+		elif String(req.get("kind", "")) == "ping" and parsed.get("ok", false) == true:
+			BetaAccess.server_confirmed = parsed.get("beta", false) == true
+			if BetaAccess.server_confirmed and BetaAccess.can_send_gameplay():
+				Monetization.restore.call_deferred()
+		if (parsed.get("ok", false) == true or response_code == 401) and String(req.get("kind", "")) == "account_delete":
+			BetaAccess.finish_deletion(String(req.get("path", "")).get_slice("device_id=", 1).uri_decode())
 	_dispatch(req, parsed)
 	_send_next()
 
@@ -620,6 +670,16 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 			receipt_verify_result.emit(parsed)
 		"receipt_granted":
 			receipt_granted_result.emit(parsed)
+		"beta_activate":
+			parsed["_attempt_hash"] = String(req.get("body", {}).get("attempt_secret", "")).sha256_text()
+			beta_activate_result.emit(parsed)
+		"beta_purchase":
+			parsed["operation_id"] = String(req.get("body", {}).get("operation_id", ""))
+			parsed["product_id"] = String(req.get("body", {}).get("product_id", ""))
+			beta_purchase_result.emit(parsed)
+		"beta_purchase_granted":
+			parsed["operation_id"] = String(req.get("body", {}).get("operation_id", ""))
+			beta_purchase_granted_result.emit(parsed)
 		"vein_find":
 			vein_find_result.emit(String(req.get("pair_key", "")),
 				String(req.get("body", {}).get("cycle_id", "")), parsed)

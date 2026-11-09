@@ -770,7 +770,12 @@ func _ready() -> void:
 		_saves._load_game()
 	_build_ui()
 	_shop.build()
-	if not _selftest and not App.consent_is_decided():
+	if BetaAccess.enabled and not _selftest:
+		var beta_screen := CanvasLayer.new()
+		beta_screen.set_script(load("res://game/ui/beta_screen.gd"))
+		add_child(beta_screen)
+		BetaAccess.access_changed.connect(_on_beta_access_changed)
+	if not _selftest and not App.consent_is_decided() and not BetaAccess.enabled:
 		_shop._open_consent.call_deferred()
 	if _demo_harness._demo:
 		_demo_harness._apply_demo_state()
@@ -1174,6 +1179,19 @@ func _on_social_inbox_arrived(result: Dictionary) -> void:
 		_social.mark_toast_shown()
 		_online._toast("Тебе написали. Загляни к друзьям.",
 			Online.NoticeKind.INFO, 6.0, _open_social)
+
+func _on_beta_access_changed() -> void:
+	if not BetaAccess.can_send_gameplay():
+		return
+	_online._net_enabled = true
+	Net.me(_online._net_nick, _online._device_id)
+	Net.social_inbox(_online._device_id)
+	Net.letter_today(_online._device_id)
+	Net.atlas_today(_online._device_id)
+	Net.week_status(_online._device_id)
+	Net.cycle_status(_online._device_id)
+	_sync.request_sync(self)
+	Monetization.restore()
 
 func _open_social() -> void:
 	# SocialUI приедет в Task 4; до этого клик по кнопке/тосту не должен падать.

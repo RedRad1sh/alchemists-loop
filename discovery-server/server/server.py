@@ -50,7 +50,7 @@ def _setup_logging() -> None:
 
 _setup_logging()
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 import secrets
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -58,6 +58,7 @@ from pydantic import ValidationError
 
 import dashboard
 import admin
+import beta_access
 
 # ---------------------------------------------------------------------------
 # Конфигурация
@@ -93,6 +94,8 @@ def _resolve_db_path() -> str:
     return target
 
 
+# Validate BEFORE path resolution can copy a legacy ordinary database.
+beta_access.validate_config(_user_data_db_path())
 DB_PATH = _resolve_db_path()
 SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:8080")
 # U5-fix (review) / I-3: TTL обязан переживать ХУДШЕЕ окно генерации, иначе
@@ -1296,8 +1299,10 @@ def _migrate_trade_items(conn: sqlite3.Connection) -> None:
 
 def init_db():
     """Инициализация БД: создать таблицы и загрузить стартовый граф веществ."""
+    beta_access.validate_config(_user_data_db_path(), DB_PATH)
     conn = get_db()
     try:
+        beta_access.init_schema(conn)
         # Heal ДО schema.sql: частичный UNIQUE-индекс в схеме упал бы на
         # БД, созданной Pre-F2-кодом с двумя открытыми циклами (гонка
         # _ensure_active_cycle). schema.sql выполняется executescript-ом,
@@ -2392,6 +2397,8 @@ def _score_vein_cycle(conn: sqlite3.Connection, cycle: dict, tag: str,
 @app.on_event("startup")
 async def startup():
     """Инициализация БД при старте."""
+    beta_access.validate_config(_user_data_db_path(), DB_PATH)
+    app.state.beta_enabled = beta_access.enabled()
     init_db()
     # T08.2: зачистка старых «могил» pending_pairs (state='resolved' из-под
     # прежней логики и протухшие блокировки). Новая логика их не создаёт:
@@ -2440,9 +2447,16 @@ async def startup():
         else:
             print("[world] Админ-панель: /admin (ADMIN_PASS не задан — вход заблокирован)")
 
+# Resolve get_db dynamically so tests and explicit isolated DB configuration agree.
+beta_access.install(app, lambda: get_db(), _user_data_db_path(), admin._is_authenticated)
+
+
 @app.get("/api/health", response_model=HealthResponse)
 async def health():
-    """Проверка доступности сервера."""
+    """Проверка доступности сервера; no player data."""
+    if beta_access.enabled():
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"ok": True, "version": "1.0.0", "beta": True})
     return {"ok": True, "version": "1.0.0"}
 
 def _nick_taken(conn: sqlite3.Connection, nick: str, device_id: str) -> bool:
@@ -4304,7 +4318,7 @@ def export_account(device_id: str = Query(..., min_length=1, max_length=128)):
 
 
 @app.delete("/api/account")
-def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
+def delete_account(request: Request, device_id: str = Query(..., min_length=1, max_length=128)):
     """Удалить профиль и персональные связи, сохранив общий мир.
 
     Вещества, уже опубликованные в мир, не удаляются: иначе удаление одного
@@ -4314,7 +4328,10 @@ def delete_account(device_id: str = Query(..., min_length=1, max_length=128)):
     conn = get_db()
     try:
         player = conn.execute("SELECT nick FROM players WHERE device_id = ?", (device_id,)).fetchone()
+        if beta_access.enabled():
+            beta_access.delete_access(conn, device_id, request.state.beta_token_hash)
         if player is None:
+            conn.commit()
             return {"ok": True, "deleted": False, "device_id": device_id, "message": "Профиль уже удалён"}
         nick = player["nick"]
         # T02: чистим авторство СВОЕГО устройства и легаси-строк, чей ник ещё
@@ -7561,7 +7578,7 @@ def _require_admin_token(x_admin_token: str = Header("")) -> None:
     # No default credentials; disabled unless explicitly configured server-side.
     # Исключение: локальный/dev-режим — ALCHEMY_DEBUG=1 или ALCHEMY_ADMIN_OPEN=1
     # открывают админ-эндпоинты БЕЗ токена (удобно для ручной проверки).
-    if os.environ.get("ALCHEMY_DEBUG") == "1" or os.environ.get("ALCHEMY_ADMIN_OPEN") == "1":
+    if not beta_access.enabled() and (os.environ.get("ALCHEMY_DEBUG") == "1" or os.environ.get("ALCHEMY_ADMIN_OPEN") == "1"):
         return
     expected = os.environ.get("ADMIN_API_TOKEN", "")
     if not expected or not secrets.compare_digest(x_admin_token.encode("utf-8"), expected.encode("utf-8")):
@@ -7782,4 +7799,5 @@ if __name__ == "__main__":
     # systemd запускает этот файл напрямую: dev-reloader в проде перезапускал бы
     # воркер посреди запросов на любую запись в каталоге.
     uvicorn.run("server:app", host="0.0.0.0", port=8080,
-                reload=os.getenv("ALCHEMY_DEV_RELOAD") == "1")
+                reload=os.getenv("ALCHEMY_DEV_RELOAD") == "1",
+                proxy_headers=not beta_access.enabled())
