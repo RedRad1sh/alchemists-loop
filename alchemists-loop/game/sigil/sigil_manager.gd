@@ -54,6 +54,9 @@ var _catalog_version: String = ""
 var _server_collection: Dictionary = {}
 var _server_extras: Array = []
 var _last_device_id: String = ""
+# После «Удалить данные» до перезапуска: ответы на запросы старого аккаунта
+# не должны записать коллекцию заново.
+var _wiped := false
 ## Майлстоуны, подтверждённые сервером: set_id -> отсортированные тиры.
 ## Строго серверные: офлайн-клейм и ошибки ничего не меняют, эффекты не
 ## включаются без серверного подтверждения.
@@ -481,7 +484,7 @@ func _on_milestone_result(result: Dictionary) -> void:
 	# Флаги строго серверные: ok && claimed — единственная ветка, которая
 	# меняет состояние. Офлайн-форма и ошибки (not_enough_cards и т.п.) ничего
 	# не делают — эффекты не включаются без серверного подтверждения.
-	if not result.get("ok", false):
+	if _wiped or not result.get("ok", false):
 		return
 	if not result.get("claimed", false):
 		return
@@ -696,6 +699,22 @@ func _on_admin_reset_result(result: Dictionary) -> void:
 
 ## Удаляет PNG-кэш карточек (user://sigil_collection/*): после сброса коллекции
 ## старые изображения не должны воскрешаться из кэша.
+## «Удалить данные»: коллекция Аркана и её кэши — личные данные установки,
+## иначе коллекция вернётся из файла при следующем запуске.
+func wipe_local_data() -> void:
+	for path in [COLLECTION_FILE, DAILY_CACHE_FILE]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	clear_image_cache()
+	_collection = {}
+	_milestones_claimed = {}
+	_daily_crafts = []
+	_daily_offer_hash = ""
+	_daily_day = ""
+	_last_device_id = ""
+	_wiped = true
+
+
 func clear_image_cache() -> void:
 	var dir := DirAccess.open(CACHE_DIR)
 	if dir == null:
@@ -764,6 +783,8 @@ func craft_card(device_id: String, craft_id: String) -> void:
 
 ## Обработать ответ сервера по крафту.
 func _on_craft_result(result: Dictionary) -> void:
+	if _wiped:
+		return
 	if not result.get("ok", false):
 		craft_failed.emit(str(result.get("error", "unknown")))
 		return

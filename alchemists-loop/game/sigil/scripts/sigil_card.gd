@@ -93,6 +93,7 @@ func _ensure_nodes() -> void:
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		title.set_meta("content_color", true)  # цвет палитры редкости, а не хрома
 		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		title.clip_text = true
 		title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS

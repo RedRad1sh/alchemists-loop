@@ -78,7 +78,7 @@ func _isolate_selftest_paths() -> void:
 	# прерванного прогона (pending-метки, session_count) не должен попадать в
 	# _load() вместо пустого контейнера — проверки сюиты зависят от её записей,
 	# а не от мусора на диске.
-	if not SelftestMode.enabled():
+	if not SelftestMode.isolated():
 		return
 	SAVE_PATH = ST_SAVE_PATH
 	TEMP_PATH = ST_TEMP_PATH
@@ -87,7 +87,7 @@ func _isolate_selftest_paths() -> void:
 	PURCHASES_TEMP_PATH = ST_PURCHASES_TEMP_PATH
 	DELETE_PENDING_PATH = ST_DELETE_PENDING_PATH
 	for p in [SAVE_PATH, TEMP_PATH, BACKUP_PATH, PURCHASES_PATH, PURCHASES_TEMP_PATH,
-			DELETE_PENDING_PATH]:
+			_purchases_backup_path(), DELETE_PENDING_PATH]:
 		if FileAccess.file_exists(p):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 
@@ -170,6 +170,8 @@ func _load_purchase_journal() -> void:
 	# отметка «начислено, но хвост не закрыт»; она живёт здесь же, чтобы пережить
 	# и снятие pending, и вайп.
 	var stored := _read_json(PURCHASES_PATH)
+	if stored.is_empty():
+		stored = _read_json(_purchases_backup_path())
 	_processed = {}
 	_granted = {}
 	var entries: Variant = stored.get("processed", null)
@@ -204,23 +206,38 @@ func _load_purchase_journal() -> void:
 	_data["purchases"] = purchases
 	_save()
 
+func _purchases_backup_path() -> String:
+	return PURCHASES_PATH.get_basename() + ".bak"
+
 func _save_purchases() -> bool:
-	# Замена одним rename: файл журнала либо старый, либо новый — промежуточного
-	# состояния нет. Backup как у основного файла не ведём: журнал дополняемый, а
-	# потеря одной строки означает лишь повторную проверку чека, но не порчу
-	# пользовательских данных.
+	# Замена одним rename: файл журнала либо старый, либо новый. Предыдущая версия
+	# уходит в .bak: битый журнал без неё означал бы повторную выдачу всех чеков.
 	var file := FileAccess.open(PURCHASES_TEMP_PATH, FileAccess.WRITE)
 	if file == null:
 		push_warning("UserData: не удалось открыть временный файл журнала покупок.")
 		return false
 	file.store_string(JSON.stringify({"version": PURCHASES_VERSION, "processed": _processed, "granted": _granted}, "\t"))
 	file.flush()
+	var write_error := file.get_error()
 	file.close()
 	var journal_abs := ProjectSettings.globalize_path(PURCHASES_PATH)
 	var temp_abs := ProjectSettings.globalize_path(PURCHASES_TEMP_PATH)
+	# Усечённый temp после rename стал бы пустым журналом → повторная выдача.
+	if write_error != OK:
+		push_warning("UserData: не удалось записать временный файл журнала покупок.")
+		DirAccess.remove_absolute(temp_abs)
+		return false
+	var backup_abs := ProjectSettings.globalize_path(_purchases_backup_path())
+	# Битый текущий журнал в .bak не ротируем: иначе затёрли бы последнюю целую копию.
+	if FileAccess.file_exists(PURCHASES_PATH) and not _read_json(PURCHASES_PATH).is_empty():
+		if FileAccess.file_exists(_purchases_backup_path()):
+			DirAccess.remove_absolute(backup_abs)
+		DirAccess.rename_absolute(journal_abs, backup_abs)
 	if DirAccess.rename_absolute(temp_abs, journal_abs) != OK:
 		push_warning("UserData: не удалось заменить файл журнала покупок.")
 		DirAccess.remove_absolute(temp_abs)
+		if not FileAccess.file_exists(PURCHASES_PATH) and FileAccess.file_exists(_purchases_backup_path()):
+			DirAccess.rename_absolute(backup_abs, journal_abs)
 		return false
 	changed.emit()
 	return true
@@ -255,13 +272,20 @@ func _save() -> bool:
 	_data["version"] = DATA_VERSION
 	file.store_string(JSON.stringify(_data, "\t"))
 	file.flush()
+	var write_error := file.get_error()
 	file.close()
 	var save_abs := ProjectSettings.globalize_path(SAVE_PATH)
 	var temp_abs := ProjectSettings.globalize_path(TEMP_PATH)
 	var backup_abs := ProjectSettings.globalize_path(BACKUP_PATH)
+	if write_error != OK:
+		push_warning("UserData: не удалось записать временный файл.")
+		DirAccess.remove_absolute(temp_abs)
+		return false
 	if FileAccess.file_exists(SAVE_PATH):
 		if FileAccess.file_exists(BACKUP_PATH):
-			DirAccess.remove_absolute(backup_abs)
+			if DirAccess.remove_absolute(backup_abs) != OK:
+				push_warning("UserData: не удалось обновить backup.")
+				return false
 		if DirAccess.rename_absolute(save_abs, backup_abs) != OK:
 			push_warning("UserData: не удалось создать backup.")
 			return false
@@ -315,6 +339,13 @@ func get_or_create_device_id() -> String:
 	_data["device_id"] = current
 	_save()
 	return current
+
+func has_device_id() -> bool:
+	return String(_data.get("device_id", "")).strip_edges() != ""
+
+func adopt_device_id(id: String) -> void:
+	_data["device_id"] = id.strip_edges()
+	_save()
 
 func get_or_create_install_id() -> String:
 	var current := String(_data.get("install_id", "")).strip_edges()
@@ -496,23 +527,49 @@ func delete_all_local_data() -> void:
 
 # --- Маркер незавершённого серверного удаления (#8) ---------------------------
 
+# Список, а не одно значение: новая установка может удалиться, пока удаление
+# прошлой ещё не дошло до сервера, и её id не должен затереть предыдущий.
 func mark_account_delete_pending(device_id: String) -> void:
+	var ids := get_account_delete_pending_ids()
+	if device_id == "" or ids.has(device_id):
+		return
+	ids.append(device_id)
+	_write_delete_pending(ids)
+
+func get_account_delete_pending_ids() -> Array:
+	if not FileAccess.file_exists(DELETE_PENDING_PATH):
+		return []
+	var stored := _read_json(DELETE_PENDING_PATH)
+	var ids: Array = []
+	var list: Variant = stored.get("device_ids", null)
+	if list is Array:
+		for id in list:
+			if id is String and String(id) != "" and not ids.has(id):
+				ids.append(String(id))
+	var legacy := String(stored.get("device_id", ""))
+	if legacy != "" and not ids.has(legacy):
+		ids.push_front(legacy)
+	return ids
+
+func get_account_delete_pending() -> String:
+	var ids := get_account_delete_pending_ids()
+	return "" if ids.is_empty() else String(ids[0])
+
+func clear_account_delete_pending(device_id: String = "") -> void:
+	var ids := get_account_delete_pending_ids() if device_id != "" else []
+	ids.erase(device_id)
+	if not ids.is_empty():
+		_write_delete_pending(ids)
+	elif FileAccess.file_exists(DELETE_PENDING_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(DELETE_PENDING_PATH))
+
+func _write_delete_pending(ids: Array) -> void:
 	var file := FileAccess.open(DELETE_PENDING_PATH, FileAccess.WRITE)
 	if file == null:
 		push_warning("UserData: не удалось записать маркер удаления (#8).")
 		return
 	file.store_string(JSON.stringify({
-		"device_id": device_id,
+		"device_ids": ids,
 		"marked_at": int(Time.get_unix_time_from_system()),
 	}))
 	file.close()
-
-func get_account_delete_pending() -> String:
-	if not FileAccess.file_exists(DELETE_PENDING_PATH):
-		return ""
-	var stored := _read_json(DELETE_PENDING_PATH)
-	return String(stored.get("device_id", ""))
-
-func clear_account_delete_pending() -> void:
-	if FileAccess.file_exists(DELETE_PENDING_PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(DELETE_PENDING_PATH))

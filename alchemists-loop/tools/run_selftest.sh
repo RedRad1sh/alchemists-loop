@@ -11,8 +11,8 @@
 # Godot берётся из $GODOT, иначе ищется в PATH. Лишние аргументы скрипта
 # пробрасываются в аргументы игры, например: tools/run_selftest.sh --probe
 #
-# Прогон страхуется таймаутом: сюиты — headless-вычисления без интерактива,
-# штатный прогон укладывается в секунды, 120 с — запас больше чем на порядок.
+# Прогон страхуется таймаутом: штатный прогон идёт около 5 минут
+# (2500+ проверок, ноябрь 2026), 900 с — запас втрое.
 # Без него Godot, упавший в бесконечный цикл или зависший на await-хвосте,
 # подвешивает прогон навсегда. Код таймаута (124) доходит наружу через
 # status/exit так же честно, как код самотеста; если timeout (и gtimeout) в
@@ -37,7 +37,7 @@ if [ -z "$GODOT_BIN" ]; then
     exit 127
 fi
 
-RUN_TIMEOUT_SEC=120
+RUN_TIMEOUT_SEC=900
 TIMEOUT_BIN=""
 if command -v timeout >/dev/null 2>&1; then
     TIMEOUT_BIN="timeout"
@@ -45,13 +45,25 @@ elif command -v gtimeout >/dev/null 2>&1; then
     TIMEOUT_BIN="gtimeout"
 fi
 
+LOG_FILE="$(mktemp)"
+trap 'rm -f "$LOG_FILE"' EXIT
+
 if [ -z "$TIMEOUT_BIN" ]; then
     echo "run_selftest: timeout/gtimeout не найден — прогон БЕЗ ограничения времени; зависший Godot не завершится сам." >&2
-    "$GODOT_BIN" --headless --path "$PROJECT_DIR" -- --selftest "$@"
+    "$GODOT_BIN" --headless --path "$PROJECT_DIR" -- --selftest "$@" 2>&1 | tee "$LOG_FILE"
 else
-    "$TIMEOUT_BIN" "$RUN_TIMEOUT_SEC" "$GODOT_BIN" --headless --path "$PROJECT_DIR" -- --selftest "$@"
+    "$TIMEOUT_BIN" "$RUN_TIMEOUT_SEC" "$GODOT_BIN" --headless --path "$PROJECT_DIR" -- --selftest "$@" 2>&1 | tee "$LOG_FILE"
 fi
-status=$?
+status=${PIPESTATUS[0]}
+# Ошибка скрипта не роняет check(): функция обрывается, проверки после неё
+# просто не выполняются, и прогон остаётся зелёным. Ловим такие ошибки по логу.
+if [ "$status" -eq 0 ]; then
+    runtime_errors=$(grep -cE "SCRIPT ERROR|Lambda capture at index" "$LOG_FILE")
+    if [ "$runtime_errors" -gt 0 ]; then
+        echo "run_selftest: SELFTEST FAIL — в выводе $runtime_errors ошибок рантайма (SCRIPT ERROR / Lambda capture)" >&2
+        status=1
+    fi
+fi
 if [ "$status" -eq 0 ]; then
     echo "run_selftest: SELFTEST PASS (exit 0)"
 elif [ "$status" -eq 124 ]; then

@@ -18,6 +18,7 @@ const U20_REAL_FILES: Array = [
 	"user://alchemists_loop_purchases.json",
 	"user://alchemists_loop_purchases.tmp",
 	"user://alchemists_loop_analytics.json",
+	"user://alchemists_loop_purchases.bak",
 ]
 const U20_ST_FILES: Array = [
 	"user://alchemy_st_user.json",
@@ -26,6 +27,7 @@ const U20_ST_FILES: Array = [
 	"user://alchemy_st_purchases.json",
 	"user://alchemy_st_purchases.tmp",
 	"user://alchemy_st_analytics.json",
+	"user://alchemy_st_purchases.bak",
 ]
 
 static func check(name: String, cond: bool) -> void:
@@ -100,6 +102,10 @@ static func run(g: Game) -> void:
 		and String(U20_ST_FILES[3]) == UserData.ST_PURCHASES_PATH
 		and String(U20_ST_FILES[4]) == UserData.ST_PURCHASES_TEMP_PATH
 		and String(U20_ST_FILES[5]) == Analytics.ST_QUEUE_PATH)
+	Selftest.check("harness scene from res://tests/ counts as isolated run",
+		SelftestMode.is_harness_args(PackedStringArray(["--scene", "res://tests/board_shots.tscn"]))
+		and not SelftestMode.is_harness_args(PackedStringArray(["--scene", "res://main.tscn"]))
+		and not SelftestMode.is_harness_args(PackedStringArray()))
 	Selftest.check("u23 UserData boot load already read from the ST twin",
 		UserData._boot_load_used_st_path)
 	Selftest.check("u23 selftest boot started no analytics session before the suite",
@@ -172,21 +178,20 @@ static func run(g: Game) -> void:
 		# Dynamic loading permits a behavioral red probe before new modules exist.
 		for workshop_suite in ["mastery", "model", "context", "scheduler", "offline", "ui", "integration", "saves", "pages", "runtime", "acceptance"]:
 			var suite_path := "res://tests/suite_workshop_%s.gd" % workshop_suite
-			if FileAccess.file_exists(suite_path):
-				var suite: Script = load(suite_path)
-				Selftest.check("workshop suite loads: " + workshop_suite, suite != null and suite.can_instantiate())
-				if suite != null and suite.can_instantiate():
-					await suite.run(g)
+			# Удалённый или переименованный файл красит свой пин, а не молча выпадает.
+			var suite: Script = load(suite_path) if FileAccess.file_exists(suite_path) else null
+			Selftest.check("workshop suite loads: " + workshop_suite, suite != null and suite.can_instantiate())
+			if suite != null and suite.can_instantiate():
+				await suite.run(g)
 		# UI-сюиты грузятся динамически: отсутствующий UITheme/UIBackdrop или
 		# опечатка в новом файле красят только свой пин, а не весь билд.
 		for ui_suite in ["theme", "backdrop", "scene"]:
 			var ui_path := "res://tests/suite_ui_%s.gd" % ui_suite
-			if FileAccess.file_exists(ui_path):
-				var ui_script: Script = load(ui_path)
-				Selftest.check("ui suite loads: " + ui_suite,
-					ui_script != null and ui_script.can_instantiate())
-				if ui_script != null and ui_script.can_instantiate():
-					await ui_script.run(g)
+			var ui_script: Script = load(ui_path) if FileAccess.file_exists(ui_path) else null
+			Selftest.check("ui suite loads: " + ui_suite,
+				ui_script != null and ui_script.can_instantiate())
+			if ui_script != null and ui_script.can_instantiate():
+				await ui_script.run(g)
 
 	_u20_wipe([g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH] + U20_ST_FILES)
 	g.SAVE_PATH = "user://alchemy_save.json"
@@ -213,7 +218,7 @@ static func run(g: Game) -> void:
 	Selftest.check("u20 selftest left the real user data file untouched",
 		_u20_untouched(real_before, [String(U20_REAL_FILES[0]), String(U20_REAL_FILES[1]), String(U20_REAL_FILES[2])]))
 	Selftest.check("u20 selftest left the real purchase journal untouched",
-		_u20_untouched(real_before, [String(U20_REAL_FILES[3]), String(U20_REAL_FILES[4])]))
+		_u20_untouched(real_before, [String(U20_REAL_FILES[3]), String(U20_REAL_FILES[4]), String(U20_REAL_FILES[6])]))
 	Selftest.check("u20 selftest left the real analytics queue untouched",
 		_u20_untouched(real_before, [String(U20_REAL_FILES[5])]))
 	# U22 (T26): точка отсчёта — boot-снимки g, снятые в самом верху Main._ready

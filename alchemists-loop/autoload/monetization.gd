@@ -49,6 +49,8 @@ var _pending_placement := ""
 # совпадает с порядком запросов (очередь Net сериальная), поэтому ответ без
 # receipt_hash корректно снимает голову очереди, а ответ с hash — свой чек.
 var _verify_requests: Array = []
+# Чеки, начисленные в памяти, но ещё не попавшие в записанный сейв.
+var _granted_unsaved: Dictionary = {}
 
 func _ready() -> void:
 	_load_catalog()
@@ -366,25 +368,42 @@ func _on_receipt_verify_result(result: Dictionary) -> void:
 		_drop_pending_if_any(product_id)
 		_pending_product = ""
 		return
-	_finish_purchase(request, not (result.get("verified", false) == true))
+	var verified: bool = result.get("verified", false) == true
+	# Сервер помнит записанную выдачу этого чека (локальный журнал мог стереть
+	# вайп): начислять второй раз нельзя, остаётся только закрыть чек магазину.
+	_finish_purchase(request, not verified, verified and result.get("already_granted", false) == true)
 
-func _finish_purchase(request: Dictionary, unverified: bool) -> void:
+func _finish_purchase(request: Dictionary, unverified: bool, server_granted := false) -> void:
 	var provider := String(request["provider"])
 	var sku := String(request["sku"])
 	var token := String(request["token"])
 	var product_id := String(request["product_id"])
 	var product := get_product(product_id)
 	var product_type := String(product.get("type", ""))
-	# Шаг 1 — начисление.
-	if not _purchase_already_granted(provider, sku, token, product_id):
+	# Шаг 1 — начисление. Отметка granted на диске и подтверждение магазину —
+	# только после записанного сейва: иначе после перезапуска награды нет, а чек
+	# уже закрыт. Пока сейв не записан, повтор в этой сессии сторожит
+	# _granted_unsaved, а после перезапуска чек начислится заново.
+	var key := UserData._token_key(provider, token, sku)
+	if not server_granted and not _purchase_already_granted(provider, sku, token, product_id) and not _granted_unsaved.has(key):
 		if not _grant_product(product_id):
 			purchase_failed.emit(product_id, "grant_failed", "Не удалось начислить покупку")
 			# Начисления не было — pending-запись это просто мусор, снимаем.
 			_drop_pending_if_any(product_id)
 			return
-		_mark_purchase_granted(provider, sku, token, product_id)
+		_granted_unsaved[key] = true
+	var saved := true
+	if _granted_unsaved.has(key):
+		saved = _game != null and _game._saves._save_game()
+		if saved:
+			_granted_unsaved.erase(key)
+			_mark_purchase_granted(provider, sku, token, product_id)
+			if not unverified and Net != null:
+				Net.receipt_granted(UserData.get_or_create_device_id(), token.sha256_text())
+		else:
+			push_warning("Monetization: сейв с покупкой не записан — магазину не подтверждаем, повторим.")
 	# Шаг 2 — подтверждение магазина с ЧТЕНИЕМ результата.
-	var confirmed := _confirm_purchase_with_store(token, sku, product_type == "consumable")
+	var confirmed := saved and _confirm_purchase_with_store(token, sku, product_type == "consumable")
 	_report_purchase(product_id, unverified, confirmed)
 	# Шаг 3 — журнал «полностью завершено» и снятие pending только после
 	# подтверждённого потребления. Иначе consumable зависал: локально чек
@@ -510,7 +529,6 @@ func _grant_product(product_id: String) -> bool:
 		UserData.set_owned_product(product_id, true)
 	_game._engine.status_text = "Покупка применена: %s." % String(product.get("title", product_id))
 	_game._engine._refresh()
-	_game._saves._save_game()
 	return true
 
 func _on_rewarded_completed(placement_id: String) -> void:

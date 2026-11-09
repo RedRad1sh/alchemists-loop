@@ -351,6 +351,9 @@ func set_peer_coll(coll: Dictionary) -> void:
 func on_peer_collection(result: Dictionary) -> void:
 	if result.get("ok", false) != true:
 		return
+	# Запоздавший ответ про прошлого собеседника в окно нового не ложится.
+	if String(result.get("_peer", _peer)) != _peer:
+		return
 	_peer_coll = {"cards": result.get("cards", {}), "extras": result.get("extras", [])}
 	# Перерисовка только на конструкторе: на списке и подтверждении планшета нет,
 	# а сброс невысказанного экрана посреди чтения оффера — худшее, что можно

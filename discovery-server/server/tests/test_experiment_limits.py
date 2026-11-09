@@ -34,6 +34,48 @@ class _LocalFallback(_ExternalLLM):
     provider = "local"
 
 
+def test_parallel_reservations_cannot_both_pass_daily_limit(tmp_path, monkeypatch):
+    # Два запроса в threadpool: каждый читает attempts=0 до записи соседа.
+    import threading
+    import sqlite3
+
+    srv, _client_unused = _client(tmp_path, monkeypatch, _ExternalLLM())
+    monkeypatch.setattr(srv, "EXPERIMENT_DAILY_LIMIT", 1)
+    monkeypatch.setattr(srv, "EXPERIMENT_COOLDOWN_SEC", 0.0)
+    monkeypatch.setattr(srv, "EXPERIMENT_GLOBAL_DAILY_LIMIT", 100)
+    gate = threading.Barrier(2, timeout=3)
+
+    class _GatedConn(sqlite3.Connection):
+        def execute(self, sql, *args):
+            cur = super().execute(sql, *args)
+            if sql.lstrip().startswith("SELECT attempts, last_at"):
+                try:
+                    gate.wait()
+                except threading.BrokenBarrierError:
+                    pass
+            return cur
+
+    results = []
+
+    def _worker():
+        conn = sqlite3.connect(srv.DB_PATH, timeout=5, factory=_GatedConn,
+                               check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        try:
+            results.append(srv._admit_experiment(conn, "racer")[0])
+        except sqlite3.OperationalError:
+            results.append(False)
+        finally:
+            conn.close()
+
+    threads = [threading.Thread(target=_worker) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+    assert sorted(results) == [False, True]
+
+
 class TestExperimentLimits:
     def test_cached_result_does_not_consume_experiment_budget(self, tmp_path, monkeypatch):
         import server as srv

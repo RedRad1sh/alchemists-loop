@@ -104,7 +104,7 @@ static func _shapes(_g: Game) -> void:
 	q = HoldingNet.one(held, "trade_peer_collection", ["dev 1", "peer 2"])
 	Selftest.check("trade peer collection GET path", q != {}
 		and String(q.get("path", "")) == "/trade/peer_collection?device_id=dev%201&peer=peer%202"
-		and not q.has("body"))
+		and not q.has("body") and String(q.get("peer", "")) == "peer 2")
 	held.free()
 
 
@@ -1226,8 +1226,15 @@ static func _builder(g: Game) -> void:
 	# _peer_coll: проверка 14 пинит и сигнал, и forwarder, и слой.
 	var routed: bool = bool(T.has_script_method("on_peer_collection")) \
 		and g.has_method("_on_trade_peer_collection_result")
+	# Запоздавший ответ про коллекцию ДРУГОГО собеседника (открыли обмен с A,
+	# потом с B) в конструктор B лечь не должен.
 	if routed:
-		Net.trade_peer_collection_result.emit({"ok": true,
+		Net.trade_peer_collection_result.emit({"ok": true, "_peer": "dev-a",
+			"cards": {"fire": {"copies": 1, "first_at": ""}}, "extras": []})
+	Selftest.check("stale peer collection of another friend is ignored", routed
+		and (tr._peer_coll as Dictionary).is_empty())
+	if routed:
+		Net.trade_peer_collection_result.emit({"ok": true, "_peer": "dev-b",
 			"cards": {"ice": {"copies": 2, "first_at": ""}},
 			"extras": [{"craft_id": "c-17", "rarity": "chromatic",
 				"llm_name": "Радуга друга"}]})

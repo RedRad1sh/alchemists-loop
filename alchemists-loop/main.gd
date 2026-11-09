@@ -723,7 +723,7 @@ func _ready() -> void:
 		Net.messages_result.connect(_social.on_messages)
 		Net.message_send_result.connect(_social.on_send)
 		Net.social_inbox_result.connect(_on_social_inbox_arrived)
-		Net.friend_respond_result.connect(_on_friend_respond)
+		Net.friend_respond_result.connect(_on_social_action_result)
 		Net.friend_remove_result.connect(_on_social_action_result)
 		Net.friend_block_result.connect(_on_social_action_result)
 	# План 2 (жила/круг): connects вне _net_enabled-блока — хендлеры сами
@@ -1181,53 +1181,47 @@ func _open_social() -> void:
 		return
 	_social_ui.open(0)
 
-func _on_friend_respond(result: Dictionary) -> void:
-	if result.get("ok", false) == true:
-		_social.refresh()
-		_engine._refresh_header()
-		if _social_ui != null and _social_ui._screen != null and _social_ui._screen.visible:
-			_social_ui._refresh_list()
-	else:
-		if _social_ui != null:
-			_social_ui.show_send_error(SocialUI._refusal_code(result))
-
+## Ответ на заявку, удаление и блок — один путь: свежий инбокс сам перерисует
+## открытый список (_on_social_inbox_arrived).
 func _on_social_action_result(result: Dictionary) -> void:
 	if _social_ui != null:
 		_social_ui._on_friend_action_result(result)
 
+## Слой обмена или null. Guard обязателен: _social_ui создаётся в _build_ui, а
+## коннекты trade_* живут в сетевом блоке _ready — раньше построения UI, и
+## offline-слив очереди (как и selftest) эмитит результаты синхронно.
+func _trade_layer() -> TradeUI:
+	if _social_ui == null:
+		return null
+	return _social_ui._trade
+
 func _on_trade_list_result(result: Dictionary) -> void:
-	# Guard обязателен: _social_ui создаётся в _build_ui, а этот коннект живёт в
-	# сетевом блоке _ready — то есть раньше построения UI. Сигнал может прийти
-	# первым: offline-слив очереди эмитит результаты синхронно.
-	if _social_ui != null and _social_ui._trade != null:
-		_social_ui._trade.on_list(result)
+	if _trade_layer() != null:
+		_trade_layer().on_list(result)
 
 func _on_trade_offer_result(result: Dictionary) -> void:
-	if _social_ui != null and _social_ui._trade != null:
-		_social_ui._trade.on_offer(result)
+	if _trade_layer() != null:
+		_trade_layer().on_offer(result)
 
 func _on_trade_gift_result(result: Dictionary) -> void:
-	if _social_ui != null and _social_ui._trade != null:
-		_social_ui._trade.on_gift(result)
+	if _trade_layer() != null:
+		_trade_layer().on_gift(result)
 	if result.get("ok", false) == true:
 		_trades_repull()
 
 func _on_trade_accept_result(result: Dictionary) -> void:
-	if _social_ui != null and _social_ui._trade != null:
-		_social_ui._trade.on_accept(result)
+	if _trade_layer() != null:
+		_trade_layer().on_accept(result)
 	if result.get("ok", false) == true:
 		_trades_repull()
 
 func _on_trade_cancel_result(result: Dictionary) -> void:
-	if _social_ui != null and _social_ui._trade != null:
-		_social_ui._trade.on_cancel(result)
+	if _trade_layer() != null:
+		_trade_layer().on_cancel(result)
 
-## Ответ GET /api/trade/peer_collection: только в слой. Гейд на null обязателен
-## как у остальных forwarder'ов: сигнал живёт на автозагрузке Net, а _social_ui
-## строится позже, и selftest эмитит этот результат напрямую.
 func _on_trade_peer_collection_result(result: Dictionary) -> void:
-	if _social_ui != null and _social_ui._trade != null:
-		_social_ui._trade.on_peer_collection(result)
+	if _trade_layer() != null:
+		_trade_layer().on_peer_collection(result)
 
 ## §8.4: после свершившейся переноски карты авторитетны только серверные ответы.
 ## Перебираем коллекцию тем же путём, что и обычно (Net.sigil_collection →

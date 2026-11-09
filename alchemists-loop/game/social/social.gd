@@ -117,6 +117,11 @@ func is_outgoing_to(nick: String) -> bool:
 			return true
 	return false
 
+## Адресат ответа: Net кладёт собеседника из запроса в `_peer`. Резервный
+## _awaiting_peer нужен только ответам без него (прямая эмиссия в тестах).
+func _reply_peer(result: Dictionary) -> String:
+	return String(result.get("_peer", _awaiting_peer))
+
 func set_awaiting_peer(peer: String) -> void:
 	_awaiting_peer = peer
 
@@ -125,9 +130,11 @@ func load_thread(peer: String) -> void:
 	Net.messages(g._online._device_id, peer, int(last_read_id.get(peer, 0)))
 
 func on_messages(result: Dictionary) -> void:
-	var peer := _awaiting_peer
+	var peer := _reply_peer(result)
 	if peer == "" or result.get("ok", false) != true:
 		return
+	# Сервер помечает письма прочитанными на этом GET: свежий инбокс гасит бейдж.
+	refresh()
 	var rows: Array = []
 	for m in result.get("messages", []):
 		if m is Dictionary:
@@ -155,9 +162,9 @@ func optimistic_send(peer: String, body: String) -> void:
 		"sent_at": "", "pending": true})
 
 func on_send(result: Dictionary) -> void:
-	# Отказ любого вида — снимаем ВСЕ pending текущего ожидаемого пира: текст
+	# Отказ любого вида — снимаем ВСЕ pending адресата отправки: текст
 	# не доставлен, клиент обязан это показать честной лентой (урок Fix #3).
-	var peer := _awaiting_peer
+	var peer := _reply_peer(result)
 	if result.get("ok", false) == true:
 		# Блуждающий ok без ожидающего пира: не дёргаем Net.messages(dev,"",0)
 		# и не троим ленты — тот же guard, что в ветке отказа ниже.
@@ -172,8 +179,8 @@ func on_send(result: Dictionary) -> void:
 		optimistic.erase(peer)
 		if g._social_ui != null:
 			# F4: detail нетипизирован — при 422 сервер шлёт СПИСОК, в String-
-			# параметр show_send_error его не гоним (паттерн main.gd
-			# `_on_friend_respond`); при отсутствии detail (offline-отказ)
+			# параметр show_send_error его не гоним (паттерн
+			# SocialUI._refusal_code); при отсутствии detail (offline-отказ)
 			# молча исчезать pending-пузырьку не даём — показываем офлайн-текст.
 			var detail = result.get("detail", "")
 			if detail is String and detail != "":

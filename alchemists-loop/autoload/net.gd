@@ -52,6 +52,7 @@ signal week_result(result: Dictionary)
 signal fair_brew_result(result: Dictionary)
 signal fair_claim_result(result: Dictionary)
 signal receipt_verify_result(result: Dictionary)
+signal receipt_granted_result(result: Dictionary)
 signal account_export_result(result: Dictionary)
 signal account_delete_result(result: Dictionary)
 signal vein_find_result(pair_key: String, cycle_id: String, result: Dictionary)
@@ -103,7 +104,7 @@ func _ready() -> void:
 	_http.request_completed.connect(_on_completed)
 	# в selftest сеть не трогаем (герметичный прогон); пустой base_url = «сервера
 	# нет» (F1: релиз без https-настройки) — пинг не шлём совсем.
-	if base_url != "" and not SelftestMode.enabled():
+	if base_url != "" and not SelftestMode.isolated():
 		_ping()
 
 # Чистый шов разрешения базового URL: env → ProjectSettings → DEFAULT_BASE.
@@ -246,12 +247,12 @@ func social_inbox(device_id: String) -> void:
 		"path": "/social/inbox?device_id=" + device_id.uri_encode()})
 
 func messages(device_id: String, peer_device: String, since_id: int) -> void:
-	_enqueue({"kind": "messages", "path": "/messages?device_id="
+	_enqueue({"kind": "messages", "peer": peer_device, "path": "/messages?device_id="
 		+ device_id.uri_encode() + "&peer_device=" + peer_device.uri_encode()
 		+ "&since_id=" + str(since_id)})
 
 func message_send(device_id: String, peer_device: String, body: String) -> void:
-	_enqueue({"kind": "message_send", "path": "/message/send",
+	_enqueue({"kind": "message_send", "peer": peer_device, "path": "/message/send",
 		"body": {"device_id": device_id, "peer_device": peer_device, "body": body}})
 
 func friend_request(device_id: String, target_nick: String) -> void:
@@ -299,7 +300,7 @@ func trade_list(device_id: String) -> void:
 		"path": "/trade/list?device_id=" + device_id.uri_encode()})
 
 func trade_peer_collection(device_id: String, peer: String) -> void:
-	_enqueue({"kind": "trade_peer_collection",
+	_enqueue({"kind": "trade_peer_collection", "peer": peer,
 		"path": "/trade/peer_collection?device_id=" + device_id.uri_encode()
 			+ "&peer=" + peer.uri_encode()})
 
@@ -413,6 +414,14 @@ func receipt_verify(device_id: String, provider: String, sku: String, receipt_to
 		},
 	})
 
+# Отметка «товар по processed-чеку начислен и сейв записан» (POST /api/receipt/granted):
+# после неё повторное эхо того же чека придёт с already_granted и не начислится снова.
+func receipt_granted(device_id: String, receipt_hash: String) -> void:
+	_enqueue({
+		"kind": "receipt_granted", "path": "/receipt/granted",
+		"body": {"device_id": device_id, "receipt_hash": receipt_hash},
+	})
+
 func _pair_key(a: String, b: String) -> String:
 	var p := PackedStringArray([a, b])
 	p.sort()
@@ -499,7 +508,7 @@ func _send_next() -> void:
 # _http.request(...); нужна как seam для selftest (см. suite_resonance_net.gd),
 # чтобы эмулировать err != OK на старте запроса без живого сервера.
 func _try_send(url: String, headers: PackedStringArray, method: int, body: String) -> int:
-	if SelftestMode.enabled():
+	if SelftestMode.isolated():
 		# Герметичный прогон: сокет не открываем НИКОГДА. Раньше skip касался
 		# только _ping(), а production-вызовы (main.gd `_refetch_world` на
 		# вкладке «Мир» гейта по selftest не имеет) уходили живым сокетом на
@@ -553,6 +562,10 @@ func _parse(data: PackedByteArray) -> Dictionary:
 	return {}
 
 func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
+	# Ответы ленты/коллекции друга сервер отдаёт без собеседника, а игрок успевает
+	# открыть другого, пока ответ в пути: адресат берётся из запроса.
+	if req.has("peer"):
+		parsed["_peer"] = String(req["peer"])
 	match String(req.get("kind", "")):
 		"ping":
 			pass
@@ -605,6 +618,8 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 			fair_claim_result.emit(parsed)
 		"receipt_verify":
 			receipt_verify_result.emit(parsed)
+		"receipt_granted":
+			receipt_granted_result.emit(parsed)
 		"vein_find":
 			vein_find_result.emit(String(req.get("pair_key", "")),
 				String(req.get("body", {}).get("cycle_id", "")), parsed)
@@ -629,7 +644,7 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 		"sigil_admin_chromatic":
 			sigil_admin_chromatic_result.emit(parsed)
 		"sigil_admin_chroma_slot":
-			sigil_admin_chromatic_result.emit(parsed)
+			sigil_admin_chroma_slot_result.emit(parsed)
 		"sync_package":
 			sync_package_result.emit(parsed)
 		"social_inbox":

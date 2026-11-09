@@ -328,7 +328,10 @@ CREATE TABLE IF NOT EXISTS receipts (
     status TEXT NOT NULL DEFAULT 'pending',
     first_seen_at REAL NOT NULL,
     processed_at REAL,
-    last_seen_at REAL NOT NULL
+    last_seen_at REAL NOT NULL,
+    -- клиент подтвердил, что товар начислен и записан в сейв: повтор этого чека
+    -- после вайпа клиентского журнала отдаёт already_granted, а не новую выдачу.
+    granted_at REAL
 );
 CREATE INDEX IF NOT EXISTS idx_receipts_device ON receipts(device_id);
 

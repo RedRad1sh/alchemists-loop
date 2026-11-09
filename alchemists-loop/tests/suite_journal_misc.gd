@@ -353,6 +353,18 @@ static func run(g: Game) -> void:
 		and (_t22_json(UserData.PURCHASES_PATH).get("processed", {}) as Dictionary).has(_legacy_key))
 	Selftest.check("t22 legacy copy cleared from the wipeable file",
 		((_t22_json(UserData.SAVE_PATH).get("purchases", {}) as Dictionary).get("processed", {}) as Dictionary).is_empty())
+	# Битый файл журнала не должен обнулять память о выданных чеках: журнал
+	# ротируется в .bak, и загрузка откатывается на предыдущую версию.
+	var _jb_path := UserData.PURCHASES_PATH.get_basename() + ".bak"
+	_st_paths.append(_jb_path)
+	UserData.mark_processed_purchase("google_play", "journal_bak_tok_2", "sku_bak")
+	var _jb_corrupt := FileAccess.open(UserData.PURCHASES_PATH, FileAccess.WRITE)
+	_jb_corrupt.store_string("{\"processed\": {")
+	_jb_corrupt.close()
+	UserData._load_purchase_journal()
+	Selftest.check("t22 corrupt purchase journal falls back to its backup",
+		FileAccess.file_exists(_jb_path) and UserData._processed.has(_legacy_key))
+	UserData._save_purchases()
 	# I-1: отметка «уже начислено» живёт в неуязвимом журнале (секция granted),
 	# отдельной строкой от processed, а НЕ в затираемом pending: снятие pending и
 	# вайп не должны её убивать.
@@ -704,6 +716,96 @@ static func run(g: Game) -> void:
 		and _m1_probe.events.size() == 2)
 	UserData.PURCHASES_TEMP_PATH = _m1_tmp0
 	Monetization.purchase_succeeded.disconnect(_m1_probe._on_purchase_succeeded)
+
+	# ---------- Начисление, не дошедшее до сейва, не подтверждается магазину ----------
+	# Сейв заморожен (вайп, нет места): награда только в памяти. Подтверди мы
+	# магазину или запиши granted в журнал — после перезапуска награды нет и
+	# повторно она не придёт. Поэтому: магазину не подтверждаем, granted на диск не
+	# пишем (после перезапуска чек начислится заново), а повтор в той же сессии
+	# сторожит отметка в памяти.
+	var _sv_prov := "google_play"
+	var _sv_sku := "al_loop_ether_500"
+	var _sv_tok := "save_failed_grant_token"
+	var _sv_pid := "ether_pack_small"
+	var _sv_req := {"provider": _sv_prov, "sku": _sv_sku, "token": _sv_tok, "product_id": _sv_pid}
+	UserData.set_pending_purchase(_sv_pid, {"provider": _sv_prov, "sku": _sv_sku, "started_at": 1.0})
+	var _sv_store := T22FakeBilling.new()
+	_sv_store.ok = true
+	_sv_store.provider = _sv_prov
+	_sv_store.sku = _sv_sku
+	_sv_store.token = _sv_tok
+	_sv_store.product_id = _sv_pid
+	_sv_store.game = g
+	Monetization._adapter = _sv_store
+	var _sv_frozen0: bool = g._saves._save_frozen
+	g._saves._save_frozen = true
+	Monetization._finish_purchase(_sv_req, false)
+	g._saves._save_frozen = _sv_frozen0
+	Selftest.check("unsaved grant is not confirmed to the store",
+		_sv_store.calls.is_empty()
+		and not UserData.get_pending_purchase(_sv_pid).is_empty()
+		and not UserData.has_processed_purchase(_sv_prov, _sv_tok, _sv_sku))
+	Selftest.check("unsaved grant is not recorded as granted on disk",
+		not Monetization._purchase_already_granted(_sv_prov, _sv_sku, _sv_tok, _sv_pid))
+	# Повтор в той же сессии: сейв пишется — тот же чек подтверждается без второго начисления.
+	var _sv_eth_mid := g._engine.ether + g._engine.ether_overflow
+	Monetization._finish_purchase(_sv_req, false)
+	Selftest.check("saved retry confirms the store without granting again",
+		_sv_store.calls.size() == 1
+		and UserData.has_processed_purchase(_sv_prov, _sv_tok, _sv_sku)
+		and g._engine.ether + g._engine.ether_overflow == _sv_eth_mid)
+
+	# ---------- Сервер помнит выдачу: processed-чек после вайпа не начисляется снова ----------
+	# Локальный журнал granted стирается вайпом/переустановкой, поэтому записанную
+	# выдачу клиент отмечает на сервере (/receipt/granted), а эхо already_granted
+	# закрывает чек магазину без второго начисления. Net держим «занятым» sentinel'ом:
+	# запрос остаётся в очереди и проверяется целиком, HTTP не делается.
+	var _ag_prov := "google_play"
+	var _ag_sku := "al_loop_ether_500"
+	var _ag_pid := "ether_pack_small"
+	var _ag_store := T22FakeBilling.new()
+	_ag_store.ok = true
+	_ag_store.provider = _ag_prov
+	_ag_store.sku = _ag_sku
+	_ag_store.product_id = _ag_pid
+	_ag_store.game = g
+	Monetization._adapter = _ag_store
+	var _ag_inflight0: Dictionary = Net._inflight
+	Net._inflight = {"kind": "sentinel"}
+	var _ag_q0 := Net._queue.size()
+	var _ag_tok1 := "ack_after_saved_grant_token"
+	_ag_store.token = _ag_tok1
+	Monetization._finish_purchase({"provider": _ag_prov, "sku": _ag_sku, "token": _ag_tok1, "product_id": _ag_pid}, false)
+	var _ag_acks: Array = []
+	for _ag_i in range(_ag_q0, Net._queue.size()):
+		if String(Net._queue[_ag_i].get("kind", "")) == "receipt_granted":
+			_ag_acks.append(Net._queue[_ag_i])
+	Selftest.check("saved verified grant is acknowledged to the server",
+		_ag_acks.size() == 1
+		and String(_ag_acks[0].get("path", "")) == "/receipt/granted"
+		and String(_ag_acks[0].get("body", {}).get("receipt_hash", "")) == _ag_tok1.sha256_text()
+		and String(_ag_acks[0].get("body", {}).get("device_id", "")) != "")
+	var _ag_q1 := Net._queue.size()
+	var _ag_tok2 := "unverified_grant_token"
+	_ag_store.token = _ag_tok2
+	Monetization._finish_purchase({"provider": _ag_prov, "sku": _ag_sku, "token": _ag_tok2, "product_id": _ag_pid}, true)
+	Selftest.check("unverified grant is not acknowledged to the server", Net._queue.size() == _ag_q1)
+	var _ag_tok3 := "already_granted_token"
+	_ag_store.token = _ag_tok3
+	_ag_store.calls.clear()
+	UserData.set_pending_purchase(_ag_pid, {"provider": _ag_prov, "sku": _ag_sku, "started_at": 1.0})
+	Monetization._verify_requests.append({"provider": _ag_prov, "sku": _ag_sku, "token": _ag_tok3, "product_id": _ag_pid})
+	var _ag_eth := g._engine.ether + g._engine.ether_overflow
+	Monetization._on_receipt_verify_result({"ok": true, "verified": true, "status": "processed",
+		"already_granted": true, "receipt_hash": _ag_tok3.sha256_text()})
+	Selftest.check("already granted receipt is closed without a second grant",
+		g._engine.ether + g._engine.ether_overflow == _ag_eth
+		and _ag_store.calls.size() == 1
+		and UserData.has_processed_purchase(_ag_prov, _ag_tok3, _ag_sku)
+		and UserData.get_pending_purchase(_ag_pid).is_empty()
+		and Net._queue.size() == _ag_q1)
+	Net._queue.resize(_ag_q0)
+	Net._inflight = _ag_inflight0
 	Monetization._adapter = _ad0
 	g._engine.ether = _eth0
 	g._engine.ether_overflow = _ovf0
@@ -1265,7 +1367,54 @@ static func run(g: Game) -> void:
 	# Второй нажим без сети: вайп всё равно завершён (сервер — не условие
 	# локального удаления), маркер остался, старая идентичность сброшена.
 	var _i8_status_before := String(g._shop._status.text)
+	# Персональные файлы вне сейва: экспорты (device_id, согласия) и коллекция
+	# Аркана, которая иначе загрузится обратно при следующем запуске.
+	var _i8_personal := ["user://alchemists_loop_export.json",
+		"user://alchemists_loop_server_export.json",
+		SigilManager.COLLECTION_FILE, SigilManager.DAILY_CACHE_FILE]
+	var _i8_snaps := {}
+	for p in _i8_personal:
+		_i8_snaps[p] = SuiteSigilCards._sb5_file_text(p)
+		var pf := FileAccess.open(p, FileAccess.WRITE)
+		pf.store_string("{\"i8\": true}")
+		pf.close()
+	# Настоящий кэш превью (SigilManager пишет в user:// и в selftest) убираем в
+	# сторону: вайп должен стереть только пробу, а не заставить перерисовать карты.
+	var _i8_cache_abs := ProjectSettings.globalize_path(SigilManager.CACHE_DIR)
+	var _i8_aside := _i8_cache_abs + "_i8_aside"
+	var _i8_had_cache := DirAccess.dir_exists_absolute(_i8_cache_abs)
+	if _i8_had_cache:
+		DirAccess.rename_absolute(_i8_cache_abs, _i8_aside)
+	DirAccess.make_dir_recursive_absolute(SigilManager.CACHE_DIR)
+	var _i8_png := SigilManager.CACHE_DIR + "/i8_probe.png"
+	var _i8_pf := FileAccess.open(_i8_png, FileAccess.WRITE)
+	_i8_pf.store_string("x")
+	_i8_pf.close()
+	var _i8_coll0: Dictionary = g._sigil._collection.duplicate(true)
+	g._sigil._collection = {"i8_card": {"seed": 1}}
+	var _i8_last_dev0 := g._sigil._last_device_id
+	g._sigil._last_device_id = "i8-dev/1"
 	g._shop._delete_data()
+	var _i8_left := []
+	for p in _i8_personal + [_i8_png]:
+		if FileAccess.file_exists(p):
+			_i8_left.append(p)
+	Selftest.check("i8 wipe removes exports and sigil collection files",
+		_i8_left.is_empty() and g._sigil._collection.is_empty())
+	# Крафт, отправленный до вайпа, отвечает после него: ответ старого аккаунта не
+	# должен воскресить коллекцию на диске новой установки.
+	g._sigil._on_craft_result({"ok": true, "craft_id": "i8_late", "rarity": "common"})
+	g._sigil._on_milestone_result({"ok": true, "claimed": true, "set": "fire", "tier": 3})
+	Selftest.check("i8 late sigil reply after wipe does not resurrect the collection",
+		not FileAccess.file_exists(SigilManager.COLLECTION_FILE)
+		and g._sigil._collection.is_empty() and g._sigil._milestones_claimed.is_empty()
+		and g._sigil._last_device_id == "")
+	for p in _i8_personal:
+		SuiteSigilCards._sb5_restore_file(p, String(_i8_snaps[p]))
+	g._sigil._collection = _i8_coll0
+	if _i8_had_cache:
+		DirAccess.remove_absolute(_i8_cache_abs)
+		DirAccess.rename_absolute(_i8_aside, _i8_cache_abs)
 	Selftest.check("i8 offline wipe completes: save gone, marker kept, identity cleared",
 		not FileAccess.file_exists(g.SAVE_PATH)
 		and UserData.get_account_delete_pending() == "i8-dev/1"
@@ -1297,20 +1446,26 @@ static func run(g: Game) -> void:
 		UserData.get_account_delete_pending() == "i8-dev/1"
 		and String(g._shop._status.text).contains("повтори удаление"))
 	# Ретрай в той же сессии: повторный нажим берёт device_id из маркера (не из
-	# уже стёртой локальной идентичности), ничего не перетирает второй раз и не
-	# дёргает сеть при выключенном net. Сеть меряем не размером очереди: в
+	# уже стёртой локальной идентичности), ничего не перетирает второй раз и
+	# реально отправляет DELETE. Сеть меряем не размером очереди: в
 	# селфтесте base_url пуст, поэтому enqueue-нутый запрос слился бы синхронно и
 	# очередь осталась бы пуста. Считаем фактические dispatch'и — сигнал
 	# account_delete_result приходит только если DELETE реально уходил в Net.
+	g._shop._status.text = "i8-до-повтора"
 	var _i8_status_p := String(g._shop._status.text)
 	var _i8_sends := [0]
 	var _i8_probe := func(_res: Dictionary) -> void: _i8_sends[0] += 1
 	Net.account_delete_result.connect(_i8_probe)
 	g._shop._delete_data()
 	Net.account_delete_result.disconnect(_i8_probe)
+	# После первого нажима _net_enabled уже сброшен (_forget_net_identity), поэтому
+	# повтор обязан идти мимо этого гейта: иначе «Повторяю…» ничего не шлёт.
+	# Без сервера Net отвечает offline-результатом, и статус честно просит
+	# повторить позже.
 	Selftest.check("i8 re-press retries by saved id without wiping again",
 		String(g._shop._status.text) != _i8_status_p
-		and g._online._device_id == "" and _i8_sends[0] == 0
+		and String(g._shop._status.text).contains("повтори удаление")
+		and g._online._device_id == "" and _i8_sends[0] == 1
 		and UserData.get_account_delete_pending() == "i8-dev/1"
 		and not g._shop._delete_armed and not FileAccess.file_exists(g.SAVE_PATH))
 	# Startup-ретрай (main.gd зовёт его в net-блоке) обязан послать DELETE ровно
@@ -1342,6 +1497,20 @@ static func run(g: Game) -> void:
 	g._saves._save_game()
 	var _i8_rewritten := g._saves._read_save(g.SAVE_PATH)
 	Selftest.check("i8 unfrozen save writes again", not _i8_rewritten.is_empty())
+	# Новая установка при недоставленном удалении старой: маркер не должен отнимать
+	# право на локальный вайп, а второе удаление — затирать id первого.
+	UserData.mark_account_delete_pending("i8-dev/1")
+	g._online._device_id = "i8-dev/2"
+	g._shop._delete_armed = false
+	g._shop._delete_data()
+	var _i8_new_armed: bool = g._shop._delete_armed
+	g._shop._delete_armed = false
+	UserData.mark_account_delete_pending("i8-dev/2")
+	var _i8_both := UserData.get_account_delete_pending_ids()
+	g._online._on_account_delete_result({"ok": true, "deleted": true, "device_id": "i8-dev/1"})
+	Selftest.check("i8 pending marker of an old install does not block a new wipe",
+		_i8_new_armed and _i8_both == ["i8-dev/1", "i8-dev/2"]
+		and UserData.get_account_delete_pending_ids() == ["i8-dev/2"])
 	# восстановление состояния сюиты
 	UserData.clear_account_delete_pending()
 	UserData._data = _i8_data0
@@ -1350,6 +1519,8 @@ static func run(g: Game) -> void:
 	g._online._net_enabled = _i8_en0
 	g._online._net_nick = _i8_nick0
 	g._saves._save_frozen = _i8_frozen0
+	g._sigil._wiped = false
+	g._sigil._last_device_id = _i8_last_dev0
 	g._shop._delete_armed = _i8_armed0
 	Selftest.check("i8 marker, online identity and UserData restored",
 		UserData.get_account_delete_pending() == "" and _i8_marker0 == ""

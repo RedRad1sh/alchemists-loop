@@ -120,6 +120,65 @@ static func _envelope_fail_closed_device(g: Game) -> void:
 	Selftest.check("save_sync: envelope fail-closed on foreign device_id", \
 		rejected.is_empty() and not accepted.is_empty())
 
+# Порча/потеря UserData не должна делать собственный сейв «чужим»: пустой
+# device_id в UserData восстанавливается из сейва. Свой id при этом не
+# подменяется — перенесённый чужой сейв по-прежнему отвергается.
+static func _device_id_recovered_from_save(g: Game) -> void:
+	var saved_device := g._online._device_id
+	var saved_ud: Dictionary = UserData._data.duplicate(true)
+	var own := {"version": 5, "inventory": {"fire": 1}, "ether": 50,
+		"known_recipes": [], "device_id": "dev-from-save"}
+	var f := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f.store_string(JSON.stringify(own))
+	f.close()
+	UserData._data.erase("device_id")
+	g._online._device_id = g._online._load_device_id()
+	var recovered: bool = g._online._device_id == "dev-from-save" \
+		and UserData.get_or_create_device_id() == "dev-from-save" \
+		and not g._saves._read_save(g.SAVE_PATH).is_empty()
+	UserData._data["device_id"] = "dev-mine"
+	g._online._device_id = g._online._load_device_id()
+	var kept: bool = g._online._device_id == "dev-mine" \
+		and g._saves._read_save(g.SAVE_PATH).is_empty()
+	UserData._data = saved_ud
+	UserData._save()
+	g._online._device_id = saved_device
+	Selftest.check("save_sync: lost UserData device_id is recovered from own save", recovered)
+	Selftest.check("save_sync: own UserData device_id is not replaced by a save's", kept)
+
+static func _rejected_copies(g: Game) -> Array:
+	var prefix := g.SAVE_PATH.get_file().get_basename() + ".rejected."
+	var out: Array = []
+	for name in DirAccess.get_files_at("user://"):
+		if String(name).begins_with(prefix):
+			out.append("user://" + String(name))
+	return out
+
+# Отвергнутый сейв (чужой device_id, битый JSON) нельзя молча затирать автосейвом
+# новой игры: до перезаписи он откладывается копией рядом.
+static func _rejected_save_is_quarantined(g: Game) -> void:
+	for path in _rejected_copies(g):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	var saved_device := g._online._device_id
+	g._online._device_id = "dev-mine"
+	var foreign_text := JSON.stringify({"version": 5, "inventory": {"fire": 1}, "ether": 50,
+		"known_recipes": [], "device_id": "dev-other"})
+	var f := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f.store_string(foreign_text)
+	f.close()
+	g._saves._load_game()
+	var copies := _rejected_copies(g)
+	var kept: bool = copies.size() == 1 \
+		and FileAccess.get_file_as_string(String(copies[0])) == foreign_text
+	for path in copies:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	_wipe(g)
+	g._saves._load_game()
+	var none_for_missing: bool = _rejected_copies(g).is_empty()
+	g._online._device_id = saved_device
+	Selftest.check("save_sync: rejected save is quarantined before it can be overwritten", kept)
+	Selftest.check("save_sync: missing save leaves no quarantine copy", none_for_missing)
+
 # Task 11: per-Part fail-open — битый Part B (known_recipes не массив) обязан
 # деградировать знание, но Part C (эфир/инвентарь) применится, а не отменит сейв.
 static func _per_part_fail_open_knowledge(g: Game) -> void:
@@ -216,6 +275,9 @@ static func run(g: Game) -> void:
 	_build_package_envelope(g)
 	_request_sync_offline_fail_open(g)
 	_envelope_fail_closed_device(g)
+	_device_id_recovered_from_save(g)
+	_wipe(g)
+	_rejected_save_is_quarantined(g)
 	_per_part_fail_open_knowledge(g)
 	_reconcile_contract(g)
 	_wipe(g)
