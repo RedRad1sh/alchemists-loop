@@ -2171,9 +2171,9 @@ static func _contract_board_checks(g: Game) -> void:
 	var note := notes.get_child(0) if notes.get_child_count() > 0 else null
 	var note_ok := note != null and note is TextureButton
 	if note_ok:
-		note_ok = (note as TextureButton).texture_normal != null and str((note as TextureButton).texture_normal.resource_path).contains("paper_note")
+		note_ok = (note as TextureButton).texture_normal != null and str((note as TextureButton).texture_normal.resource_path).ends_with(ContractBoard.NOTE_TEX)
 		note_ok = note_ok and note.size == ContractBoard.NOTE_SIZE
-	Selftest.check("§5.4 a note is a paper_note texture at the declared NOTE_SIZE", note_ok)
+	Selftest.check("§5.4 a note is the board note texture at the declared NOTE_SIZE", note_ok)
 
 	# 14. На записке — время Ч:ММ.
 	var time_lbl: Label = null
@@ -2279,6 +2279,14 @@ static func _contract_board_checks(g: Game) -> void:
 		Selftest.check("§5.4 the popup has the reward title and an OK button",
 			pop_title != null and pop_title.text == ContractBoard.POPUP_TITLE
 			and pop_ok_btn != null)
+		# Письмо лежит на затемнении: без него текст награды сливался с листами доски.
+		var pop_paper := popup.get_node_or_null("Paper") as TextureRect
+		var scrim := board.get_node_or_null("RewardScrim") as TextureRect
+		Selftest.check("§5.4 the reward is a letter over a dimming scrim that eats taps",
+			pop_paper != null and pop_paper.texture != null
+			and String(pop_paper.texture.resource_path).ends_with(ContractBoard.LETTER_TEX)
+			and scrim != null and scrim.mouse_filter == Control.MOUSE_FILTER_STOP
+			and scrim.z_index < popup.z_index)
 		# §C: та же латунная плашка на единственной кнопке попапа (проверяется ДО
 		# onжатия: press закрывает доску награды вместе с кнопкой).
 		Selftest.check("§C the reward popup's OK button is sawn in the brass plate",
@@ -2286,8 +2294,9 @@ static func _contract_board_checks(g: Game) -> void:
 		if pop_ok_btn != null:
 			pop_ok_btn.pressed.emit()
 		await g.get_tree().process_frame
-		Selftest.check("§5.4 pressing OK closes the reward popup",
-			board.get_node_or_null("RewardPopup") == null)
+		Selftest.check("§5.4 pressing OK closes the reward popup and its scrim",
+			board.get_node_or_null("RewardPopup") == null
+			and board.get_node_or_null("RewardScrim") == null)
 
 	# --- Точная награда по наведению (Polish 1) ---
 	# 20. Строка награды и штамп показывают при наведении точную награду:
@@ -3310,20 +3319,29 @@ static func _ca_distinct(img: Image) -> int:
 static func _contract_asset_checks() -> void:
 	# Контракт имён и размеров, который читают экраны Task 9 и Task 10.
 	var sizes := {
-		"board_planks.png": Vector2i(256, 256),
-		"frame_h.png": Vector2i(256, 40),
-		"frame_v.png": Vector2i(40, 256),
+		"board_planks.png": Vector2i(480, 512),
+		"frame_h.png": Vector2i(1080, 80),
+		"frame_v.png": Vector2i(80, 1760),
 		"corner_iron.png": Vector2i(96, 96),
-		"shelf_bar.png": Vector2i(256, 28),
-		"sign_hang.png": Vector2i(600, 168),
+		"shelf_bar.png": Vector2i(920, 56),
+		"sign_hang.png": Vector2i(600, 200),
 		"paper_daily.png": Vector2i(280, 392),
 		"paper_weekly.png": Vector2i(368, 488),
-		"paper_note.png": Vector2i(264, 176),
+		"paper_daily_b.png": Vector2i(280, 392),
+		"paper_daily_c.png": Vector2i(280, 392),
+		"board_note.png": Vector2i(264, 176),
+		"paper_strip.png": Vector2i(300, 96),
+		"reward_letter.png": Vector2i(552, 800),
+		"nail_brass_b.png": Vector2i(64, 64),
+		"nail_brass_c.png": Vector2i(64, 64),
+		"nail_brass_d.png": Vector2i(64, 64),
+		"board_vignette.png": Vector2i(270, 480),
+		"popup_scrim.png": Vector2i(270, 480),
 		"nail_brass.png": Vector2i(64, 64),
 		"seal_bronze.png": Vector2i(104, 104),
 		"seal_silver.png": Vector2i(104, 104),
 		"seal_gold.png": Vector2i(104, 104),
-		"stamp_frame.png": Vector2i(264, 112),
+		"stamp_frame.png": Vector2i(264, 96),
 		"ring_pull.png": Vector2i(88, 88),
 		"plate_brass.png": Vector2i(224, 64),
 	}
@@ -3366,8 +3384,8 @@ static func _contract_asset_checks() -> void:
 	# stamp_frame и ring_pull — особые формы (рамка и кольцо с дыркой),
 	# для них отдельные проверки ниже.
 	var cutout := true
-	for f in ["paper_daily.png", "paper_weekly.png", "paper_note.png", "sign_hang.png",
-			"corner_iron.png"]:
+	for f in ["paper_daily.png", "paper_daily_b.png", "paper_daily_c.png", "paper_weekly.png",
+			"board_note.png", "paper_strip.png", "reward_letter.png", "sign_hang.png"]:
 		var img := _ca_img(CA_DIR + String(f))
 		if img == null:
 			cutout = false
@@ -3397,11 +3415,16 @@ static func _contract_asset_checks() -> void:
 		var sf_clean := true
 		for a in sf_corners:
 			sf_clean = sf_clean and float(a) < 0.05
-		# Проверяем непрозрачность верхней рамки в нескольких точках по X.
+		# Верхняя кромка непрозрачна в нескольких точках по X. Оттиск рваный —
+		# чернила проваливаются на пару пикселей, — поэтому смотрим полосу
+		# верхних 14 px, а не одну строку.
 		var sf_border := true
 		for k in 5:
 			var bx := int(sf_w * (0.2 + 0.15 * k))
-			sf_border = sf_border and sf_img.get_pixel(bx, 5).a > 0.5
+			var hit := false
+			for by in range(14):
+				hit = hit or sf_img.get_pixel(bx, by).a > 0.5
+			sf_border = sf_border and hit
 		sf_ok = sf_clean and sf_border
 	Selftest.check("§5.3 stamp_frame is a double frame with transparent interior", sf_ok)
 
@@ -3799,6 +3822,25 @@ static func _contract_card_checks(g: Game) -> void:
 		# Гвоздь не висит на бумаге: он вбит в доску и не поворачивается вместе с листом.
 		nail_ok = nail_ok and nail.get_parent() == unfinished
 	Selftest.check("§5.3 the brass nail sits on the middle of the paper's top edge", nail_ok)
+
+	# 5b. Дневная записка и гвоздь — один из вариантов по id: стабильно между
+	# вызовами, а на 30 id встречаются все силуэты бумаги и все шляпки.
+	var papers_seen := {}
+	var nails_seen := {}
+	var pick_stable := true
+	for i in range(30):
+		var vid := "daily:brew:bronze:v%d" % i
+		var pp := ContractCard.pick(vid, ContractCard.DAILY_PAPERS)
+		pick_stable = pick_stable and pp == ContractCard.pick(vid, ContractCard.DAILY_PAPERS)
+		papers_seen[pp] = true
+		nails_seen[ContractCard.pick(vid, ContractCard.NAILS)] = true
+	var up_name := String(up.texture.resource_path).get_file() if paper_ok else ""
+	var nail_name := String(nail.texture.resource_path).get_file() if nail != null and nail.texture != null else ""
+	Selftest.check("§5.3 a daily note and its nail are id-picked variants, all of them in use",
+		pick_stable and papers_seen.size() == ContractCard.DAILY_PAPERS.size()
+		and nails_seen.size() == ContractCard.NAILS.size()
+		and up_name == ContractCard.pick(String((fixtures[0] as Dictionary)["id"]), ContractCard.DAILY_PAPERS)
+		and nail_name == ContractCard.pick(String((fixtures[0] as Dictionary)["id"]), ContractCard.NAILS))
 
 	# 6. Сургуч соответствует тиру контракта.
 	var seal_ok := states_ok

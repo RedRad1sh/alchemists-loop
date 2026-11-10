@@ -11,15 +11,24 @@ const WEEKLY_SIZE := Vector2(184, 244)
 const TILT_MAX := 4.0
 const NAIL_SIZE := 32.0
 const SEAL_SIZE := 52.0
-const STAMP_SIZE := Vector2(80, 36)
+const STAMP_SIZE := Vector2(100, 36)
+## Дневные записки — три силуэта, гвоздь — четыре шляпки; вариант выбирается от id,
+## поэтому доска не выглядит штампованной и не меняется между запусками.
+const DAILY_PAPERS := ["paper_daily.png", "paper_daily_b.png", "paper_daily_c.png"]
+const NAILS := ["nail_brass.png", "nail_brass_b.png", "nail_brass_c.png", "nail_brass_d.png"]
+## Недельный плакат несёт нарисованную двойную рамку и орнамент сверху: текст
+## садится внутрь рамки, а не на неё.
+const WEEKLY_TITLE_Y := 32.0
+## Рваный верх дневной записки уходит до 20 px вниз: заголовок ниже кромки.
+const DAILY_TITLE_Y := 22.0
 const STAMP_TILT := -6.0
 ## Полоса штампа (§D): нижние 50 px бумаги отданы оттиску, поэтому ни одна
 ## строка цели или награды не попадает под его рамки.
 const STAMP_BAND := 50.0
 const PAD := 17.0
-const PAD_WEEKLY := 20.0
+const PAD_WEEKLY := 24.0
 ## Кегль заголовка и его потолок вниз при подборе (§D, `_fit_title`).
-const TITLE_FS := 14
+const TITLE_FS := 16
 const TITLE_FS_MIN := 11
 const HOVER_SCALE := 1.03
 const HOVER_SECONDS := 0.12
@@ -72,20 +81,34 @@ static func tex(fname: String) -> Texture2D:
 ## читался как интерфейсная заглушка.
 const PAPER_FONT := "res://assets/fonts/PTSerif-Regular.ttf"
 const PAPER_FONT_BOLD := "res://assets/fonts/PTSerif-Bold.ttf"
+## Заголовки объявлений, вывеска и письмо награды — рисованная антиква Divagon,
+## как «Bounty»/«Wanted» на досках объявлений; цифры и мелкий текст остаются
+## на PT Serif, иначе на телефоне не прочитать.
+const TITLE_FONT := "res://assets/fonts/Divagon.otf"
 
 static func paper_font(l: Control, bold: bool = false) -> void:
 	var f := load(PAPER_FONT_BOLD if bold else PAPER_FONT) as Font
 	if f != null:
 		l.add_theme_font_override("font", f)
 
-# Наклон по id, детерминированный между сборками: FNV-1a тот же, что у `_seed_for`
-# в доске, а `String.hash()` движок солёт иначе — и бумаги прыгали бы при каждом
-# перезапуске (решение 3).
-static func rot_deg(id: String) -> float:
+static func title_font(l: Control) -> void:
+	var f := load(TITLE_FONT) as Font
+	if f != null:
+		l.add_theme_font_override("font", f)
+
+# FNV-1a по id, детерминированный между сборками: `String.hash()` движок солёт
+# иначе — и бумаги прыгали бы при каждом перезапуске (решение 3).
+static func id_hash(id: String) -> int:
 	var h := 2166136261
 	for byte in id.to_utf8_buffer():
 		h = ((h ^ int(byte)) * 16777619) & 0x7FFFFFFF
-	return TILT_MAX * (2.0 * float(h % 1001) / 1000.0 - 1.0)
+	return h
+
+static func rot_deg(id: String) -> float:
+	return TILT_MAX * (2.0 * float(id_hash(id) % 1001) / 1000.0 - 1.0)
+
+static func pick(id: String, variants: Array) -> String:
+	return String(variants[(id_hash(id) / 1001) % variants.size()])
 
 func _init(game: Game) -> void:
 	g = game
@@ -107,21 +130,25 @@ func setup(c: Dictionary) -> void:
 	_hang.rotation_degrees = rot_deg(String(c["id"]))
 	scale = Vector2.ONE
 	_paper.size = sz
-	_paper.texture = tex("paper_weekly.png") if weekly else tex("paper_daily.png")
+	var cid := String(c["id"])
+	_paper.texture = tex("paper_weekly.png") if weekly else tex(pick(cid, DAILY_PAPERS))
+	_nail.texture = tex(pick(cid, NAILS))
 	var pad := PAD_WEEKLY if weekly else PAD
-	_title.position = Vector2(pad, 16.0)
-	_title.size = Vector2(w - 2.0 * pad, 22.0)
+	var top := WEEKLY_TITLE_Y if weekly else DAILY_TITLE_Y
+	_title.position = Vector2(pad, top)
+	_title.size = Vector2(w - 2.0 * pad, 24.0)
 	_title.add_theme_color_override("font_color",
 		TIER_INK.get(String(c.get("tier", "bronze")), INK))
-	_count.position = Vector2(pad, 44.0)
+	_count.position = Vector2(pad, top + 26.0)
 	_count.size = Vector2(w - 2.0 * pad, 26.0)
 	# Тело карточки — между счётчиком и наградой; размеры существующих полей не
 	# тронуты (бриф Task 7), полоса тела берёт оставшееся paper-окно. Награда
 	# садится над полосой штампа, поэтому штамп (§D) не наезжает на текст.
 	var stamp_top := h - STAMP_BAND
 	var reward_h := 62.0 if weekly else 46.0
-	_detail.position = Vector2(pad, DETAIL_TOP)
-	_detail.size = Vector2(w - 2.0 * pad, stamp_top - reward_h - 4.0 - DETAIL_TOP - DETAIL_GAP)
+	var dtop := _detail_top()
+	_detail.position = Vector2(pad, dtop)
+	_detail.size = Vector2(w - 2.0 * pad, stamp_top - reward_h - 4.0 - dtop - DETAIL_GAP)
 	_reward.position = Vector2(pad, stamp_top - 4.0 - reward_h)
 	_reward.size = Vector2(w - 2.0 * pad, reward_h)
 	_seal.position = Vector2(w - SEAL_SIZE + 4.0, h - SEAL_SIZE + 4.0)
@@ -150,6 +177,10 @@ func setup(c: Dictionary) -> void:
 	_fill_detail(id, String(c.get("type", "")))
 	_fit_body(stamp_top)
 
+func _detail_top() -> float:
+	var weekly := String(_c.get("kind", "daily")) == "weekly"
+	return DETAIL_TOP - 18.0 + (WEEKLY_TITLE_Y if weekly else DAILY_TITLE_Y)
+
 ## Тело и награда делят одну полосу между счётчиком и штампом. Награда садится
 ## над штампом своей фактической высотой (кегль подбирается вниз до
 ## REWARD_FS_MIN), тело получает остаток; ряды жилы, которые в остаток не
@@ -158,7 +189,8 @@ func _fit_body(stamp_top: float) -> void:
 	var weekly := String(_c.get("kind", "daily")) == "weekly"
 	var pad := PAD_WEEKLY if weekly else PAD
 	var bottom_clear := 18.0 if weekly else 6.0
-	var avail := stamp_top - bottom_clear - DETAIL_TOP
+	var dtop := _detail_top()
+	var avail := stamp_top - bottom_clear - dtop
 	var w := _reward.size.x
 	var fs := REWARD_FS
 	var need := 0.0
@@ -176,7 +208,7 @@ func _fit_body(stamp_top: float) -> void:
 			_fill_vein(rows)
 	var actual_dh := minf(_detail_h(), maxf(0.0, body_room))
 	_detail.size = Vector2(_detail.size.x, actual_dh)
-	var reward_y := DETAIL_TOP + (actual_dh + DETAIL_GAP if actual_dh > 0.0 else 8.0)
+	var reward_y := dtop + (actual_dh + DETAIL_GAP if actual_dh > 0.0 else 8.0)
 	reward_y = minf(reward_y, stamp_top - bottom_clear - need)
 	_reward.size = Vector2(w, need)
 	_reward.position = Vector2(pad, reward_y)
@@ -250,7 +282,7 @@ func _build() -> void:
 	_title.clip_text = true
 	_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	paper_font(_title, true)
+	title_font(_title)
 	_title.add_theme_color_override("font_color", INK)
 	_hang.add_child(_title)
 
