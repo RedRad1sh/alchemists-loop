@@ -11,12 +11,12 @@ const ROW_DY := 8.0
 const BAND_DX := 4.0
 const NOTE_GAP := 8.0
 const CARD_GAP := 4.0
-const SIGN_SIZE := Vector2(300, 84)
+const SIGN_SIZE := Vector2(300, 100)
 const CLOSE_SIZE := Vector2(112, 32)
 const SCROLL_STEP := 72.0
 const SCROLL_HINT_SIZE := Vector2(160, 24)
 const NOTE_SIZE := Vector2(132, 88)
-const POPUP_SIZE := Vector2(276, 366)
+const POPUP_SIZE := Vector2(276, 400)
 const NOTE_TICK := 1.0
 const SEAL_HOLD := 0.26
 # доска v2 (Task 7, спека §5): полка очага под дневным рядом и строка ранга
@@ -43,6 +43,11 @@ const POPUP_TITLE := "Получено"
 const CAP_HINT := "Склад забит: часть награды не влезла"
 const DECOR_MISSING_HINT := "в каталоге пока нет"
 const SIGN_INK := Color(0.93, 0.86, 0.70)
+## Вывеска — светлый дуб с тёмной каймой: надпись выжжена тёмными чернилами.
+const SIGN_WORD_INK := Color(0.22, 0.12, 0.05)
+const NOTE_TEX := "board_note.png"
+const STRIP_TEX := "paper_strip.png"
+const LETTER_TEX := "reward_letter.png"
 const NOTE_INK := Color(0.16, 0.11, 0.07)
 # §D: текст не должен касаться кромки текстуры; §C: светлые чернила по латуни.
 const BTN_M := 14.0
@@ -60,6 +65,8 @@ var g: Game
 var _w := 0.0
 var _h := 0.0
 var _bg: TextureRect
+var _vignette: TextureRect
+var _scrim: TextureRect
 var _strip_bg: TextureRect
 var _strip_shelf: TextureRect
 var _strip_shadow: ColorRect
@@ -186,6 +193,9 @@ func _build_layers() -> void:
 	# Доска тайлится: один брусок 256 px на весь экран, а не растянутая картинка (§5.2.1).
 	_bg.stretch_mode = TextureRect.STRETCH_TILE
 	_bg.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	# Свет падает в центр доски, к раме дерево темнеет: растянутый градиент
+	# поверх тайла, иначе повтор досок читается обоями.
+	_vignette = _layer("board_vignette.png", "Vignette")
 
 	_rails = [_layer("frame_h.png", "RailTop"), _layer("frame_h.png", "RailBottom"),
 		_layer("frame_v.png", "RailLeft"), _layer("frame_v.png", "RailRight")]
@@ -214,12 +224,10 @@ func _build_layers() -> void:
 	_sign_word.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_sign_word.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_sign_word.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	# Вывеска — та же книжная антиква, что на листах: рунический шрифт шапки
-	# на тёмном дереве читался с трудом.
-	ContractCard.paper_font(_sign_word, true)
-	_sign_word.add_theme_font_size_override("font_size", 22)
-	_sign_word.add_theme_color_override("font_color", SIGN_INK)
-	_sign_word.add_theme_color_override("font_shadow_color", Color(0.05, 0.03, 0.01, 0.55))
+	ContractCard.title_font(_sign_word)
+	_sign_word.add_theme_font_size_override("font_size", 24)
+	_sign_word.add_theme_color_override("font_color", SIGN_WORD_INK)
+	_sign_word.add_theme_color_override("font_shadow_color", Color(1.0, 0.92, 0.75, 0.35))
 	_sign_word.add_theme_constant_override("shadow_offset_y", 1)
 	_sign_word.add_theme_constant_override("shadow_offset_x", 0)
 	_sign.add_child(_sign_word)
@@ -380,7 +388,7 @@ func _add_card(row: Control) -> void:
 func _rank_note(node_name: String, tip: String) -> TextureRect:
 	var r := TextureRect.new()
 	r.name = node_name
-	r.texture = ContractCard.tex("paper_note.png")
+	r.texture = ContractCard.tex(STRIP_TEX)
 	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	r.stretch_mode = TextureRect.STRETCH_SCALE
 	r.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -393,8 +401,8 @@ func _rank_note(node_name: String, tip: String) -> TextureRect:
 	ContractCard.paper_font(w)
 	w.add_theme_color_override("font_color", NOTE_INK)
 	w.clip_text = true
-	w.position = Vector2(14.0, 6.0)
-	w.size = RANK_NOTE - Vector2(28.0, 12.0)
+	w.position = Vector2(16.0, 7.0)
+	w.size = RANK_NOTE - Vector2(32.0, 14.0)
 	r.add_child(w)
 	return r
 
@@ -405,6 +413,7 @@ func _relayout() -> void:
 	position = Vector2.ZERO
 	size = vp
 	_bg.size = vp
+	_vignette.size = vp
 
 	_rails[0].size = Vector2(_w, RAIL)
 	_rails[1].position = Vector2(0.0, _h - RAIL)
@@ -471,7 +480,9 @@ func _relayout() -> void:
 func _layout_flow(top: float, inner: float) -> void:
 	_sign.position = Vector2((_w - SIGN_SIZE.x) / 2.0, top + 4.0)
 	_sign.size = SIGN_SIZE
-	_sign_word.size = SIGN_SIZE
+	# Надпись — в светлом поле вывески, ниже колец подвеса.
+	_sign_word.position = Vector2(0.0, 22.0)
+	_sign_word.size = Vector2(SIGN_SIZE.x, SIGN_SIZE.y - 30.0)
 	_notes.position = Vector2(RAIL + BAND_DX, top + SIGN_SIZE.y + 16.0)
 	var band_w := inner - 2.0 * BAND_DX
 	_notes.size = Vector2(band_w, _notes_band_h(band_w))
@@ -659,7 +670,7 @@ func _make_note(b: Dictionary) -> TextureButton:
 	var shown := _mm(int(b["left"]))
 	var note := TextureButton.new()
 	note.name = "Note_%s" % id
-	note.texture_normal = ContractCard.tex("paper_note.png")
+	note.texture_normal = ContractCard.tex(NOTE_TEX)
 	note.ignore_texture_size = true
 	note.stretch_mode = TextureButton.STRETCH_SCALE
 	note.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -691,7 +702,7 @@ func _make_note(b: Dictionary) -> TextureButton:
 	# а не нарисованный кодом кружок.
 	var pin := TextureRect.new()
 	pin.name = "Pin"
-	pin.texture = ContractCard.tex("nail_brass.png")
+	pin.texture = ContractCard.tex(ContractCard.pick(id, ContractCard.NAILS))
 	pin.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pin.stretch_mode = TextureRect.STRETCH_SCALE
 	pin.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -776,28 +787,35 @@ func _reward_text(r: Dictionary) -> String:
 
 func _show_reward(result: Dictionary) -> void:
 	_close_reward()
+	# Затемнение — отдельный слой под письмом: без него текст награды сливался
+	# с листами доски позади. Ловит ввод, чтобы тап мимо письма не жал штампы.
+	_scrim = _layer("popup_scrim.png", "RewardScrim")
+	_scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_scrim.size = Vector2(_w, _h)
+	_scrim.z_index = Z_CLOSE + 1
 	var pop := Control.new()
 	pop.name = "RewardPopup"
 	pop.mouse_filter = Control.MOUSE_FILTER_STOP
 	pop.size = POPUP_SIZE
 	pop.position = Vector2((_w - POPUP_SIZE.x) / 2.0, (_h - POPUP_SIZE.y) / 2.0)
+	pop.z_index = Z_CLOSE + 2
 	add_child(pop)
 	var paper := TextureRect.new()
 	paper.name = "Paper"
-	paper.texture = ContractCard.tex("paper_weekly.png")
+	paper.texture = ContractCard.tex(LETTER_TEX)
 	paper.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	paper.stretch_mode = TextureRect.STRETCH_SCALE
 	paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	paper.size = POPUP_SIZE
 	pop.add_child(paper)
-	var title := g._label(POPUP_TITLE, 18)
+	var title := g._label(POPUP_TITLE, 24)
 	title.name = "Title"
 	title.autowrap_mode = TextServer.AUTOWRAP_OFF
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ContractCard.paper_font(title, true)
+	ContractCard.title_font(title)
 	title.add_theme_color_override("font_color", NOTE_INK)
-	title.position = Vector2(0.0, 18.0)
-	title.size = Vector2(POPUP_SIZE.x, 26.0)
+	title.position = Vector2(0.0, 34.0)
+	title.size = Vector2(POPUP_SIZE.x, 32.0)
 	pop.add_child(title)
 	var body := g._label(_reward_text(result), 13)
 	body.name = "Body"
@@ -807,13 +825,13 @@ func _show_reward(result: Dictionary) -> void:
 	body.clip_text = true
 	ContractCard.paper_font(body)
 	body.add_theme_color_override("font_color", NOTE_INK)
-	body.position = Vector2(18.0, 54.0)
-	body.size = Vector2(POPUP_SIZE.x - 36.0, POPUP_SIZE.y - 122.0)
+	body.position = Vector2(30.0, 80.0)
+	body.size = Vector2(POPUP_SIZE.x - 60.0, POPUP_SIZE.y - 158.0)
 	pop.add_child(body)
 	var ok := g._small_button("OK", Vector2(120, 44))
 	ok.name = "Ok"
 	style_plate(ok)
-	ok.position = Vector2((POPUP_SIZE.x - 120.0) / 2.0, POPUP_SIZE.y - 58.0)
+	ok.position = Vector2((POPUP_SIZE.x - 120.0) / 2.0, POPUP_SIZE.y - 72.0)
 	ok.pressed.connect(_on_reward_ok)
 	pop.add_child(ok)
 	_popup = pop
@@ -824,6 +842,10 @@ func _on_reward_ok() -> void:
 	_close_reward()
 
 func _close_reward() -> void:
+	if _scrim != null:
+		remove_child(_scrim)
+		_scrim.queue_free()
+		_scrim = null
 	if _popup == null:
 		return
 	var pop := _popup
