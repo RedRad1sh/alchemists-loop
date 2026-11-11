@@ -57,7 +57,8 @@ func _build_companion_dialog() -> void:
 	g.add_child(center)
 	_companion_dlg = center
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", g._panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
+	card.add_theme_stylebox_override("panel", UIStyle.modal_panel())
+	UIStyle.decorate_frame(card)
 	center.add_child(card)
 	var col := VBoxContainer.new()
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -215,35 +216,22 @@ func _companion_on_name_ok() -> void:
 	var pname := _companion_dlg_name.text.strip_edges()
 	if pname == "":
 		pname = "Алхимик"
-	_companion_set_name(pname)
-	_companion_dlg_name_row.visible = false
-	_companion_dlg_text.text = "Рад знакомству, %s! Я — %s. Теперь котёл у нас общий." % [_player_name, _spirit_name]
-	_companion.say(_companion_dlg_text.text, "happy")
-	Sfx.legendary()
+	_companion_close_dialog()
+	g._hub._open_profile()
+	g._hub._profile_nick.text = pname
+	g._hub._profile_onboarding = true
+	g._hub._preview_profile()
 
-func _companion_set_name(pname: String) -> bool:
-	_player_name = pname
-	# то же имя пишем в профиль (ник в мире), если оно валидно
+func _companion_set_name(pname: String, gender: String) -> bool:
 	var nn := g._hub._clean_player_nick(pname)
-	if nn != "":
-		var prev_nick := g._online._net_nick
-		g._online._net_nick = nn
-		if g._me_avatar != null:
-			g._me_avatar.setup(g._online._net_nick, 24)
-		if g._hub._profile_avatar != null:
-			g._hub._profile_avatar.setup(g._online._net_nick, 96)
-		if g._online._net_enabled:
-			# U25 (re-review, Critical #1): сервер принимает ник не всегда (400
-			# «Ник уже занят» — и проверка занятости, и IntegrityError-гонка в
-			# set_me), поэтому онбординг идёт через тот же контракт заявки, что и
-			# диалог профиля: hub._on_net_me_result при отказе откатывает на
-			# prev_nick и печатает причину, при успехе принимает серверный
-			# канонический ник. Без флага ответ уходил в молчание (там prev ==
-			# "" — защита стартового sync me()), и мир продолжал показывать
-			# чужой ник.
-			g._hub._profile_prev_nick = prev_nick
-			g._hub._profile_pending = true
-			Net.me(g._online._net_nick, g._online._device_id)
+	if nn == "" or gender not in ["male", "female"]:
+		return false
+	g._hub._profile_onboarding = true
+	g._hub._submit_profile(nn, gender)
+	return true
+
+func _finish_companion_name(pname: String) -> void:
+	_player_name = pname
 	var names := ["Светик"]
 	_spirit_name = String(names[randi() % names.size()])
 	_companion_met = true
@@ -253,7 +241,6 @@ func _companion_set_name(pname: String) -> bool:
 	if _companion_dlg_title != null:
 		_companion_dlg_title.text = _spirit_name
 	g._saves._save_game()
-	return true
 
 func _companion_hint() -> void:
 	if g._pages == null:

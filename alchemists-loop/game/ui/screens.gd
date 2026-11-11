@@ -21,7 +21,7 @@ const NAV_GAP := 6.0
 const SIDE_M := 12.0
 const TOP_M := 6.0
 const BOTTOM_M := 10.0
-const PAD_M := 14.0
+const PAD_M := 4.0
 const PLATE_REF_PX := Vector2(1080.0, 1609.0)
 const PLATE_ART := "room_plate"
 
@@ -67,6 +67,9 @@ func build(game: Game) -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	g.add_child(root)
+	# Получатель клика зависит от порядка соседей, а не z_index.
+	if g._bottom_nav != null:
+		g.move_child(root, g._bottom_nav.bar.get_index())
 
 	backdrop = TextureRect.new()
 	backdrop.name = "ScreenBackdrop"
@@ -92,6 +95,7 @@ func build(game: Game) -> void:
 	# панель занимает всё тело под шапкой, а не висит окном по центру.
 	panel = PanelContainer.new()
 	panel.name = "ScreenPanel"
+	UIStyle.decorate_frame(panel)
 	panel.add_theme_stylebox_override("panel", UIStyle.modal_panel(UIStyle.BRASS_HI))
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel.offset_left = SIDE_M

@@ -361,10 +361,12 @@ func _dispatch_manual() -> void:
 	_manual_left -= 1
 	_manual_ready = false
 	if String(result.get("output", "")) == target:
-		_blueprint(target, result, int(job["completed"]))
-		g._engine._craft_job.clear()
+		job["produced"] = int(job.get("produced", 0)) + 1
 		_stats["items"] += 1
 		_stats["craft_items"] += 1
+	if int(job.get("produced", 0)) >= int(job.get("amount", 1)):
+		_blueprint(target, result, int(job["completed"]))
+		g._engine._craft_job.clear()
 		_stats["craft_status"] = "complete"
 	elif _manual_left <= 0:
 		job["status"] = "paused_operation_cap"

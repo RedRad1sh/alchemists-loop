@@ -117,9 +117,7 @@ static func run(g: Game) -> void:
 		eng.ether_overflow = 0
 		Selftest.check("bulk buy limited by ether", eng._buy_upgrade("ether_cap", 10)
 				and eng._up_lvl("ether_cap") == 2 and eng.ether == 5)
-		g._hub._pick_up_qty(10)
-		Selftest.check("upgrade qty chip picks x10", g._hub._up_qty == 10)
-		g._hub._pick_up_qty(1)
+		Selftest.check("upgrade has no quantity selector", g.find_child("UpQtyRow", true, false) == null)
 		eng.upgrades["ether_cap"] = cap_keep
 		eng.ether = eth_keep
 		eng.ether_overflow = over_keep

@@ -225,6 +225,9 @@
     "Задания Светика, достижения, комплекты, заказы": "Lumi's quests, achievements, sets & orders",
     "Улучшения": "Upgrades",
     "Профиль: твоё имя и аватар": "Profile: your name & avatar",
+    "Загрузка…": "Loading…",
+    "Подготовка мастерской…": "Preparing the workshop…",
+    "Не удалось загрузить ресурсы.": "Could not load resources.",
     "Дом Светика: построй домик, обставь его, смени тему и ауру": "Lumi's House: build, furnish, change theme & aura",
     "Лавка: покупки, награды за просмотр и приватность": "Shop: purchases, ad rewards & privacy",
     "Аркан Сигилов: крафт карт и коллекция": "Sigil Arcana: card crafting & collection",
@@ -272,6 +275,7 @@
     "Отправить": "Send",
     "МАСТЕРСКАЯ": "WORKSHOP",
     "Автоматика лаборатории: устройства созревают без тебя. Новые открываются вместе с веществами.": "Lab automation: devices work while you're away. New ones unlock as you discover elements.",
+    "Устройства работают, пока тебя нет.\nНовые откроются вместе с веществами.": "Devices work while you're away.\nDiscover elements to unlock more.",
     "Родник": "Spring",
     "Верстак": "Workbench",
     "Реторта": "Retort",
@@ -579,7 +583,12 @@
     "Лор: зелье, сплавленное из огня и тени…": "Lore: a draught fused from fire and shadow…",
     "Шрифты: Manrope (UI), Divagon (названия), Manasco (лор), Alchemist Runic (заголовок)": "Fonts: Manrope (UI), Divagon (titles), Manasco (lore), Alchemist Runic (header)",
     "ПРОФИЛЬ АЛХИМИКА": "ALCHEMIST PROFILE",
-    "Это твоё имя в мире: его видят в ленте первооткрытий и в зале славы. Аватар рисуется из имени.": "Your public name in the discovery feed and Hall of Fame. Your avatar is generated from your name.",
+    "Имя видят другие алхимики. Выбери образ — его можно изменить позже.": "Other alchemists see your name. Choose an appearance — you can change it later.",
+    "Выбери мужской или женский образ": "Choose a male or female appearance",
+    "Выбери мужской или женский образ.": "Choose a male or female appearance.",
+    "Мужской": "Male",
+    "Женский": "Female",
+    "Профиль ещё сохраняется…": "Your profile is still being saved…",
     "Имя алхимика…": "Alchemist name…",
     "Имя должно быть 2–24 символа (буквы, цифры, пробел, дефис).": "Name must be 2–24 characters (letters, digits, space, hyphen).",
     "Отправляю имя…": "Saving name…",
@@ -1892,13 +1901,18 @@
       "n": 1
     },
     {
-      "rx": "(?s)^Веществ\\ открыто:\\ (-?\\d+)\\ /\\ (-?\\d+)\\ \\ \\ ·\\ \\ \\ Рецептов:\\ (-?\\d+)\\ /\\ (-?\\d+)([^\\n]+)$",
-      "en": "Elements: {0} / {1}   ·   Recipes: {2} / {3}{4}",
+      "rx": "(?s)^Вещества  (-?\\d+) / (-?\\d+)     Рецепты  (-?\\d+) / (-?\\d+)\\nАтлас · следующая награда: (-?\\d+) веществ$",
+      "en": "Elements  {0} / {1}     Recipes  {2} / {3}\nAtlas · next reward: {4} elements",
       "n": 5
     },
     {
-      "rx": "(?s)^Веществ\\ открыто:\\ (-?\\d+)\\ /\\ (-?\\d+)\\ \\ \\ ·\\ \\ \\ Рецептов:\\ (-?\\d+)\\ /\\ (-?\\d+)$",
-      "en": "Elements: {0} / {1}   ·   Recipes: {2} / {3}",
+      "rx": "(?s)^Рецепты: (-?\\d+) / (-?\\d+)$",
+      "en": "Recipes: {0} / {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Вещества  (-?\\d+) / (-?\\d+)     Рецепты  (-?\\d+) / (-?\\d+)$",
+      "en": "Elements  {0} / {1}     Recipes  {2} / {3}",
       "n": 4
     },
     {
@@ -2637,8 +2651,8 @@
       "n": 2
     },
     {
-      "rx": "(?s)^\\ \\ \\ ·\\ \\ \\ Атлас:\\ награда\\ на\\ (-?\\d+)$",
-      "en": "   ·   Atlas: reward at {0}",
+      "rx": "(?s)^Атлас · следующая награда: (-?\\d+) веществ$",
+      "en": "Atlas · next reward: {0} elements",
       "n": 1
     },
     {
@@ -3062,8 +3076,8 @@
       "n": 1
     },
     {
-      "rx": "(?s)^⚡(-?\\d+)/(-?\\d+)\\ ·\\ рез:(-?\\d+)\\ ·\\ \\+(-?\\d+(?:\\.\\d+)?)/с$",
-      "en": "⚡{0}/{1} · res:{2} · +{3}/s",
+      "rx": "(?s)^Эфир  (-?\\d+) / (-?\\d+)\\nРезерв (-?\\d+)  ·  \\+(-?\\d+(?:\\.\\d+)?)/с$",
+      "en": "Ether  {0} / {1}\nReserve {2}  ·  +{3}/s",
       "n": 4
     },
     {
@@ -3292,7 +3306,7 @@
       "n": 1
     },
     {
-      "rx": "(?s)^\\ ·\\ новых:\\ (-?\\d+)$",
+      "rx": "(?s)^(?:\\ ·\\ )?новых:\\ (-?\\d+)$",
       "en": " · new: {0}",
       "n": 1
     },

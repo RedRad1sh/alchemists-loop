@@ -6,16 +6,18 @@ class_name ContractCard
 
 const ASSET_DIR := "res://assets/contracts/"
 const FADE_SHADER := "res://assets/contracts/paper_fade.gdshader"
-const DAILY_SIZE := Vector2(140, 196)
-const WEEKLY_SIZE := Vector2(184, 244)
+const DAILY_SIZE := Vector2(196, 196)
+const WEEKLY_SIZE := Vector2(196, 234)
 const TILT_MAX := 4.0
 const NAIL_SIZE := 32.0
 const SEAL_SIZE := 52.0
 const STAMP_SIZE := Vector2(100, 36)
 ## Дневные записки — три силуэта, гвоздь — четыре шляпки; вариант выбирается от id,
 ## поэтому доска не выглядит штампованной и не меняется между запусками.
-const DAILY_PAPERS := ["paper_daily.png", "paper_daily_b.png", "paper_daily_c.png"]
-const NAILS := ["nail_brass.png", "nail_brass_b.png", "nail_brass_c.png", "nail_brass_d.png"]
+const DAILY_PAPERS := ["18a_contract_parchment_daily.png"]
+const NAILS := ["19_brass_pin_tack.png"]
+const Kit = preload("res://game/ui/menu_kit.gd")
+const SEALS := {"bronze": "seal_bronze.png", "silver": "seal_silver.png", "gold": "seal_gold.png"}
 ## Недельный плакат несёт нарисованную двойную рамку и орнамент сверху: текст
 ## садится внутрь рамки, а не на неё.
 const WEEKLY_TITLE_Y := 32.0
@@ -131,8 +133,8 @@ func setup(c: Dictionary) -> void:
 	scale = Vector2.ONE
 	_paper.size = sz
 	var cid := String(c["id"])
-	_paper.texture = tex("paper_weekly.png") if weekly else tex(pick(cid, DAILY_PAPERS))
-	_nail.texture = tex(pick(cid, NAILS))
+	_paper.texture = Kit.texture("18b_contract_parchment_tall.png" if weekly else "18a_contract_parchment_daily.png")
+	_nail.texture = Kit.texture("19_brass_pin_tack.png")
 	var pad := PAD_WEEKLY if weekly else PAD
 	var top := WEEKLY_TITLE_Y if weekly else DAILY_TITLE_Y
 	_title.position = Vector2(pad, top)
@@ -153,7 +155,7 @@ func setup(c: Dictionary) -> void:
 	_reward.size = Vector2(w - 2.0 * pad, reward_h)
 	_seal.position = Vector2(w - SEAL_SIZE + 4.0, h - SEAL_SIZE + 4.0)
 	_seal.size = Vector2(SEAL_SIZE, SEAL_SIZE)
-	_seal.texture = tex("seal_%s.png" % String(c.get("tier", "bronze")))
+	_seal.texture = tex(SEALS[String(c.get("tier", "bronze"))])
 	_stamp.position = Vector2(14.0, h - STAMP_BAND + 2.0)
 	_stamp.size = STAMP_SIZE
 	# Гвоздь — ребёнок карточки, не листа: он в доске и не поворачивается.

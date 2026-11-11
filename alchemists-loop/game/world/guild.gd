@@ -145,14 +145,14 @@ func _refresh_quest_label() -> void:
 	var q := _active_quest()
 	if q.is_empty():
 		if _order_targets_cache.size() > 0 and _order_done.size() < _order_targets_cache.size():
-			_quest_label.text = "✦ Гильдия: заказов %d/%d" % [_order_done.size(), _order_targets_cache.size()]
+			_quest_label.tooltip_text = "✦ Гильдия: заказов %d/%d" % [_order_done.size(), _order_targets_cache.size()]
 			_quest_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.42))
 		else:
-			_quest_label.text = "✦ Светик: все задания выполнены!"
+			_quest_label.tooltip_text = "✦ Светик: все задания выполнены!"
 			_quest_label.add_theme_color_override("font_color", UIStyle.GLOW)
 		return
 	var p := mini(_quest_progress(q), _quest_target(q))
-	_quest_label.text = "✦ Светик: %s — %d/%d" % [String(q["title"]), p, _quest_target(q)]
+	_quest_label.tooltip_text = "✦ Светик: %s — %d/%d" % [String(q["title"]), p, _quest_target(q)]
 	_quest_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.42))
 
 func _collect_needs(stock: Dictionary, item: String, units: int,
@@ -273,7 +273,7 @@ func _plan_known_frontier(item_id: String) -> Dictionary:
 		"missing": missing,
 	}
 
-func _plan_craft(item_id: String) -> Dictionary:
+func _plan_craft(item_id: String, amount: int = 1) -> Dictionary:
 	# план автоварки: {ok, reason, ops: [{a,b,n,layer}], total, base_add}
 	g._engine._cost_cache.clear()
 	var fail := func(why: String) -> Dictionary:
@@ -283,10 +283,10 @@ func _plan_craft(item_id: String) -> Dictionary:
 	var op_n: Dictionary = {}
 	var base_add: Dictionary = {}
 	var missing: Array[String] = []
-	# целевой предмет не берём из запаса: автоварка всегда варит +1 сверх имеющегося
+	# Целевая партия производится сверх имеющегося запаса.
 	var stock := g._engine.inventory.duplicate()
 	stock.erase(item_id)
-	_collect_needs(stock, item_id, 1, op_n, base_add, missing)
+	_collect_needs(stock, item_id, amount, op_n, base_add, missing)
 	if not missing.is_empty():
 		return fail.call("нужен открытый рецепт для «%s»." % g._online._item_name(missing[0]))
 	var ops: Array = []

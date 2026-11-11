@@ -101,7 +101,7 @@ static func run(g: Game) -> void:
 	# краю ячейки (это и видно на первом кадре приёмки).
 	var it0: Dictionary = g._bottom_nav._items[0]
 	var b0: Control = it0["btn"]
-	var l0: Label = it0["label"]
+	var l0: TextureRect = it0["icon"]
 	Selftest.check("nav item content centered", b0.size.x > 0.0
 			and absf((l0.global_position.x + l0.size.x * 0.5)
 					- (b0.global_position.x + b0.size.x * 0.5)) < 2.0)
@@ -138,10 +138,12 @@ static func run(g: Game) -> void:
 			and not sdim
 			and spanel.size.x >= sp.size.x - 2.0 * SocialUI.SECTION_M - 1.0
 			and spanel.size.y >= sp.size.y - 2.0 * SocialUI.SECTION_M - 1.0)
-	# Иконка бара не прилипает к латунной рейке сверху.
-	var nav_icon := g._bottom_nav._items[0]["icon"] as Control
-	Selftest.check("nav icons sit below the rail with a gap",
-			nav_icon.global_position.y - g._bottom_nav.bar.global_position.y >= 14.0)
+	var cauldron_icon := g._bottom_nav._items[0]["icon"] as Control
+	var world_icon := g._bottom_nav._items[1]["icon"] as Control
+	Selftest.check("cauldron shield rises above rectangular tabs",
+			cauldron_icon.global_position.y + 10.0 < world_icon.global_position.y)
+	Selftest.check("rectangular tab icon stays inside dock",
+			world_icon.global_position.y > g._bottom_nav.bar.global_position.y)
 	g._bottom_nav._on_pressed("rating")
 	Selftest.check("nav sibling closes friends panel",
 			not g._social_ui.is_open() and g._tabs_ref.current_tab == Game.TAB_RATING
@@ -169,7 +171,7 @@ static func run(g: Game) -> void:
 			and idle_icon.modulate == idle_col
 			and (idle_it["mark"] as ColorRect).color.a == 0.0)
 	# Шапка: иконки вместо слов, без дублей нижнего бара.
-	var ether_row := g.find_child("EtherRow", true, false) as Control
+	var ether_row := g.find_child("HUDRightActions", true, false) as Control
 	var worded := false
 	var row_icons := 0
 	if ether_row != null:

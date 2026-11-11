@@ -57,10 +57,9 @@ static func run(g: Game) -> void:
 		return
 
 	# На русском отрисовываются русские подписи.
-	var title_lbl := g.find_child("TitlePlaque", true, false)
-	var title_node := title_lbl.get_child(0) as Label if title_lbl != null and title_lbl.get_child_count() > 0 else null
+	var profile := g.find_child("ProfileEntry", true, false) as Button
 	Selftest.check("i18n default ru keeps Russian UI captions",
-		title_node != null and title_node.atr(title_node.text) == "ПЕТЛЯ АЛХИМИКА"
+		profile != null and _has_cyrillic(profile.atr(profile.tooltip_text))
 		and g._engine._brew_btn.atr(g._engine._brew_btn.text) == "ВАРИТЬ"
 		and popup_lang_btn.atr(popup_lang_btn.text).contains("Русский"))
 
@@ -76,10 +75,11 @@ static func run(g: Game) -> void:
 	# Основные поверхности UI переводятся на английский без кириллицы.
 	var nav_ok := true
 	for item in g._bottom_nav._items:
-		var lb := item["label"] as Label
-		var shown := lb.atr(lb.text)
+		var button := item["btn"] as Button
+		var shown := button.atr(button.tooltip_text)
 		if shown.is_empty() or _has_cyrillic(shown):
 			nav_ok = false
+			print("[FAIL-DIAG] navigation tooltip: ", shown)
 	var screen_back := g._screens.back_btn
 	var ether_lbl: Label = g._engine._ether_label
 	if ether_lbl == null:
@@ -89,7 +89,7 @@ static func run(g: Game) -> void:
 				ether_lbl = ch as Label
 				break
 	Selftest.check("i18n core chrome, nav, buttons and dynamic HUD translate to English",
-		title_node != null and title_node.atr(title_node.text) == "ALCHEMIST'S LOOP"
+		profile != null and not _has_cyrillic(profile.atr(profile.tooltip_text))
 		and g._engine._brew_btn != null and g._engine._brew_btn.atr(g._engine._brew_btn.text) == "BREW"
 		and screen_back != null and not _has_cyrillic(screen_back.atr(screen_back.text))
 		and nav_ok

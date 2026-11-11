@@ -56,7 +56,7 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 	dim.add_child(margin)
 	var panel := PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	panel.add_theme_stylebox_override("panel", main._panel_style(Color(0.055, 0.065, 0.10, 0.99), 18))
+	panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	margin.add_child(panel)
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 10)
@@ -393,7 +393,9 @@ func _sigil_set_panel(set_def: Dictionary) -> Control:
 	box.add_child(head)
 	var title: Label = main._label(str(set_def.get("title", "")), 17)
 	title.name = "SigilSetTitle"
-	title.autowrap_mode = TextServer.AUTOWRAP_OFF
+	title.add_theme_font_override("font", load("res://assets/fonts/Divagon.otf"))
+	title.add_theme_font_size_override("font_size", 22)
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title.add_theme_color_override("font_color", accent)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -420,7 +422,7 @@ func _sigil_set_panel(set_def: Dictionary) -> Control:
 	bar.show_percentage = false
 	bar.custom_minimum_size = Vector2(0, 10)
 	var bar_bg := StyleBoxFlat.new()
-	bar_bg.bg_color = Color(0.04, 0.045, 0.07, 1.0)
+	bar_bg.bg_color = UIStyle.WOOD_DEEP
 	bar_bg.set_corner_radius_all(5)
 	bar_bg.set_border_width_all(1)
 	bar_bg.border_color = Color(accent.r, accent.g, accent.b, 0.3)
@@ -517,7 +519,9 @@ func _open_sigil_set_screen(set_id: String) -> void:
 	var title: Label = main._label("%s · %d/%d" % [str(set_def.get("title", "")),
 		collected, main.SIGIL_SET_SIZE], 20)
 	title.name = "SigilSetScreenTitle"
-	title.autowrap_mode = TextServer.AUTOWRAP_OFF
+	title.add_theme_font_override("font", load("res://assets/fonts/Divagon.otf"))
+	title.add_theme_font_size_override("font_size", 22)
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title.add_theme_color_override("font_color", accent)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -617,10 +621,10 @@ func _sigil_set_cell(card_id: String, coll_entry: Dictionary) -> Control:
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.clip_contents = true
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.04, 0.045, 0.07, 1.0)
+	sb.bg_color = UIStyle.WOOD_DEEP
 	sb.border_color = Color(0.42, 0.45, 0.52, 0.3)
 	sb.set_border_width_all(1)
-	sb.set_corner_radius_all(12)
+	sb.set_corner_radius_all(3)
 	box.add_theme_stylebox_override("panel", sb)
 	var vb := VBoxContainer.new()
 	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -925,11 +929,6 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	var vbox := VBoxContainer.new()
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_theme_constant_override("separation", 12)
-	# Отступы объектов внутри попапа от краёв панели.
-	vbox.add_theme_constant_override("margin_left", 14)
-	vbox.add_theme_constant_override("margin_right", 14)
-	vbox.add_theme_constant_override("margin_top", 14)
-	vbox.add_theme_constant_override("margin_bottom", 10)
 	panel.add_child(vbox)
 
 	# Верхней надписи с именем здесь нет намеренно: имя уже напечатано на самой
@@ -976,18 +975,18 @@ func _open_sigil_fullscreen(entry: Dictionary) -> void:
 	lsb.bg_color = Color(0.07, 0.07, 0.11, 1.0)
 	lsb.border_color = Color(accent.r, accent.g, accent.b, 0.5)
 	lsb.set_border_width_all(1)
-	lsb.set_corner_radius_all(12)
+	lsb.set_corner_radius_all(3)
 	lore.add_theme_stylebox_override("panel", lsb)
 	card_flip.add_child(lore)
 	var lore_v := VBoxContainer.new()
 	lore_v.add_theme_constant_override("separation", 12)
 	lore_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# Отступы текста от краёв оборотной стороны.
-	lore_v.add_theme_constant_override("margin_left", 12)
-	lore_v.add_theme_constant_override("margin_right", 12)
-	lore_v.add_theme_constant_override("margin_top", 12)
-	lore_v.add_theme_constant_override("margin_bottom", 12)
-	lore.add_child(lore_v)
+	var lore_margin := MarginContainer.new()
+	lore_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		lore_margin.add_theme_constant_override(side, 20)
+	lore.add_child(lore_margin)
+	lore_margin.add_child(lore_v)
 	# Лор: тот же детерминированный генератор, что у комплектных карт
 	# (SigilLore.generate от (id, seed)). Хроматики получают seed и ингредиенты
 	# с сервера — SigilLore даёт такой же структурированный текст {title,
@@ -1273,8 +1272,9 @@ func _sigil_craft_row(craft: Dictionary) -> Control:
 	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(info)
 
-	var name_lbl: Label = main._label(title, 18)
-	name_lbl.add_theme_color_override("font_color", Color(0.95, 0.93, 0.86))
+	var name_lbl: Label = main._label(title, 22)
+	name_lbl.add_theme_font_override("font", load("res://assets/fonts/Divagon.otf"))
+	name_lbl.add_theme_color_override("font_color", UIStyle.PAPER_HI)
 	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_child(name_lbl)
@@ -1407,10 +1407,10 @@ func _sigil_preview_slot(accent: Color, side: int, border: bool = true) -> Contr
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.clip_contents = true
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.04, 0.045, 0.07, 1.0) if border else Color(0, 0, 0, 0)
+	sb.bg_color = UIStyle.WOOD_DEEP if border else Color(0, 0, 0, 0)
 	sb.border_color = Color(accent.r, accent.g, accent.b, 0.55) if border else Color(0, 0, 0, 0)
 	sb.set_border_width_all(1) if border else sb.set_border_width_all(0)
-	sb.set_corner_radius_all(12)
+	sb.set_corner_radius_all(3)
 	box.add_theme_stylebox_override("panel", sb)
 	var rect := TextureRect.new()
 	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -1440,22 +1440,11 @@ func _sigil_fill_preview(box: Control, tex: ImageTexture) -> void:
 
 func _sigil_row_style(accent: Color, lift: float, is_chromatic: bool = false) -> StyleBox:
 	var sb := StyleBoxFlat.new()
-	if is_chromatic:
-		# Хроматик выделяется: тёплый фон и золотая рамка потолще.
-		sb.bg_color = Color(0.16 + lift, 0.11 + lift, 0.06 + lift, 1.0)
-		sb.border_color = Color(1.0, 0.72, 0.25, 0.95)
-		sb.set_border_width_all(2)
-		sb.border_width_left = 5
-		# Лёгкое свечение: внешний контур рамки (имитация ореола).
-		sb.shadow_color = Color(1.0, 0.6, 0.15, 0.35)
-		sb.shadow_size = 6
-	else:
-		sb.bg_color = Color(0.075 + accent.r * 0.10 + lift, 0.085 + accent.g * 0.10 + lift,
-			0.12 + accent.b * 0.10 + lift, 1.0)
-		sb.border_color = Color(accent.r, accent.g, accent.b, 0.45 + lift)
-		sb.set_border_width_all(1)
-		sb.border_width_left = 4
-	sb.set_corner_radius_all(14)
+	sb.bg_color = UIStyle.WOOD_DEEP.lightened(lift)
+	sb.border_color = UIStyle.BRASS_HI if is_chromatic else Color(accent, 0.65 + lift)
+	sb.set_border_width_all(1)
+	sb.border_width_left = 2
+	sb.set_corner_radius_all(2)
 	sb.content_margin_left = 14
 	sb.content_margin_right = 14
 	sb.content_margin_top = 12
@@ -1773,9 +1762,7 @@ func _close_sigil_craft_screen() -> void:
 	Sfx.click()
 
 func _btn_style(col: Color) -> StyleBox:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = col
-	sb.set_corner_radius_all(6)
+	var sb := UIStyle.box(UIStyle.WOOD_DEEP.lerp(col, 0.25), col, 2, 1)
 	sb.content_margin_left = 10
 	sb.content_margin_right = 10
 	sb.content_margin_top = 6

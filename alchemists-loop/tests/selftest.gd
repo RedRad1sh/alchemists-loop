@@ -152,6 +152,12 @@ static func run(g: Game) -> void:
 		await SuiteHouseV2.run(g)
 	elif OS.get_cmdline_user_args().has("--suite=contracts"):
 		await SuiteContractBoard.run(g)
+	elif OS.get_cmdline_user_args().has("--suite=navigation"):
+		await load("res://tests/suite_navigation_fixes.gd").run(g)
+	elif OS.get_cmdline_user_args().has("--suite=avatars"):
+		await load("res://tests/suite_avatar_profiles.gd").run(g)
+	elif OS.get_cmdline_user_args().has("--suite=engraved"):
+		await load("res://tests/suite_ui_engraved.gd").run(g)
 	elif OS.get_cmdline_user_args().has("--suite=i18n"):
 		var i18n_s: Script = load("res://tests/suite_ui_i18n.gd")
 		if i18n_s != null and i18n_s.can_instantiate():
@@ -191,13 +197,14 @@ static func run(g: Game) -> void:
 				await suite.run(g)
 		# UI-сюиты грузятся динамически: отсутствующий UITheme/UIBackdrop или
 		# опечатка в новом файле красят только свой пин, а не весь билд.
-		for ui_suite in ["theme", "backdrop", "scene", "i18n"]:
+		for ui_suite in ["theme", "backdrop", "scene", "i18n", "engraved"]:
 			var ui_path := "res://tests/suite_ui_%s.gd" % ui_suite
 			var ui_script: Script = load(ui_path) if FileAccess.file_exists(ui_path) else null
 			Selftest.check("ui suite loads: " + ui_suite,
 				ui_script != null and ui_script.can_instantiate())
 			if ui_script != null and ui_script.can_instantiate():
 				await ui_script.run(g)
+		await load("res://tests/suite_avatar_profiles.gd").run(g)
 
 	_u20_wipe([g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH] + U20_ST_FILES)
 	g.SAVE_PATH = "user://alchemy_save.json"
