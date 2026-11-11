@@ -196,6 +196,17 @@ func _build_lab(page: VBoxContainer) -> void:
 	var book_title := g._label("Книга рецептов — Производство", 16)
 	book_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	book_head.add_child(book_title)
+	var quantity_row := HBoxContainer.new()
+	quantity_row.name = "BrewQtyRow"
+	lab_content.add_child(quantity_row)
+	var quantity_group := ButtonGroup.new()
+	for amount in [1, 10, 100]:
+		var choice := g._small_button("×%d" % amount, Vector2(64, 40))
+		choice.toggle_mode = true
+		choice.button_group = quantity_group
+		choice.button_pressed = amount == 1
+		choice.pressed.connect(func() -> void: g._engine._brew_quantity = amount)
+		quantity_row.add_child(choice)
 	var search := LineEdit.new()
 	search.placeholder_text = "Поиск вещества по названию…"
 	search.custom_minimum_size = Vector2(0, 40)

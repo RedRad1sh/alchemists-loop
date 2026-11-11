@@ -9,8 +9,6 @@ var _up_btn: Button
 var _up_popup: Control
 var _up_dim: ColorRect
 var _up_rows: VBoxContainer
-var _up_qty := 1
-var _up_qty_btns: Array = []
 var _profile_dim: Control = null
 var _profile_popup: Control = null
 var _profile_avatar: Avatar = null
@@ -28,6 +26,12 @@ var _profile_prev_nick := ""
 # отказ ПЕРВОГО в жизни ника приходит именно с prev == "", и по одному prev его
 # было не отличить от стартового sync me() / онбординга (там откатывать нечего).
 var _profile_pending := false
+var _profile_gender := ""
+var _profile_prev_gender := ""
+var _profile_onboarding := false
+var _profile_gender_buttons: Dictionary = {}
+var _profile_gender_hint: Label
+
 var _log_events: Array = []
 var _journal_dim: ColorRect = null
 var _journal_popup: CenterContainer = null
@@ -61,32 +65,54 @@ func _build_profile_popup() -> void:
 	g.add_child(center)
 	_profile_popup = center
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", g._panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
+	card.add_theme_stylebox_override("panel", UIStyle.modal_panel())
+	UIStyle.decorate_frame(card)
 	center.add_child(card)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
-	col.custom_minimum_size = Vector2(320, 0)
+	col.custom_minimum_size = Vector2(280, 0)
 	card.add_child(col)
 	var t := g._label("ПРОФИЛЬ АЛХИМИКА", 20)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	t.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	col.add_child(t)
-	_profile_avatar = g._make_avatar(g._online._net_nick, 96)
-	_profile_avatar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	col.add_child(_profile_avatar)
-	_profile_stats = g._label("", 13)
-	_profile_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(_profile_stats)
-	var sub := g._label("Это твоё имя в мире: его видят в ленте первооткрытий и в зале славы. Аватар рисуется из имени.", 13)
+	var sub := g._label("Имя видят другие алхимики. Выбери образ — его можно изменить позже.", 12)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 	col.add_child(sub)
 	_profile_nick = LineEdit.new()
+	_profile_nick.name = "ProfileNickname"
 	_profile_nick.custom_minimum_size = Vector2(0, 42)
 	_profile_nick.max_length = 24
 	_profile_nick.placeholder_text = "Имя алхимика…"
 	_profile_nick.add_theme_font_size_override("font_size", 16)
+	_profile_nick.text_changed.connect(func(_text: String): _preview_profile())
 	col.add_child(_profile_nick)
+	_profile_gender_hint = g._label("Выбери мужской или женский образ", 12)
+	_profile_gender_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_profile_gender_hint.add_theme_color_override("font_color", UIStyle.BRASS_HI)
+	col.add_child(_profile_gender_hint)
+	var gender_row := HBoxContainer.new()
+	gender_row.name = "ProfileGender"
+	gender_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	gender_row.add_theme_constant_override("separation", 10)
+	col.add_child(gender_row)
+	var gender_group := ButtonGroup.new()
+	for gender in ["male", "female"]:
+		var button := g._small_button("Мужской" if gender == "male" else "Женский", Vector2(128, 44))
+		button.name = "Gender_" + gender
+		button.toggle_mode = true
+		button.button_group = gender_group
+		button.pressed.connect(_choose_profile_gender.bind(gender))
+		gender_row.add_child(button)
+		_profile_gender_buttons[gender] = button
+	_profile_avatar = g._make_avatar(g._online._net_nick, 96)
+	_profile_avatar.name = "ProfilePortrait"
+	_profile_avatar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	col.add_child(_profile_avatar)
+	_profile_stats = g._label("", 12)
+	_profile_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(_profile_stats)
 	var btns := HBoxContainer.new()
 	btns.alignment = BoxContainer.ALIGNMENT_CENTER
 	btns.add_theme_constant_override("separation", 12)
@@ -99,8 +125,13 @@ func _build_profile_popup() -> void:
 	btns.add_child(cancel)
 
 func _open_profile() -> void:
+	if not _profile_pending:
+		_profile_onboarding = false
 	_profile_nick.text = g._online._net_nick
-	_profile_avatar.setup(g._online._net_nick, 96)
+	_profile_gender = g._online._avatar_gender
+	for gender in _profile_gender_buttons:
+		_profile_gender_buttons[gender].set_pressed_no_signal(gender == _profile_gender)
+	_preview_profile()
 	_profile_stats.text = "Веществ %d/%d · Рецептов %d/%d\nДостижения %d/%d · Комплекты %d/4\nЗолото мудрецов %d · Дружба ур. %d\nМировых открытий: %d\nТитул: %s" % [
 		g._engine.inventory.size(), g.ITEMS.size(), g._engine.known_recipes.size(), g.RECIPES.size(),
 		g._progress_ui._ach_done.size(), Game.ACHIEVEMENTS.size(), g._progress_ui._set_done.size(),
@@ -111,6 +142,8 @@ func _open_profile() -> void:
 	Sfx.click()
 
 func _close_profile() -> void:
+	if not _profile_pending:
+		_profile_onboarding = false
 	Juice.close(_profile_dim, _profile_popup)
 	Sfx.click()
 
@@ -126,80 +159,108 @@ func _clean_player_nick(raw: String) -> String:
 		return ""
 	return filtered
 
+func _choose_profile_gender(gender: String) -> void:
+	_profile_gender = gender
+	for key in _profile_gender_buttons:
+		_profile_gender_buttons[key].set_pressed_no_signal(key == gender)
+	_preview_profile()
+
+func _preview_profile() -> void:
+	if _profile_avatar == null:
+		return
+	_profile_gender_hint.visible = _profile_gender == ""
+	_profile_avatar.visible = _profile_gender != ""
+	_profile_avatar.setup(_clean_player_nick(_profile_nick.text), 96, _profile_gender)
+
+func _refresh_own_avatar() -> void:
+	if g._me_avatar != null:
+		g._me_avatar.setup(g._online._net_nick, g._me_avatar.custom_minimum_size.x, g._online._avatar_gender)
+	if _profile_avatar != null:
+		_profile_avatar.setup(g._online._net_nick, 96, g._online._avatar_gender)
+
 func _save_profile() -> void:
+	if _profile_pending:
+		g._online._set_status("Профиль ещё сохраняется…")
+		return
 	var filtered := _clean_player_nick(_profile_nick.text)
 	if filtered == "":
 		g._online._set_status("Имя должно быть 2–24 символа (буквы, цифры, пробел, дефис).")
 		return
-	# I-1 (T28): «Имя сохранено» печатается только в ok-ветке _on_net_me_result —
-	# сервер принимает ник не всегда (400 «Ник уже занят»), и прежний мгновенный
-	# успех врал игроку при отказе. Здесь — только нейтральная метка отправки;
-	# кейс-мутант «t28 nick save prints no premature success» (краснеет, если
-	# вернуть успех в этот метод).
-	_profile_prev_nick = g._online._net_nick
-	_profile_pending = true
-	g._online._net_nick = filtered
-	g._saves._save_game()
-	g._me_avatar.setup(g._online._net_nick, 24)
-	_profile_avatar.setup(g._online._net_nick, 96)
-	# метка отправки — ДО Net.me: при пустом base_url очередь сливается
-	# offline-результатом синхронно внутри этого вызова, и статус отказа,
-	# выставленный обработчиком, не затирается меткой «Отправляю имя…»
-	g._online._set_status("Отправляю имя…")
-	Net.me(g._online._net_nick, g._online._device_id)
+	if _profile_gender not in ["male", "female"]:
+		_profile_gender_hint.visible = true
+		g._online._set_status("Выбери мужской или женский образ.")
+		return
+	if _profile_onboarding:
+		g._spirit._companion_set_name(filtered, _profile_gender)
+	else:
+		_submit_profile(filtered, _profile_gender)
 	_close_profile()
 	g._online._rebuild_world_grid()
 
+func _submit_profile(nick: String, gender: String) -> void:
+	_profile_prev_nick = g._online._net_nick
+	_profile_prev_gender = g._online._avatar_gender
+	g._online._net_nick = nick
+	g._online._avatar_gender = gender
+	_refresh_own_avatar()
+	if not g._online._net_enabled:
+		g._spirit._player_name = nick
+		if _profile_onboarding:
+			g._spirit._finish_companion_name(nick)
+			_profile_onboarding = false
+		g._saves._save_game()
+		g._online._set_status("Имя сохранено: %s." % nick)
+		return
+	_profile_pending = true
+	g._online._set_status("Отправляю имя…")
+	Net.me(nick, g._online._device_id, gender)
+
 func _on_net_me_result(result: Dictionary) -> void:
+	if _profile_pending and result.get("_profile_read", false):
+		return
 	var was_pending := _profile_pending
 	var prev := _profile_prev_nick
+	var prev_gender := _profile_prev_gender
 	_profile_pending = false
 	_profile_prev_nick = ""
+	_profile_prev_gender = ""
 	if result.get("ok", false) == true:
 		var nick := g._clean_str(result.get("nick", ""))
-		if nick != "" and nick != g._online._net_nick:
+		var gender := String(result.get("avatar_gender", g._online._avatar_gender))
+		if not was_pending and gender == "" and g._online._avatar_gender != "" and g._online._net_nick != "":
+			_submit_profile(nick if nick != "" else g._online._net_nick, g._online._avatar_gender)
+			return
+		if nick != "":
 			g._online._net_nick = nick
-			if g._me_avatar != null:
-				g._me_avatar.setup(g._online._net_nick, 24)
-			g._saves._save_game()
-		# успех объявляем только своей смене (U25: по флагу заявки, а не по
-		# непустому prev — иначе отказ/успех ПЕРВОГО в жизни ника не доходил до
-		# игрока): стартовый sync me() (main.gd) и онбординг-ник (spirit.gd)
-		# приходят сюда без заявки
+			g._spirit._player_name = nick
+		g._online._avatar_gender = gender if gender in ["male", "female"] else ""
+		g._online._remember_avatar(nick, result.get("avatar"))
+		_profile_gender = g._online._avatar_gender
+		if was_pending and _profile_onboarding:
+			g._spirit._finish_companion_name(g._online._net_nick)
+			_profile_onboarding = false
+		_refresh_own_avatar()
+		g._saves._save_game()
 		if was_pending:
 			g._online._set_status("Имя сохранено: %s. Его видят все алхимики!" % g._online._net_nick)
-		# γ: счётчик гостей и недельный подарок приходят вместе с профилем. Отдельного
-		# запроса не заводим; офлайн сюда не попадаем вовсе, поэтому поля читаются с
-		# дефолтами 0 и [] — подарок просто не начислится без серверного числа.
-		g._home._on_house_profile(int(result.get("house_visits_week", 0)),
-			result.get("house_visitors", []))
+		g._home._on_house_profile(int(result.get("house_visits_week", 0)), result.get("house_visitors", []))
 		return
-	# Отказ/офлайн, пришедший НЕ в ответ на заявку игрока — молча игнорируем
-	# (поведение до T28): откатывать на чужую отправку нечего.
 	if not was_pending:
 		return
-	# I-1 (T28): ветка отказа. Мутация «удалить ветку отказа (оставить только
-	# if ok, успех — как в BASE — печатать в _save_profile)» красит кейс
-	# «t28 rejected nick rolls back»: статус остаётся успехным и ник не откатан.
 	if result.get("offline", false) == true:
 		g._online._set_status("Сервер не ответил, имя не принято.")
 	else:
 		var detail := String(result.get("detail", ""))
-		if detail != "":
-			g._online._set_status("Имя не принято: " + detail)
-		else:
-			g._online._set_status("Имя не принято.")
+		g._online._set_status("Имя не принято: " + detail if detail != "" else "Имя не принято.")
+	_profile_onboarding = false
 	g._online._net_nick = prev
-	if g._me_avatar != null:
-		g._me_avatar.setup(g._online._net_nick, 24)
-	if _profile_avatar != null:
-		_profile_avatar.setup(g._online._net_nick, 96)
-	# U25 (re-review #3): поле диалога возвращаем тоже. Пока заявка в полёте,
-	# игрок успевает открыть профиль (_open_profile печатает в поле текущий
-	# _net_nick = ужеRejected), и без этой строки отказ повесил бы непринятое
-	# имя в открытой форме. Различник — тот же кейс сюиты (третий конъюнкт).
+	g._online._avatar_gender = prev_gender
+	_profile_gender = prev_gender
+	_refresh_own_avatar()
 	if _profile_nick != null:
 		_profile_nick.text = prev
+	for gender in _profile_gender_buttons:
+		_profile_gender_buttons[gender].set_pressed_no_signal(gender == prev_gender)
 	g._saves._save_game()
 
 
@@ -235,7 +296,8 @@ func _build_craftable_popup() -> void:
 	g.add_child(center)
 	_craftable_popup = center
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", g._panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
+	card.add_theme_stylebox_override("panel", UIStyle.modal_panel())
+	UIStyle.decorate_frame(card)
 	center.add_child(card)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
@@ -329,13 +391,15 @@ func _build_settings_popup() -> void:
 	g.add_child(center)
 	_settings_popup = center
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", g._panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
+	card.add_theme_stylebox_override("panel", UIStyle.modal_panel())
+	UIStyle.decorate_frame(card)
 	center.add_child(card)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 10)
 	col.custom_minimum_size = Vector2(330, 0)
 	card.add_child(col)
-	var t := g._label("НАСТРОЙКИ", 20)
+	var t := g._label("НАСТРОЙКИ", 24)
+	t.add_theme_font_override("font", load("res://assets/fonts/Divagon.otf"))
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	t.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	col.add_child(t)
@@ -440,7 +504,8 @@ func _build_credits_popup() -> void:
 	g.add_child(center)
 	_credits_popup = center
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", g._panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
+	card.add_theme_stylebox_override("panel", UIStyle.modal_panel())
+	UIStyle.decorate_frame(card)
 	center.add_child(card)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
@@ -515,7 +580,8 @@ func _build_journal_popup() -> void:
 	g.add_child(center)
 	_journal_popup = center
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", g._panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
+	card.add_theme_stylebox_override("panel", UIStyle.modal_panel())
+	UIStyle.decorate_frame(card)
 	center.add_child(card)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
@@ -609,18 +675,6 @@ func _build_upgrade_popup() -> void:
 	hint.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 	col.add_child(hint)
 
-	var qty_row := HBoxContainer.new()
-	qty_row.name = "UpQtyRow"
-	qty_row.add_theme_constant_override("separation", 6)
-	qty_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.add_child(qty_row)
-	_up_qty_btns.clear()
-	for q in [1, 10, 100]:
-		var qb := g._small_button("×%d" % q, Vector2(72, 48), 1)
-		qb.pressed.connect(_pick_up_qty.bind(q))
-		qty_row.add_child(qb)
-		_up_qty_btns.append(qb)
-	_sync_up_qty_chips()
 
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(0, 380)
@@ -662,7 +716,8 @@ func _build_prestige_popup() -> void:
 	g.add_child(center)
 	_prestige_popup = center
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", g._panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
+	card.add_theme_stylebox_override("panel", UIStyle.modal_panel())
+	UIStyle.decorate_frame(card)
 	center.add_child(card)
 	var col := VBoxContainer.new()
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -791,19 +846,6 @@ func _do_prestige() -> void:
 	_log_event("Перегонка: +%d Золота мудрецов (всего %d)" % [gain, g._engine.sage_gold])
 	Sfx.legendary()
 
-func _pick_up_qty(q: int) -> void:
-	_up_qty = q
-	_sync_up_qty_chips()
-	_rebuild_up_rows()
-	Sfx.click()
-
-func _sync_up_qty_chips() -> void:
-	var vals := [1, 10, 100]
-	for i in _up_qty_btns.size():
-		var qb: Button = _up_qty_btns[i]
-		if is_instance_valid(qb):
-			qb.modulate = Color.WHITE if vals[i] == _up_qty else Color(1, 1, 1, 0.55)
-
 func _rebuild_up_rows() -> void:
 	if _up_rows == null:
 		return
@@ -881,17 +923,12 @@ func _up_row(u: Dictionary) -> Button:
 		st.text = "максимум"
 		st.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	else:
-		var n := maxi(1, mini(_up_qty, mx - lvl))
-		var cost := 0
-		for k in n:
-			cost += g._engine._up_cost_at(id, lvl + k)
+		var cost := g._engine._up_cost_at(id, lvl)
 		st.text = "Стоимость: %d ⚡" % cost
-		if n > 1:
-			st.text += " за %d шт." % n
 		if id == "ether_regen":
-			st.text += " · итог +%.2f эфир/с" % (0.35 * n)
+			st.text += " · итог +0.35 эфир/с"
 		elif id == "ether_cap":
-			st.text += " · итог +%d к капу" % (50 * n)
+			st.text += " · итог +50 к капу"
 		st.add_theme_color_override("font_color", UIStyle.FLAME if g._engine._available_ether() >= cost else UIStyle.RUBY)
-		b.pressed.connect(g._engine._buy_upgrade.bind(id, n))
+		b.pressed.connect(g._engine._buy_upgrade.bind(id))
 	return b

@@ -47,6 +47,7 @@ func _build(game: Game) -> void:
 
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", UIStyle.modal_panel(UIStyle.BRASS_HI))
+	UIStyle.decorate_frame(panel)
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# Тело между шапкой игры и нижней навигацией — как у экранов ScreenRouter,
 	# иначе кнопка пуска уходит под бар.

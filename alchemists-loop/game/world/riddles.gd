@@ -251,9 +251,9 @@ func _refresh_letters_page() -> void:
 func _letter_card_style(accent: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.14, 0.12, 0.095, 0.97)
-	sb.set_corner_radius_all(12)
+	sb.set_corner_radius_all(2)
 	sb.border_color = accent
-	sb.set_border_width_all(2)
+	sb.set_border_width_all(1)
 	sb.content_margin_left = 12
 	sb.content_margin_right = 12
 	sb.content_margin_top = 10

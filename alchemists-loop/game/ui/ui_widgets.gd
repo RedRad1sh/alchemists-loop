@@ -12,8 +12,8 @@ static func card(accent: Color = UIStyle.LINE, done: bool = false) -> PanelConta
 	if done:
 		bg = Color(UIStyle.PANEL_HI, 0.85)
 		edge = Color(UIStyle.BRASS.r, UIStyle.BRASS.g, UIStyle.BRASS.b, 0.75)
-	var sb := UIStyle.box(bg, Color(edge.r, edge.g, edge.b, 0.65), 12, 1)
-	sb.border_width_left = 4  # цветная полоса слева — быстро читается состояние
+	var sb := UIStyle.box(bg, Color(edge.r, edge.g, edge.b, 0.65), 2, 1)
+	sb.border_width_left = 2  # цветная полоса слева — быстро читается состояние
 	sb.content_margin_left = 12.0
 	sb.content_margin_right = 12.0
 	sb.content_margin_top = 8.0
@@ -116,7 +116,7 @@ static func empty(g: Game, text: String) -> Control:
 ## Информационная плашка-баннер (бонусы, «получен!»).
 static func banner(g: Game, text: String, accent: Color = UIStyle.GOLD) -> Control:
 	var sb := UIStyle.box(Color(accent.r * 0.18, accent.g * 0.18, accent.b * 0.18, 0.9),
-		Color(accent.r, accent.g, accent.b, 0.8), 12, 1)
+		Color(accent.r, accent.g, accent.b, 0.8), 2, 1)
 	sb.content_margin_left = 12.0
 	sb.content_margin_right = 12.0
 	sb.content_margin_top = 8.0

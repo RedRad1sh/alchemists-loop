@@ -1,12 +1,8 @@
 extends RefCounted
 class_name BottomNav
-# Нижний бар навигации (перенос из PR #65): верхний TabBar спрятан, разделы
-# переключает этот бар — он двигает тот же TabContainer, поэтому контракты
-# тестов (current_tab, страницы) не разъезжаются. Балка — деревянный 9-slice
-# tab_rail; активный раздел отличается цветом и латунной полосой под иконкой,
-# а не отдельной накладкой на каждую кнопку.
 
-const NAV_H := 70
+const Kit = preload("res://game/ui/menu_kit.gd")
+const NAV_H := 90
 
 var g: Game
 var bar: PanelContainer = null
@@ -39,26 +35,42 @@ func build(game: Game, parent: Control) -> void:
 	bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	bar.offset_top = -NAV_H
 	bar.offset_bottom = 0
-	# Рейка во всю ширину без торцов: заглушки с заклёпками у краёв экрана
-	# выглядели обрубками (претензия владельца к бокам бара).
-	# Верх контента 15 px: иконки не прилипают к латунной рейке.
-	var rail: StyleBox = UITheme.nine("tab_rail", Vector4(8, 12, 8, 8), Vector4(6, 15, 6, 4))
-	if rail == null:
-		rail = UIStyle.box(Color(0.09, 0.06, 0.04, 0.98), UIStyle.LINE, 0, 1)
+	var s := game.size.x / 360.0
+	bar.offset_top = -58 * s
+	var rail := StyleBoxTexture.new()
+	rail.texture = Kit.texture("09_bottom_dock_bar.png")
+	rail.content_margin_left = 6 * s
+	rail.content_margin_right = 8 * s
+	rail.content_margin_top = 6 * s
+	rail.content_margin_bottom = 4 * s
 	bar.add_theme_stylebox_override("panel", rail)
 	# Фиксированная нижняя панель: событие мира не должно ложиться на неё (док §7).
 	bar.add_to_group("qte_exclusion")
 	parent.add_child(bar)
 	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", roundi(5 * s))
 	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.add_child(hbox)
 	for spec in _specs():
 		var btn := Button.new()
 		var key := String(spec["key"])
 		btn.name = "Nav_" + key
-		btn.flat = true
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		Kit.clear_button(btn)
+		btn.custom_minimum_size = Vector2(74 * s if key == "lab" else 0.0, 39 * s)
+		btn.size_flags_horizontal = Control.SIZE_FILL if key == "lab" else Control.SIZE_EXPAND_FILL
+		var artwork: TextureRect
+		var icon_host: Control = btn
+		if key == "lab":
+			btn.z_index = 1
+			var shield := Control.new()
+			shield.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(shield)
+			shield.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			artwork = Kit.glow_artwork(shield, "11_bottom_cauldron_shield.png")
+			icon_host = shield
+		else:
+			artwork = Kit.glow_artwork(btn, "10_bottom_tab_button.png")
+		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		btn.tooltip_text = String(spec["label"])
 		var vbox := VBoxContainer.new()
 		vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -66,14 +78,15 @@ func build(game: Game, parent: Control) -> void:
 		# Button — не контейнер: без якорей VBox встаёт в левый верх ячейки и подпись
 		# с иконкой липнут к левому краю вместо центра.
 		vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		btn.add_child(vbox)
+		icon_host.add_child(vbox)
 		var ic := CenterContainer.new()
 		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		ic.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		vbox.add_child(ic)
-		var icon := UIIcon.make(String(spec["icon"]), 26, UIStyle.TEXT_DIM)
+		var icon := UIIcon.make(String(spec["icon"]), roundi((24 if key == "lab" else 19) * s), Color("e2bc80"))
 		ic.add_child(icon)
 		var mark_box := CenterContainer.new()
+		mark_box.visible = false
 		mark_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		vbox.add_child(mark_box)
 		var mark := ColorRect.new()
@@ -81,19 +94,25 @@ func build(game: Game, parent: Control) -> void:
 		mark.custom_minimum_size = Vector2(24, 3)
 		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		mark_box.add_child(mark)
-		var lb := Label.new()
-		lb.text = String(spec["label"])
-		lb.add_theme_font_size_override("font_size", 11)
-		lb.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
-		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		vbox.add_child(lb)
 		btn.pressed.connect(_on_pressed.bind(key))
-		hbox.add_child(btn)
+		if key == "lab":
+			var slot := Control.new()
+			slot.custom_minimum_size = Vector2(74, 39) * s
+			slot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			hbox.add_child(slot)
+			slot.add_child(btn)
+			btn.custom_minimum_size = Vector2.ZERO
+			btn.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+			btn.offset_left = -32 * s
+			btn.offset_right = 32 * s
+			btn.offset_top = -73 * s
+			btn.offset_bottom = 2 * s
+		else:
+			hbox.add_child(btn)
 		if key == "friends":
 			# Счётчик непрочитанного и заявок — бейдж на самой иконке; его
 			# правит core._refresh_header через g._social_btn.
-			var badge := UIStyle.count_badge()
+			var badge := Kit.wax_badge()
 			btn.add_child(badge)
 			# Правый верхний угол иконки: от центра ячейки, а не от её края.
 			badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
@@ -103,7 +122,7 @@ func build(game: Game, parent: Control) -> void:
 			badge.offset_bottom = 17
 			g._social_btn = btn
 		var item := {"key": key, "tab": int(spec["tab"]), "btn": btn,
-				"icon": icon, "mark": mark, "label": lb, "hover": false}
+				"icon": icon, "mark": mark, "artwork": artwork, "hover": false}
 		btn.mouse_entered.connect(_on_hover.bind(item, true))
 		btn.mouse_exited.connect(_on_hover.bind(item, false))
 		_items.append(item)
@@ -158,9 +177,9 @@ func _paint(it: Dictionary, active_tab: int) -> void:
 	var active := _is_active(it, active_tab)
 	var hot: bool = bool(it.get("hover", false)) and not active
 	var col: Color = UIStyle.BRASS_HI if active else (HOVER_ICON if hot else UIStyle.TEXT_DIM)
-	(it["icon"] as TextureRect).modulate = col
-	(it["label"] as Label).add_theme_color_override("font_color",
-			UIStyle.CREAM if active or hot else UIStyle.TEXT_DIM)
+	(it["icon"] as TextureRect).modulate = Color("ffe5a3") if active else col
+	var material := (it["artwork"] as TextureRect).material as ShaderMaterial
+	material.set_shader_parameter("active_amount", 1.0 if active else 0.0)
 	var mark := Color(0, 0, 0, 0)
 	if active:
 		mark = UIStyle.BRASS

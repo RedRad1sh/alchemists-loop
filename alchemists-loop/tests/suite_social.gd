@@ -204,7 +204,7 @@ static func _screen(g: Game) -> void:
 	if ui == null or ui._screen == null:
 		return
 	Selftest.check("social screen hidden", not ui._screen.visible)
-	Selftest.check("social screen z20 group", ui._screen.z_index == 20
+	Selftest.check("social section stays below dock and remains dismissible", ui._screen.z_index < g._bottom_nav.bar.z_index
 		and ui._screen.is_in_group("modal_ui"))
 	g._social._seed_demo()
 	ui.open(0)

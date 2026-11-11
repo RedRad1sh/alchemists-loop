@@ -28,6 +28,8 @@ var _netexperiment_started := false
 var _net_enabled := false
 var _device_id := ""
 var _net_nick := Game.NET_NICK
+var _avatar_gender := ""
+var _avatar_specs: Dictionary = {}
 var _challenge_avatar: Avatar = null
 var _server_layers: Dictionary = {}
 var _server_elements: Dictionary = {}
@@ -214,6 +216,7 @@ func _render_rating_rows(result: Dictionary) -> void:
 		var rl := g._label("#%d" % rank, 15)
 		rl.custom_minimum_size = Vector2(40, 0)
 		row.add_child(rl)
+		_remember_avatar(nick, d.get("avatar"))
 		row.add_child(g._make_avatar(nick, 20))
 		var v := VBoxContainer.new()
 		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -245,6 +248,7 @@ func _on_net_house_result(result: Dictionary) -> void:
 	# p3 (батч 4): задержанный ответ ЗА другой домик не должен перетирать тот,
 	# что игрок уже смотрит.
 	var nick := g._clean_str(result.get("nick", ""))
+	_remember_avatar(nick, result.get("avatar"))
 	if g._home._house_popup == null or not g._home._house_popup.visible:
 		return
 	if nick != "" and nick != g._home._house_popup_nick:
@@ -584,6 +588,7 @@ func _experiment_outcome(out: Dictionary, a: String, b: String, created: bool = 
 	else:
 		g._spirit._companion_react_discovery(slug)
 	_server_authors[slug] = g._clean_str(out.get("author", _net_nick))
+	_remember_avatar(_server_authors[slug], out.get("avatar"))
 	_rebuild_world_grid()
 	g._show_discovery_popup(slug, a, b, first_milestones)
 	g._saves._save_game()
@@ -624,6 +629,7 @@ func _on_net_pair_result(pair_key: String, result: Dictionary) -> void:
 			var world_author := g._clean_str((result.get("out", {}) as Dictionary).get("author", ""))
 			if world_author != "":
 				_server_authors[slug] = world_author
+				_remember_avatar(world_author, (result.get("out", {}) as Dictionary).get("avatar"))
 			_set_status("Эта пара уже открыта в мире: %s!" % _item_name(slug))
 			_rebuild_world_grid()
 			g._engine._refresh()
@@ -724,6 +730,7 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 				g._contracts._vein_report_pair(a, b, slug)
 			var author := g._clean_str(disc.get("author", _net_nick))
 			_server_authors[slug] = author
+			_remember_avatar(author, disc.get("avatar"))
 			if status == "created" and not reused:
 				_set_status("ПЕРВООТКРЫТИЕ: %s (автор: %s)!" % [_item_name(slug), author])
 				g._spirit._companion_react("world_first", _item_name(slug))
@@ -962,6 +969,8 @@ func _forget_net_identity() -> void:
 	_net_enabled = false
 	_device_id = ""
 	_net_nick = ""
+	_avatar_gender = ""
+	_avatar_specs.clear()
 
 func _retry_pending_account_delete(net: Object = null) -> void:
 	if net == null:
@@ -994,6 +1003,7 @@ func _on_net_world_result(result: Dictionary) -> void:
 		var slug := _apply_server_element(e)
 		if slug != "" and typeof(e) == TYPE_DICTIONARY:
 			_server_authors[slug] = g._clean_str((e as Dictionary).get("author", ""))
+			_remember_avatar(_server_authors[slug], (e as Dictionary).get("avatar"))
 	print("NETWORLD page=", page, " total=", total, " got=", elements.size(), " local=", g.ITEMS.size())
 	# дотягиваем остальные страницы (сервер отдаёт до 100 за запрос)
 	if page * per_page < total:
@@ -1202,6 +1212,7 @@ func _on_net_events_result(result: Dictionary) -> void:
 		var txt := "%s открыл «%s» (%s) · %s" % [who, out_name, parts, _ago_text(ago)]
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
+		_remember_avatar(nick, d.get("avatar"))
 		row.add_child(g._make_avatar(nick, 18))
 		var lbl := g._label(txt, 12)
 		lbl.add_theme_color_override("font_color", Color(0.62, 0.74, 0.82))
@@ -1221,7 +1232,8 @@ func _on_net_challenge_result(result: Dictionary) -> void:
 	var my_points := int(result.get("my_points", 0))
 	if first_nick != "":
 		_challenge_avatar.visible = true
-		_challenge_avatar.setup(first_nick, 20)
+		_remember_avatar(first_nick, result.get("first_avatar"))
+		_challenge_avatar.setup_spec(avatar_spec(first_nick), 20)
 		_challenge_label.text = "Цель дня: %s · выполнено: %d · первый: %s" % [hint, completions, first_nick]
 	else:
 		_challenge_avatar.visible = false
@@ -1278,6 +1290,7 @@ func _on_net_hall_result(result: Dictionary) -> void:
 		rk.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		rk.custom_minimum_size = Vector2(26, 0)
 		row.add_child(rk)
+		_remember_avatar(nick, d.get("avatar"))
 		row.add_child(g._make_avatar(nick, 20))
 		var lb := g._label("%s — %d" % [nick, cnt], 14)
 		lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1359,12 +1372,10 @@ func _build_event_qte() -> void:
 	_event_card.size = Vector2(104, 112)
 	_event_card.mouse_filter = Control.MOUSE_FILTER_STOP
 	var bubble_panel := StyleBoxFlat.new()
-	bubble_panel.bg_color = Color(0.06, 0.10, 0.17, 0.96)
-	bubble_panel.border_color = Color(1.0, 0.78, 0.28, 0.95)
-	bubble_panel.set_border_width_all(2)
+	bubble_panel.bg_color = UIStyle.WOOD_DEEP
+	bubble_panel.border_color = UIStyle.BRASS_DIM
+	bubble_panel.set_border_width_all(1)
 	bubble_panel.set_corner_radius_all(52)
-	bubble_panel.shadow_color = Color(0.95, 0.62, 0.18, 0.28)
-	bubble_panel.shadow_size = 9
 	_event_card.add_theme_stylebox_override("panel", bubble_panel)
 	_event_qte.add_child(_event_card)
 
@@ -1383,18 +1394,16 @@ func _build_event_qte() -> void:
 	_event_btn.tooltip_text = "Быстрая реакция: нажми на пузырёк"
 	_event_btn.pressed.connect(_on_event_tap)
 	var bubble_normal := StyleBoxFlat.new()
-	bubble_normal.bg_color = Color(1.0, 0.62, 0.16, 0.98)
-	bubble_normal.border_color = Color(1.0, 0.91, 0.47, 1.0)
-	bubble_normal.set_border_width_all(2)
+	bubble_normal.bg_color = UIStyle.PAPER
+	bubble_normal.border_color = UIStyle.PAPER_HI
+	bubble_normal.set_border_width_all(1)
 	bubble_normal.set_corner_radius_all(39)
-	bubble_normal.shadow_color = Color(1.0, 0.68, 0.2, 0.38)
-	bubble_normal.shadow_size = 7
 	_event_btn.add_theme_stylebox_override("normal", bubble_normal)
 	var bubble_hover := bubble_normal.duplicate() as StyleBoxFlat
-	bubble_hover.bg_color = Color(1.0, 0.75, 0.28, 1.0)
+	bubble_hover.bg_color = UIStyle.PAPER.lightened(0.08)
 	_event_btn.add_theme_stylebox_override("hover", bubble_hover)
 	var bubble_pressed := bubble_normal.duplicate() as StyleBoxFlat
-	bubble_pressed.bg_color = Color(0.88, 0.42, 0.10, 1.0)
+	bubble_pressed.bg_color = UIStyle.PAPER.darkened(0.08)
 	_event_btn.add_theme_stylebox_override("pressed", bubble_pressed)
 	_event_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	col.add_child(_event_btn)
@@ -1810,14 +1819,8 @@ func _toast(text: String, kind: int = NoticeKind.INFO, duration := 3.0,
 	panel.custom_minimum_size = Vector2(300, 52)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.modulate = Color(1, 1, 1, 0)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.055, 0.075, 0.11, 0.97)
-	style.border_color = accent
-	style.set_border_width_all(1)
-	style.border_width_left = 4
-	style.set_corner_radius_all(10)
-	style.shadow_color = Color(0, 0, 0, 0.35)
-	style.shadow_size = 8
+	var style := UIStyle.box(Color(UIStyle.WOOD_DEEP, 0.97), accent, 2, 1)
+	style.border_width_left = 2
 	panel.add_theme_stylebox_override("panel", style)
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 14)
@@ -1900,13 +1903,7 @@ func _build_network_badge() -> void:
 	_network_badge.offset_bottom = 66.0
 	_network_badge.visible = false
 	_network_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.10, 0.16, 0.96)
-	style.border_color = Color(0.35, 0.66, 0.95, 0.8)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(12)
-	style.shadow_color = Color(0, 0, 0, 0.3)
-	style.shadow_size = 6
+	var style := UIStyle.panel()
 	_network_badge.add_theme_stylebox_override("panel", style)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -1916,12 +1913,12 @@ func _build_network_badge() -> void:
 	_network_badge_spinner = Label.new()
 	_network_badge_spinner.text = "◐"
 	_network_badge_spinner.add_theme_font_size_override("font_size", 18)
-	_network_badge_spinner.add_theme_color_override("font_color", Color("#79baff"))
+	_network_badge_spinner.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	row.add_child(_network_badge_spinner)
 	_network_badge_label = Label.new()
 	_network_badge_label.text = "Мир изучает сочетание…"
 	_network_badge_label.add_theme_font_size_override("font_size", 14)
-	_network_badge_label.add_theme_color_override("font_color", Color("#dcecff"))
+	_network_badge_label.add_theme_color_override("font_color", UIStyle.CREAM)
 	row.add_child(_network_badge_label)
 	_ux_layer.add_child(_network_badge)
 
@@ -1965,3 +1962,13 @@ func _update_network_badge(delta: float) -> void:
 	var base := "Мир проводит эксперимент" if bool(entry.get("experiment", false)) \
 		else "Мир проверяет сочетание"
 	_network_badge_label.text = "%s · %d с" % [base, elapsed]
+
+func _remember_avatar(nick: String, raw: Variant) -> void:
+	if nick == "" or not raw is Dictionary or not raw.has("archetype"):
+		return
+	_avatar_specs[nick] = Avatar.Portrait.normalized(raw)
+
+func avatar_spec(nick: String) -> Dictionary:
+	if nick == _net_nick:
+		return Avatar.spec_for(nick, _avatar_gender)
+	return _avatar_specs.get(nick, Avatar.spec_for(nick))

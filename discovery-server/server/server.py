@@ -22,13 +22,14 @@ import time
 import unicodedata
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Literal
 
 import sqlite3
 
 # seed.py лежит рядом с server.py и содержит стартовый граф веществ.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import seed
+from avatar import portrait_spec
 import gen_llm
 from gen_llm import GLYPH_PARAM, GLYPHS, LLMGenerator, LLMError, TAGS, is_glyph
 
@@ -473,6 +474,7 @@ class HealthResponse(BaseModel):
 class ProfileRequest(BaseModel):
     device_id: str = Field(..., min_length=1, max_length=128, description="Уникальный ID устройства")
     nick: str = Field("", max_length=64, description="Ник игрока (2..24 символа после очистки)")
+    avatar_gender: Optional[Literal["male", "female"]] = None
 
 class HouseGuest(BaseModel):
     nick: str
@@ -705,6 +707,7 @@ class TradeListResponse(BaseModel):
 
 
 class ProfileResponse(BaseModel):
+    avatar_gender: str = ""
     ok: bool
     nick: str
     device_id: str
@@ -1350,6 +1353,8 @@ def init_db():
             conn.execute("ALTER TABLE players ADD COLUMN house_updated_at TEXT")
         if "last_seen" not in pcols:
             conn.execute("ALTER TABLE players ADD COLUMN last_seen TEXT")
+        if "avatar_gender" not in pcols:
+            conn.execute("ALTER TABLE players ADD COLUMN avatar_gender TEXT")
 
         # миграция challenges: winner_* → first_* (личная цель вместо гонки)
         ccols = {r["name"] for r in conn.execute("PRAGMA table_info(challenges)").fetchall()}
@@ -1911,35 +1916,11 @@ def _hash_to_int(s: str, mod: int) -> int:
     h = int(hashlib.sha256(s.encode("utf-8")).hexdigest(), 16)
     return h % mod
 
-# Палитра аватаров (10 цветов) — совпадает с game/avatar.gd на клиенте.
-# Палитра построена по цветовому кругу (10 оттенков через 36°, S≈0.47/V≈0.80) —
-# совпадает с game/avatar.gd на клиенте.
-AVATAR_PALETTE = [
-    "#cc6c6c", "#cca66c", "#b9cc6c", "#7fcc6c", "#6ccc92",
-    "#6ccccc", "#6c92cc", "#7f6ccc", "#b96ccc", "#cc6ca6",
-]
-
-def avatar_for(seed: str) -> dict:
-    """Детерминированный процедурный аватар из строки-сида (ник игрока).
-
-    Клиент (game/avatar.gd) реализует ТОТ ЖЕ алгоритм, поэтому аватар,
-    посчитанный сервером, совпадает с локальной отрисовкой. Возвращает
-    словарь {bg, accent, sym, ring}: цвета из палитры, индекс символа 0..11,
-    флаг внешнего кольца.
-    """
-    h = hashlib.sha256(("avatar_" + (seed or "")).encode("utf-8")).digest()
-    bg_idx = h[0] % len(AVATAR_PALETTE)
-    # split-complementary: акцент на 4..6 позиций (144°..180°) от фона,
-    # чтобы символ/кольцо контрастировали и не сливались с фоном.
-    accent_idx = (bg_idx + 4 + h[1] % 3) % len(AVATAR_PALETTE)
-    sym = h[2] % 12
-    ring = bool(h[3] & 1)
-    return {
-        "bg": AVATAR_PALETTE[bg_idx],
-        "accent": AVATAR_PALETTE[accent_idx],
-        "sym": sym,
-        "ring": ring,
-    }
+def avatar_for(seed: str, gender: str | None = None, *, conn=None) -> dict:
+    if gender is None and conn is not None:
+        row = conn.execute("SELECT avatar_gender FROM players WHERE nick = ?", (seed,)).fetchone()
+        gender = row["avatar_gender"] if row else None
+    return portrait_spec(seed or "", gender if gender in ("male", "female") else "male")
 
 def clean_nick(raw: str) -> str:
     """Нормализация ника: обрезка, схлопывание пробелов, только буквы/цифры/
@@ -3208,7 +3189,7 @@ def _known_discovery(conn: sqlite3.Connection, recipe_row, pair_key: str, a: str
             created_at=out_row["created_at"], tag=out_row["tag"],
         ),
         already_known=True,
-        avatar=avatar_for(out_row["author"]) if out_row["author"] else None,
+        avatar=avatar_for(out_row["author"], conn=conn) if out_row["author"] else None,
         message=(
             f"Пара {a}+{b} уже открыта {discoverer}"
             if discoverer
@@ -3274,7 +3255,7 @@ def _link_existing(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, row, de
         id=row["id"], slug=row["slug"], name=row["name"], color=row["color"],
         layer=row["layer"], category=row["category"], glyph=row["glyph"], d=row["d"],
         pair_key=pair_key, a=a_slug, b=b_slug, author=row["author"],
-        avatar=avatar_for(row["author"]) if row["author"] else None,
+        avatar=avatar_for(row["author"], conn=conn) if row["author"] else None,
         seq=(seq_row[0] if seq_row else 0), created_at=row["created_at"],
         gen_method="linked", reused=True, tag=row["tag"] if "tag" in row.keys() else "",
     )
@@ -3313,7 +3294,7 @@ def _materialize(conn, a_slug, b_slug, a_info, b_info, pair_key, nick, name, cat
     return DiscoveryData(
         id=element_id, slug=slug, name=name, color=color, layer=layer,
         category=category, glyph=glyph, d=d, pair_key=pair_key, a=a_slug, b=b_slug,
-        author=nick, avatar=avatar_for(nick), seq=(seq_row[0] if seq_row else 0),
+        author=nick, avatar=avatar_for(nick, conn=conn), seq=(seq_row[0] if seq_row else 0),
         created_at=created_at, gen_method=gen_method, tag=tag,
     )
 
@@ -4000,7 +3981,7 @@ def world(
                 glyph=r["glyph"],
                 d=r["d"],
                 author=r["author"],
-                avatar=avatar_for(r["author"]) if r["author"] else None,
+                avatar=avatar_for(r["author"], conn=conn) if r["author"] else None,
                 created_at=r["created_at"],
             )
             for r in rows
@@ -4045,7 +4026,7 @@ def hall_of_fame():
             HallEntry(
                 rank=i + 1,
                 nick=r["nick"],
-                avatar=avatar_for(r["nick"]),
+                avatar=avatar_for(r["nick"], conn=conn),
                 count=r["count"],
                 updated_at=r["updated_at"],
             )
@@ -4086,7 +4067,7 @@ def events(limit: int = Query(20, ge=1, le=100)):
                 "a_name": r["a_name"] or "", "b_name": r["b_name"] or "",
                 "out": r["out"], "out_name": r["out_name"],
                 "discoverer": r["discoverer"],
-                "avatar": avatar_for(r["discoverer"]) if r["discoverer"] else None,
+                "avatar": avatar_for(r["discoverer"], conn=conn) if r["discoverer"] else None,
                 "created_at": r["created_at"],
                 "ago_sec": ago,
             })
@@ -4140,7 +4121,7 @@ def challenge(device_id: str = Query("", max_length=128)):
             ok=True, day=ch["day"], target=ch["target"],
             target_name=ch["target_name"], hint=ch["hint"],
             first_nick=first,
-            first_avatar=avatar_for(first) if first else None,
+            first_avatar=avatar_for(first, conn=conn) if first else None,
             completions=completions,
             my_points=my_points,
             my_points_total=my_points_total,
@@ -4174,11 +4155,12 @@ def get_me(device_id: str = Query(..., min_length=1, max_length=128),
     conn = get_db()
     try:
         row = conn.execute(
-            "SELECT nick FROM players WHERE device_id = ?", (device_id,)
+            "SELECT nick, avatar_gender FROM players WHERE device_id = ?", (device_id,)
         ).fetchone()
         nick = row["nick"] if row else ""
         return ProfileResponse(
-            ok=True, nick=nick, device_id=device_id, avatar=avatar_for(nick or device_id),
+            ok=True, nick=nick, device_id=device_id, avatar=avatar_for(nick or device_id, conn=conn),
+            avatar_gender=(row["avatar_gender"] or "") if row else "",
             house_visits_week=_visits_week(conn, device_id),
             house_visitors=_guest_list(conn, device_id, limit_guests),
         )
@@ -4224,6 +4206,8 @@ def set_me(req: ProfileRequest):
         except sqlite3.IntegrityError:
             # гонка: ник заняли между проверкой и записью
             raise HTTPException(status_code=400, detail="Ник уже занят")
+        if req.avatar_gender is not None:
+            conn.execute("UPDATE players SET avatar_gender = ? WHERE device_id = ?", (req.avatar_gender, device))
         if old and old["nick"] and old["nick"] != nick:
             # перепривязка легаси-авторства (author_device ещё не заполнен)
             conn.execute(
@@ -4242,7 +4226,8 @@ def set_me(req: ProfileRequest):
         # до следующего GET-синка. 8 — дефолт limit_guests из GET /api/me
         # (POST параметров запроса не несёт).
         return ProfileResponse(
-            ok=True, nick=nick, device_id=device, avatar=avatar_for(nick),
+            ok=True, nick=nick, device_id=device, avatar=avatar_for(nick, conn=conn),
+            avatar_gender=conn.execute("SELECT avatar_gender FROM players WHERE device_id = ?", (device,)).fetchone()[0] or "",
             house_visits_week=_visits_week(conn, device),
             house_visitors=_guest_list(conn, device, 8),
         )
@@ -4439,7 +4424,7 @@ def _guest_list(conn: sqlite3.Connection, host_device: str, limit: int = 10) -> 
         "ORDER BY hv.day DESC, hv.visitor_device ASC LIMIT ?",
         (host_device, since, limit),
     ).fetchall()
-    return [HouseGuest(nick=r["nick"], avatar=avatar_for(r["nick"]), day=r["day"]) for r in rows]
+    return [HouseGuest(nick=r["nick"], avatar=avatar_for(r["nick"], conn=conn), day=r["day"]) for r in rows]
 
 
 @app.post("/api/house", response_model=HouseResponse)
@@ -4458,7 +4443,7 @@ def save_house(req: HouseRequest):
             (house_json, _now_iso(), req.device_id),
         )
         conn.commit()
-        return HouseResponse(ok=True, nick=nick, avatar=avatar_for(nick), house=req.house)
+        return HouseResponse(ok=True, nick=nick, avatar=avatar_for(nick, conn=conn), house=req.house)
     finally:
         conn.close()
 
@@ -4597,7 +4582,7 @@ def get_house(nick: str = Query(..., min_length=1, max_length=64)):
             "SELECT nick, device_id, house FROM players WHERE nick = ? ORDER BY id DESC LIMIT 1", (nick,)
         ).fetchone()
         if not row:
-            return HouseResponse(ok=True, nick=nick, avatar=avatar_for(nick), house=None, found=False)
+            return HouseResponse(ok=True, nick=nick, avatar=avatar_for(nick, conn=conn), house=None, found=False)
         house = None
         if row["house"]:
             try:
@@ -4605,7 +4590,7 @@ def get_house(nick: str = Query(..., min_length=1, max_length=64)):
             except ValueError:
                 house = None
         return HouseResponse(
-            ok=True, nick=row["nick"], avatar=avatar_for(row["nick"]), house=house,
+            ok=True, nick=row["nick"], avatar=avatar_for(row["nick"], conn=conn), house=house,
             visits_week=_visits_week(conn, row["device_id"]),
         )
     finally:
@@ -4627,14 +4612,14 @@ def _social_peer(conn: sqlite3.Connection, device_id: str) -> SocialPeer:
         # констант, как уже сделано в inbox. Без этой ветки peer в ответе по
         # дух-ребру возвращал nick: "".
         return SocialPeer(device_id=device_id, nick=SPIRIT_NICK,
-                          avatar=avatar_for(SPIRIT_NICK))
+                          avatar={"kind": "spirit"})
     row = conn.execute(
         "SELECT nick, last_seen FROM players WHERE device_id = ?", (device_id,)
     ).fetchone()
     if row is None:
-        return SocialPeer(device_id=device_id, nick="", avatar=avatar_for(device_id))
+        return SocialPeer(device_id=device_id, nick="", avatar=avatar_for(device_id, conn=conn))
     return SocialPeer(device_id=device_id, nick=row["nick"],
-                      avatar=avatar_for(row["nick"]), last_seen=row["last_seen"] or "")
+                      avatar=avatar_for(row["nick"], conn=conn), last_seen=row["last_seen"] or "")
 
 
 def _social_blocked(conn: sqlite3.Connection, a: str, b: str) -> bool:
@@ -5814,7 +5799,7 @@ def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
                              else "")
             friends.append(InboxFriend(
                 device_id=peer, nick=nick,
-                avatar=avatar_for(nick or peer),
+                avatar={"kind": "spirit"} if peer == SPIRIT_DEVICE else avatar_for(nick or peer, conn=conn),
                 last_seen=last_seen,
                 unread=unread,
                 last_msg_at=(last["sent_at"] if last is not None else ""),
@@ -5823,7 +5808,7 @@ def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
             row = showcase.get(peer)
             nick = row["nick"] if row is not None else ""
             incoming.append(InboxRequest(
-                device_id=peer, nick=nick, avatar=avatar_for(nick or peer),
+                device_id=peer, nick=nick, avatar=avatar_for(nick or peer, conn=conn),
                 last_seen=(row["last_seen"] if row is not None and row["last_seen"] else ""),
                 requested_at=at))
         for peer, at in outgoing_dev.items():
@@ -6350,7 +6335,7 @@ def rating(device_id: str = Query("", max_length=128)):
         ).fetchall()
         built = [
             RatingRow(
-                rank=i + 1, nick=r["nick"], avatar=avatar_for(r["nick"]),
+                rank=i + 1, nick=r["nick"], avatar=avatar_for(r["nick"], conn=conn),
                 discoveries=r["discoveries"], elements=r["elements"],
                 points=r["points"], house_built=bool(r["house"]),
                 house_guests=r["house_guests"],

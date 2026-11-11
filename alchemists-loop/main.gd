@@ -372,6 +372,7 @@ var _screens: ScreenRouter = null  # полноэкранные экраны м�
 # interstitial в _on_tab_changed допускается только после достройки (true
 # выставляется в конце _build_ui).
 var _ui_ready := false
+var _hud: RefCounted
 var _source_col: HBoxContainer
 var _popup: Control
 var _popup_dim: ColorRect = null
@@ -822,7 +823,7 @@ func _ready() -> void:
 	# визит-днём теперь считается день, в который закрыт дневной контракт
 	# (Contracts.claim → track_visit).
 	if not _selftest and _online._net_enabled:
-		Net.me(_online._net_nick, _online._device_id)
+		Net.me_get(_online._device_id)
 		# S1: пулл инбокса при входе — сразу после me; до ответа шапку держит кэш.
 		Net.social_inbox(_online._device_id)
 		# boot-пакет: первый sync после загрузки сейва (union-рековери грантов).
@@ -1538,100 +1539,8 @@ func _build_ui() -> void:
 	root.set_size(margin.size)
 	call_deferred("_fit_ui_root_after_layout", margin, root)
 
-	# шапка
-	var head := HBoxContainer.new()
-	head.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	root.add_child(head)
-	# Заголовок игры — рунический display-шрифт: это логотип, а не заголовок
-	# раздела. 19 px, а не 22-24: при ширине 540 px ряд из шести кнопок 46×46
-	# оставляет заголовку ~216 px, а рунический в 22 px требует 235 px и при
-	# AUTOWRAP_WORD_SMART уезжает на две строки; в 19 px это 203 px.
-	var title := _label("ПЕТЛЯ АЛХИМИКА", 15)
-	title.autowrap_mode = TextServer.AUTOWRAP_OFF
-	title.clip_text = true
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if _font_runic != null:
-		title.add_theme_font_override("font", _font_runic)
-	elif _font_xbold != null:
-		title.add_theme_font_override("font", _font_xbold)
-	title.add_theme_color_override("font_color", UIStyle.CREAM)
-	# Вывеска: заголовок на латунной плашке. Поля контента узкие (10/4), а не
-	# 36/12 набора: в шапке 46 px по высоте и ~216 px по ширине.
-	var title_plate := PanelContainer.new()
-	title_plate.name = "TitlePlaque"
-	title_plate.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_plate.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	# Поля 16 по бокам — за заклёпками в углах; надпись по центру, а не у края.
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	var plate_sb := UITheme.nine("plaque_title", Vector4(20, 16, 20, 16), Vector4(16, 7, 16, 7))
-	if plate_sb != null:
-		title_plate.add_theme_stylebox_override("panel", plate_sb)
-	title_plate.add_child(title)
-	head.add_child(title_plate)
-	# Ряд шапки — одинаковые квадраты 46×46 с иконками Atheneum 24 px. Размер
-	# задала таро-кнопка Аркана (спека: строго квадратная 46×46); остальные были
-	# 46×36, поэтому ряд шёл рваным по высоте, а аватар жил в своей 9-slice
-	# текстуре вместо общего UIStyle-хрома.
-	# Вся шапка — один материал: тёмное дерево с латунной иконкой. Раньше часть
-	# кнопок была светлой латунью без смысла за этим (претензия владельца);
-	# внимание теперь даёт только бейдж-счётчик, а не цвет плашки.
-	var quests_btn := _icon_row_button("gi_quests", "Задания Светика, достижения, комплекты, заказы")
-	quests_btn.pressed.connect(_progress_ui._open_progress_popup)
-	head.add_child(quests_btn)
-	# Счётчик доступных улучшений — бейдж на иконке (core._refresh_header), а не
-	# текст рядом с ней: Button.icon рисовался в натуральную величину SVG и
-	# вылезал за кнопку.
-	_hub._up_btn = _icon_row_button("gi_upgrade", "Улучшения")
-	_hub._up_btn.add_child(UIStyle.count_badge())
-	_place_badge(_hub._up_btn)
-	_hub._up_btn.pressed.connect(_hub._open_upgrades)
-	head.add_child(_hub._up_btn)
-	var me_btn := _header_button(0)
-	me_btn.tooltip_text = "Профиль: твоё имя и аватар"
-	me_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	me_btn.pressed.connect(_hub._open_profile)
-	var cc := CenterContainer.new()
-	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	me_btn.add_child(cc)
-	_me_avatar = _make_avatar(_online._net_nick, 24)
-	cc.add_child(_me_avatar)
-	head.add_child(me_btn)
-
-	var ether_row := HBoxContainer.new()
-	ether_row.name = "EtherRow"
-	ether_row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	ether_row.add_theme_constant_override("separation", 8)
-	root.add_child(ether_row)
-	_engine._ether_label = _label("", 14)
-	_engine._ether_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_engine._ether_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_engine._ether_label.clip_text = true
-	ether_row.add_child(_engine._ether_label)
-	# Ряд эфира — те же иконочные кнопки, что в шапке. Сверху всё открывается
-	# на весь экран или модалкой поверх всего: Дом, Лавка, Аркан Сигилов.
-	# Друзья — нижний раздел (BottomNav), их бейдж живёт там.
-	var home_btn := _icon_row_button("gi_house",
-		"Дом Светика: построй домик, обставь его, смени тему и ауру")
-	home_btn.name = "HouseEntry"
-	home_btn.pressed.connect(_home._open_workshop)
-	ether_row.add_child(home_btn)
-	var market_btn := _icon_row_button("gi_shop", "Лавка: покупки, награды за просмотр и приватность")
-	market_btn.name = "ShopBtn"
-	market_btn.pressed.connect(_shop.open)
-	ether_row.add_child(market_btn)
-	_engine._collection_label = _label("", 14)
-	_engine._collection_label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	root.add_child(_engine._collection_label)
-	_guild._quest_label = Button.new()
-	_guild._quest_label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	_guild._quest_label.flat = true
-	_guild._quest_label.add_theme_font_size_override("font_size", 13)
-	_guild._quest_label.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_guild._quest_label.tooltip_text = "Нажми, чтобы открыть задания и достижения"
-	_guild._quest_label.pressed.connect(_progress_ui._open_progress_popup)
-	root.add_child(_guild._quest_label)
+	_hud = load("res://game/ui/compact_hud.gd").new()
+	_hud.build(self, root)
 
 	var tabs := TabContainer.new()
 	tabs.name = "Tabs"
@@ -1827,6 +1736,8 @@ func _build_brew_bar() -> void:
 	srow.add_child(_engine._auto_stop_btn)
 
 func _on_tab_changed(index: int) -> void:
+	if _hud != null:
+		_hud.tab_changed(index)
 	_update_brew_bar_visibility()
 	_spirit._refresh_companion_visible()
 	if _bottom_nav != null:
@@ -1937,7 +1848,7 @@ func _make_orb(item_id: String, size_px: int) -> ElementOrb:
 
 func _make_avatar(seed: String, size_px: float) -> Avatar:
 	var av := Avatar.new()
-	av.setup(seed, size_px)
+	av.setup_spec(_online.avatar_spec(seed), size_px)
 	av.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return av
 

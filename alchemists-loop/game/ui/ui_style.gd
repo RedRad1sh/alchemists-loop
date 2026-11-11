@@ -75,6 +75,32 @@ static func box(bg: Color, border: Color, radius: int, border_w: int = 1) -> Sty
 	return sb
 
 
+static func decorate_frame(panel_node: Control) -> void:
+	if panel_node.has_node("FrameCrest"):
+		return
+	var overlay := Node2D.new()
+	overlay.name = "FrameCrest"
+	panel_node.add_child(overlay, false, Node.INTERNAL_MODE_BACK)
+	var crest := TextureRect.new()
+	crest.texture = UIIcon.texture("frame_crest")
+	crest.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	crest.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	crest.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	crest.modulate = BRASS_HI
+	crest.size = Vector2(70, 20)
+	overlay.add_child(crest)
+	var place := func() -> void:
+		crest.position = Vector2((panel_node.size.x - crest.size.x) * 0.5, 8)
+	panel_node.resized.connect(place)
+	place.call()
+
+
+static func focus_ring() -> StyleBoxFlat:
+	var sb := box(Color.TRANSPARENT, PAPER_HI, 2, 1)
+	sb.set_expand_margin_all(2.0)
+	return sb
+
+
 static func _margins(sb: StyleBox, l: float, t: float, r: float, b: float) -> void:
 	sb.content_margin_left = l
 	sb.content_margin_top = t
@@ -88,12 +114,12 @@ static func _margins(sb: StyleBox, l: float, t: float, r: float, b: float) -> vo
 ## в сигнатуре ради 54 вызовов; материал теперь задаёт текстура.
 static func panel(_bg: Color = PANEL, _radius: int = 16,
 		_border: Color = LINE) -> StyleBoxTexture:
-	return UITheme.nine("frame_panel", Vector4(20, 20, 20, 20), Vector4(12, 10, 12, 10))
+	return UITheme.nine("frame_panel", Vector4(20, 20, 20, 20), Vector4(20, 18, 20, 18))
 
 
 ## Модалка: самая нарядная рама набора.
 static func modal_panel(_accent: Color = GOLD) -> StyleBoxTexture:
-	return UITheme.nine("frame_modal", Vector4(34, 34, 34, 34), Vector4(18, 16, 18, 16))
+	return UITheme.nine("frame_modal", Vector4(34, 34, 34, 34), Vector4(28, 40, 28, 28))
 
 
 ## Поле Эксперимента: мягкая тёмная вуаль с тонкой латунной кромкой поверх
@@ -140,7 +166,7 @@ static func style_button(b: Button, kind: int = 0, _radius: int = 11) -> void:
 	b.add_theme_stylebox_override("pressed", states["pressed"])
 	b.add_theme_stylebox_override("hover_pressed", states["pressed"])
 	b.add_theme_stylebox_override("disabled", disabled)
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.add_theme_stylebox_override("focus", focus_ring())
 	var fg := PAPER_INK if kind != 0 else CREAM
 	b.add_theme_color_override("font_color", fg)
 	b.add_theme_color_override("font_hover_color", fg)
@@ -162,21 +188,25 @@ static func style_cell(btn: Button, hint: bool = false, alpha: float = 0.7) -> v
 	btn.add_theme_stylebox_override("normal", n)
 	btn.add_theme_stylebox_override("hover", h)
 	btn.add_theme_stylebox_override("pressed", p)
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("hover_pressed", p)
+	btn.add_theme_stylebox_override("disabled", UITheme.nine("well_slot", m, c, Color(0.65, 0.65, 0.65, a)))
+	btn.add_theme_stylebox_override("focus", focus_ring())
 	btn.add_theme_color_override("font_color", BRASS_HI if hint else CREAM)
 
 
 ## Строка списка (улучшения, крафты): доска, контент не ближе 12/10.
 static func style_row(b: Button) -> void:
 	var m := Vector4(20, 20, 20, 20)
-	var c := Vector4(12, 10, 12, 10)
+	var c := Vector4(20, 18, 20, 18)
 	var n := UITheme.nine("frame_panel", m, c)
 	var h := UITheme.nine("frame_panel", m, c, Color(1.08, 1.08, 1.08, 1.0))
-	var p := UITheme.nine("frame_panel", m, Vector4(12, 9, 12, 11), Color(0.90, 0.90, 0.90, 1.0))
+	var p := UITheme.nine("frame_panel", m, Vector4(20, 17, 20, 19), Color(0.90, 0.90, 0.90, 1.0))
 	b.add_theme_stylebox_override("normal", n)
 	b.add_theme_stylebox_override("hover", h)
 	b.add_theme_stylebox_override("pressed", p)
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.add_theme_stylebox_override("hover_pressed", p)
+	b.add_theme_stylebox_override("disabled", UITheme.nine("frame_panel", m, c, Color(0.65, 0.65, 0.65)))
+	b.add_theme_stylebox_override("focus", focus_ring())
 	b.add_theme_color_override("font_color", CREAM)
 	b.add_theme_color_override("font_hover_color", CREAM)
 	b.add_theme_color_override("font_pressed_color", CREAM)
@@ -251,13 +281,21 @@ static func set_tabs_panel_bare(tabs: TabContainer, bare: bool) -> void:
 		tabs.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 		return
 	tabs.add_theme_stylebox_override("panel",
-		UITheme.nine("frame_panel", Vector4(20, 20, 20, 20), Vector4(12, 10, 12, 10)))
+		UITheme.nine("frame_panel", Vector4(20, 20, 20, 20), Vector4(20, 18, 20, 18)))
 
 
 # ---------- глобальная тема ----------
 
 static func apply_theme(th: Theme) -> void:
 	th.set_color("font_color", "Label", CREAM)
+	var button := Button.new()
+	style_button(button)
+	for control in ["Button", "OptionButton", "CheckButton", "CheckBox"]:
+		for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+			th.set_stylebox(state, control, button.get_theme_stylebox(state).duplicate())
+		for state in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_disabled_color"]:
+			th.set_color(state, control, button.get_theme_color(state))
+	button.free()
 	# LineEdit — поле материала.
 	var le_n := UITheme.nine("field", Vector4(18, 12, 18, 12), Vector4(12, 8, 12, 8))
 	var le_f := UITheme.nine("field", Vector4(18, 12, 18, 12), Vector4(12, 8, 12, 8),

@@ -95,6 +95,7 @@ var _experiment_count := 0
 var _experiment_last_at := 0.0
 var _experiment_pending_pair: Array[String] = []
 var _craft_job: Dictionary = {}
+var _brew_quantity := 1
 var _blueprints: Dictionary = {}
 var _production_discount := 1.0
 # Only the synchronous commit owns this guard; the cauldron's coroutine keeps
@@ -1072,13 +1073,9 @@ func _refresh() -> void:
 func _refresh_header() -> void:
 	if not is_instance_valid(_ether_label):
 		return
-	_ether_label.text = "⚡%d/%d · рез:%d · +%.1f/с" % [ether, _max_ether(), ether_overflow, _ether_rate()]
-	var nxt := _next_milestone(inventory.size())
-	var atlas := ""
-	if nxt > 0:
-		atlas = "   ·   Атлас: награда на %d" % nxt
-	_collection_label.text = "Веществ открыто: %d / %d   ·   Рецептов: %d / %d%s" % [
-		inventory.size(), g.ITEMS.size(), known_recipes.size(), g.RECIPES.size(), atlas]
+	_ether_label.text = str(ether)
+	_collection_label.text = str(inventory.size())
+	g._hud.refresh()
 	g._guild._orders_refresh()
 	g._guild._refresh_quest_label()
 	if g._hub._up_btn != null:
@@ -1135,13 +1132,13 @@ func _auto_row(a: String, b: String, out: String) -> Button:
 	btn.add_theme_font_size_override("font_size", 15)
 	var r := _rarity_of(out)
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.11, 0.16, 0.9)
-	sb.set_corner_radius_all(14)
+	sb.bg_color = UIStyle.WOOD_DEEP
+	sb.set_corner_radius_all(2)
 	var rc: Color = r["color"]
 	sb.border_color = Color(rc.r, rc.g, rc.b, 0.55)
 	sb.set_border_width_all(1)
 	var sb_h: StyleBoxFlat = sb.duplicate()
-	sb_h.bg_color = Color(0.13, 0.18, 0.25, 1)
+	sb_h.bg_color = UIStyle.WOOD_DEEP.lightened(0.08)
 	btn.add_theme_stylebox_override("normal", sb)
 	btn.add_theme_stylebox_override("hover", sb_h)
 	btn.add_theme_stylebox_override("pressed", sb_h)
@@ -1343,7 +1340,9 @@ func _auto_craft(item_id: String) -> void:
 		Sfx.error()
 		_refresh()
 		return
-	var plan := g._guild._plan_craft(item_id)
+	var amount := _brew_quantity if _craft_job.is_empty() else maxi(1, int(_craft_job.get("amount", 1)) - int(_craft_job.get("produced", 0)))
+	var plan := g._guild._plan_craft(item_id, amount)
+	plan["amount"] = amount
 	if not bool(plan.get("ok", false)):
 		var frontier := g._guild._plan_known_frontier(item_id)
 		var frontier_rows: Array = frontier.get("frontier", [])
@@ -1376,7 +1375,7 @@ func _auto_craft(item_id: String) -> void:
 	_pending_item = item_id
 	_pending_plan = plan
 	g._confirm_orb.setup(item_id, g._item_colors.get(item_id, Color.WHITE), true, g._online._item_glyph(item_id))
-	g._confirm_l1.text = g._online._item_name(item_id)
+	g._confirm_l1.text = "%s ×%d" % [g._online._item_name(item_id), amount]
 	g._confirm_l2.text = _base_spend_text(plan)
 	var warning_note := "⚠ длинная цепочка · " if int(plan["total"]) >= Game.CRAFT_PLAN_WARNING_OPERATIONS else ""
 	var blueprint_note := ""
@@ -1431,6 +1430,8 @@ func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
 	if not resuming_job:
 		_craft_job = {
 			"item": item_id,
+			"amount": int(plan.get("amount", 1)),
+			"produced": 0,
 			"started_at": Time.get_unix_time_from_system(),
 			"completed": 0,
 			"total_estimate": total,
@@ -1526,6 +1527,8 @@ func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
 				paused_reason = fail_reason if fail_reason in ["ingredients", "ether"] else "recipe"
 				break
 			_craft_job["completed"] = done + 1
+			if String(brew_res.get("output", "")) == item_id:
+				_craft_job["produced"] = int(_craft_job.get("produced", 0)) + 1
 			_craft_job["status"] = "running"
 			# Сохраняем после каждой операции, а не только после всего этапа:
 			# закрытие приложения не откатывает уже полученные промежуточные items.
@@ -1568,8 +1571,9 @@ func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
 			"target": item_id, "operations": total_estimate,
 			"blueprint": true, "repeat": resuming_job,
 		})
+		var produced := int(_craft_job.get("amount", 1))
 		_craft_job.clear()
-		status_text = "Производство завершён: %s +1. Маршрут сохранён как чертёж." % g._online._item_name(item_id)
+		status_text = "Производство завершено: %s +%d. Маршрут сохранён как чертёж." % [g._online._item_name(item_id), produced]
 		if not _auto_new.is_empty():
 			var names := PackedStringArray()
 			for nid in _auto_new:

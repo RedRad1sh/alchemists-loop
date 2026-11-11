@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS players (
     house TEXT,
     house_updated_at TEXT,
     last_seen TEXT,
+    avatar_gender TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 

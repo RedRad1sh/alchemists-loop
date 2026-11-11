@@ -1195,7 +1195,7 @@ func _sheet_button(nm: String, text: String,
 	b.custom_minimum_size = size
 	b.mouse_filter = Control.MOUSE_FILTER_STOP
 	var sb := StyleBoxTexture.new()
-	sb.texture = board_tex("paper_note.png")
+	sb.texture = UITheme.tex("btn_brass")
 	for m in ["texture_margin_left", "texture_margin_top",
 			"texture_margin_right", "texture_margin_bottom"]:
 		sb.set(m, PAPER_FIELD)

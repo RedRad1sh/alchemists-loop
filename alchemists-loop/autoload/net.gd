@@ -153,11 +153,14 @@ func challenge(device_id: String = "") -> void:
 		path += "?device_id=" + device_id.uri_encode()
 	_enqueue({"kind": "challenge", "path": path})
 
-func me(nick: String, device_id: String) -> void:
-	_enqueue({
-		"kind": "me",
-		"body": {"nick": nick, "device_id": device_id},
-	})
+func me(nick: String, device_id: String, gender: String = "") -> void:
+	var body := {"nick": nick, "device_id": device_id}
+	if gender in ["male", "female"]:
+		body["avatar_gender"] = gender
+	_enqueue({"kind": "me", "body": body})
+
+func me_get(device_id: String) -> void:
+	_enqueue({"kind": "me", "path": "/me?device_id=" + device_id.uri_encode()})
 
 func export_account(device_id: String) -> void:
 	_enqueue({
@@ -582,6 +585,7 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 		"challenge":
 			challenge_result.emit(parsed)
 		"me":
+			parsed["_profile_read"] = not req.has("body")
 			me_result.emit(parsed)
 		"account_export":
 			account_export_result.emit(parsed)

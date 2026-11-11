@@ -93,7 +93,8 @@ func _save_game() -> bool:
 		"bench_on": g._pages._bench_on,
 		"spirit_name": g._spirit._spirit_name,
 		"player_name": g._spirit._player_name,
-		"net_nick": g._online._net_nick,
+		"net_nick": g._hub._profile_prev_nick if g._hub._profile_pending else g._online._net_nick,
+		"avatar_gender": g._hub._profile_prev_gender if g._hub._profile_pending else g._online._avatar_gender,
 		"milestones": g._engine._milestones_done.keys(),
 		"quests_done": g._guild._quests_done.keys(),
 		"quest_brew": g._guild._quest_brew,
@@ -299,6 +300,9 @@ func _load_game() -> void:
 		g._spirit._spirit_name = String(data["spirit_name"])
 	if data.get("player_name") is String:
 		g._spirit._player_name = String(data["player_name"])
+	g._online._avatar_gender = String(data.get("avatar_gender", ""))
+	if g._online._avatar_gender not in ["male", "female"]:
+		g._online._avatar_gender = ""
 	if data.get("net_nick") is String:
 		var nn := g._hub._clean_player_nick(String(data["net_nick"]))
 		if nn != "":

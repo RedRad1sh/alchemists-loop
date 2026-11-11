@@ -4,15 +4,17 @@ class_name ContractBoard
 # §5.2/§5.4: доска. Ничего не считает: состояние берёт из Contracts, награду просит
 # через claim() (решение 3) и только рисует.
 
-const RAIL := 40.0
+const Kit = preload("res://game/ui/menu_kit.gd")
+const ModalStyle = preload("res://game/ui/friends_v2_styleboxes.gd")
+const RAIL := 24.0
 const CORNER := 48.0
 const SHELF_H := 28.0
 const ROW_DY := 8.0
 const BAND_DX := 4.0
 const NOTE_GAP := 8.0
 const CARD_GAP := 4.0
-const SIGN_SIZE := Vector2(300, 100)
-const CLOSE_SIZE := Vector2(112, 32)
+const SIGN_SIZE := Vector2(400, 48)
+const CLOSE_SIZE := Vector2(40, 40)
 const SCROLL_STEP := 72.0
 const SCROLL_HINT_SIZE := Vector2(160, 24)
 const NOTE_SIZE := Vector2(132, 88)
@@ -22,7 +24,8 @@ const SEAL_HOLD := 0.26
 # доска v2 (Task 7, спека §5): полка очага под дневным рядом и строка ранга
 # над нижним рельсом.
 const HEARTH_H := 56.0
-const RANK_H := 56.0
+const RANK_H := 104.0
+const CONTENT_BOTTOM_GAP := 40.0
 const RANK_NOTE := Vector2(150, 48)
 const FLAME_INK := Color(1.0, 0.72, 0.30)
 # Слои отрисовки: контент листается под рамой, поэтому рама, строка ранга,
@@ -44,7 +47,7 @@ const CAP_HINT := "Склад забит: часть награды не вле�
 const DECOR_MISSING_HINT := "в каталоге пока нет"
 const SIGN_INK := Color(0.93, 0.86, 0.70)
 ## Вывеска — светлый дуб с тёмной каймой: надпись выжжена тёмными чернилами.
-const SIGN_WORD_INK := Color(0.22, 0.12, 0.05)
+const SIGN_WORD_INK := Color("d8b676")
 const NOTE_TEX := "board_note.png"
 const STRIP_TEX := "paper_strip.png"
 const LETTER_TEX := "reward_letter.png"
@@ -65,29 +68,22 @@ var g: Game
 var _w := 0.0
 var _h := 0.0
 var _bg: TextureRect
-var _vignette: TextureRect
 var _scrim: TextureRect
-var _strip_bg: TextureRect
-var _strip_shelf: TextureRect
+var _strip_bg: Panel
 var _strip_shadow: ColorRect
 var _strip_cut: ColorRect
-var _rails: Array = []
-var _corners: Array = []
-var _shelf_daily: TextureRect
-var _shelf_weekly: TextureRect
 var _shelf_hearth: Control
-var _hearth_bar: TextureRect
 var _hearth_box: HBoxContainer
 var _hearth_btn: Button
 var _hearth_flame: Label
 var _rank_strip: Control
 var _rank_symbol: CircleRankSymbol
 var _rank_title: Label
-var _mile_days: TextureRect
-var _mile_pts: TextureRect
+var _mile_days: Panel
+var _mile_pts: Panel
 var _mile_days_word: Label
 var _mile_pts_word: Label
-var _sign: TextureRect
+var _sign: Control
 var _sign_word: Label
 var _close_btn: Button
 var _mask_top: Control
@@ -95,6 +91,7 @@ var _mask_bottom: Control
 var _scroll_hint: Label
 var _drag_from := NAN
 var _notes_sig_cache := ""
+var _content: Control
 var _daily_row: Control
 var _weekly_row: Control
 var _notes: Control
@@ -160,25 +157,22 @@ func _layer(fname: String, node_name: String) -> TextureRect:
 ## Статическая и с полем `m`: карточка контракта тоже рисует плашку (кнопка
 ## «Влить» в ряду жилы), а `ContractBoard._mm` карточка уже зовёт статически.
 static func style_plate(b: Button, m: float = BTN_M, mv: float = BTN_MV) -> void:
-	var sb := StyleBoxTexture.new()
-	sb.texture = ContractCard.tex("plate_brass.png")
-	sb.texture_margin_left = PLATE_SIDE_FIELD
-	sb.texture_margin_right = PLATE_SIDE_FIELD
-	sb.texture_margin_top = PLATE_EDGE_FIELD
-	sb.texture_margin_bottom = PLATE_EDGE_FIELD
+	var sb := ModalStyle.make_board_action_button()
 	sb.content_margin_left = m
 	sb.content_margin_right = m
 	sb.content_margin_top = mv
 	sb.content_margin_bottom = mv
-	var sbh: StyleBoxTexture = sb.duplicate()
-	sbh.modulate_color = Color(1.08, 1.08, 1.08)
-	var sbp: StyleBoxTexture = sb.duplicate()
-	sbp.modulate_color = Color(0.94, 0.94, 0.94)
-	# «1 px вниз» при нажатии: texture_offset в Godot 4 нет, сдвигаем поля контента.
+	var sbh := ModalStyle.make_board_action_button(true)
+	sbh.content_margin_left = m
+	sbh.content_margin_right = m
+	sbh.content_margin_top = mv
+	sbh.content_margin_bottom = mv
+	var sbp := sb.duplicate() as StyleBoxFlat
+	sbp.bg_color = sb.bg_color.darkened(0.15)
 	sbp.content_margin_top = mv - 1.0
 	sbp.content_margin_bottom = mv + 1.0
-	var sbd: StyleBoxTexture = sb.duplicate()
-	sbd.modulate_color = Color(0.55, 0.55, 0.55)
+	var sbd := sb.duplicate() as StyleBoxFlat
+	sbd.border_color = sb.border_color.darkened(0.45)
 	for pair in [["normal", sb], ["hover", sbh], ["pressed", sbp], ["disabled", sbd]]:
 		b.add_theme_stylebox_override(pair[0], pair[1])
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
@@ -189,36 +183,16 @@ static func style_plate(b: Button, m: float = BTN_M, mv: float = BTN_MV) -> void
 	ContractCard.paper_font(b, true)
 
 func _build_layers() -> void:
-	_bg = _layer("board_planks.png", "Planks")
-	# Доска тайлится: один брусок 256 px на весь экран, а не растянутая картинка (§5.2.1).
-	_bg.stretch_mode = TextureRect.STRETCH_TILE
-	_bg.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-	# Свет падает в центр доски, к раме дерево темнеет: растянутый градиент
-	# поверх тайла, иначе повтор досок читается обоями.
-	_vignette = _layer("board_vignette.png", "Vignette")
-
-	_rails = [_layer("frame_h.png", "RailTop"), _layer("frame_h.png", "RailBottom"),
-		_layer("frame_v.png", "RailLeft"), _layer("frame_v.png", "RailRight")]
-	(_rails[1] as TextureRect).flip_v = true
-	(_rails[3] as TextureRect).flip_h = true
-	# Рама рисуется поверх листающегося контента: бумага, уехавшая под рельс,
-	# должна исчезать под деревом, а не поверх него.
-	for raw in _rails:
-		(raw as TextureRect).z_index = Z_RAIL
-
-	# Один кованый уголок, четыре раза зеркалом (§5.2.2).
-	_corners = []
-	for i in range(4):
-		var corner := _layer("corner_iron.png", "Corner%d" % i)
-		corner.flip_h = (i & 1) == 1
-		corner.flip_v = (i & 2) == 2
-		corner.z_index = Z_CORNER
-		_corners.append(corner)
-
-	_shelf_daily = _layer("shelf_bar.png", "ShelfDaily")
-	_shelf_weekly = _layer("shelf_bar.png", "ShelfWeekly")
-
-	_sign = _layer("sign_hang.png", "Sign")
+	_bg = TextureRect.new()
+	_bg.name = "Planks"
+	_bg.texture = Kit.texture("17_contract_board_frame.png")
+	_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_bg)
+	_sign = Control.new()
+	_sign.name = "Sign"
+	_sign.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_sign)
 	_sign_word = g._label(BOARD_TITLE, 18)
 	_sign_word.name = "SignWord"
 	_sign_word.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -227,40 +201,34 @@ func _build_layers() -> void:
 	ContractCard.title_font(_sign_word)
 	_sign_word.add_theme_font_size_override("font_size", 24)
 	_sign_word.add_theme_color_override("font_color", SIGN_WORD_INK)
-	_sign_word.add_theme_color_override("font_shadow_color", Color(1.0, 0.92, 0.75, 0.35))
-	_sign_word.add_theme_constant_override("shadow_offset_y", 1)
-	_sign_word.add_theme_constant_override("shadow_offset_x", 0)
 	_sign.add_child(_sign_word)
 
-	# Ряды — обычные Control, не контейнеры: карточка фиксированного размера, а контейнер
-	# растянул бы бумагу до custom_minimum_size соседа (решение Task 9, п.5).
+	_content = Control.new()
+	_content.name = "PaperViewport"
+	_content.clip_contents = true
+	_content.mouse_filter = Control.MOUSE_FILTER_PASS
+	add_child(_content)
+
 	_daily_row = Control.new()
 	_daily_row.name = "DailyRow"
 	_daily_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_daily_row)
+	_content.add_child(_daily_row)
 	_weekly_row = Control.new()
 	_weekly_row.name = "WeeklyRow"
 	_weekly_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_weekly_row)
+	_content.add_child(_weekly_row)
 
 	_notes = Control.new()
 	_notes.name = "Notes"
 	_notes.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_notes)
+	_content.add_child(_notes)
 
 	# Полка очага (доска v2, спека §5): та же доска-полка, на ней — полешко и
 	# пламя серии. Иммерсивность: реальная текстура shelf_bar, не Label-полоса.
 	_shelf_hearth = Control.new()
 	_shelf_hearth.name = "ShelfHearth"
 	_shelf_hearth.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_shelf_hearth)
-	_hearth_bar = TextureRect.new()
-	_hearth_bar.name = "HearthBar"
-	_hearth_bar.texture = ContractCard.tex("shelf_bar.png")
-	_hearth_bar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_hearth_bar.stretch_mode = TextureRect.STRETCH_SCALE
-	_hearth_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_shelf_hearth.add_child(_hearth_bar)
+	_content.add_child(_shelf_hearth)
 	_hearth_box = HBoxContainer.new()
 	_hearth_box.name = "HearthBox"
 	_hearth_box.add_theme_constant_override("separation", 8)
@@ -300,12 +268,9 @@ func _build_layers() -> void:
 	# §A: строка ранга — плашка футера. Непрозрачная доска гасит бумаги, ушедшие
 	# под неё при прокрутке (маска нижнего края ловит только ввод), а 2 px тени
 	# над плашкой и 1 px светлого среза дают ей толщину рейки.
-	_strip_bg = TextureRect.new()
+	_strip_bg = Panel.new()
 	_strip_bg.name = "StripBg"
-	_strip_bg.texture = ContractCard.tex("board_planks.png")
-	_strip_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_strip_bg.stretch_mode = TextureRect.STRETCH_TILE
-	_strip_bg.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	_strip_bg.add_theme_stylebox_override("panel", ModalStyle.make_board_milestone_box())
 	_strip_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_rank_strip.add_child(_strip_bg)
 	_strip_shadow = ColorRect.new()
@@ -319,13 +284,6 @@ func _build_layers() -> void:
 	_strip_cut.color = Color(1.0, 0.86, 0.62, 0.16)
 	_strip_cut.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_rank_strip.add_child(_strip_cut)
-	_strip_shelf = TextureRect.new()
-	_strip_shelf.name = "StripShelf"
-	_strip_shelf.texture = ContractCard.tex("shelf_bar.png")
-	_strip_shelf.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_strip_shelf.stretch_mode = TextureRect.STRETCH_SCALE
-	_strip_shelf.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_rank_strip.add_child(_strip_shelf)
 	_rank_symbol = CircleRankSymbol.new()
 	_rank_symbol.name = "RankSymbol"
 	_rank_symbol.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -357,9 +315,14 @@ func _build_layers() -> void:
 
 	# Закрытие — подписанная кнопка, как на каждом другом экране: кованое
 	# кольцо без надписи игрок принимал за декор и не находил выход.
-	_close_btn = g._small_button(CLOSE_TEXT, CLOSE_SIZE, 2)
+	_close_btn = g._small_button("", CLOSE_SIZE)
 	_close_btn.name = "Close"
-	style_plate(_close_btn)
+	Kit.clear_button(_close_btn)
+	var cross := Kit.artwork(_close_btn, "21_close_icon_x_brass.png")
+	cross.offset_left = 8
+	cross.offset_right = -8
+	cross.offset_top = 8
+	cross.offset_bottom = -8
 	# _small_button держит минимум 38 px; на 40-пиксельном рельсе такая кнопка
 	# касалась кромок бруса.
 	_close_btn.custom_minimum_size = CLOSE_SIZE
@@ -385,12 +348,10 @@ func _add_card(row: Control) -> void:
 
 # Бумажный свиток вех в строке ранга: real paper_note.png +(child Label, как
 # записки баффов — правило immersive UI, не Label-простыня.
-func _rank_note(node_name: String, tip: String) -> TextureRect:
-	var r := TextureRect.new()
+func _rank_note(node_name: String, tip: String) -> Panel:
+	var r := Panel.new()
 	r.name = node_name
-	r.texture = ContractCard.tex(STRIP_TEX)
-	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	r.stretch_mode = TextureRect.STRETCH_SCALE
+	r.add_theme_stylebox_override("panel", ModalStyle.make_board_milestone_box())
 	r.mouse_filter = Control.MOUSE_FILTER_STOP
 	r.tooltip_text = tip
 	var w := g._label("", 10)
@@ -399,7 +360,7 @@ func _rank_note(node_name: String, tip: String) -> TextureRect:
 	w.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	w.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	ContractCard.paper_font(w)
-	w.add_theme_color_override("font_color", NOTE_INK)
+	w.add_theme_color_override("font_color", Color("c6b294"))
 	w.clip_text = true
 	w.position = Vector2(16.0, 7.0)
 	w.size = RANK_NOTE - Vector2(32.0, 14.0)
@@ -413,33 +374,24 @@ func _relayout() -> void:
 	position = Vector2.ZERO
 	size = vp
 	_bg.size = vp
-	_vignette.size = vp
-
-	_rails[0].size = Vector2(_w, RAIL)
-	_rails[1].position = Vector2(0.0, _h - RAIL)
-	_rails[1].size = Vector2(_w, RAIL)
-	_rails[2].position = Vector2(0.0, RAIL)
-	_rails[2].size = Vector2(RAIL, _h - 2.0 * RAIL)
-	_rails[3].position = Vector2(_w - RAIL, RAIL)
-	_rails[3].size = Vector2(RAIL, _h - 2.0 * RAIL)
-	for i in range(_corners.size()):
-		var corner := _corners[i] as TextureRect
-		corner.size = Vector2(CORNER, CORNER)
-		corner.position = Vector2(0.0 if (i & 1) == 0 else _w - CORNER,
-			0.0 if (i & 2) == 0 else _h - CORNER)
 
 	var inner := _w - 2.0 * RAIL
-	# Контент листается: восемь бумаг (4 дневных + 4 недельных) в портрете
-	# 540×960 дают ~1360 px при видимой полосе ~824 px. Первый проход без
-	# сдвига измеряет настоящую высоту (wrapping-_place пересчитывает её сам),
-	# второй — сдвигает на уже ограниченный _scroll_y.
-	_layout_flow(RAIL, inner)
-	var view_bottom := _h - RAIL - RANK_H
+	var view_top := RAIL + SIGN_SIZE.y + 12.0
+	var view_bottom := _h - RAIL - RANK_H - CONTENT_BOTTOM_GAP
+	_content.position = Vector2(0.0, view_top)
+	_content.size = Vector2(_w, view_bottom - view_top - CONTENT_BOTTOM_GAP)
+	_sign.position = Vector2(RAIL, RAIL)
+	_sign.size = Vector2(inner - CLOSE_SIZE.x - 12.0, SIGN_SIZE.y)
+	_sign_word.position = Vector2.ZERO
+	_sign_word.size = _sign.size
+	_sign_word.clip_text = true
+	_sign_word.add_theme_font_size_override("font_size", 20 if inner < 400 else 24)
+	_layout_flow(0.0, inner)
 	var nat_bottom := _weekly_row.position.y + _weekly_row.size.y
-	_scroll_max = maxf(0.0, nat_bottom - view_bottom)
+	_scroll_max = maxf(0.0, nat_bottom - _content.size.y)
 	_scroll_y = clampf(_scroll_y, 0.0, _scroll_max)
 	if _scroll_y > 0.0:
-		_layout_flow(RAIL - _scroll_y, inner)
+		_layout_flow(-_scroll_y, inner)
 
 	# Строка ранга — над нижним рельсом (спека §5), ниже её только сам рельс.
 	_rank_strip.position = Vector2(RAIL, _h - RAIL - RANK_H)
@@ -448,24 +400,28 @@ func _relayout() -> void:
 	_strip_shadow.size = Vector2(inner, 2.0)
 	_strip_cut.position = Vector2(0.0, 0.0)
 	_strip_cut.size = Vector2(inner, 1.0)
-	_strip_shelf.position = Vector2(0.0, -10.0)
-	_strip_shelf.size = Vector2(inner, 12.0)
-	_rank_symbol.position = Vector2(2.0, (RANK_H - 48.0) / 2.0)
+	_rank_symbol.position = Vector2(8.0, 0.0)
 	_rank_symbol.size = Vector2(48.0, 48.0)
-	_mile_pts.position = Vector2(inner - RANK_NOTE.x, (RANK_H - RANK_NOTE.y) / 2.0)
-	_mile_pts.size = RANK_NOTE
-	_mile_days.position = Vector2(inner - 2.0 * RANK_NOTE.x - 4.0, _mile_pts.position.y)
-	_mile_days.size = RANK_NOTE
-	_rank_title.position = Vector2(56.0, 0.0)
-	_rank_title.size = Vector2(_mile_days.position.x - 62.0, RANK_H)
+	_rank_title.position = Vector2(64.0, 0.0)
+	_rank_title.size = Vector2(inner - 72.0, 48.0)
+	_rank_title.clip_text = true
+	var note_size := Vector2((inner - 24.0) / 2.0, 48.0)
+	_mile_days.position = Vector2(8.0, 48.0)
+	_mile_days.size = note_size
+	_mile_pts.position = Vector2(16.0 + note_size.x, 48.0)
+	_mile_pts.size = note_size
+	for word in [_mile_days_word, _mile_pts_word]:
+		word.position = Vector2(10.0, 7.0)
+		word.size = note_size - Vector2(20.0, 14.0)
+		word.add_theme_font_size_override("font_size", 10)
 
 	_mask_top.position = Vector2.ZERO
-	_mask_top.size = Vector2(_w, RAIL)
+	_mask_top.size = Vector2(_w, view_top)
 	_mask_bottom.position = Vector2(0.0, view_bottom)
 	_mask_bottom.size = Vector2(_w, _h - view_bottom)
 	# Кнопка закрытия — в правом краю верхнего рельса: вывеска по центру
 	# (x 120..420), а правый уголок начинается с _w - CORNER.
-	_close_btn.position = Vector2(_w - CORNER - CLOSE_SIZE.x - 6.0, (RAIL - CLOSE_SIZE.y) / 2.0)
+	_close_btn.position = Vector2(_w - RAIL - CLOSE_SIZE.x, 20)
 	_close_btn.size = CLOSE_SIZE
 	# На нижнем рельсе рамы, а не над рядом: листающийся контент под подсказку
 	# не заезжает, и «▼ листай вниз» не ложится на кнопку нижней карточки.
@@ -478,30 +434,20 @@ func _relayout() -> void:
 # Поток контента: вывеска → записки баффов → дневная полка и ряд → очаг →
 # недельная полка и ряд. `top` — верх видимой полосы с учётом прокрутки.
 func _layout_flow(top: float, inner: float) -> void:
-	_sign.position = Vector2((_w - SIGN_SIZE.x) / 2.0, top + 4.0)
-	_sign.size = SIGN_SIZE
-	# Надпись — в светлом поле вывески, ниже колец подвеса.
-	_sign_word.position = Vector2(0.0, 22.0)
-	_sign_word.size = Vector2(SIGN_SIZE.x, SIGN_SIZE.y - 30.0)
-	_notes.position = Vector2(RAIL + BAND_DX, top + SIGN_SIZE.y + 16.0)
+	_notes.position = Vector2(RAIL + BAND_DX, top + 8.0)
 	var band_w := inner - 2.0 * BAND_DX
 	_notes.size = Vector2(band_w, _notes_band_h(band_w))
-	_shelf_daily.position = Vector2(RAIL, _notes.position.y + _notes.size.y + 4.0)
-	_shelf_daily.size = Vector2(inner, SHELF_H)
-	_daily_row.position = Vector2(RAIL, _shelf_daily.position.y + SHELF_H)
+	var daily_top := _notes.position.y + _notes.size.y + 12.0
+	_daily_row.position = Vector2(RAIL, daily_top)
 	_daily_row.size = Vector2(inner, ContractCard.DAILY_SIZE.y)
 	_place(_daily_row, ContractCard.DAILY_SIZE)
 	# Доска v2 (Task 7): полка очага — ПОСЛЕ дневного ряда, поэтому её точка
 	# привязки читается фактической высотой ряда, которую вернул wrapping-_place.
 	_shelf_hearth.position = Vector2(RAIL, _daily_row.position.y + _daily_row.size.y + ROW_DY)
 	_shelf_hearth.size = Vector2(inner, HEARTH_H)
-	_hearth_bar.position = Vector2(0.0, HEARTH_H - SHELF_H)
-	_hearth_bar.size = Vector2(inner, SHELF_H)
-	_hearth_box.position = Vector2(8.0, HEARTH_H - SHELF_H - 30.0)
+	_hearth_box.position = Vector2(8.0, 8.0)
 	_hearth_box.size = Vector2(inner - 16.0, 40.0)
-	_shelf_weekly.position = Vector2(RAIL, _shelf_hearth.position.y + HEARTH_H + ROW_DY)
-	_shelf_weekly.size = Vector2(inner, SHELF_H)
-	_weekly_row.position = Vector2(RAIL, _shelf_weekly.position.y + SHELF_H)
+	_weekly_row.position = Vector2(RAIL, _shelf_hearth.position.y + HEARTH_H + ROW_DY)
 	_weekly_row.size = Vector2(inner, ContractCard.WEEKLY_SIZE.y)
 	_place(_weekly_row, ContractCard.WEEKLY_SIZE)
 
@@ -558,17 +504,19 @@ static func _place(row: Control, sz: Vector2) -> void:
 	var n := row.get_child_count()
 	if n == 0:
 		return
-	var per_row := maxi(1, int((row.size.x + CARD_GAP) / (sz.x + CARD_GAP)))
+	# Поле ячейки включает наклон ±4°, hover ×1.03, гвоздь и выступ воска.
+	var cell := sz + Vector2(48, 52)
+	var per_row := maxi(1, int((row.size.x + CARD_GAP) / (cell.x + CARD_GAP)))
 	var rows := int(ceil(float(n) / float(per_row)))
-	row.size = Vector2(row.size.x, float(rows) * sz.y + float(rows - 1) * ROW_DY)
+	row.size = Vector2(row.size.x, float(rows) * cell.y + float(rows - 1) * ROW_DY)
 	for i in range(n):
 		@warning_ignore("integer_division")
 		var r := i / per_row
 		var cnt := mini(per_row, n - r * per_row)
-		var total := float(cnt) * sz.x + float(cnt - 1) * CARD_GAP
+		var total := float(cnt) * cell.x + float(cnt - 1) * CARD_GAP
 		var x0 := (row.size.x - total) / 2.0
 		(row.get_child(i) as Control).position = Vector2(
-			x0 + float(i % per_row) * (sz.x + CARD_GAP), float(r) * (sz.y + ROW_DY))
+			x0 + 24.0 + float(i % per_row) * (cell.x + CARD_GAP), 20.0 + float(r) * (cell.y + ROW_DY))
 
 func refresh() -> void:
 	var all := g._contracts.daily() + g._contracts.weekly()
@@ -702,7 +650,7 @@ func _make_note(b: Dictionary) -> TextureButton:
 	# а не нарисованный кодом кружок.
 	var pin := TextureRect.new()
 	pin.name = "Pin"
-	pin.texture = ContractCard.tex(ContractCard.pick(id, ContractCard.NAILS))
+	pin.texture = Kit.texture("19_brass_pin_tack.png")
 	pin.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pin.stretch_mode = TextureRect.STRETCH_SCALE
 	pin.mouse_filter = Control.MOUSE_FILTER_IGNORE

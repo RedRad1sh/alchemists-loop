@@ -6,9 +6,9 @@ class CountingGuild extends Guild:
 	var plans := 0
 	func _init(game: Game) -> void:
 		super(game)
-	func _plan_craft(target: String) -> Dictionary:
+	func _plan_craft(target: String, amount: int = 1) -> Dictionary:
 		plans += 1
-		return super(target)
+		return super(target, amount)
 
 static func run(g: Game) -> void:
 	var before := Selftest._total
