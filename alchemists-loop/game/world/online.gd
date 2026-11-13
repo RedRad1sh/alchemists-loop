@@ -828,6 +828,8 @@ func _apply_server_element(d) -> String:
 		dsc = "Стихия «%s»." % cat
 	if not g.ITEMS.has(slug):
 		var entry: Dictionary = {"name": name, "color": color}
+		if cat != "":
+			entry["category"] = cat
 		if glyph != "":
 			entry["g"] = glyph
 		if dsc != "":
@@ -838,6 +840,8 @@ func _apply_server_element(d) -> String:
 		g._engine._layer_cache.erase(slug)
 		_add_inventory_orb(slug)
 	else:
+		if cat != "":
+			g.ITEMS[slug]["category"] = cat
 		if glyph != "" and not g.ITEMS[slug].has("g"):
 			g.ITEMS[slug]["g"] = glyph
 		if dsc != "" and not g.ITEMS[slug].has("d"):
@@ -879,7 +883,10 @@ func _restore_server_elements(raw) -> void:
 			continue
 		if not color.begins_with("#"):
 			color = "#8899aa"
+		var cat := g._clean_str(e.get("category", ""))
 		var entry: Dictionary = {"name": name, "color": color}
+		if cat != "":
+			entry["category"] = cat
 		var gl := g._clean_str(e.get("g", ""))
 		if gl != "" and ElementGlyphs.has(gl):
 			entry["g"] = gl

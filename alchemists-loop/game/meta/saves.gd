@@ -106,7 +106,15 @@ func _save_game() -> bool:
 		"res_total": g._resonance._res_total,
 		"res_balance": g._resonance._res_balance,
 		"retort_slots": g._retort._retort_slots,
-		"essences": g._retort._essences,
+		"essence_inv": g._retort._essence_inv,
+		"essence_codex": g._retort._essence_codex,
+		"legacy_cap_bonus": g._retort._legacy_cap_bonus,
+		"cube_levels": g._retort._cube_levels,
+		"queue": g._retort._queue,
+		"queue_on": g._retort._queue_on,
+		"queue_cursor": g._retort._queue_cursor,
+		"queue_window_start": g._retort._queue_window_start,
+		"blend": g._retort._blend,
 		"last_rank": g._last_rank,
 		"world_total_seen": g._online._world_total_seen,
 		"letter_milestones": g._riddles._letter_milestones,
@@ -345,14 +353,52 @@ func _load_game() -> void:
 				g._resonance._res_done[mi] = true
 	g._resonance._res_total = maxi(0, int(data.get("res_total", 0)))
 	g._resonance._res_balance = maxi(0, int(data.get("res_balance", 0)))
+	_apply_recipe_knowledge(data)
 	if data.get("retort_slots") is Array:
 		_load_retort_slots_for_test(data["retort_slots"] as Array)
 	else:
 		_load_retort_slots_for_test([])
-	g._retort._essences.clear()
-	if data.get("essences") is Dictionary:
-		for k in data["essences"]:
-			g._retort._essences[String(k)] = String(data["essences"][k])
+	var saved_essence_inv: Variant = data.get("essence_inv", {})
+	g._retort._essence_inv = saved_essence_inv.duplicate(true) if saved_essence_inv is Dictionary else {}
+	var saved_essence_codex: Variant = data.get("essence_codex", {})
+	g._retort._essence_codex = saved_essence_codex.duplicate(true) if saved_essence_codex is Dictionary else {}
+	g._retort._legacy_cap_bonus = maxi(0, int(data.get("legacy_cap_bonus", 0)))
+	var cube_defaults := {"queue": 0, "offline": 0, "slots": 0, "speed": 0,
+		"complexity": 0, "blend": 0, "cap": 0, "equip": 0}
+	g._retort._cube_levels = cube_defaults.duplicate(true)
+	var saved_cube_levels: Variant = data.get("cube_levels", {})
+	if saved_cube_levels is Dictionary:
+		for axis in cube_defaults:
+			g._retort._cube_levels[axis] = maxi(0, int(saved_cube_levels.get(axis, 0)))
+	var saved_queue: Variant = data.get("queue", [])
+	g._retort._queue = []
+	if saved_queue is Array:
+		for entry in saved_queue:
+			if g._retort._queue.size() >= g._retort._queue_depth():
+				break
+			if not entry is Dictionary:
+				continue
+			var sub: Variant = entry.get("sub", "")
+			if sub is String and g.ITEMS.has(sub):
+				g._retort._queue.append({"sub": sub})
+	g._retort._queue_on = bool(data.get("queue_on", false))
+	g._retort._queue_cursor = maxi(0, int(data.get("queue_cursor", 0)))
+	if not g._retort._queue.is_empty():
+		g._retort._queue_cursor %= g._retort._queue.size()
+	else:
+		g._retort._queue_cursor = 0
+	g._retort._queue_window_start = maxf(0.0, float(data.get("queue_window_start", 0.0)))
+	var saved_blend: Variant = data.get("blend", {})
+	g._retort._blend = {}
+	if saved_blend is Dictionary:
+		var out: Variant = saved_blend.get("out", "")
+		var dur: Variant = saved_blend.get("dur", 0.0)
+		if out is String and out.begins_with("blend-") and (dur is int or dur is float) \
+				and is_finite(float(dur)) and float(dur) > 0.0:
+			g._retort._blend = saved_blend.duplicate(true)
+	var old_essences: Variant = data.get("essences", {})
+	if old_essences is Dictionary and not old_essences.is_empty():
+		g._retort.migrate_legacy_essences(old_essences)
 	g._last_rank = maxi(0, int(data.get("last_rank", 0)))
 	g._online._world_total_seen = maxi(0, int(data.get("world_total_seen", 0)))
 	g._riddles._letter_milestones = maxi(0, int(data.get("letter_milestones", 0)))
@@ -545,7 +591,6 @@ func _load_game() -> void:
 	for item_id in Game.BASE_IDS:
 		if not g._engine.inventory.has(item_id):
 			g._engine.inventory[item_id] = 0
-	_apply_recipe_knowledge(data)
 	g._workshop.import_state(data.get("workshop"), data)
 	if data.has("companion_unlocked"):
 		g._spirit._companion_unlocked = bool(data["companion_unlocked"])
@@ -568,9 +613,15 @@ func _load_retort_slots_for_test(raw: Array) -> void:
 		if typeof(s) != TYPE_DICTIONARY:
 			continue
 		var sd := s as Dictionary
+		var sub := String(sd.get("sub", ""))
+		var essence := String(sd.get("essence", ""))
+		if essence == "" and sub != "":
+			essence = g._retort.essence_of(sub)
 		g._retort._retort_slots.append({
-			"sub": String(sd.get("sub", "")),
+			"sub": sub,
 			"name": String(sd.get("name", "")),
+			"essence": essence,
+			"tier": clampi(int(sd.get("tier", 0)), 0, 4),
 			"started": maxf(0.0, float(sd.get("started", 0.0))),
 			"dur": maxf(0.0, float(sd.get("dur", 0.0))),
 		})
@@ -722,6 +773,7 @@ func _grant_offline() -> void:
 	# Exactly one absolute replay includes ether, spring, manual chain and lines.
 	var result: Dictionary = g._workshop_scheduler.replay_offline(g._last_ts, now)
 	_project_workshop(result, queues)
+	g._retort._queue_offline_replay(g._last_ts, now)
 	g._last_ts = maxf(_timestamp(g._last_ts), maxf(_timestamp(result.get("consumed_until")), now))
 	if _return_ether > 0:
 		g._spirit._companion_react("offline", str(_return_ether))
@@ -814,6 +866,7 @@ func _apply_recipe_knowledge(data: Dictionary) -> void:
 		known[key] = true
 	g._engine.known_recipe_defs = defs
 	g._engine.known_recipes = known
+	g._engine._layer_cache.clear()
 
 func _def_from_catalog(key: String) -> Dictionary:
 	var parts := key.split("|")
@@ -1123,7 +1176,7 @@ func _inject_return_demo() -> void:
 	_return_world_new = 4
 	_return_rank_old = 19
 	g._last_rank = 14
-	g._retort._essences = {"fire": "Огонь"}
+	g._retort._essence_codex = {"fire-0": true}
 	var now := Time.get_unix_time_from_system()
 	g._retort._retort_slots = [
 		{"sub": "glass", "name": "Стекло", "started": now - 13.0 * 3600.0, "dur": 12.0 * 3600.0},

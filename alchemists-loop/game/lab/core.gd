@@ -309,7 +309,7 @@ func _sage_multiplier() -> float:
 func _max_ether() -> int:
 	return Game.MAX_ETHER + 50 * _up_lvl("ether_cap") + _collection_cap_bonus() \
 		+ 40 * sage_gold + g._progress_ui._quest_cap_bonus() + g._progress_ui._ach_cap_bonus() + g._resonance._res_cap_bonus() \
-		+ g._retort._essence_cap_bonus() + g._riddles._letter_cap_bonus() + g._riddles._atlas_cap_bonus() + g._contracts._mile_cap_bonus() \
+		+ g._retort._essence_cap_bonus() + g._retort._essence_cap_line_bonus() + g._riddles._letter_cap_bonus() + g._riddles._atlas_cap_bonus() + g._contracts._mile_cap_bonus() \
 		+ g._contracts._vein_cap_total + g._sigil.milestone_cap_bonus() + g._sigil.card_cap_bonus()
 
 func spring_interval() -> float:
