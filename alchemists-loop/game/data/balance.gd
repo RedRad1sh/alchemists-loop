@@ -55,11 +55,10 @@ const RES_CAP50 := 5       # +к максимуму эфира за веху 50 
 # и заведомо больше реального round-trip (очередь Net сериализуется за опросом
 # событий); самоотпускается, чтобы потерянный ответ не запирал claim до конца сессии.
 const RESONANCE_CLAIM_GATE_MSEC := 15000
-# ночная реторта: долгий сосуд 8–24 ч, эссенции с вечным бонусом к капу
+# ночная реторта: долгий сосуд 8–24 ч, типизированные эссенции для улучшений куба
 const RETORT_BASE_HOURS := 8.0   # срок = 8 ч × (1 + тир × 0.5): 8/12/16/20/24 ч
-const RETORT_CAP_EACH := 1       # +к капу за каждую уникальную эссенцию…
-const RETORT_CAP_FIRST := 8      # …первые 8 уникальных; дальше — разовый эфир
-const RETORT_REPEAT_ETHER := 25  # эфир за повторную/позднюю эссенцию
+const RETORT_CAP_EACH := 1       # legacy: +к капу за уникальную эссенцию старого сейва…
+const RETORT_CAP_FIRST := 8      # …но не больше первых восьми
 # письма Светика: ежедневная загадка-пары, матчинг на сервере (клиент ответа не видит)
 const LETTER_MILE_EVERY := 5   # каждые N разгаданных — веха
 const LETTER_CAP_EACH := 3     # +к капу навсегда за каждую веху
@@ -128,7 +127,6 @@ const CRAFT_STAGE_OPERATIONS := 3
 const MASTERY_STAGE_RANKS := [3, 7]     # +1 операция этапа за каждый достигнутый ранг
 const MASTERY_RETORT_SPEED := 0.06      # −6 % срока реторты за каждый ранг ≥ 2 (задача 2)
 const MASTERY_RETORT_MIN_HOURS := 6.0   # пол срока реторты, ч (задача 2)
-const MASTERY_RETORT_SLOT_RANK := 5     # ранг, открывающий 4-й сосуд (задача 3)
 const RETORT_SLOT_MAX := 4              # физических сосудов в массиве (задача 3)
 const CRAFT_PLAN_WARNING_OPERATIONS := 20
 const CRAFT_PLAN_HARD_LIMIT_OPERATIONS := 200

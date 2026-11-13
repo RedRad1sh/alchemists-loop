@@ -836,12 +836,65 @@
     "Не вышло положить в реторту.": "Could not place item into the Retort.",
     "Нет веществ с запасом — добудь что-нибудь из источников.": "No elements in stock — harvest from sources first.",
     "Откроется за Перегонку (престиж).": "Unlocks after your first Distillation (prestige).",
+    "Откроется за улучшение оси «Слоты».": "Unlock by upgrading the Slots axis.",
     "Пока ни одной эссенции.": "No essences collected yet.",
     "Положи вещество на ночь — к утру созреет эссенция. ": "Steep an element overnight — by morning an essence matures. ",
+    "Положи вещество на ночь — к утру созреет типизированная эссенция.": "Steep an element overnight — by morning a typed essence matures.",
     "Пуст. Положи вещество — и возвращайся завтра.": "Empty. Steep an element and check back later.",
     "Реторта готова — неси кружку!": "The Retort is ready — bring a mug!",
     "ЧТО ПОЛОЖИТЬ В РЕТОРТУ?": "WHAT TO STEEP IN THE RETORT?",
     "Чем глубже вещество, тем дольше настой — и тем ценнее эссенция.": "Deeper elements steep longer and yield richer essences.",
+    "Экспериментальный куб": "Experimental Cube",
+    "Куб": "Cube",
+    "Эссенции": "Essences",
+    "Очередь": "Queue",
+    "Пустить": "Start",
+    "+ Добавить": "+ Add",
+    "Удалить шаг": "Remove Step",
+    "запущена": "running",
+    "остановлена": "stopped",
+    "Программа пуста — добавь первое вещество.": "Program is empty — add the first element.",
+    "Реторта повторяет программу по кругу, пока есть вещества и свободные сосуды.": "The Retort repeats the program while elements and free vessels are available.",
+    "Это вещество сейчас нельзя перегнать.": "This element cannot be distilled right now.",
+    "Дистиллируй вещества в типизированные эссенции и вложи их в постоянные улучшения.": "Distill elements into typed essences and invest them in permanent upgrades.",
+    "Аппарат": "Apparatus",
+	"Заменить": "Replace",
+	"Убрать": "Remove",
+    "Забрать купаж": "Claim Blend",
+    "Инвентарь эссенций": "Essence Inventory",
+    "Улучшения экспериментального куба": "Experimental Cube Upgrades",
+    "Авто-очередь": "Auto-Queue",
+    "— пусто —": "— empty —",
+    "Сохранить программу": "Save Program",
+    "Включена": "Enabled",
+    "Кодекс эссенций": "Essence Codex",
+    "Слоты сосудов": "Vessel Slots",
+    "Забрать раньше срока нельзя, отмена возвращает вещество. Реторта и купаж работают офлайн.": "Cannot claim early; cancelling returns the element. Retort and blending work offline.",
+    "Глубина очереди": "Queue Depth",
+    "Оффлайн-окно": "Offline Window",
+    "Ячейки": "Slots",
+    "Сложность": "Complexity",
+    "Купаж": "Blending",
+    "Эссенциальная ёмкость": "Essential Capacity",
+    "Эссенциальное оборудование": "Essential Equipment",
+    "глубина очереди": "queue depth",
+    "оффлайн-окно": "offline window",
+    "ячейки": "slots",
+    "скорость": "speed",
+    "сложность": "complexity",
+    "купаж": "blending",
+    "эссенциальная ёмкость": "essential capacity",
+    "эссенциальное оборудование": "essential equipment",
+    "открыт": "unlocked",
+    "закрыт": "locked",
+    "Программа не помещается в глубину очереди.": "The program exceeds the queue depth.",
+    "Купаж недоступен: проверь уровень и редкие эссенции.": "Blending unavailable: check its level and rare essences.",
+    "Первая дистилляция откроет запись в кодексе.": "Your first distillation will add a codex entry.",
+    "Откроется за улучшение оси «Ячейки».": "Unlock by upgrading the Slots axis.",
+    "Сосуд купажа закрыт. Улучши ось «Купаж».": "The blending vessel is locked. Upgrade the Blending axis.",
+    "Купаж: тир 3 + тир 4 одной стихии → составная эссенция.": "Blend: tier 3 + tier 4 of one element → compound essence.",
+    "вещество → эссенция (стихия, тир)": "element → essence (elemental type, tier)",
+    "заперт (сложность)": "locked (complexity)",
     " кап)": " cap)",
     "А тебя как звать, алхимик?": "And what do they call you, alchemist?",
     "Алхимики говорят: путь важнее цели.": "Alchemists say the path matters more than the destination.",
@@ -3496,6 +3549,11 @@
       "n": 1
     },
     {
+      "rx": "(?s)^сначала\\ сложность\\ (-?\\d+)\\+$",
+      "en": "requires complexity {0}+",
+      "n": 1
+    },
+    {
       "rx": "(?s)^сначала\\ ([^\\n]+)$",
       "en": "requires {0}",
       "n": 1
@@ -3644,6 +3702,86 @@
       "rx": "(?s)^Пол\\ ([^\\n]+)$",
       "en": "Floor {0}",
       "n": 1
+    },
+    {
+      "rx": "(?s)^Шаг\\ (-?\\d+)$",
+      "en": "Step {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^(-?\\d+)\\ шагов$",
+      "en": "{0} steps",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^(-?\\d+)\\ сосудов$",
+      "en": "{0} vessels",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^×(-?\\d+(?:\\.\\d+)?)\\ ко\\ времени$",
+      "en": "×{0} duration",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^тир\\ до\\ (-?\\d+)$",
+      "en": "up to tier {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^\\+(-?\\d+)\\ к\\ капу$",
+      "en": "+{0} ether cap",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^\\+(-?\\d+)\\ линий\\ мастерской$",
+      "en": "+{0} workshop lines",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^сначала\\ ([^\\n]+)$",
+      "en": "requires {0}",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Открыто\\ эссенций:\\ (-?\\d+)/24\\ ·\\ бонус\\ капа:\\ \\+(-?\\d+)$",
+      "en": "Essences discovered: {0}/24 · cap bonus: +{1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Открыто\\ (-?\\d+)\\ из\\ 24\\ ·\\ неизвестно\\ (-?\\d+)$",
+      "en": "Discovered {0}/24 · unknown {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Программа:\\ (-?\\d+)/(-?\\d+)\\ шагов\\ ·\\ офлайн-окно\\ (-?\\d+)\\ ч$",
+      "en": "Program: {0}/{1} steps · offline window {2}h",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^(-?\\d+)/(-?\\d+)\\ шагов\\ ·\\ офлайн\\ (-?\\d+)\\ ч\\ ·\\ (.+)$",
+      "en": "{0}/{1} steps · offline {2}h · {3}",
+      "n": 4
+    },
+    {
+      "rx": "(?s)^([^\\n]+?)\\ →\\ ([^\\n]+?)\\ ×(-?\\d+)$",
+      "en": "{0} → {1} ×{2}",
+      "n": 3
+    },
+    {
+      "rx": "(?s)^«([^\\n]+?)»\\ →\\ эссенция\\ ([^\\n]+)$",
+      "en": "\"{0}\" → essence {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^Купаж\\ готов:\\ ([^\\n]+?)\\.$",
+      "en": "Blend ready: {0}.",
+      "n": 1
+    },
+    {
+      "rx": "(?s)^Купаж\\ ([^\\n]+?)\\ зреет…\\ осталось\\ ([^\\n]+?)\\.$",
+      "en": "Blend {0} maturing… {1} left.",
+      "n": 2
     }
   ],
   "low_patterns": [

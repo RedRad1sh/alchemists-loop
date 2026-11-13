@@ -62,7 +62,11 @@ func is_read_only() -> bool:
 	return not _future_state.is_empty()
 
 func line_count() -> int:
-	return int(Rules.RANKS[rank]["lines"])
+	return int(Rules.RANKS[rank]["lines"]) + g._retort._workshop_bonus_lines()
+
+func materialize_lines() -> void:
+	while lines.size() < line_count():
+		lines.append(_new_line(_unused_id("line", _line_ids())))
 
 func queue_capacity() -> int:
 	return int(Rules.RANKS[rank]["capacity"])
@@ -148,8 +152,7 @@ func buy_rank(next_rank: int) -> Dictionary:
 	# Контрактный апгрейд начисляем ДО changed.emit(): экран, перечитавший прогресс
 	# контракта в перерисовке, обязан увидеть уже начисленный пункт.
 	g._contracts.on_upgrade("workshop", "rank", next_rank)
-	while lines.size() < line_count():
-		lines.append(_new_line(_unused_id("line", _line_ids())))
+	materialize_lines()
 	changed.emit()
 	return {"ok": true, "reason": "", "rank": rank}
 

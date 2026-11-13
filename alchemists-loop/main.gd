@@ -43,7 +43,6 @@ const RESONANCE_CLAIM_GATE_MSEC := Balance.RESONANCE_CLAIM_GATE_MSEC
 const RETORT_BASE_HOURS := Balance.RETORT_BASE_HOURS
 const RETORT_CAP_EACH := Balance.RETORT_CAP_EACH
 const RETORT_CAP_FIRST := Balance.RETORT_CAP_FIRST
-const RETORT_REPEAT_ETHER := Balance.RETORT_REPEAT_ETHER
 const LETTER_MILE_EVERY := Balance.LETTER_MILE_EVERY
 const LETTER_CAP_EACH := Balance.LETTER_CAP_EACH
 const LETTER_PENDING_MAX := Balance.LETTER_PENDING_MAX
@@ -79,7 +78,6 @@ const CRAFT_STAGE_OPERATIONS := Balance.CRAFT_STAGE_OPERATIONS
 const MASTERY_STAGE_RANKS := Balance.MASTERY_STAGE_RANKS
 const MASTERY_RETORT_SPEED := Balance.MASTERY_RETORT_SPEED
 const MASTERY_RETORT_MIN_HOURS := Balance.MASTERY_RETORT_MIN_HOURS
-const MASTERY_RETORT_SLOT_RANK := Balance.MASTERY_RETORT_SLOT_RANK
 const RETORT_SLOT_MAX := Balance.RETORT_SLOT_MAX
 const CRAFT_PLAN_WARNING_OPERATIONS := Balance.CRAFT_PLAN_WARNING_OPERATIONS
 const CRAFT_PLAN_HARD_LIMIT_OPERATIONS := Balance.CRAFT_PLAN_HARD_LIMIT_OPERATIONS
@@ -1032,7 +1030,7 @@ func _ready() -> void:
 		_engine._refresh()
 	if _demo_harness._demo and _demo_harness._action_retort:
 		var now := Time.get_unix_time_from_system()
-		_retort._essences = {"fire": "Огонь", "water": "Вода", "clay": "Глина"}
+		_retort._essence_codex = {"fire-0": true, "water-0": true, "earth-1": true}
 		_retort._retort_slots = [
 			{"sub": "steam", "name": "Пар", "started": now - 4.0 * 3600.0, "dur": 8.0 * 3600.0},
 			{"sub": "glass", "name": "Стекло", "started": now - 13.0 * 3600.0, "dur": 12.0 * 3600.0},
@@ -1322,6 +1320,8 @@ func _process(delta: float) -> void:
 	if not _workshop.is_read_only() and _workshop.last_simulated_at < wall:
 		_workshop.last_simulated_at = wall
 	_saves._save_frozen = save_was_frozen
+	if not _selftest:
+		_retort._queue_advance(wall, false)
 	if int(work.get("steps", 0)) > 0 or int(work.get("spring_items", 0)) > 0:
 		_engine._refresh()
 		_saves._save_game()

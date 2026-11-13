@@ -46,7 +46,8 @@ func _interval(line: Dictionary) -> float:
 	if not is_finite(interval) or interval <= EPS:
 		interval = Game.BENCH_INTERVAL
 	# Ускорение карт ограничено 90%, чтобы интервал не стал нулевым.
-	return interval * (1.0 - clampf(g._sigil.card_speed_bonus() / 100.0, 0.0, 0.9))
+	return interval * (1.0 - clampf(g._sigil.card_speed_bonus() / 100.0, 0.0, 0.9)) \
+		* g._retort._workshop_speed_factor()
 
 func _token() -> Array:
 	return [_signature, _mutation]
