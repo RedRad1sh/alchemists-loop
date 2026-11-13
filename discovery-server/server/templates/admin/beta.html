@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Закрытая бета — инвайты{% endblock %}
+{% block content %}
+<h2>Закрытая бета</h2>
+<p>Одноразовые приглашения. Отзыв немедленно закрывает серверный доступ.</p>
+{% if new_code %}
+<article>
+    <strong>Сохраните код сейчас — он показывается только один раз:</strong>
+    <p><code id="new-invite">{{ new_code }}</code></p>
+</article>
+{% endif %}
+<form method="post" action="/admin/beta/create">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit">Создать приглашение</button>
+</form>
+<p>Последние 500 приглашений. Сырые коды и токены не хранятся.</p>
+<table>
+    <thead><tr><th>ID</th><th>Статус</th><th>Устройство</th><th>Действие</th></tr></thead>
+    <tbody>
+    {% for invite in invites %}
+    <tr>
+        <td>{{ invite.id }}</td>
+        <td>{% if invite.revoked_at %}Отозван{% elif invite.redeemed_at %}Использован{% else %}Не использован{% endif %}</td>
+        <td>{{ invite.subject or '—' }}</td>
+        <td>
+            <form method="post" action="/admin/beta/{{ invite.id }}/revoke">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="outline secondary">Отозвать</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

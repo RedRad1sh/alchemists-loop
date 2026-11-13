@@ -194,7 +194,7 @@ func _product_row(product: Dictionary) -> Control:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 3)
 	var title := String(product.get("title", product.get("id", "Товар")))
-	var price := String(product.get("price_hint", "цена в магазине"))
+	var price := "тест · без оплаты" if BetaAccess.enabled else String(product.get("price_hint", "цена в магазине"))
 	var button := g._small_button("Купить · %s" % price, Vector2(0, 42), 1)
 	var product_id := String(product.get("id", ""))
 	if Monetization.is_product_owned(product_id):
@@ -321,11 +321,15 @@ func _delete_data() -> void:
 		return
 	var device_id := g._online._device_id
 	if device_id != "":
+		if BetaAccess.enabled:
+			BetaAccess.prepare_deletion(device_id)
 		UserData.mark_account_delete_pending(device_id)
 	if g._online._net_enabled and device_id != "":
 		Net.delete_account(device_id)
 	g._saves._delete_local_save()
 	UserData.delete_all_local_data()
+	if BetaAccess.enabled:
+		BetaAccess.clear_credentials()
 	for path in [LOCAL_EXPORT_PATH, SERVER_EXPORT_PATH]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
