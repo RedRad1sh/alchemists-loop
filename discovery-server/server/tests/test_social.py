@@ -1256,6 +1256,22 @@ class TestInbox:
         full = client.get("/api/messages", params={"device_id": a, "peer_device": b}).json()
         assert len(full["messages"][0]["body"]) == srv.MSG_MAX_LEN
 
+    def test_preview_carries_direction(self, tmp_path, monkeypatch):
+        """Превью последнего сообщения пары обязано нести направление: без него
+        строка друга показывает мой собственный текст как будто входящий, пока
+        горит unread-бейдж. Снять from_device из запроса превью — тест краснеет."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        _send(client, b, a, "чужое последнее")
+        f = _humans(_inbox(client, a))[0]
+        assert f["last_msg_from_me"] is False, f
+        _send(client, a, b, "моё последнее")
+        f = _humans(_inbox(client, a))[0]
+        assert f["last_msg_from_me"] is True, f
+        theirs = _humans(_inbox(client, b))[0]
+        assert theirs["last_msg_from_me"] is False, theirs
+
     def test_rename_visible_immediately(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
         client = _client(srv)

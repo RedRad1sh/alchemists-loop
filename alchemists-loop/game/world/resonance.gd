@@ -28,15 +28,17 @@ func _init(game: Game) -> void:
 
 func _build_resonance_page(container: VBoxContainer) -> void:
 	var pad := MarginContainer.new()
-	pad.add_theme_constant_override("margin_left", 14)
-	pad.add_theme_constant_override("margin_right", 14)
-	pad.add_theme_constant_override("margin_top", 12)
+	# Секции «Отголосков» стоят на той же левой линии и с тем же зазором, что
+	# остальные заголовки страницы Мир (стиль секций «Настроек»).
+	pad.add_theme_constant_override("margin_left", 0)
+	pad.add_theme_constant_override("margin_right", 0)
+	pad.add_theme_constant_override("margin_top", 0)
 	pad.add_theme_constant_override("margin_bottom", 8)
 	container.add_child(pad)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
 	pad.add_child(col)
-	col.add_child(g._label("Отголоски мира", 17))
+	col.add_child(UIWidgets.section(g, "ОТГОЛОСКИ МИРА"))
 	var desc := g._label("Когда другие игроки повторяют твои вещества, здесь копится эхо. Забирай его эфиром — эхо не сгорает.", 12)
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc.add_theme_color_override("font_color", Color(0.62, 0.74, 0.82))
@@ -52,7 +54,7 @@ func _build_resonance_page(container: VBoxContainer) -> void:
 	_res_miles.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_res_miles.add_theme_color_override("font_color", Color(0.9, 0.86, 0.72))
 	col.add_child(_res_miles)
-	col.add_child(g._label("Родословная", 14))
+	col.add_child(UIWidgets.section(g, "РОДОСЛОВНАЯ"))
 	_res_lines = VBoxContainer.new()
 	_res_lines.add_theme_constant_override("separation", 4)
 	col.add_child(_res_lines)

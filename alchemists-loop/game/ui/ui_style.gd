@@ -43,6 +43,9 @@ const GOLD_DIM := BRASS_DIM
 const TEXT := CREAM
 const DANGER := RUBY
 
+# Единый небольшой верхний отступ содержимого всех вкладок нижнего меню.
+const PAGE_TOP_M := 10.0
+
 # Рунический display-шрифт (заголовок игры и названия карточек сигилов).
 const RUNIC_PATH := "res://assets/fonts/Alchemist-Runic.ttf"
 static var _runic: Font = null
@@ -63,6 +66,20 @@ static func runic() -> Font:
 				arr.append(fb)
 				_runic.fallbacks = arr
 	return _runic
+
+
+static var _emoji: SystemFont = null
+
+
+static func emoji_fallback() -> Font:
+	# В Godot 4.7 нет Theme.set_fallback_font (код из docs §6 не компилируется):
+	# эмодзи-фолбэк живёт в Font.fallbacks каждого шрифта темы — навешивается
+	# в main._load_font. Кэш обязателен: один и тот же объект во всех шрифтах.
+	if _emoji == null:
+		_emoji = SystemFont.new()
+		_emoji.font_names = PackedStringArray([
+			"Segoe UI Emoji", "Noto Color Emoji", "Apple Color Emoji", "Android Emoji"])
+	return _emoji
 
 
 static func box(bg: Color, border: Color, radius: int, border_w: int = 1) -> StyleBoxFlat:
@@ -280,8 +297,12 @@ static func set_tabs_panel_bare(tabs: TabContainer, bare: bool) -> void:
 	if bare:
 		tabs.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 		return
-	tabs.add_theme_stylebox_override("panel",
-		UITheme.nine("frame_panel", Vector4(20, 20, 20, 20), Vector4(20, 18, 20, 18)))
+	tabs.add_theme_stylebox_override("panel", tab_panel())
+
+
+## Единая рамка разделов нижнего меню: и TabContainer, и «Друзья» рисуют её.
+static func tab_panel() -> StyleBoxTexture:
+	return UITheme.nine("frame_panel", Vector4(20, 20, 20, 20), Vector4(20, 18, 20, 18))
 
 
 # ---------- глобальная тема ----------

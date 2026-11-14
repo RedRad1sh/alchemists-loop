@@ -72,6 +72,63 @@ static func run(g: Game) -> void:
 		g._engine._pending_plan = {}
 		g._engine._pending_item = ""
 		g._engine._refresh()
+	await _check_bottom_tab_consistency(g)
+
+## Консистентность нижних вкладок (претензии владельца): единый верхний отступ,
+## «Друзья» того же размера и с той же рамкой, что остальные разделы, кнопки
+## верхней панели отвечают на нажатие сжатием.
+static func _check_bottom_tab_consistency(g: Game) -> void:
+	var tops := {}
+	# Замер только на видимой вкладке: скрытый TabContainer не пересчитывает
+	# layout, поэтому открываем каждый раздел так же, как игрок — через нижний бар.
+	var nav_for := {Game.TAB_WORLD: 1, Game.TAB_RATING: 3, Game.TAB_TOOLS: 4}
+	for tab in [Game.TAB_WORLD, Game.TAB_RATING, Game.TAB_TOOLS]:
+		await _click_nav(g, int(nav_for[tab]))
+		await g.get_tree().process_frame
+		var page := g._tabs_ref.get_tab_control(tab) as ScrollContainer
+		page.scroll_vertical = 0
+		await g.get_tree().process_frame
+		var margin := page.get_child(0) as MarginContainer
+		Selftest.check("page uses shared top indent tab %d" % tab,
+			margin.get_theme_constant("margin_top") == int(UIStyle.PAGE_TOP_M))
+		var first: Control = margin.get_child(0) as Control
+		while first is Container and first.get_child_count() > 0:
+			first = first.get_child(0) as Control
+		tops[tab] = first.global_position.y
+	Selftest.check("world, rating and settings share one top line",
+		is_equal_approx(tops[Game.TAB_WORLD], tops[Game.TAB_RATING])
+		and is_equal_approx(tops[Game.TAB_WORLD], tops[Game.TAB_TOOLS]))
+	var tabs_rect := g._tabs_ref.get_global_rect()
+	# Рамка TabContainer рисуется вокруг области контента: скрытый tab bar
+	# резервирует высоту сверху, эталон сдвигаем на ту же величину.
+	var bar_h := g._tabs_ref.get_tab_bar().get_combined_minimum_size().y
+	tabs_rect.position.y += bar_h
+	tabs_rect.size.y -= bar_h
+	await _click_nav(g, 2)
+	await g.get_tree().process_frame
+	var friends_panel := g._social_ui._screen.find_child("SocialPanel", true, false) as PanelContainer
+	var friends_rect := friends_panel.get_global_rect()
+	Selftest.check("friends frame matches the tab rect",
+		friends_rect.position.distance_to(tabs_rect.position) < 1.0
+		and friends_rect.size.distance_to(tabs_rect.size) < 1.0)
+	var friends_frame := friends_panel.get_theme_stylebox("panel") as StyleBoxTexture
+	var tabs_frame := g._tabs_ref.get_theme_stylebox("panel") as StyleBoxTexture
+	Selftest.check("friends frame is the tab frame",
+		friends_frame != null and tabs_frame != null
+		and friends_frame.texture == tabs_frame.texture)
+	await _click_nav(g, 0)
+	for key in ["EtherChip", "ProfileEntry", "ShopBtn"]:
+		var button := g.find_child(key, true, false) as Button
+		Selftest.check("HUD button exists " + key, button != null)
+		if button == null:
+			continue
+		button.button_down.emit()
+		await g.get_tree().create_timer(0.1).timeout
+		Selftest.check("HUD button compresses on press " + key, button.scale.x < 0.99)
+		button.button_up.emit()
+		await g.get_tree().create_timer(0.3).timeout
+		Selftest.check("HUD button springs back after release " + key,
+			button.scale.distance_to(Vector2.ONE) < 0.01)
 
 static func _click_nav(g: Game, index: int) -> void:
 	await g.get_tree().process_frame

@@ -1130,13 +1130,11 @@ func _build_world(page: VBoxContainer) -> void:
 	page.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	# Всё в одном ScrollContainer: убраны вложенные Scroll'ы; пагинация,
 	# ленты и резонавилки идут последовательно без отдельных экранов.
-	page.add_child(g._label("Мир живых открытий", 20))
+	page.add_child(UIWidgets.section(g, "МИР ЖИВЫХ ОТКРЫТИЙ"))
 	g._online._world_status = g._label("Связываемся с миром…", 14)
 	g._online._world_status.add_theme_color_override("font_color", Color(0.62, 0.74, 0.82))
 	page.add_child(g._online._world_status)
-	var race_title := g._label("Гонка первооткрытий", 16)
-	race_title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.42))
-	page.add_child(race_title)
+	page.add_child(UIWidgets.section(g, "ГОНКА ПЕРВООТКРЫТИЙ"))
 	var challenge_row := HBoxContainer.new()
 	challenge_row.add_theme_constant_override("separation", 8)
 	g._online._challenge_avatar = g._make_avatar("", 20)
@@ -1147,22 +1145,20 @@ func _build_world(page: VBoxContainer) -> void:
 	g._online._challenge_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	challenge_row.add_child(g._online._challenge_label)
 	page.add_child(challenge_row)
-	var feed_title := g._label("Свежие открытия", 16)
-	feed_title.add_theme_color_override("font_color", UIStyle.BRASS_HI)
-	page.add_child(feed_title)
+	page.add_child(UIWidgets.section(g, "СВЕЖИЕ ОТКРЫТИЯ"))
 	g._feed_list = VBoxContainer.new()
 	g._feed_list.add_theme_constant_override("separation", 3)
 	page.add_child(g._feed_list)
-	page.add_child(g._label("Зал славы", 18))
+	page.add_child(UIWidgets.section(g, "ЗАЛ СЛАВЫ"))
 	g._online._hall_list = VBoxContainer.new()
 	g._online._hall_list.add_theme_constant_override("separation", 4)
 	page.add_child(g._online._hall_list)
-	page.add_child(g._label("Топ длинных цепочек", 18))
+	page.add_child(UIWidgets.section(g, "ТОП ДЛИННЫХ ЦЕПОЧЕК"))
 	g._online._chains_list = VBoxContainer.new()
 	g._online._chains_list.add_theme_constant_override("separation", 4)
 	page.add_child(g._online._chains_list)
 	g._resonance._build_resonance_page(page)
-	page.add_child(g._label("Все вещества", 18))
+	page.add_child(UIWidgets.section(g, "ВСЕ ВЕЩЕСТВА"))
 	g._online._world_search = LineEdit.new()
 	g._online._world_search.placeholder_text = "Поиск по миру: имя, id, автор…"
 	g._online._world_search.clear_button_enabled = true
@@ -1208,15 +1204,11 @@ func _mode_hint(key: String) -> String:
 # ---------- инструменты: единая вкладка-хаб (вместо растущих вкладок) ----------
 
 func _build_tools_page(page: VBoxContainer) -> void:
-	var pad := MarginContainer.new()
-	pad.add_theme_constant_override("margin_left", 14)
-	pad.add_theme_constant_override("margin_right", 14)
-	pad.add_theme_constant_override("margin_top", 12)
-	pad.add_theme_constant_override("margin_bottom", 8)
-	page.add_child(pad)
+	# Отступы страницы задаёт _make_page (единые для всех вкладок); своя рамка
+	# полей здесь давала «Настройкам» лишний верхний отступ против «Мира».
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 10)
-	pad.add_child(col)
+	page.add_child(col)
 	_build_more_sections(page, col)
 	_tools_flow = HFlowContainer.new()
 	_tools_flow.add_theme_constant_override("h_separation", 6)
@@ -1247,6 +1239,12 @@ const MORE_LICENSES := [
 func _build_more_sections(page: Control, col: VBoxContainer) -> void:
 	var settings := _more_section(col, "MoreSettings", "НАСТРОЙКИ")
 	g._hub._build_sound_controls(settings)
+	var news := _more_section(col, "MoreNews", "НОВОСТИ")
+	var news_b := g._small_button("Новости", Vector2(0, 40))
+	news_b.name = "NewsOpenButton"
+	news_b.tooltip_text = "Алхимический вестник: новости сервера"
+	news_b.pressed.connect(g._open_news)
+	news.add_child(news_b)
 	var help := _more_section(col, "MoreHelp", "КАК ИГРАТЬ")
 	for line in MORE_HELP:
 		help.add_child(_more_text(String(line)))

@@ -46,6 +46,7 @@ func build(game: Game, parent: VBoxContainer) -> void:
 	var profile := Button.new()
 	profile.custom_minimum_size = Vector2(44, 44) * s
 	Kit.clear_button(profile)
+	Kit.press_feedback(profile)
 	profile.name = "ProfileEntry"
 	profile.tooltip_text = "Профиль: твоё имя и аватар"
 	profile.pressed.connect(g._hub._open_profile)
@@ -133,6 +134,7 @@ func _side_button(icon: String, tip: String, s: float) -> Button:
 	button.custom_minimum_size = Vector2(44, 44) * s
 	button.tooltip_text = tip
 	Kit.frame_button(button, "06_side_button_frame.png")
+	Kit.press_feedback(button)
 	UIIcon.into_button(button, icon.replace("gi_", "hud_"), roundi(19 * s), Color("e2bc80"))
 	return button
 
@@ -143,6 +145,7 @@ func _chip(parent: HBoxContainer, node_name: String, icon: String, key: String, 
 	button.custom_minimum_size = Vector2(dimensions.x, 44 * s)
 	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	Kit.frame_button(button, file)
+	Kit.press_feedback(button)
 	var plaque := button.get_node("Artwork") as TextureRect
 	plaque.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	plaque.offset_left = 8 * s

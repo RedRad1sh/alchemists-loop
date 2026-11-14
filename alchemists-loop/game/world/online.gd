@@ -113,12 +113,8 @@ func _init(game: Game) -> void:
 # ---------- рейтинг ----------
 
 func _build_rating_page(page: VBoxContainer) -> void:
-	var t := g._label("РЕЙТИНГ ИГРОКОВ", 20)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_color_override("font_color", Color(1.0, 0.85, 0.42))
-	page.add_child(t)
+	page.add_child(UIWidgets.section(g, "РЕЙТИНГ ИГРОКОВ"))
 	var sub := g._label("Кто сколько открыл — и чей домик можно посмотреть.", 13)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_color_override("font_color", Color(0.6, 0.68, 0.75))
 	page.add_child(sub)
 	_rating_me = g._label("", 12)
