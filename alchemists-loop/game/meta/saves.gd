@@ -37,6 +37,13 @@ var _save_frozen := false
 # награды). Заморозка в единственной точке записи — единственный способ
 # гарантированно не пересоздать удалённый файл старым состоянием.
 
+# Язык в сейве — выбор игрока из UserData, а не активная локаль: CLI-оверрайд
+# --lang временный (persist=false) и не должен переживать перезапуск через сейв.
+func _saved_locale() -> String:
+	if UserData != null and UserData.has_method("get_locale"):
+		return UserData.get_locale()
+	return Locale.get_locale_code() if Locale != null else "ru"
+
 func _save_game() -> bool:
 	if _save_frozen:
 		return false
@@ -132,7 +139,7 @@ func _save_game() -> bool:
 		"last_ts": snapshot_ts,
 		"sage_gold": g._engine.sage_gold,
 		"journal": g._hub._log_events.slice(0, 20),
-		"locale": Locale.get_locale_code() if Locale != null else "ru",
+		"locale": _saved_locale(),
 		"music_on": Sfx.music_on,
 		"sfx_vol": Sfx.sfx_volume,
 		"music_vol": Sfx.music_volume,

@@ -104,7 +104,7 @@ static func run(g: Game) -> void:
 			continue
 		var nm_tr := g.atr(g._online._item_name(sid))
 		var ds_tr := g.atr(g._online._item_desc(sid))
-		if _has_cyrillic(nm_tr) or _has_cyrillic(ds_tr):
+		if nm_tr.is_empty() or ds_tr.is_empty() or _has_cyrillic(nm_tr) or _has_cyrillic(ds_tr):
 			bad_items.append(sid)
 	Selftest.check("i18n all 109 item names and descriptions translate cleanly to English",
 		bad_items.is_empty())
@@ -139,11 +139,14 @@ static func run(g: Game) -> void:
 	if not bad_data.is_empty():
 		print("[FAIL-DIAG] untranslated data: ", bad_data.slice(0, 15))
 
-	# Поиск элементов находит вещества по английскому названию ("Steam", "Fire").
-	g._engine._search_box.text = "steam"
-	var search_lab_ok := g._online._matches_search("steam") and not g._online._matches_search("stone")
+	# Поиск по EN-имени/описанию: запрос обязан удовлетворяться ТОЛЬКО переводом.
+	# «sprout» — EN-имя plant (RU «Росток» и id «plant» его не содержат); прежний
+	# «steam» маскировался совпадением с item_id и проходил бы без перевода.
+	g._engine._search_box.text = "sprout"
+	var search_lab_ok := g._online._matches_search("plant") and not g._online._matches_search("stone")
 	g._engine._search_box.text = ""
-	g._pages._experiment_reagent_search.text = "flame"
+	# «heat» есть только в EN-описании fire («Heat and flame…»), не в имени/id/алиасах.
+	g._pages._experiment_reagent_search.text = "heat"
 	var search_exp_ok := g._pages._experiment_search_matches("fire")
 	g._pages._experiment_reagent_search.text = ""
 	Selftest.check("i18n search matches English element names and descriptions",
@@ -164,6 +167,39 @@ static func run(g: Game) -> void:
 		and not _has_cyrillic(g.atr(String(lore_out.get("description", ""))))
 		and not _has_cyrillic(g.atr(String(lore_out.get("effect_hint", ""))))
 		and not _has_cyrillic(g.atr(String(lore_out.get("warning", "")))))
+
+	# Приветствие питомца хранит имя игрока как есть: захваченная группа — raw,
+	# иначе «Огонь» перевёлся бы в «Fire» и кличка исказилась.
+	var welcome := g.atr("С возвращением, Огонь! Котёл соскучился.")
+	Selftest.check("i18n welcome bubble keeps the player nickname untranslated (raw group)",
+		welcome.contains("Welcome back") and welcome.contains("Огонь") and not welcome.contains("Fire"))
+
+	# Карточно-независимый RU-заголовок (шаблон без {target}/{source}) не должен
+	# переводиться именем карты: иначе две карты с одинаковым RU-заголовком
+	# делили бы глобальную запись и одна носила имя другой.
+	var lore_indep_ok := true
+	var lore_indep_n := 0
+	for cid in ["steam", "fire", "water", "earth", "air"]:
+		for sd in [101, 202, 303, 404]:
+			var lc := {
+				"id": cid, "recipe": [{"item_id": "water", "qty": 10}, {"item_id": "fire", "qty": 10}],
+				"process": "sublimatio", "stage": "albedo", "seed": sd,
+			}
+			var lo := SigilLore.generate(lc)
+			if lo.is_empty():
+				continue
+			var tru := String(lo.get("title", ""))
+			if tru.is_empty() or SigilLore._ru_mentions_card(tru, lc):
+				continue
+			lore_indep_n += 1
+			var en := g.atr(tru)
+			if en.contains(SigilLore._en_slug_label(cid)):
+				lore_indep_ok = false
+			if not SigilLore._ru_has_symbol(tru, SigilLore._symbol_for(cid, sd)) \
+					and en != "Sublimation — Albedo":
+				lore_indep_ok = false
+	Selftest.check("i18n card-independent sigil titles never borrow a card name in EN",
+		lore_indep_n > 0 and lore_indep_ok)
 
 	# Рунический шрифт имеет fallback для строчной латиницы (не рисует пустые квадраты).
 	var runic_f := UIStyle.runic()
@@ -210,6 +246,22 @@ static func run(g: Game) -> void:
 	Selftest.check("i18n _load_game restores saved language preference",
 		String(locale_node.get("lang")) == "en"
 		and g._engine._brew_btn.atr(g._engine._brew_btn.text) == "BREW")
+
+	# CLI-оверрайд --lang временный (persist=false): сейв хранит выбор игрока из
+	# UserData, а не активную локаль, иначе --lang=en навсегда менял бы язык.
+	var cli_saved := String(locale_node.get("_cli_lang"))
+	var ud_saved := UserData.get_locale()
+	UserData.set_locale("ru")
+	locale_node.call("apply_locale", "en", false)
+	locale_node.set("_cli_lang", "en")
+	g._saves._save_game()
+	locale_node.set("_cli_lang", "")
+	g._saves._load_game()
+	Selftest.check("i18n save does not leak a temporary CLI locale into the permanent choice",
+		String(locale_node.get("lang")) == "ru" and UserData.get_locale() == "ru")
+	locale_node.set("_cli_lang", cli_saved)
+	UserData.set_locale(ud_saved)
+	locale_node.call("apply_locale", ud_saved, false)
 
 
 	# В английском режиме доска контрактов держит все подписи, бафф-записки и штампы внутри бумаги без обрезки.

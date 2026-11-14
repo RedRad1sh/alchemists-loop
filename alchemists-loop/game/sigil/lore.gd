@@ -933,6 +933,47 @@ static func _en_slug_label(slug: String) -> String:
 	return " ".join(out) if not out.is_empty() else "Essence"
 
 
+## ID цели/источника как в generate(): у внекомплектных хроматиков цель сводится
+## к первому ингредиенту.
+static func _lore_card_ids(card: Dictionary) -> Array:
+	var card_id := str(card.get("id", ""))
+	var source_id := ""
+	var recipe: Variant = card.get("recipe", [])
+	if recipe is Array:
+		for entry in recipe:
+			if entry is Dictionary:
+				var iid := str((entry as Dictionary).get("item_id", ""))
+				if not iid.is_empty():
+					source_id = iid
+					break
+	var target_id := card_id
+	if not _load_elements().has(target_id):
+		target_id = source_id
+	return [target_id, source_id]
+
+
+## Содержит ли RU-текст имя карты/ингредиента (в любом падеже) — тогда перевод
+## может ссылаться на карту; иначе замена обязана быть карточно-независимой.
+static func _ru_mentions_card(text: String, card: Dictionary) -> bool:
+	for cid in _lore_card_ids(card):
+		var id := str(cid)
+		if id.is_empty():
+			continue
+		for case in ["name", "gen", "dat", "acc", "ins", "prep"]:
+			var form := _decline(id, case)
+			if not form.is_empty() and text.contains(form):
+				return true
+	return false
+
+
+static func _ru_has_symbol(text: String, sym: Dictionary) -> bool:
+	for case in ["name", "gen", "dat", "acc", "ins", "prep"]:
+		var form := _form(sym, case)
+		if not form.is_empty() and text.contains(form):
+			return true
+	return false
+
+
 static func _register_en_lore(card: Dictionary, res: Dictionary) -> void:
 	if Locale == null or not Locale.has_method("register_dynamic"):
 		return
@@ -972,14 +1013,32 @@ static func _register_en_lore(card: Dictionary, res: Dictionary) -> void:
 	var desc_ru := str(res.get("description", ""))
 	var eff_ru := str(res.get("effect_hint", ""))
 	var warn_ru := str(res.get("warning", ""))
+	var sym := _symbol_for(str(card.get("id", "")), int(card.get("seed", 0)))
+	var symbol_en := _en_slug_label(str(sym.get("id", "")))
+	# EN-замена регистрируется глобально по RU-тексту. Если RU-шаблон не называет
+	# карту (174/300 заголовков, все 24 generic-эффекта), подстановка target_en
+	# приписала бы одной карте имя другой при совпадении RU-текста. Поэтому
+	# карточное имя допустимо только когда RU сам его содержит; иначе — символ
+	# или карточно-независимая формулировка.
 	if not title_ru.is_empty():
-		Locale.register_dynamic(title_ru, "%s of %s — %s" % [proc_en, target_en, stage_en])
+		var title_en: String
+		if _ru_mentions_card(title_ru, card):
+			title_en = "%s of %s — %s" % [proc_en, target_en, stage_en]
+		elif _ru_has_symbol(title_ru, sym):
+			title_en = "%s of %s — %s" % [proc_en, symbol_en, stage_en]
+		else:
+			title_en = "%s — %s" % [proc_en, stage_en]
+		Locale.register_dynamic(title_ru, title_en)
 	if not desc_ru.is_empty():
 		Locale.register_dynamic(desc_ru,
 			"Through %s in the %s phase, %s converges within the sealed alembic. The transmutation stabilizes into the %s sigil, preserving its alchemical resonance." % [proc_en.to_lower(), stage_en, reag_str, target_en])
 	if not eff_ru.is_empty():
-		Locale.register_dynamic(eff_ru,
-			"Attunes the laboratory to %s resonance during %s." % [target_en.to_lower(), stage_en.to_lower()])
+		var eff_en: String
+		if _ru_mentions_card(eff_ru, card):
+			eff_en = "Attunes the laboratory to %s resonance during %s." % [target_en.to_lower(), stage_en.to_lower()]
+		else:
+			eff_en = "Attunes the laboratory to the resonance of the Work."
+		Locale.register_dynamic(eff_ru, eff_en)
 	if not warn_ru.is_empty():
 		Locale.register_dynamic(warn_ru,
 			"Caution: keep the %s seal steady throughout %s." % [stage_en.to_lower(), proc_en.to_lower()])
