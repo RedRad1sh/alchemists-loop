@@ -276,8 +276,11 @@ func _on_slot_cleared(well: SlotWell) -> void:
 	_refresh()
 # ================= прокачка и режимы =================
 
+func _bal() -> BalanceProfile:
+	return g.balance if (g != null and g.balance != null) else BalanceConfig.baseline()
+
 func _up_def(id: String) -> Dictionary:
-	for u in Game.UPGRADES:
+	for u in (_bal().get_value("upgrades.items", Game.UPGRADES) as Array):
 		if String(u["id"]) == id:
 			return u
 	return {}
@@ -304,28 +307,27 @@ func _up_cost_at(id: String, lvl: int) -> int:
 func _sage_multiplier() -> float:
 	# Prestige remains useful, but cannot make regeneration grow without bound.
 	# The cap bonus is deliberately stronger than the bounded regen multiplier.
-	return 1.0 + 0.04 * minf(float(sage_gold), 15.0)
+	return 1.0 + float(_bal().get_value("prestige.regen_per_gold")) * minf(float(sage_gold), float(_bal().get_value("prestige.regen_gold_cap")))
 
 func _max_ether() -> int:
-	return Game.MAX_ETHER + 50 * _up_lvl("ether_cap") + _collection_cap_bonus() \
-		+ 40 * sage_gold + g._progress_ui._quest_cap_bonus() + g._progress_ui._ach_cap_bonus() + g._resonance._res_cap_bonus() \
+	return int(_bal().get_value("ether.max_ether", Game.MAX_ETHER)) + int(_bal().get_value("ether.cap_per_upgrade")) * _up_lvl("ether_cap") + _collection_cap_bonus() \
+		+ int(_bal().get_value("prestige.cap_per_gold")) * sage_gold + g._progress_ui._quest_cap_bonus() + g._progress_ui._ach_cap_bonus() + g._resonance._res_cap_bonus() \
 		+ g._retort._essence_cap_bonus() + g._retort._essence_cap_line_bonus() + g._riddles._letter_cap_bonus() + g._riddles._atlas_cap_bonus() + g._contracts._mile_cap_bonus() \
 		+ g._contracts._vein_cap_total + g._sigil.milestone_cap_bonus() + g._sigil.card_cap_bonus()
 
 func spring_interval() -> float:
+	var b := _bal()
 	var speed_lvl: int = spring_levels.get("speed", 0)
-	var interval: float = Game.SPRING_INTERVAL * pow(SpringBalance.SPEED_FACTOR, speed_lvl)
-	return maxf(interval, SpringBalance.MIN_INTERVAL)
+	var base_iv := float(b.get_value("spring.base_interval", Game.SPRING_INTERVAL))
+	var sf := float(b.get_value("spring.speed_factor", SpringBalance.SPEED_FACTOR))
+	var interval: float = base_iv * pow(sf, speed_lvl)
+	return maxf(interval, float(b.get_value("spring.min_interval", SpringBalance.MIN_INTERVAL)))
 
 func spring_purchase(axis: String) -> Dictionary:
 	var lvl: int = spring_levels.get(axis, 0)
-	var table: Array
-	match axis:
-		"speed": table = SpringBalance.SPEED
-		"volume": table = SpringBalance.VOLUME
-		"sources": table = SpringBalance.SOURCES
-		"offline": table = SpringBalance.OFFLINE
-		_: return {"ok": false, "error": "unknown axis"}
+	var table: Array = SpringBalance.axis_table(_bal(), axis)
+	if table.is_empty():
+		return {"ok": false, "error": "unknown axis"}
 	if lvl >= table.size():
 		return {"ok": false, "error": "max level"}
 	var price: Dictionary = table[lvl]
@@ -350,13 +352,14 @@ func spring_purchase(axis: String) -> Dictionary:
 	return {"ok": true, "error": ""}
 
 func _ether_rate() -> float:
-	return (Game.BASE_ETHER_REGEN + 0.35 * float(_up_lvl("ether_regen")) + _collection_regen_bonus() \
+	var base_regen := float(_bal().get_value("ether.base_regen", Game.BASE_ETHER_REGEN))
+	return (base_regen + float(_bal().get_value("ether.regen_per_upgrade")) * float(_up_lvl("ether_regen")) + _collection_regen_bonus() \
 		+ g._progress_ui._quest_regen_bonus() + g._progress_ui._ach_regen_bonus() + g._resonance._res_regen_bonus() \
 		+ g._contracts._mile_regen_bonus() + g._contracts._fair_regen_total) \
 		* _sage_multiplier() * (1.0 + g._contracts.buff_power("ether_regen"))
 
 func _brew_time() -> float:
-	return maxf(0.35, g.BREW_SECONDS * pow(0.90, _up_lvl("brew_speed")) \
+	return maxf(float(_bal().get_value("brew.minimum_seconds")), float(_bal().get_value("brew.base_seconds")) * pow(float(_bal().get_value("brew.speed_factor")), _up_lvl("brew_speed")) \
 		/ (1.0 + g._contracts.buff_power("brew_speed")))
 
 func _content_layer(item_id: String, trail: Array = []) -> int:
@@ -385,7 +388,9 @@ func _discovery_fee_for_layer(layer: int) -> int:
 	if layer <= 0:
 		return 0
 	var key := mini(layer, 6)
-	return int(Game.DISCOVERY_FEES.get(key, Game.DISCOVERY_FEES[6]))
+	var fees: Dictionary = _bal().get_value("discovery.fees", Game.DISCOVERY_FEES) as Dictionary
+	var def_fee: int = int(fees.get(6, fees.get("6", Game.DISCOVERY_FEES[6])))
+	return int(fees.get(key, fees.get(str(key), def_fee)))
 
 func _production_pair_block(a: String, b: String) -> String:
 	var recipe := g._online._find_recipe(a, b)
@@ -398,7 +403,7 @@ func _production_pair_block(a: String, b: String) -> String:
 
 func _pair_cost(a: String, b: String, discount: float = 1.0) -> int:
 	var recipe := g._online._find_recipe(a, b)
-	var raw_cost := Game.BREW_COST
+	var raw_cost := int(_bal().get_value("ether.brew_cost", Game.BREW_COST))
 	if not recipe.is_empty():
 		var output := String(recipe.get("out", ""))
 		if output != "" and not inventory.has(output):
@@ -412,6 +417,7 @@ func _plan_ether_cost(plan: Dictionary, limit_ops: int = -1, discount: float = 1
 	var simulated := inventory.duplicate()
 	var total := 0
 	var taken := 0
+	var flat_cost := int(_bal().get_value("ether.brew_cost", Game.BREW_COST))
 	for raw_op in plan.get("ops", []):
 		var op: Dictionary = raw_op
 		var a := String(op.get("a", ""))
@@ -420,7 +426,7 @@ func _plan_ether_cost(plan: Dictionary, limit_ops: int = -1, discount: float = 1
 			if limit_ops >= 0 and taken >= limit_ops:
 				return maxi(1, int(round(float(total) * discount))) if total > 0 else 0
 			var recipe := g._online._find_recipe(a, b)
-			var cost := Game.BREW_COST
+			var cost := flat_cost
 			if not recipe.is_empty():
 				var out := String(recipe.get("out", ""))
 				if out != "" and not simulated.has(out):
@@ -445,7 +451,7 @@ func _grant_ether(amount: int, _reason: String = "") -> int:
 	return direct
 
 func _experiment_day_key() -> String:
-	return Time.get_date_string_from_system()
+	return Time.get_date_string_from_unix_time(int(g.game_now())) if g.game_clock.is_valid() else Time.get_date_string_from_system()
 
 func _experiment_sync_day() -> void:
 	var today := _experiment_day_key()
@@ -455,11 +461,11 @@ func _experiment_sync_day() -> void:
 
 func _experiment_remaining() -> int:
 	_experiment_sync_day()
-	return maxi(0, Game.EXPERIMENT_DAILY_LIMIT - _experiment_count)
+	return maxi(0, int(_bal().get_value("discovery.daily_limit", Game.EXPERIMENT_DAILY_LIMIT)) - _experiment_count)
 
 func _experiment_cooldown_remaining() -> float:
-	var elapsed := Time.get_unix_time_from_system() - _experiment_last_at
-	return maxf(0.0, Game.EXPERIMENT_COOLDOWN_SEC - elapsed)
+	var elapsed := g.game_now() - _experiment_last_at
+	return maxf(0.0, float(_bal().get_value("discovery.cooldown_sec", Game.EXPERIMENT_COOLDOWN_SEC)) - elapsed)
 
 func _experiment_status(a: String, b: String) -> Dictionary:
 	if not _resource_mutation_allowed():
@@ -486,8 +492,9 @@ func _experiment_status(a: String, b: String) -> Dictionary:
 		return {"ok": false, "reason": "Следующий эксперимент будет доступен через %d с." % ceili(cooldown)}
 	if _experiment_remaining() <= 0:
 		return {"ok": false, "reason": "Дневной лимит экспериментов исчерпан."}
-	if _available_ether() < Game.EXPERIMENT_COST:
-		return {"ok": false, "reason": "Для эксперимента нужно %d ⚡." % Game.EXPERIMENT_COST}
+	var exp_cost := int(_bal().get_value("discovery.cost", Game.EXPERIMENT_COST))
+	if _available_ether() < exp_cost:
+		return {"ok": false, "reason": "Для эксперимента нужно %d ⚡." % exp_cost}
 	return {"ok": true, "key": key}
 
 func _begin_experiment(a: String, b: String) -> bool:
@@ -497,7 +504,8 @@ func _begin_experiment(a: String, b: String) -> bool:
 		Sfx.error()
 		_refresh()
 		return false
-	if not _spend_ether(Game.EXPERIMENT_COST):
+	var exp_cost := int(_bal().get_value("discovery.cost", Game.EXPERIMENT_COST))
+	if not _spend_ether(exp_cost):
 		return false
 	inventory[a] = int(inventory.get(a, 0)) - 1
 	inventory[b] = int(inventory.get(b, 0)) - 1
@@ -506,10 +514,10 @@ func _begin_experiment(a: String, b: String) -> bool:
 	attempts += 1
 	_experiment_sync_day()
 	_experiment_count += 1
-	_experiment_last_at = Time.get_unix_time_from_system()
+	_experiment_last_at = g.game_now()
 	_experiment_pending_pair = [a, b]
 	status_text = "Эксперимент отправлен в лабораторный журнал: %s + %s…" % [g._online._item_name(a), g._online._item_name(b)]
-	Analytics.track("experiment_start", {"left": a, "right": b, "cost": Game.EXPERIMENT_COST})
+	Analytics.track("experiment_start", {"left": a, "right": b, "cost": exp_cost})
 	_refresh()
 	return true
 
@@ -523,7 +531,9 @@ func _finish_experiment_inputs(a: String, b: String, full_refund: bool) -> void:
 	inventory[b] = int(inventory.get(b, 0)) + 1
 	_spring_unburn(a)
 	_spring_unburn(b)
-	_grant_ether(Game.EXPERIMENT_COST if full_refund else Game.EXPERIMENT_FAILURE_REFUND, "experiment_refund")
+	var exp_cost := int(_bal().get_value("discovery.cost", Game.EXPERIMENT_COST))
+	var exp_ref := int(_bal().get_value("discovery.failure_refund", Game.EXPERIMENT_FAILURE_REFUND))
+	_grant_ether(exp_cost if full_refund else exp_ref, "experiment_refund")
 	_experiment_pending_pair.clear()
 	_refresh()
 
@@ -610,14 +620,16 @@ func _award_synthesis(item_id: String) -> int:
 func _stage_ops() -> int:
 	# A2: этап автоварки растёт от ранга печати (3 → 4 → 5). Константа — база;
 	# читают этап только отсюда.
-	var n := Game.CRAFT_STAGE_OPERATIONS
+	var n := int(_bal().get_value("caps.craft_stage_operations"))
 	for r in Game.MASTERY_STAGE_RANKS:
 		if mastery_rank >= int(r):
 			n += 1
 	return n
 
 func _mastery_cost() -> int:
-	return int(round(float(Game.ETHER_MASTERY_BASE) * pow(Game.ETHER_MASTERY_GROWTH, mastery_rank)))
+	var mb := float(_bal().get_value("ether.mastery_base", Game.ETHER_MASTERY_BASE))
+	var mg := float(_bal().get_value("ether.mastery_growth", Game.ETHER_MASTERY_GROWTH))
+	return int(round(mb * pow(mg, mastery_rank)))
 
 func _buy_mastery() -> bool:
 	if not _resource_mutation_allowed():
@@ -695,7 +707,9 @@ func _mode_unlocked(key: String) -> bool:
 	return false
 
 func _spring_volume_cap() -> int:
-	return int(SpringBalance.VOLUME_CAP[spring_levels.get("volume", 0)])
+	var caps := SpringBalance.volume_cap(_bal())
+	var idx := clampi(int(spring_levels.get("volume", 0)), 0, caps.size() - 1)
+	return int(caps[idx])
 
 ## Буфер — учёт родниковой добычи, а не отдельное хранилище: расход элемента
 ## игроком освобождает место под капом, иначе после капа Родник замирал навсегда.
@@ -741,17 +755,18 @@ func _spring_tick(delta: float) -> void:
 		if produced:
 			_refresh()
 
-func _gift_tick(delta: float) -> void:
+func _gift_tick(delta: float) -> String:
 	# улучшение «Дары»: +1 случайное открытое вещество каждые 2 минуты
 	if _up_lvl("auto_gift") < 1:
-		return
+		return ""
 	_gift_clock += delta
-	if _gift_clock < Game.GIFT_INTERVAL:
-		return
-	_gift_clock -= Game.GIFT_INTERVAL
+	var interval := float(_bal().get_value("events.gift_interval"))
+	if _gift_clock + 0.000001 < interval:
+		return ""
+	_gift_clock = maxf(0.0, _gift_clock - interval)
 	var pick := g._online._random_opened_item()
 	if pick == "":
-		return
+		return ""
 	inventory[pick] = int(inventory.get(pick, 0)) + 1
 	status_text = "Дары: %s +1." % g._online._item_name(pick)
 	var orb: ElementOrb = _item_orbs.get(pick)
@@ -760,6 +775,7 @@ func _gift_tick(delta: float) -> void:
 			g._item_colors.get(pick, Color.WHITE))
 	Sfx.click()
 	_refresh()
+	return pick
 # ================= геймплей =================
 
 func _deny_orb(orb: ElementOrb, msg: String) -> void:
@@ -854,7 +870,7 @@ func _candidate_skip_text(reason: String, retry_in: float) -> String:
 
 
 func _brew(from_auto: bool = false) -> Dictionary:
-	var pair_cost := Game.BREW_COST
+	var pair_cost := int(_bal().get_value("ether.brew_cost", Game.BREW_COST))
 	if selected.size() == 2:
 		pair_cost = _pair_cost(selected[0], selected[1], _production_discount)
 	# U9 (T11): единый мьютекс — ручная варка не стартует, пока идёт автоплан.
@@ -997,6 +1013,8 @@ func _stop_auto() -> void:
 # ================= refresh =================
 
 func _refresh() -> void:
+	if g._selftest and g.has_meta("progression_driver"):
+		return
 	if g._item_colors.is_empty():
 		g._online._init_colors()
 	_refresh_header()
@@ -1243,20 +1261,22 @@ func _layer_of(item_id: String) -> int:
 func _rarity_of(item_id: String) -> Dictionary:
 	# редкость вещества из слоя; награда за первое открытие растёт с глубиной
 	var layer := _layer_of(item_id)
+	var bounties: Array = _bal().get_value("discovery.bounties")
 	if g._online._server_layers.has(item_id):
 		layer = int(g._online._server_layers[item_id])
 	if layer <= 0:
-		return {"tier": 0, "name": "первостихия", "color": Color(0.60, 0.65, 0.70), "bounty": 0}
+		return {"tier": 0, "name": "первостихия", "color": Color(0.60, 0.65, 0.70), "bounty": int(bounties[0])}
 	if layer <= 2:
-		return {"tier": 1, "name": "обычное", "color": Color(0.72, 0.78, 0.83), "bounty": 6}
+		return {"tier": 1, "name": "обычное", "color": Color(0.72, 0.78, 0.83), "bounty": int(bounties[1])}
 	if layer <= 4:
-		return {"tier": 2, "name": "редкое", "color": Color(0.36, 0.62, 0.95), "bounty": 12}
+		return {"tier": 2, "name": "редкое", "color": Color(0.36, 0.62, 0.95), "bounty": int(bounties[2])}
 	if layer == 5:
-		return {"tier": 3, "name": "эпическое", "color": Color(0.74, 0.45, 0.95), "bounty": 25}
-	return {"tier": 4, "name": "легендарное", "color": Color(0.98, 0.80, 0.20), "bounty": 45}
+		return {"tier": 3, "name": "эпическое", "color": Color(0.74, 0.45, 0.95), "bounty": int(bounties[3])}
+	return {"tier": 4, "name": "легендарное", "color": Color(0.98, 0.80, 0.20), "bounty": int(bounties[4])}
 
 func _milestone_reward(count: int) -> int:
-	return int(Game.MILESTONE_REWARDS.get(count, 0))
+	var rewards: Dictionary = _bal().get_value("milestones.rewards")
+	return int(rewards.get(count, rewards.get(str(count), 0)))
 
 func _milestone_boost(count: int) -> String:
 	match count:
@@ -1282,18 +1302,18 @@ func _next_milestone(count: int) -> int:
 func _collection_regen_bonus() -> float:
 	var b := 0.0
 	if _milestones_done.has(20):
-		b += 0.5
+		b += float(_bal().get_value("milestones.regen20"))
 	if _milestones_done.has(57):
-		b += 0.75
+		b += float(_bal().get_value("milestones.regen57"))
 	return b
 
 func _collection_cap_bonus() -> int:
-	return 50 if _milestones_done.has(40) else 0
+	return int(_bal().get_value("milestones.cap40")) if _milestones_done.has(40) else 0
 
 func _check_milestones() -> Array:
 	# начисляет награды за пройденные вехи; вернёт список новых вех
 	var crossed: Array = []
-	if g._selftest:
+	if g._selftest and not g.has_meta("progression_driver"):
 		return crossed
 	var count := inventory.size()
 	for m in Game.MILESTONES:
@@ -1316,7 +1336,7 @@ func _check_milestones() -> Array:
 func _grant_first_open(slug: String) -> Array:
 	# награда за первое появление вещества в инвентаре; вернёт новые вехи
 	_first_open_calls += 1  # U11 (T15): см. комментарий у поля
-	if g._selftest or not g.ITEMS.has(slug):
+	if (g._selftest and not g.has_meta("progression_driver")) or not g.ITEMS.has(slug):
 		return []
 	_layer_cache.erase(slug)
 	var r := _rarity_of(slug)
@@ -1355,7 +1375,7 @@ func _auto_craft(item_id: String) -> void:
 		Sfx.error()
 		_refresh()
 		return
-	var route_discount := Game.BLUEPRINT_DISCOUNT if _blueprints.has(item_id) else 1.0
+	var route_discount := float(_bal().get_value("brew.blueprint_discount")) if _blueprints.has(item_id) else 1.0
 	var ether_need := _plan_ether_cost(plan, -1, route_discount)
 	var stage_preview := mini(_stage_ops(), int(plan.get("total", 0)))
 	var stage_cost_preview := _plan_ether_cost(plan, stage_preview, route_discount)
@@ -1380,7 +1400,7 @@ func _auto_craft(item_id: String) -> void:
 	var warning_note := "⚠ длинная цепочка · " if int(plan["total"]) >= Game.CRAFT_PLAN_WARNING_OPERATIONS else ""
 	var blueprint_note := ""
 	if _blueprints.has(item_id):
-		blueprint_note = "Чертёж: −%d%% · " % [int(round((1.0 - Game.BLUEPRINT_DISCOUNT) * 100.0))]
+		blueprint_note = "Чертёж: −%d%% · " % [int(round((1.0 - float(_bal().get_value("brew.blueprint_discount"))) * 100.0))]
 	g._confirm_l3.text = "%s%sВарок: %d · всего эфир: %d · сейчас этап: %d ⚡ · можно продолжить позже" % [
 		warning_note, blueprint_note, int(plan["total"]), ether_need, stage_cost]
 	Juice.open(g._confirm_dim, g._confirm)
@@ -1394,7 +1414,7 @@ func _record_blueprint(item_id: String, plan: Dictionary) -> void:
 		"item": item_id,
 		"operations": int(plan.get("total", 0)),
 		"plan": plan.duplicate(true),
-		"discount": Game.BLUEPRINT_DISCOUNT,
+		"discount": float(_bal().get_value("brew.blueprint_discount")),
 		"created_at": Time.get_unix_time_from_system(),
 	}
 
@@ -1425,7 +1445,7 @@ func _run_auto_plan(item_id: String, plan: Dictionary) -> bool:
 	var total := int(plan.get("total", 0))
 	if total <= 0:
 		return false
-	var route_discount := Game.BLUEPRINT_DISCOUNT if _blueprints.has(item_id) else 1.0
+	var route_discount := float(_bal().get_value("brew.blueprint_discount")) if _blueprints.has(item_id) else 1.0
 	var resuming_job := not _craft_job.is_empty() and String(_craft_job.get("item", "")) == item_id
 	if not resuming_job:
 		_craft_job = {
@@ -1588,7 +1608,7 @@ func _run_bench_plan(item_id: String, plan: Dictionary) -> bool:
 	if not _resource_mutation_allowed() or brewing or _auto or g._pages._bench_busy:
 		return false
 	var total := int(plan["total"])
-	var route_discount := Game.BLUEPRINT_DISCOUNT if _blueprints.has(item_id) else 1.0
+	var route_discount := float(_bal().get_value("brew.blueprint_discount")) if _blueprints.has(item_id) else 1.0
 	g._pages._bench_busy = true
 	_production_discount = route_discount
 	_auto_new.clear()
@@ -1704,7 +1724,7 @@ func _commit_brew_locked(a: String, b: String, context: Dictionary) -> Dictionar
 		if int(inventory.get(output, 0)) >= Game.CRAFT_INVENTORY_STACK_CAP:
 			return _brew_rejected("inventory")
 	var first_time := output != "" and not inventory.has(output)
-	var brew_cost := Game.BREW_COST
+	var brew_cost := int(_bal().get_value("ether.brew_cost", Game.BREW_COST))
 	if first_time:
 		brew_cost += _discovery_fee_for_layer(_content_layer(output))
 	brew_cost = maxi(1, int(round(float(brew_cost) * discount)))
@@ -1724,7 +1744,7 @@ func _commit_brew_locked(a: String, b: String, context: Dictionary) -> Dictionar
 	g._riddles._letter_attempt(a, b)
 	g._riddles._atlas_attempt(a, b)
 	if recipe.is_empty():
-		_grant_ether(Game.FAILURE_REFUND, "failed_brew")
+		_grant_ether(int(_bal().get_value("ether.failure_refund", Game.FAILURE_REFUND)), "failed_brew")
 		Analytics.track("combine_try", {"left": a, "right": b, "result": "fail", "source": source})
 		return {"failed": true, "output": "", "newly_learned": false,
 			"ether_spent": brew_cost, "mastery_awarded": 0}

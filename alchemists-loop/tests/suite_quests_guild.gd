@@ -87,16 +87,18 @@ static func run(g: Game) -> void:
 
 	# комплекты стихий
 	Selftest.check("category sets data", Game.CATEGORY_SETS.size() == 4)
-	Selftest.check("category totals", g._progress_ui._cat_total("огонь") == 7 and g._progress_ui._cat_total("вода") == 9
-		and g._progress_ui._cat_total("воздух") == 12 and g._progress_ui._cat_total("земля") == 29)
+	Selftest.check("category totals cover the 200-item local catalog",
+		g._progress_ui._cat_total("огонь") + g._progress_ui._cat_total("вода")
+		+ g._progress_ui._cat_total("воздух") + g._progress_ui._cat_total("земля") == 200)
 	Selftest.check("category found base", g._progress_ui._cat_found("огонь") >= int(g._engine.inventory.has("fire"))
 		and g._progress_ui._cat_found("вода") >= int(g._engine.inventory.has("water"))
-		and g._progress_ui._cat_found("огонь") <= 7 and g._progress_ui._cat_found("вода") <= 9)
+		and g._progress_ui._cat_found("огонь") <= g._progress_ui._cat_total("огонь")
+		and g._progress_ui._cat_found("вода") <= g._progress_ui._cat_total("вода"))
 	Selftest.check("ach sets progress", g._progress_ui._ach_progress({"kind": "sets"}) == g._progress_ui._set_done.size())
 	var all := 0
 	for k in Game.CATEGORY_OF:
 		all += 1
-	Selftest.check("category covers 57", all == 57)
+	Selftest.check("category covers 200 local items", all == 200)
 
 	# заказы гильдии
 	var ord1 := g._guild._order_targets_for("2026-09-11")

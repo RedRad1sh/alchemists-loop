@@ -1,0 +1,164 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Alchemist's Loop player scenario report",
+  "description": "Contract emitted by ProgressionScenario.run and validated by tools/run_player_scenario.py. One report per profile run; comparison.json wraps several reports with schema=1 and comparison=1.",
+  "type": "object",
+  "required": ["schema", "scenario", "seed", "catalog_hash", "profile", "definition", "segments", "before", "after", "delta", "time", "available_goals", "blocked_goals", "verdict"],
+  "properties": {
+    "schema": {"const": 1},
+    "scenario": {"const": 1},
+    "scenario_name": {"type": "string"},
+    "seed": {"type": "integer"},
+    "runner_commit": {"type": "string"},
+    "catalog_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "item_names": {"type": "object", "additionalProperties": {"type": "string"}},
+    "verdict": {"enum": ["pass", "fail", "incomplete", "invalid"]},
+    "errors": {"type": "array", "items": {"type": "string"}},
+    "profile": {
+      "type": "object",
+      "required": ["name", "hash", "base", "schema", "resolved_overrides"],
+      "properties": {
+        "name": {"type": "string"},
+        "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "base": {"const": "baseline"},
+        "schema": {"const": 1},
+        "resolved_overrides": {"type": "object"}
+      }
+    },
+    "definition": {
+      "type": "object",
+      "required": ["segments"],
+      "properties": {
+        "scenario": {"const": 1},
+        "segments": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["kind", "seconds"],
+            "properties": {
+              "kind": {"enum": ["active", "offline"]},
+              "seconds": {"type": "number", "minimum": 0}
+            }
+          }
+        }
+      }
+    },
+    "time": {
+      "type": "object",
+      "required": ["active_seconds", "offline_seconds", "simulated_real_seconds"],
+      "properties": {
+        "active_seconds": {"type": "number", "minimum": 0},
+        "offline_seconds": {"type": "number", "minimum": 0},
+        "simulated_real_seconds": {"type": "number", "minimum": 0},
+        "now": {"type": "number"}
+      }
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "seconds", "before", "after", "delta", "clock_delta", "ledger", "events", "available_goals", "blocked_goals"],
+        "properties": {
+          "kind": {"enum": ["active", "offline"]},
+          "seconds": {"type": "number", "minimum": 0},
+          "before": {"$ref": "#/definitions/snapshot"},
+          "after": {"$ref": "#/definitions/snapshot"},
+          "delta": {"type": "object"},
+          "clock_delta": {"type": "object"},
+          "ledger": {
+            "type": "object",
+            "required": ["unexplained_resources", "events"],
+            "properties": {
+              "unexplained_resources": {"type": "array", "maxItems": 0},
+              "events": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["kind", "deltas"],
+                  "properties": {
+                    "kind": {"type": "string", "not": {"enum": ["direct_grant", "grant", "base_add"]}},
+                    "deltas": {"type": "object"}
+                  }
+                }
+              }
+            }
+          },
+          "events": {"type": "array"},
+          "counters": {"type": "object"},
+          "stalls": {"type": "array"},
+          "policy": {"type": "string"},
+          "reason": {"type": "string"},
+          "new_elements": {"type": "array", "items": {"type": "string"}},
+          "new_unlocks": {"type": "array", "items": {"type": "string"}},
+          "offline_granted": {"type": "object"},
+          "offline_spent": {"type": "object"},
+          "production": {"type": "object"},
+          "available_goals": {"type": "array", "items": {"$ref": "#/definitions/goal"}},
+          "blocked_goals": {"type": "array", "items": {"$ref": "#/definitions/goal"}}
+        }
+      }
+    },
+    "before": {"$ref": "#/definitions/snapshot"},
+    "after": {"$ref": "#/definitions/snapshot"},
+    "delta": {"type": "object"},
+    "available_goals": {"type": "array", "items": {"$ref": "#/definitions/goal"}},
+    "blocked_goals": {"type": "array", "items": {"$ref": "#/definitions/goal"}},
+    "session": {
+      "type": "object",
+      "properties": {
+        "policy": {"type": "string"},
+        "counters": {"type": "object"},
+        "events": {"type": "array"},
+        "stalls": {"type": "array"}
+      }
+    },
+    "scope": {"type": "object", "additionalProperties": {"type": "string"}}
+  },
+  "definitions": {
+    "snapshot": {
+      "type": "object",
+      "required": ["inventory", "upgrade_levels", "workshop", "retort", "sigils", "clock", "ether", "ether_overflow", "ether_available", "ether_cap", "gold", "known_recipe_count", "local_discovered_count", "local_discovered_ids"],
+      "properties": {
+        "local_discovered_ids": {"type": "array", "items": {"type": "string"}},
+        "local_discovered_count": {"type": "integer", "minimum": 0},
+        "ether": {"type": "number", "minimum": 0},
+        "ether_overflow": {"type": "number", "minimum": 0},
+        "ether_available": {"type": "number", "minimum": 0},
+        "ether_cap": {"type": "number", "minimum": 0},
+        "gold": {"type": "number", "minimum": 0},
+        "known_recipe_count": {"type": "integer", "minimum": 0},
+        "inventory": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0}},
+        "upgrade_levels": {"type": "object"},
+        "workshop": {"type": "object"},
+        "retort": {
+          "type": "object",
+          "properties": {
+            "essences": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0}}
+          }
+        },
+        "sigils": {"type": "object"},
+        "clock": {
+          "type": "object",
+          "properties": {
+            "now": {"type": "number"},
+            "active_seconds": {"type": "number", "minimum": 0},
+            "offline_seconds": {"type": "number", "minimum": 0},
+            "simulated_real_seconds": {"type": "number", "minimum": 0}
+          }
+        }
+      }
+    },
+    "goal": {
+      "type": "object",
+      "required": ["id", "kind", "available", "reason", "missing"],
+      "properties": {
+        "id": {"type": "string"},
+        "kind": {"type": "string"},
+        "available": {"type": "boolean"},
+        "reason": {"type": "string", "minLength": 1, "enum": ["available", "ether", "ingredients", "cooldown", "not_unlocked", "mastery", "autonomy", "rank", "recipe"]},
+        "missing": {"type": "object"}
+      }
+    }
+  }
+}

@@ -144,7 +144,7 @@ static func run(g: Game) -> void:
 	# База кода — 105 рецептов; сейв игрока может добавить серверные (мир-крафты),
 	# поэтому строгий ==105 краснел бы от прогресса. Инварианты: база не съедена
 	# и все пары в списке уникальны (register/restore дедупят — дубликат красит).
-	Selftest.check("recipes unique", g.RECIPES.size() >= 105 and keys.size() == g.RECIPES.size())
+	Selftest.check("recipes unique", g.RECIPES.size() >= 196 and keys.size() == g.RECIPES.size())
 	Selftest.check("find steam", String(g._online._find_recipe("water", "fire").get("out", "") ) == "steam")
 	Selftest.check("find empty", g._online._find_recipe("fire", "fire").is_empty())
 
@@ -162,7 +162,19 @@ static func run(g: Game) -> void:
 		var i18n_s: Script = load("res://tests/suite_ui_i18n.gd")
 		if i18n_s != null and i18n_s.can_instantiate():
 			await i18n_s.run(g)
+	elif OS.get_cmdline_user_args().has("--suite=balance"):
+		await SuiteBalanceConfig.run(g)
+	elif OS.get_cmdline_user_args().has("--suite=catalog200"):
+		await SuiteLocalCatalog200.run(g)
+	elif OS.get_cmdline_user_args().has("--suite=progression-mutations"):
+		var cases: Dictionary = load("res://tests/progression_mutation_cases.gd").run(g)
+		Selftest.check("progression mutations: six critical faults are exercised", cases.size() == 6)
+		for name in cases:
+			Selftest.check("progression mutation detected: " + String(name), bool(cases[name]))
+	elif OS.get_cmdline_user_args().has("--suite=progression"):
+		await SuiteProgressionRunner.run(g)
 	else:
+		await SuiteBalanceConfig.run(g)
 		await SuiteCoreBrew.run(g)
 		await SuiteLabModes.run(g)
 		await SuiteRetortReturn.run(g)
