@@ -1,152 +1,96 @@
 extends RefCounted
 class_name Balance
-# Баланс и тюнинг: цены, возвраты, сроки, награды, вехи (бывшие const из main.gd, оп D).
+# Compatibility facade: single source of balance tables is BalanceConfig.
 
-# Единый протокол синхронизации сейва (sync/package envelope). Значение зеркалит
-# серверный SYNC_SCHEMA_VERSION; MAX_ACCRUAL_RATE_PER_SEC — потолок оффлайн-
-# аккумулятора, которым клиент проверяет собственное declared-окно (advisory).
-const SYNC_SCHEMA_VERSION := 4
-const MAX_ACCRUAL_RATE_PER_SEC := 1000.0
-# Троттл фоновой синхронизации:dirty-знание льётся на сервер не чаще этого шага
-# (сек). Boot/resume/after-discover синкаются явно; таймер — лишь backstop.
-const SYNC_THROTTLE_SEC := 60.0
+const SYNC_SCHEMA_VERSION: int = BalanceConfig.BASELINE_DATA["sync"]["schema_version"]
+const MAX_ACCRUAL_RATE_PER_SEC: float = BalanceConfig.BASELINE_DATA["sync"]["max_accrual_rate_per_sec"]
+const SYNC_THROTTLE_SEC: float = BalanceConfig.BASELINE_DATA["sync"]["throttle_sec"]
 
-# Economy v2: эфир is a paced research resource, not an unlimited idle faucet.
-const BREW_COST := 12
-const FAILURE_REFUND := 2
-const BASE_ETHER_REGEN := 0.35
-const MAX_ETHER := 180
-const START_ETHER := 100
-# First-time discoveries pay a depth surcharge. Known recipes still cost BREW_COST.
-const DISCOVERY_FEES := {1: 4, 2: 6, 3: 10, 4: 16, 5: 24, 6: 36}
-# Rewards that would land above the active cap go to the visible surplus reserve.
-# Instant surplus stays spendable through Core._spend_ether; regen never fills it.
-const ETHER_MASTERY_BASE := 300
-const ETHER_MASTERY_GROWTH := 1.35
+const BREW_COST: int = BalanceConfig.BASELINE_DATA["ether"]["brew_cost"]
+const FAILURE_REFUND: int = BalanceConfig.BASELINE_DATA["ether"]["failure_refund"]
+const BASE_ETHER_REGEN: float = BalanceConfig.BASELINE_DATA["ether"]["base_regen"]
+const MAX_ETHER: int = BalanceConfig.BASELINE_DATA["ether"]["max_ether"]
+const START_ETHER: int = BalanceConfig.BASELINE_DATA["ether"]["start_ether"]
+const DISCOVERY_FEES: Dictionary = BalanceConfig.BASELINE_DATA["discovery"]["fees"]
+const ETHER_MASTERY_BASE: int = BalanceConfig.BASELINE_DATA["ether"]["mastery_base"]
+const ETHER_MASTERY_GROWTH: float = BalanceConfig.BASELINE_DATA["ether"]["mastery_growth"]
 
-# --- прокачка (покупки за эфир) и «судьбоносные» режимы-вкладки ---
-# Улучшения появляются по мере открытий: поле "unlock" — вещество, которое их открывает.
-const UPGRADES := [
-	{"id": "ether_regen", "name": "Поток эфира", "desc": "+0.35 эфира в секунду",
-		"base": 150, "growth": 1.55, "max": 4, "unlock": "steam"},
-	{"id": "ether_cap", "name": "Ёмкость эфира", "desc": "+50 к максимуму эфира",
-		"base": 70, "growth": 1.32, "max": 8, "unlock": "clay"},
-	{"id": "brew_speed", "name": "Скороварка", "desc": "каждая варка на 10% быстрее",
-		"base": 170, "growth": 1.5, "max": 4, "unlock": "glass"},
-	{"id": "source_yield", "name": "Щедрые источники", "desc": "каждая 8/7/6/5-я добыча даёт +1 сверху",
-		"base": 220, "growth": 1.6, "max": 3, "unlock": "mushroom"},
-	{"id": "auto_gift", "name": "Дары", "desc": "случайное открытое вещество +1 каждые 2 минуты",
-		"base": 450, "growth": 1.0, "max": 1, "unlock": "fish"}
-]
+const UPGRADES: Array = BalanceConfig.BASELINE_DATA["upgrades"]["items"]
+const HINT_COST: int = BalanceConfig.BASELINE_DATA["ether"]["hint_cost"]
+const SPEND_GUARD_MSEC: int = BalanceConfig.BASELINE_DATA["ether"]["spend_guard_msec"]
 
-# Светик подсказывает направление, но не раскрывает результат. Цена — существующий эфир.
-# Значение вынесено в баланс, чтобы аналитика могла менять его без рерайта UI.
-const HINT_COST := 10
-# Анти-спам окно для кнопок траты (подсказка): повторный тап внутри него
-# молча отбрасывается. Тот же интервал, что и у _collect_all_ms в core.gd.
-const SPEND_GUARD_MSEC := 250
+const RES_MILES: Array = BalanceConfig.BASELINE_DATA["resonance"]["miles"]
+const RES_REGEN10: float = BalanceConfig.BASELINE_DATA["resonance"]["regen10"]
+const RES_CAP50: int = BalanceConfig.BASELINE_DATA["resonance"]["cap50"]
+const RESONANCE_CLAIM_GATE_MSEC: int = BalanceConfig.BASELINE_DATA["resonance"]["claim_gate_msec"]
 
-# резонанс 2.0: вечные вехи отголосков (вечный счётчик повторов твоих веществ)
-const RES_MILES := [10, 50, 100]
-const RES_REGEN10 := 0.03  # +регенерация/с за веху 10 повторов
-const RES_CAP50 := 5       # +к максимуму эфира за веху 50 повторов
-# веха 100 — золотая рамка своих веществ в сетке мира (без числового бонуса)
-# «Забрать» эхо — асинхронная трата: окно «запрос в пути» держится до ответа мира
-# и заведомо больше реального round-trip (очередь Net сериализуется за опросом
-# событий); самоотпускается, чтобы потерянный ответ не запирал claim до конца сессии.
-const RESONANCE_CLAIM_GATE_MSEC := 15000
-# ночная реторта: долгий сосуд 8–24 ч, типизированные эссенции для улучшений куба
-const RETORT_BASE_HOURS := 8.0   # срок = 8 ч × (1 + тир × 0.5): 8/12/16/20/24 ч
-const RETORT_CAP_EACH := 1       # legacy: +к капу за уникальную эссенцию старого сейва…
-const RETORT_CAP_FIRST := 8      # …но не больше первых восьми
-# письма Светика: ежедневная загадка-пары, матчинг на сервере (клиент ответа не видит)
-const LETTER_MILE_EVERY := 5   # каждые N разгаданных — веха
-const LETTER_CAP_EACH := 3     # +к капу навсегда за каждую веху
-const LETTER_PENDING_MAX := 20 # потолок очереди офлайн-попыток (пары «a|b»)
-# страница Атласа: общемировая загадка дня, альбом прошлого, веха каждые 10
-const ATLAS_MILE_EVERY := 10
-const ATLAS_CAP_EACH := 3
-const ATLAS_PENDING_MAX := 20
-# дневной круг (v29 → доска v2): контейнер суточного слоя удалён вместе с
-# вкладкой; остались мягкий стрик-очаг и вечные вехи на доске контрактов
-const HEARTH_BASE := 10        # база награды «полешка» (× множитель серии, кап ×2)
-const CIRCLE_DAY_MILES := [7, 30, 100, 365]      # вехи суммарных дней визитов
-const CIRCLE_DAY_CAP := {7: 5, 100: 10}          # +к капу за вехи дней
-const CIRCLE_DAY_REGEN := {30: 0.05}              # +к регену за вехи дней (365 — аура «Очаг»)
-const CIRCLE_PTS_MILES := [50, 150, 500]         # вехи вечных очков цели дня
-const CIRCLE_PTS_CAP := {50: 3, 500: 5}          # +к капу за вехи очков
-const CIRCLE_PTS_REGEN := {150: 0.03}            # +к регену за вехи очков
-# план 2 (жила): cap прожилки за цикл, награда за cap, очки world-first (отображение)
-const VEIN_STREAK_CAP := 5
-const VEIN_STREAK_REWARD := 25
-const VEIN_POINTS_WORLD := 2
-# §2.2: объединённая шкала ранга «Огонёк очага» — порог→уровень, титул, символ
-const CIRCLE_RANKS := [
-	{"level": 1, "kind": "дней",  "threshold": 7,   "title": "Искра",    "shape": "dot",      "color": "#ffe08a"},
-	{"level": 2, "kind": "дней",  "threshold": 30,  "title": "Уголёк",   "shape": "circle",   "color": "#e88a3c"},
-	{"level": 3, "kind": "очков", "threshold": 50,  "title": "Тлеющий",  "shape": "triangle", "color": "#e05252"},
-	{"level": 4, "kind": "дней",  "threshold": 100, "title": "Полено",   "shape": "square",   "color": "#a03028"},
-	{"level": 5, "kind": "очков", "threshold": 150, "title": "Горящий",  "shape": "diamond",  "color": "#ff6a3c"},
-	{"level": 6, "kind": "дней",  "threshold": 365, "title": "Сердце",   "shape": "star",     "color": "#ffd21f"},
-	{"level": 7, "kind": "очков", "threshold": 500, "title": "Пламенный", "shape": "flame",   "color": "#fff4d6"},
-]
-# Награды круга по стажу: 30 дней — «Тлеющий» (уголь), 100 — дверь гильдии,
-# 365 — резная кровать («Сердце» дома). Все три выдаются и поручениями β,
-# поэтому повторная выдача просто не даёт ничего нового (идемпотентно).
-const CIRCLE_DECOR_REWARDS := {30: "planetarium_ember", 100: "door_guild", 365: "bed_carved"}
-# недельный слой (v30): жила даёт очки + прожилки (+1 кап, кап 5/нед. на сервере)
-const FAIR_REGEN_EACH := 0.05  # сильная недельная награда: +0.05 регена/с за закрытый котёл (вклад ≥3)
-const FAIR_REGEN_CAP := 0.5    # потолок суммарного регена ярмарок
-const FAIR_OFFLINE_GOAL := 3     # A3: варок разных веществ за неделю — локальный котёл
-const FAIR_OFFLINE_FACTOR := 0.5 # без мира реген ярмарки — вполовину, ключ недели тот же
-# сводка возврата: единый экран «пока тебя не было» после долгого отсутствия
-const RETURN_GAP := 1800.0       # 30 минут — порог показа сводки
-const SPRING_INTERVAL := 6.0
-# Производство remains useful, but it is a paced helper rather than a free second cauldron.
-## Верстак: без потолка накопления, зато медленнее. Длинный idle вместо
-## короткого клика — игрок не обязан возвращаться каждые 30 секунд.
-const BENCH_INTERVAL := 40.0
-## Офлайн-верстак идёт вполсилы и не больше 60 тиков за окно (прецедент:
-## родник ограничен буфером и окном офлайн-запаса). Иначе 8 часов простоя дали бы 720 варок.
-const BENCH_OFFLINE_FACTOR := 0.5
-const BENCH_OFFLINE_MAX_TICKS := 60
-const GIFT_INTERVAL := 120.0
-const EVENT_INTERVAL := 150.0
-const EVENT_WINDOW := 8.0
+const RETORT_BASE_HOURS: float = BalanceConfig.BASELINE_DATA["retort"]["base_hours"]
+const RETORT_CAP_EACH: int = BalanceConfig.BASELINE_DATA["retort"]["legacy_cap_each"]
+const RETORT_CAP_FIRST: int = BalanceConfig.BASELINE_DATA["retort"]["legacy_cap_first"]
 
-# Crafting rework v1: two-input Эксперимент now; hash/API are versioned
-# so 3–4 reagents can be added later without changing saved pair identity.
-const EXPERIMENT_ARITY_MIN := 2
-const EXPERIMENT_ARITY_MAX := 2
-const EXPERIMENT_COOLDOWN_SEC := 1.0  # сек между экспериментами (было 5)
-const EXPERIMENT_DAILY_LIMIT := 200
-const EXPERIMENT_COST := BREW_COST
-const EXPERIMENT_FAILURE_REFUND := FAILURE_REFUND
-const CRAFT_STAGE_OPERATIONS := 3
-# A2 «Печать мастерства»: продаём время и параллелизм, не эфир.
-const MASTERY_STAGE_RANKS := [3, 7]     # +1 операция этапа за каждый достигнутый ранг
-const MASTERY_RETORT_SPEED := 0.06      # −6 % срока реторты за каждый ранг ≥ 2 (задача 2)
-const MASTERY_RETORT_MIN_HOURS := 6.0   # пол срока реторты, ч (задача 2)
-const RETORT_SLOT_MAX := 4              # физических сосудов в массиве (задача 3)
-const CRAFT_PLAN_WARNING_OPERATIONS := 20
-const CRAFT_PLAN_HARD_LIMIT_OPERATIONS := 200
-# The existing save migration already clamps stacks to this value. Производство
-# treats reaching it as an explicit, resumable inventory pause instead of
-# silently overflowing the target stack.
-const CRAFT_INVENTORY_STACK_CAP := 1000000
-const BLUEPRINT_DISCOUNT := 0.90
-const GUILD_ALL_BONUS := 100  # эфир за выполнение всех заказов гильдии подряд
+const LETTER_MILE_EVERY: int = BalanceConfig.BASELINE_DATA["letters"]["mile_every"]
+const LETTER_CAP_EACH: int = BalanceConfig.BASELINE_DATA["letters"]["cap_each"]
+const LETTER_PENDING_MAX: int = BalanceConfig.BASELINE_DATA["letters"]["pending_max"]
 
-const CANDIDATE_CHANCE := 0.05    # 5%: «туман» без запроса к серверу
-const CANDIDATE_COOLDOWN := 60.0  # сек между проверками одной пары
-const NET_NICK := "Алхимик"
-const CHALLENGE_REWARD := 50   # эфир за победу в ежедневной цели
+const ATLAS_MILE_EVERY: int = BalanceConfig.BASELINE_DATA["atlas"]["mile_every"]
+const ATLAS_CAP_EACH: int = BalanceConfig.BASELINE_DATA["atlas"]["cap_each"]
+const ATLAS_PENDING_MAX: int = BalanceConfig.BASELINE_DATA["atlas"]["pending_max"]
 
-const WORLD_PAGE_SIZE := 25  # строк на странице сетки «Все вещества» (п.8)
+const HEARTH_BASE: int = BalanceConfig.BASELINE_DATA["circle"]["hearth_base"]
+const CIRCLE_DAY_MILES: Array = BalanceConfig.BASELINE_DATA["circle"]["day_miles"]
+const CIRCLE_DAY_CAP: Dictionary = BalanceConfig.BASELINE_DATA["circle"]["day_cap"]
+const CIRCLE_DAY_REGEN: Dictionary = BalanceConfig.BASELINE_DATA["circle"]["day_regen"]
+const CIRCLE_PTS_MILES: Array = BalanceConfig.BASELINE_DATA["circle"]["pts_miles"]
+const CIRCLE_PTS_CAP: Dictionary = BalanceConfig.BASELINE_DATA["circle"]["pts_cap"]
+const CIRCLE_PTS_REGEN: Dictionary = BalanceConfig.BASELINE_DATA["circle"]["pts_regen"]
 
-const PRESTIGE_MIN := 30           # веществ для разблокировки «Перегонки»
-const OFFLINE_MIN_SEC := 60.0       # меньше минуты — не считаем отсутствием
-const OFFLINE_CAP_SEC := 12 * 3600.0 # максимум 12 часов офлайн-накопления
-const MILESTONES := [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 57]
-const MILESTONE_REWARDS := {5: 20, 10: 25, 15: 30, 20: 40, 25: 50, 30: 60,
-	35: 70, 40: 80, 45: 90, 50: 100, 55: 120, 57: 160}
+const VEIN_STREAK_CAP: int = BalanceConfig.BASELINE_DATA["vein"]["streak_cap"]
+const VEIN_STREAK_REWARD: int = BalanceConfig.BASELINE_DATA["vein"]["streak_reward"]
+const VEIN_POINTS_WORLD: int = BalanceConfig.BASELINE_DATA["vein"]["points_world"]
+
+const CIRCLE_RANKS: Array = BalanceConfig.BASELINE_DATA["circle"]["ranks"]
+const CIRCLE_DECOR_REWARDS: Dictionary = BalanceConfig.BASELINE_DATA["circle"]["decor_rewards"]
+
+const FAIR_REGEN_EACH: float = BalanceConfig.BASELINE_DATA["fair"]["regen_each"]
+const FAIR_REGEN_CAP: float = BalanceConfig.BASELINE_DATA["fair"]["regen_cap"]
+const FAIR_OFFLINE_GOAL: int = BalanceConfig.BASELINE_DATA["fair"]["offline_goal"]
+const FAIR_OFFLINE_FACTOR: float = BalanceConfig.BASELINE_DATA["fair"]["offline_factor"]
+
+const RETURN_GAP: float = BalanceConfig.BASELINE_DATA["offline"]["return_gap_sec"]
+const SPRING_INTERVAL: float = BalanceConfig.BASELINE_DATA["spring"]["base_interval"]
+const BENCH_INTERVAL: float = BalanceConfig.BASELINE_DATA["events"]["bench_interval"]
+const BENCH_OFFLINE_FACTOR: float = BalanceConfig.BASELINE_DATA["events"]["bench_offline_factor"]
+const BENCH_OFFLINE_MAX_TICKS: int = BalanceConfig.BASELINE_DATA["events"]["bench_offline_max_ticks"]
+const GIFT_INTERVAL: float = BalanceConfig.BASELINE_DATA["events"]["gift_interval"]
+const EVENT_INTERVAL: float = BalanceConfig.BASELINE_DATA["events"]["event_interval"]
+const EVENT_WINDOW: float = BalanceConfig.BASELINE_DATA["events"]["event_window"]
+
+const EXPERIMENT_ARITY_MIN: int = BalanceConfig.BASELINE_DATA["discovery"]["arity_min"]
+const EXPERIMENT_ARITY_MAX: int = BalanceConfig.BASELINE_DATA["discovery"]["arity_max"]
+const EXPERIMENT_COOLDOWN_SEC: float = BalanceConfig.BASELINE_DATA["discovery"]["cooldown_sec"]
+const EXPERIMENT_DAILY_LIMIT: int = BalanceConfig.BASELINE_DATA["discovery"]["daily_limit"]
+const EXPERIMENT_COST: int = BalanceConfig.BASELINE_DATA["discovery"]["cost"]
+const EXPERIMENT_FAILURE_REFUND: int = BalanceConfig.BASELINE_DATA["discovery"]["failure_refund"]
+const CRAFT_STAGE_OPERATIONS: int = BalanceConfig.BASELINE_DATA["caps"]["craft_stage_operations"]
+
+const MASTERY_STAGE_RANKS: Array = BalanceConfig.BASELINE_DATA["mastery"]["stage_ranks"]
+const MASTERY_RETORT_SPEED: float = BalanceConfig.BASELINE_DATA["mastery"]["retort_speed"]
+const MASTERY_RETORT_MIN_HOURS: float = BalanceConfig.BASELINE_DATA["mastery"]["retort_min_hours"]
+const RETORT_SLOT_MAX: int = BalanceConfig.BASELINE_DATA["retort"]["slot_max"]
+const CRAFT_PLAN_WARNING_OPERATIONS: int = BalanceConfig.BASELINE_DATA["caps"]["craft_plan_warning_operations"]
+const CRAFT_PLAN_HARD_LIMIT_OPERATIONS: int = BalanceConfig.BASELINE_DATA["caps"]["craft_plan_hard_limit_operations"]
+const CRAFT_INVENTORY_STACK_CAP: int = BalanceConfig.BASELINE_DATA["caps"]["craft_inventory_stack_cap"]
+const BLUEPRINT_DISCOUNT: float = BalanceConfig.BASELINE_DATA["brew"]["blueprint_discount"]
+const GUILD_ALL_BONUS: int = BalanceConfig.BASELINE_DATA["brew"]["guild_all_bonus"]
+
+const CANDIDATE_CHANCE: float = BalanceConfig.BASELINE_DATA["discovery"]["candidate_chance"]
+const CANDIDATE_COOLDOWN: float = BalanceConfig.BASELINE_DATA["discovery"]["candidate_cooldown"]
+const NET_NICK: String = BalanceConfig.BASELINE_DATA["caps"]["net_nick"]
+const CHALLENGE_REWARD: int = BalanceConfig.BASELINE_DATA["events"]["challenge_reward"]
+const WORLD_PAGE_SIZE: int = BalanceConfig.BASELINE_DATA["caps"]["world_page_size"]
+
+const PRESTIGE_MIN: int = BalanceConfig.BASELINE_DATA["prestige"]["min_items"]
+const OFFLINE_MIN_SEC: float = BalanceConfig.BASELINE_DATA["offline"]["min_sec"]
+const OFFLINE_CAP_SEC: float = BalanceConfig.BASELINE_DATA["offline"]["cap_sec"]
+const MILESTONES: Array = BalanceConfig.BASELINE_DATA["milestones"]["thresholds"]
+const MILESTONE_REWARDS: Dictionary = BalanceConfig.BASELINE_DATA["milestones"]["rewards"]

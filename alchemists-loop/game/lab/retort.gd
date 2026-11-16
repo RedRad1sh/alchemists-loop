@@ -67,15 +67,22 @@ func _init(game: Game) -> void:
 func _retort_now(when: float = -1.0) -> float:
 	return when if when >= 0.0 else Time.get_unix_time_from_system()
 
+func _bal() -> BalanceProfile:
+	return g.balance if (g != null and g.balance != null) else BalanceConfig.baseline()
+
 func _retort_hours_for_tier(tier: int) -> float:
-	var base := Game.RETORT_BASE_HOURS * (1.0 + float(maxi(0, tier)) * 0.5)
-	var speed: float = RetortBalance.SPEED_FACTOR[clampi(_level("speed"), 0, RetortBalance.SPEED_FACTOR.size() - 1)]
-	return maxf(Game.MASTERY_RETORT_MIN_HOURS, base * speed * _retort_mastery_factor())
+	var b := _bal()
+	var base := float(b.get_value("retort.base_hours", Game.RETORT_BASE_HOURS)) * (1.0 + float(maxi(0, tier)) * float(b.get_value("retort.tier_hours_factor")))
+	var sf: Array = b.get_value("retort.speed_factor", RetortBalance.SPEED_FACTOR) as Array
+	var speed: float = float(sf[clampi(_level("speed"), 0, sf.size() - 1)])
+	var min_h := float(b.get_value("mastery.retort_min_hours", Game.MASTERY_RETORT_MIN_HOURS))
+	return maxf(min_h, base * speed * _retort_mastery_factor())
 
 func _retort_mastery_factor() -> float:
 	# A2: каждый ранг ≥ 2 снимает 6 % срока; ранг 1 — без бонуса. Пол — 6 ч.
 	var ranks := maxi(0, g._engine.mastery_rank - 1)
-	return maxf(0.0, 1.0 - Game.MASTERY_RETORT_SPEED * float(ranks))
+	var m_speed := float(_bal().get_value("mastery.retort_speed", Game.MASTERY_RETORT_SPEED))
+	return maxf(0.0, 1.0 - m_speed * float(ranks))
 
 func _retort_hours_text(tier: int) -> String:
 	return "%d ч" % int(_retort_hours_for_tier(tier))
@@ -98,7 +105,7 @@ func _retort_ready(i: int, when: float = -1.0) -> bool:
 	var s := _retort_slot(i)
 	if String(s.get("sub", "")) == "":
 		return false
-	return _retort_now(when) - float(s.get("started", 0.0)) >= float(s.get("dur", 0.0))
+	return _retort_now(when) >= float(s.get("started", 0.0)) + float(s.get("dur", 0.0))
 
 func _retort_left(i: int, when: float = -1.0) -> float:
 	var s := _retort_slot(i)
@@ -149,7 +156,7 @@ func migrate_legacy_essences(old_ess: Dictionary) -> void:
 		var id := essence_of(String(sub))
 		_essence_codex[id] = true
 		_essence_inv[id] = int(_essence_inv.get(id, 0)) + 1
-	_legacy_cap_bonus = Game.RETORT_CAP_EACH * mini(old_ess.size(), Game.RETORT_CAP_FIRST)
+	_legacy_cap_bonus = int(_bal().get_value("retort.legacy_cap_each")) * mini(old_ess.size(), int(_bal().get_value("retort.legacy_cap_first")))
 
 func _essence_cap_bonus() -> int:
 	return _legacy_cap_bonus
@@ -161,16 +168,7 @@ func _max_distill_tier() -> int:
 	return RetortBalance.COMPLEXITY_MAX_TIER[clampi(_level("complexity"), 0, RetortBalance.COMPLEXITY_MAX_TIER.size() - 1)]
 
 func _axis_table(axis: String) -> Array:
-	match axis:
-		"queue": return RetortBalance.QUEUE
-		"offline": return RetortBalance.OFFLINE
-		"slots": return RetortBalance.SLOTS
-		"speed": return RetortBalance.SPEED
-		"complexity": return RetortBalance.COMPLEXITY
-		"blend": return RetortBalance.BLEND
-		"cap": return RetortBalance.CAP
-		"equip": return RetortBalance.EQUIP
-	return []
+	return RetortBalance.axis_table(_bal(), axis)
 
 func cube_purchase(axis: String) -> Dictionary:
 	var table := _axis_table(axis)
@@ -194,27 +192,32 @@ func cube_purchase(axis: String) -> Dictionary:
 
 func _essence_cap_line_bonus() -> int:
 	var total := 0
-	for i in mini(_level("cap"), RetortBalance.CAP.size()):
-		total += int(RetortBalance.CAP[i].get("cap", 0))
+	var cap_tbl: Array = _axis_table("cap")
+	for i in mini(_level("cap"), cap_tbl.size()):
+		total += int((cap_tbl[i] as Dictionary).get("cap", 0))
 	return total
 
 func _workshop_bonus_lines() -> int:
 	var n := 0
-	for i in mini(_level("equip"), RetortBalance.EQUIP.size()):
-		n += int(RetortBalance.EQUIP[i].get("lines", 0))
+	var eq_tbl: Array = _axis_table("equip")
+	for i in mini(_level("equip"), eq_tbl.size()):
+		n += int((eq_tbl[i] as Dictionary).get("lines", 0))
 	return n
 
 func _workshop_speed_factor() -> float:
 	var f := 1.0
-	for i in mini(_level("equip"), RetortBalance.EQUIP.size()):
-		f *= float(RetortBalance.EQUIP[i].get("speed", 1.0))
+	var eq_tbl: Array = _axis_table("equip")
+	for i in mini(_level("equip"), eq_tbl.size()):
+		f *= float((eq_tbl[i] as Dictionary).get("speed", 1.0))
 	return f
 
 func _queue_depth() -> int:
-	return RetortBalance.QUEUE_DEPTH[clampi(_level("queue"), 0, RetortBalance.QUEUE_DEPTH.size() - 1)]
+	var qd: Array = _bal().get_value("retort.queue_depth", RetortBalance.QUEUE_DEPTH) as Array
+	return int(qd[clampi(_level("queue"), 0, qd.size() - 1)])
 
 func _offline_window() -> float:
-	return RetortBalance.OFFLINE_WINDOW_SEC[clampi(_level("offline"), 0, RetortBalance.OFFLINE_WINDOW_SEC.size() - 1)]
+	var ow: Array = _bal().get_value("retort.offline_window_sec", RetortBalance.OFFLINE_WINDOW_SEC) as Array
+	return float(ow[clampi(_level("offline"), 0, ow.size() - 1)])
 
 func queue_set(program: Array) -> bool:
 	if program.size() > _queue_depth():
@@ -227,16 +230,21 @@ func queue_toggle(on: bool) -> void:
 	_queue_on = on
 	_queue_window_start = Time.get_unix_time_from_system()
 
-func _queue_advance(now: float = -1.0, offline: bool = false) -> void:
+func _queue_advance(now: float = -1.0, offline: bool = false) -> Dictionary:
+	var result := {"inventory": {}, "essences": {}, "started": 0, "collected": 0}
 	if not _queue_on:
-		return
+		return result
 	var t := _retort_now(now)
 	# Занятые сосуды остаются доступны после миграции даже при уменьшенной оси ячеек.
 	for i in Game.RETORT_SLOT_MAX:
 		if _retort_ready(i, t):
-			_retort_collect(i, t)
+			var collected := _retort_collect(i, t)
+			if collected.get("ok", false):
+				var id := String(collected.essence)
+				result.essences[id] = int(result.essences.get(id, 0)) + 1
+				result.collected += 1
 	if _queue.is_empty() or (offline and t - _queue_window_start >= _offline_window()):
-		return
+		return result
 	for i in _retort_slots_open():
 		if _retort_busy(i):
 			continue
@@ -250,24 +258,28 @@ func _queue_advance(now: float = -1.0, offline: bool = false) -> void:
 				continue
 			if int(g._engine.inventory.get(sub, 0)) >= 1 and int(g._engine._rarity_of(sub).get("tier", 0)) <= _max_distill_tier():
 				if _retort_start(i, sub, t):
+					result.inventory[sub] = int(result.inventory.get(sub, 0)) - 1
+					result.started += 1
 					_queue_cursor = (idx + 1) % _queue.size()
 					started = true
 					break
 		if not started:
 			break # нет вещества ни для одного шага — ждём, программа не сгорает
+	return result
 
-func _queue_offline_replay(from_ts: float, to_ts: float) -> void:
+func _queue_offline_replay(from_ts: float, to_ts: float) -> Dictionary:
 	# Событийный проход: каждое созревание собирается в свой момент, после чего
 	# свободный сосуд сразу получает следующий шаг программы. Один вызов на now
 	# терял все промежуточные циклы длинного офлайн-окна.
+	var result := {"inventory": {}, "essences": {}, "started": 0, "collected": 0}
 	if not _queue_on:
-		return
+		return result
 	var t := maxf(0.0, from_ts)
 	var finish := maxf(t, to_ts)
 	_queue_window_start = t
 	var deadline := t + _offline_window()
 	while true:
-		_queue_advance(t, true)
+		_merge_queue_stats(result, _queue_advance(t, true))
 		if _queue.is_empty() or t >= deadline:
 			break
 		var next_t := INF
@@ -282,16 +294,25 @@ func _queue_offline_replay(from_ts: float, to_ts: float) -> void:
 		t = next_t
 	if finish > t:
 		# Созревшее за пределами окна можно забрать, но новые циклы там не стартуют.
-		_queue_advance(finish, true)
+		_merge_queue_stats(result, _queue_advance(finish, true))
+	return result
+
+func _merge_queue_stats(total: Dictionary, part: Dictionary) -> void:
+	for resource in ["inventory", "essences"]:
+		for id in part[resource]:
+			total[resource][id] = int(total[resource].get(id, 0)) + int(part[resource][id])
+	total.started += int(part.started)
+	total.collected += int(part.collected)
 
 func _blend_hours() -> float:
-	var blend_factor := 0.6 if _level("blend") >= 2 else 1.0
-	return 12.0 * RetortBalance.SPEED_FACTOR[clampi(_level("speed"), 0, RetortBalance.SPEED_FACTOR.size() - 1)] * blend_factor
+	var blend_factor := float(_bal().get_value("essences.blend_upgraded_factor")) if _level("blend") >= 2 else 1.0
+	var sf: Array = _bal().get_value("retort.speed_factor", RetortBalance.SPEED_FACTOR) as Array
+	return float(_bal().get_value("essences.blend_base_hours")) * float(sf[clampi(_level("speed"), 0, sf.size() - 1)]) * blend_factor
 
 func blend_ready(now: float = -1.0) -> bool:
 	if _blend.is_empty():
 		return false
-	return _retort_now(now) - float(_blend.get("started", 0.0)) >= float(_blend.get("dur", 0.0))
+	return _retort_now(now) >= float(_blend.get("started", 0.0)) + float(_blend.get("dur", 0.0))
 
 func blend_start(element: String, now: float = -1.0) -> bool:
 	if _level("blend") < 1 or not _blend.is_empty() or not RetortBalance.BLEND_RECIPES.has(element):

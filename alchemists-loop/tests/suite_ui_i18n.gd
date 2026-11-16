@@ -106,7 +106,7 @@ static func run(g: Game) -> void:
 		var ds_tr := g.atr(g._online._item_desc(sid))
 		if _has_cyrillic(nm_tr) or _has_cyrillic(ds_tr):
 			bad_items.append(sid)
-	Selftest.check("i18n all 109 item names and descriptions translate cleanly to English",
+	Selftest.check("i18n all 200 local item names and descriptions translate cleanly to English",
 		bad_items.is_empty())
 	if not bad_items.is_empty():
 		print("[FAIL-DIAG] untranslated items: ", bad_items.slice(0, 10))

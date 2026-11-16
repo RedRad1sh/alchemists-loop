@@ -751,9 +751,10 @@ func _open_upgrades() -> void:
 	Sfx.click()
 
 func _prestige_gain() -> int:
-	if g._engine.inventory.size() < Game.PRESTIGE_MIN:
+	var pmin: int = int(g.balance.get_value("prestige.min_items", Game.PRESTIGE_MIN)) if g.balance != null else Game.PRESTIGE_MIN
+	if g._engine.inventory.size() < pmin:
 		return 0
-	return int(floor(float(g._engine.inventory.size() - Game.PRESTIGE_MIN) / 5.0)) + 1
+	return int(floor(float(g._engine.inventory.size() - pmin) / 5.0)) + 1
 
 func _refresh_prestige_ui() -> void:
 	if _prestige_btn == null:
@@ -805,7 +806,7 @@ func _do_prestige() -> void:
 	g._reset_world_clock()
 	g._workshop.reset_prestige()
 	g._contracts.on_prestige()
-	g._engine.ether = Game.START_ETHER
+	g._engine.ether = int(g.balance.get_value("ether.start_ether", Game.START_ETHER)) if g.balance != null else Game.START_ETHER
 	g._engine.attempts = 0
 	g._engine.successes = 0
 	g._engine.selected.clear()
@@ -824,8 +825,9 @@ func _do_prestige() -> void:
 	g._engine._source_taps = 0
 	g._engine.spring_on = false
 	g._engine.spring_source = "water"
+	var keep_lvl: int = int(g.balance.get_value("prestige.spring_keep_level", SpringBalance.PRESTIGE_KEEP_LEVEL)) if g.balance != null else SpringBalance.PRESTIGE_KEEP_LEVEL
 	for axis in g._engine.spring_levels:
-		g._engine.spring_levels[axis] = mini(g._engine.spring_levels[axis], SpringBalance.PRESTIGE_KEEP_LEVEL)
+		g._engine.spring_levels[axis] = mini(g._engine.spring_levels[axis], keep_lvl)
 	g._engine.spring_buffer = {}
 	g._engine.spring_sources = ["water"]
 	g._pages._bench_target = ""

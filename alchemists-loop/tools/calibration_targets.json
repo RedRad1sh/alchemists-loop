@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "target": {
+    "full_progression_seconds": {"min": 21600, "max": 259200},
+    "active_player_seconds": {"min": 1800, "max": 10800},
+    "first_workshop_seconds": {"max": 1800},
+    "first_retort_seconds": {"min": 28800},
+    "ether_deficit_at_completion": {"max": 0},
+    "uncompleted_upgrades": 0,
+    "uncompleted_sigil_targets": 0,
+    "unexplained_resources": 0,
+    "prestige_proof": true
+  },
+  "parameters": {
+    "ether.base_regen": {"min": 0.1, "max": 2.0, "step": 0.05, "baseline": 0.35, "direction": "faster"},
+    "events.bench_interval": {"min": 20, "max": 180, "step": 5, "baseline": 40, "direction": "slower"},
+    "retort.base_hours": {"min": 8, "max": 24, "step": 1, "baseline": 8, "direction": "slower"}
+  }
+}
