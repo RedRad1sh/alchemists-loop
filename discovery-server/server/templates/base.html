@@ -15,6 +15,7 @@
         <ul>
             <li><a href="/dashboard">Дашборд</a></li>
             <li><a href="/admin">Админ</a></li>
+            {% if request.app.state.beta_enabled %}<li><a href="/admin/beta">Бета-инвайты</a></li>{% endif %}
         </ul>
     </nav>
     <main class="container">

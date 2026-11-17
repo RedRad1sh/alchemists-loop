@@ -1002,7 +1002,8 @@ func _forget_net_identity() -> void:
 func _retry_pending_account_delete(net: Object = null) -> void:
 	if net == null:
 		net = Net
-	for pending in UserData.get_account_delete_pending_ids():
+	var pending_ids: Array = BetaAccess.pending_deletion_ids() if BetaAccess.enabled else UserData.get_account_delete_pending_ids()
+	for pending in pending_ids:
 		net.delete_account(pending)
 
 func _on_account_delete_result(result: Dictionary) -> void:

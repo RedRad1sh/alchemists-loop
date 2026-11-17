@@ -14,6 +14,44 @@
 
 PRAGMA journal_mode=WAL;
 
+-- Closed beta: only credential hashes, never raw invite/token/attempt secrets.
+-- Kept in sync with beta_access.SCHEMA (also heals existing databases).
+CREATE TABLE IF NOT EXISTS beta_identities (
+    subject TEXT PRIMARY KEY,
+    secret_hash TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS beta_invites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code_hash TEXT NOT NULL UNIQUE,
+    created_at REAL NOT NULL,
+    redeemed_at REAL,
+    revoked_at REAL,
+    subject TEXT,
+    attempt_hash TEXT
+);
+CREATE TABLE IF NOT EXISTS beta_sessions (
+    token_hash TEXT PRIMARY KEY,
+    invite_id INTEGER NOT NULL REFERENCES beta_invites(id),
+    subject TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active'
+);
+CREATE INDEX IF NOT EXISTS idx_beta_sessions_invite ON beta_sessions(invite_id);
+CREATE TABLE IF NOT EXISTS beta_rate_windows (
+    bucket INTEGER PRIMARY KEY,
+    window INTEGER NOT NULL,
+    attempts INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS beta_purchases (
+    subject TEXT NOT NULL,
+    operation_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    purchase_id TEXT NOT NULL UNIQUE,
+    created_at REAL NOT NULL,
+    granted_at REAL,
+    PRIMARY KEY (subject, operation_id)
+);
+
 -- Все элементы (включая сгенерированные)
 CREATE TABLE IF NOT EXISTS elements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

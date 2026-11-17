@@ -47,6 +47,15 @@
   считается «не настроено» (кнопка «Политика конфиденциальности» не откроет
   мёртвую ссылку), а без живой https-политики сборка не готова к стору.
 
+### Закрытая beta
+
+APK собирается через `tools/export_beta.py`, а не только с переменной окружения: переменная процесса экспорта не переносится на телефон.
+
+```
+python tools/export_beta.py --godot /absolute/path/to/godot --server "$BETA_API_URL"
+```
+
+`BETA_API_URL` — предоставленный владельцем HTTPS base URL с `/api`. Пустой адрес, HTTP и URL с credentials отклоняются до запуска Godot. Скрипт временно записывает адрес в `application/config/alchemy_server`, экспортирует `Closed Beta` и восстанавливает исходный `project.godot` также при ошибке. Запускать в отдельном build-worktree без открытого редактора. Готовый APK требует Android export templates, Gradle и настроенной подписи; без реального адреса сборку для раздачи не выпускать.
 
 ## 2. Google Play
 
