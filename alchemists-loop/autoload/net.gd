@@ -595,11 +595,7 @@ func _on_completed(result: int, response_code: int, _headers: PackedStringArray,
 	if BetaAccess.enabled:
 		if response_code == 401 and String(req.get("kind", "")) not in ["beta_activate", "account_delete"]:
 			BetaAccess.access_revoked()
-		elif String(req.get("kind", "")) == "ping" and parsed.get("ok", false) == true:
-			BetaAccess.server_confirmed = parsed.get("beta", false) == true
-			if BetaAccess.server_confirmed and BetaAccess.can_send_gameplay():
-				Monetization.restore.call_deferred()
-		if (parsed.get("ok", false) == true or response_code == 401) and String(req.get("kind", "")) == "account_delete":
+		if parsed.get("ok", false) == true and String(req.get("kind", "")) == "account_delete":
 			BetaAccess.finish_deletion(String(req.get("path", "")).get_slice("device_id=", 1).uri_decode())
 	_dispatch(req, parsed)
 	_send_next()
@@ -612,6 +608,9 @@ func _parse(data: PackedByteArray) -> Dictionary:
 	return {}
 
 func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
+	if BetaAccess.enabled and String(req.get("kind", "")) == "ping":
+		BetaAccess.server_confirmed = parsed.get("ok", false) == true and parsed.get("beta", false) == true
+		BetaAccess.access_changed.emit()
 	# Ответы ленты/коллекции друга сервер отдаёт без собеседника, а игрок успевает
 	# открыть другого, пока ответ в пути: адресат берётся из запроса.
 	if req.has("peer"):

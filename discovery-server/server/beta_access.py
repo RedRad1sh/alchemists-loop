@@ -6,7 +6,9 @@ query/JSON device_id is the actor, never peer_device, to, or a house nickname.
 """
 from __future__ import annotations
 
+from contextvars import ContextVar
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -15,7 +17,7 @@ import sqlite3
 import time
 from urllib.parse import parse_qsl
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from starlette.responses import JSONResponse, RedirectResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -24,6 +26,7 @@ SOURCE_LIMIT = 10
 GLOBAL_LIMIT = 100
 RATE_BUCKETS = 256
 RATE_SECONDS = 600
+MAX_PURCHASE_OPERATIONS = 256
 PRODUCT_IDS = frozenset({
     "ether_pack_small", "ether_pack_large", "sage_gold_pack",
     "starter_bundle", "remove_ads",
@@ -73,19 +76,26 @@ def enabled() -> bool:
 
 
 def validate_config(default_db_path: str, actual_db_path: str | None = None) -> None:
-    """Must run before resolving/copying a legacy DB and before init_db."""
+    """Validate beta storage before resolving/copying a legacy database."""
     if not enabled():
         return
-    explicit = os.environ.get("ALCHEMY_DB_PATH") or os.environ.get("DB_PATH")
+    explicit = os.environ.get("ALCHEMY_BETA_DB_PATH")
+    live = os.environ.get("ALCHEMY_LIVE_DB_PATH")
+    if not live or not os.path.isabs(live):
+        raise RuntimeError("Beta requires an explicit absolute ALCHEMY_LIVE_DB_PATH")
     if not explicit or not os.path.isabs(explicit):
-        raise RuntimeError("Beta requires an explicit absolute DB_PATH (or ALCHEMY_DB_PATH)")
+        raise RuntimeError("Beta requires an explicit absolute ALCHEMY_BETA_DB_PATH")
     if any(os.environ.get(k) == "1" for k in ("ALCHEMY_DEBUG", "ALCHEMY_ADMIN_OPEN")):
         raise RuntimeError("Beta forbids ALCHEMY_DEBUG and ALCHEMY_ADMIN_OPEN")
+    _trusted_proxy_networks()
     target = Path(actual_db_path or explicit).resolve()
+    live_target = Path(live).resolve()
     forbidden = [Path(default_db_path).resolve(), Path(__file__).with_name("discoveries.db").resolve()]
-    for normal in forbidden:
-        if target == normal or (target.exists() and normal.exists() and os.path.samefile(target, normal)):
-            raise RuntimeError("Beta requires an isolated database, not the ordinary database path")
+    for normal in [live_target, *forbidden]:
+        same_file = target.exists() and normal.exists() and os.path.samefile(target, normal)
+        if target == normal or same_file:
+            label = "live" if normal == live_target else "ordinary"
+            raise RuntimeError("Beta database path must differ from %s database path" % label)
 
 
 def init_schema(conn: sqlite3.Connection) -> None:
@@ -114,9 +124,16 @@ def create_invite(conn: sqlite3.Connection) -> str:
 
 def revoke_invite(conn: sqlite3.Connection, invite_id: int) -> None:
     with conn:
-        conn.execute("UPDATE beta_invites SET revoked_at=COALESCE(revoked_at, ?) WHERE id=?",
-                     (time.time(), invite_id))
-        conn.execute("UPDATE beta_sessions SET status='revoked' WHERE invite_id=?", (invite_id,))
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT subject FROM beta_invites WHERE id=?", (invite_id,)).fetchone()
+        if row and row[0]:
+            conn.execute("UPDATE beta_invites SET revoked_at=COALESCE(revoked_at, ?) WHERE subject=?",
+                         (time.time(), row[0]))
+            conn.execute("UPDATE beta_sessions SET status='revoked' WHERE subject=?", (row[0],))
+        else:
+            conn.execute("UPDATE beta_invites SET revoked_at=COALESCE(revoked_at, ?) WHERE id=?",
+                         (time.time(), invite_id))
+            conn.execute("UPDATE beta_sessions SET status='revoked' WHERE invite_id=?", (invite_id,))
 
 
 def delete_access(conn: sqlite3.Connection, subject: str, token_hash: str) -> None:
@@ -130,6 +147,8 @@ def delete_access(conn: sqlite3.Connection, subject: str, token_hash: str) -> No
     conn.execute("UPDATE beta_sessions SET status=CASE WHEN token_hash=? AND status IN ('active','deleted') "
                  "THEN 'deleted' ELSE 'revoked' END WHERE subject=?", (token_hash, subject))
     conn.execute("DELETE FROM beta_purchases WHERE subject=?", (subject,))
+    conn.execute("DELETE FROM beta_identities WHERE subject=?", (subject,))
+    conn.execute("UPDATE beta_invites SET subject=NULL, attempt_hash=NULL WHERE subject=?", (subject,))
 
 
 def error(code: str, status: int) -> JSONResponse:
@@ -162,6 +181,41 @@ def _admit(conn, source: str) -> bool:
                      "ON CONFLICT(bucket) DO UPDATE SET window=excluded.window, "
                      "attempts=CASE WHEN window=excluded.window THEN attempts+1 ELSE 1 END", (key, window))
     return True
+
+
+def _trusted_proxy_networks() -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    raw = os.environ.get("ALCHEMY_TRUSTED_PROXIES", "")
+    networks = []
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(item, strict=False))
+        except ValueError as exc:
+            raise RuntimeError("ALCHEMY_TRUSTED_PROXIES contains an invalid network") from exc
+    return tuple(networks)
+
+
+def _activation_source(scope) -> str:
+    client = scope.get("client")
+    peer = str(client[0]) if client else "unknown"
+    networks = _trusted_proxy_networks()
+    try:
+        address = ipaddress.ip_address(peer)
+        if not any(address in network for network in networks):
+            return str(address)
+        headers = Request(scope).headers.getlist("x-forwarded-for")
+        if len(headers) != 1 or len(headers[0]) > 2048:
+            return str(address)
+        chain = [ipaddress.ip_address(item.strip()) for item in headers[0].split(",")]
+        for hop in reversed(chain):
+            if not any(address in network for network in networks):
+                break
+            address = hop
+        return str(address)
+    except ValueError:
+        return peer
 
 
 def _activation_admission(get_db, source):
@@ -219,7 +273,7 @@ def _activate(get_db, data, source, admitted=False):
         conn.close()
 
 
-def _purchase(get_db, data, granted=False):
+def _purchase(get_db, data, granted=False, token_hash=""):
     subject = _field(data, "device_id", 128)
     operation = _field(data, "operation_id", 128)
     product = _field(data, "product_id", 128)
@@ -228,6 +282,9 @@ def _purchase(get_db, data, granted=False):
     conn = get_db()
     try:
         conn.execute("BEGIN IMMEDIATE")
+        if not session_is_valid(conn, token_hash, subject):
+            conn.rollback()
+            return error("unauthorized", 401)
         row = conn.execute("SELECT product_id,purchase_id,granted_at FROM beta_purchases WHERE subject=? AND operation_id=?",
                            (subject, operation)).fetchone()
         if granted:
@@ -240,6 +297,12 @@ def _purchase(get_db, data, granted=False):
         if row and row[0] != product:
             return error("operation_conflict", 403)
         if not row:
+            purchase_count = conn.execute(
+                "SELECT COUNT(*) FROM beta_purchases WHERE subject=?", (subject,)
+            ).fetchone()[0]
+            if purchase_count >= MAX_PURCHASE_OPERATIONS:
+                conn.rollback()
+                return error("purchase_limit", 429)
             purchase_id = "beta_test:" + secrets.token_hex(32)
             conn.execute("INSERT INTO beta_purchases(subject,operation_id,product_id,purchase_id,created_at) VALUES (?,?,?,?,?)",
                          (subject, operation, product, purchase_id, time.time()))
@@ -252,11 +315,48 @@ def _purchase(get_db, data, granted=False):
         conn.close()
 
 
+def _session_row(conn: sqlite3.Connection, token_hash: str):
+    return conn.execute(
+        "SELECT s.subject,s.status,i.revoked_at FROM beta_sessions s "
+        "JOIN beta_invites i ON i.id=s.invite_id WHERE s.token_hash=?",
+        (token_hash,),
+    ).fetchone()
+
+
+def session_is_valid(conn: sqlite3.Connection, token_hash: str, subject: str) -> bool:
+    row = _session_row(conn, token_hash)
+    return row is not None and row[0] == subject and row[1] == "active" and row[2] is None
+
+
+_request_identity: ContextVar[tuple[str, str] | None] = ContextVar("beta_request_identity", default=None)
+
+
+class BetaConnection(sqlite3.Connection):
+    def execute(self, sql, parameters=()):
+        identity = _request_identity.get()
+        command = sql.lstrip().split(None, 1)[0].upper()
+        # Handlers can commit before external calls, so every later write needs a fresh check under its lock.
+        if identity and command not in ("SELECT", "PRAGMA", "EXPLAIN"):
+            if command == "BEGIN":
+                cursor = super().execute("BEGIN IMMEDIATE")
+                self._require_active(identity)
+                return cursor
+            if not self.in_transaction:
+                super().execute("BEGIN IMMEDIATE")
+                self._require_active(identity)
+        return super().execute(sql, parameters)
+
+    def _require_active(self, identity):
+        token_hash, subject = identity
+        if not session_is_valid(self, token_hash, subject):
+            self.rollback()
+            raise HTTPException(status_code=401, detail="unauthorized")
+
+
 def _session(get_db, token_hash):
     conn = get_db()
     try:
-        row = conn.execute("SELECT s.subject,s.status,i.revoked_at FROM beta_sessions s "
-                           "JOIN beta_invites i ON i.id=s.invite_id WHERE s.token_hash=?", (token_hash,)).fetchone()
+        row = _session_row(conn, token_hash)
         if not row or row[1] not in ("active", "deleted") or (row[2] is not None and row[1] != "deleted"):
             return None
         return row[0], row[1]
@@ -301,7 +401,7 @@ class BetaGuard:
         if activation:
             # Include malformed and oversized attempts; otherwise invalid inputs
             # could bypass the durable limiter before endpoint validation.
-            source = scope.get("client", ("unknown", 0))[0] if scope.get("client") else "unknown"
+            source = _activation_source(scope)
             try:
                 admitted = await run_in_threadpool(_activation_admission, self.get_db, source)
             except sqlite3.Error:
@@ -366,7 +466,11 @@ class BetaGuard:
                 replayed = True
                 return {"type": "http.request", "body": bytes(raw), "more_body": False}
             return await receive()
-        return await self.app(scope, replay, send)
+        context = _request_identity.set((token_hash, session[0]) if session else None)
+        try:
+            return await self.app(scope, replay, send)
+        finally:
+            _request_identity.reset(context)
 
 
 def install(app, get_db, default_db_path, admin_authenticated):
@@ -388,7 +492,7 @@ def install(app, get_db, default_db_path, admin_authenticated):
         if not enabled():
             return error("not_found", 404)
         try:
-            return await run_in_threadpool(_purchase, get_db, request.state.beta_json)
+            return await run_in_threadpool(_purchase, get_db, request.state.beta_json, False, request.state.beta_token_hash)
         except sqlite3.Error:
             return error("unavailable", 503)
 
@@ -397,6 +501,6 @@ def install(app, get_db, default_db_path, admin_authenticated):
         if not enabled():
             return error("not_found", 404)
         try:
-            return await run_in_threadpool(_purchase, get_db, request.state.beta_json, True)
+            return await run_in_threadpool(_purchase, get_db, request.state.beta_json, True, request.state.beta_token_hash)
         except sqlite3.Error:
             return error("unavailable", 503)

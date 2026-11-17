@@ -76,8 +76,11 @@ def _user_data_db_path() -> str:
 
 
 def _resolve_db_path() -> str:
-    # Явный путь из окружения (ALCHEMY_DB_PATH или старый DB_PATH) имеет приоритет.
-    env = os.environ.get("ALCHEMY_DB_PATH") or os.environ.get("DB_PATH")
+    # Beta получает отдельный путь: он не должен молча переиспользовать live-БД.
+    if beta_access.enabled():
+        env = os.environ.get("ALCHEMY_BETA_DB_PATH")
+    else:
+        env = os.environ.get("ALCHEMY_DB_PATH") or os.environ.get("DB_PATH")
     if env:
         return os.path.abspath(env)
     target = _user_data_db_path()
@@ -472,6 +475,7 @@ class HallResponse(BaseModel):
 class HealthResponse(BaseModel):
     ok: bool
     version: str
+    beta: bool = False
 
 class ProfileRequest(BaseModel):
     device_id: str = Field(..., min_length=1, max_length=128, description="Уникальный ID устройства")
@@ -1173,7 +1177,8 @@ def get_db() -> sqlite3.Connection:
     блокировки сериализуются ожиданием.
     """
     os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=DB_BUSY_TIMEOUT_SEC)
+    conn = sqlite3.connect(DB_PATH, timeout=DB_BUSY_TIMEOUT_SEC,
+                           factory=beta_access.BetaConnection if beta_access.enabled() else sqlite3.Connection)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute(f"PRAGMA busy_timeout={int(DB_BUSY_TIMEOUT_SEC * 1000)}")
@@ -2451,7 +2456,7 @@ async def startup():
 beta_access.install(app, lambda: get_db(), _user_data_db_path(), admin._is_authenticated)
 
 
-@app.get("/api/health", response_model=HealthResponse)
+@app.get("/api/health", response_model=HealthResponse, response_model_exclude_defaults=True)
 async def health():
     """Проверка доступности сервера; no player data."""
     if beta_access.enabled():
@@ -4201,7 +4206,7 @@ def get_me(device_id: str = Query(..., min_length=1, max_length=128),
 
 
 @app.post("/api/me", response_model=ProfileResponse)
-def set_me(req: ProfileRequest):
+def set_me(req: ProfileRequest, request: Request):
     """Установить ник игрока (уникальное имя); аватар считается из ника.
 
     Единственная дверь переименования (T02): ник занят другим устройством —
@@ -4220,6 +4225,11 @@ def set_me(req: ProfileRequest):
     device = _social_caller(req.device_id)
     conn = get_db()
     try:
+        conn.execute("BEGIN IMMEDIATE")
+        if beta_access.enabled() and not beta_access.session_is_valid(
+                conn, getattr(request.state, "beta_token_hash", ""), device):
+            conn.rollback()
+            raise HTTPException(status_code=401, detail="unauthorized")
         taken = conn.execute(
             "SELECT device_id FROM players WHERE nick = ? AND device_id <> ?",
             (nick, device),
@@ -4327,13 +4337,15 @@ def delete_account(request: Request, device_id: str = Query(..., min_length=1, m
     """
     conn = get_db()
     try:
+        conn.execute("BEGIN IMMEDIATE")
+        if beta_access.enabled() and not beta_access.session_is_valid(
+                conn, request.state.beta_token_hash, device_id):
+            conn.rollback()
+            raise HTTPException(status_code=401, detail="unauthorized")
         player = conn.execute("SELECT nick FROM players WHERE device_id = ?", (device_id,)).fetchone()
         if beta_access.enabled():
             beta_access.delete_access(conn, device_id, request.state.beta_token_hash)
-        if player is None:
-            conn.commit()
-            return {"ok": True, "deleted": False, "device_id": device_id, "message": "Профиль уже удалён"}
-        nick = player["nick"]
+        nick = player["nick"] if player else None
         # T02: чистим авторство СВОЕГО устройства и легаси-строк, чей ник ещё
         # не привязан к device. Раньше WHERE nick задевал всех
         # однофамильцев — это был и угон, и порча чужих аккаунтов.
@@ -4410,7 +4422,7 @@ def delete_account(request: Request, device_id: str = Query(..., min_length=1, m
                      (anon, device_id))
         conn.execute("DELETE FROM players WHERE device_id = ?", (device_id,))
         conn.commit()
-        return {"ok": True, "deleted": True, "device_id": device_id}
+        return {"ok": True, "deleted": player is not None, "device_id": device_id}
     finally:
         conn.close()
 

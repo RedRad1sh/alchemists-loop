@@ -16,11 +16,15 @@ import server as srv
 @pytest.fixture
 def env(tmp_path, monkeypatch):
     path = str(tmp_path / "beta.db")
+    live_path = str(tmp_path / "live.db")
     monkeypatch.setenv("ALCHEMY_BETA", "1")
+    monkeypatch.setenv("ALCHEMY_BETA_DB_PATH", path)
+    monkeypatch.setenv("ALCHEMY_LIVE_DB_PATH", live_path)
     monkeypatch.setenv("DB_PATH", path)
     monkeypatch.delenv("ALCHEMY_DB_PATH", raising=False)
     monkeypatch.delenv("ALCHEMY_DEBUG", raising=False)
     monkeypatch.delenv("ALCHEMY_ADMIN_OPEN", raising=False)
+    monkeypatch.delenv("ALCHEMY_TRUSTED_PROXIES", raising=False)
     monkeypatch.setenv("ADMIN_API_TOKEN", "test-admin-token")
     monkeypatch.setattr(srv, "DB_PATH", path)
     return path
@@ -57,13 +61,13 @@ def auth(client, device="actor"):
 def test_config_requires_explicit_isolated_path(env, monkeypatch):
     default = srv._user_data_db_path()
     beta.validate_config(default, env)
-    monkeypatch.delenv("DB_PATH")
+    monkeypatch.delenv("ALCHEMY_BETA_DB_PATH")
     with pytest.raises(RuntimeError):
         beta.validate_config(default, env)
-    monkeypatch.setenv("DB_PATH", default)
+    monkeypatch.setenv("ALCHEMY_BETA_DB_PATH", default)
     with pytest.raises(RuntimeError):
         beta.validate_config(default, default)
-    monkeypatch.setenv("DB_PATH", env)
+    monkeypatch.setenv("ALCHEMY_BETA_DB_PATH", env)
     for flag in ("ALCHEMY_DEBUG", "ALCHEMY_ADMIN_OPEN"):
         monkeypatch.setenv(flag, "1")
         with pytest.raises(RuntimeError):
@@ -79,6 +83,22 @@ def test_guard_runs_before_database_init(env, monkeypatch):
         with TestClient(srv.app):
             pass
     assert calls == []
+
+
+def test_beta_rejects_live_database_collision(env, monkeypatch, tmp_path):
+    live = str(tmp_path / "live.db")
+    monkeypatch.setenv("ALCHEMY_LIVE_DB_PATH", live)
+    monkeypatch.setenv("ALCHEMY_BETA_DB_PATH", env)
+    beta.validate_config(srv._user_data_db_path(), env)
+    monkeypatch.setenv("ALCHEMY_BETA_DB_PATH", live)
+    with pytest.raises(RuntimeError, match="live"):
+        beta.validate_config(srv._user_data_db_path(), live)
+
+
+def test_beta_requires_explicit_live_database_path(env, monkeypatch):
+    monkeypatch.delenv("ALCHEMY_LIVE_DB_PATH")
+    with pytest.raises(RuntimeError, match="ALCHEMY_LIVE_DB_PATH"):
+        beta.validate_config(srv._user_data_db_path(), env)
 
 
 def test_activation_retry_rotation_single_use_and_hashes(client):
@@ -99,6 +119,130 @@ def test_activation_retry_rotation_single_use_and_hashes(client):
     conn.close()
     for raw in (code, attempt, token, second.json()["token"]):
         assert raw not in dump
+
+
+def test_revoking_one_invite_revokes_all_subject_sessions(client):
+    first_code = invite()
+    first = activate(client, first_code, device="actor")
+    assert first.status_code == 200
+    second_code = invite()
+    second = activate(client, second_code, device="actor")
+    assert second.status_code == 200
+    conn = srv.get_db()
+    first_id = conn.execute(
+        "SELECT id FROM beta_invites WHERE code_hash = ?", (beta.digest(beta.normalize_code(first_code)),)
+    ).fetchone()[0]
+    beta.revoke_invite(conn, first_id)
+    conn.close()
+    for token in (first.json()["token"], second.json()["token"]):
+        assert client.get("/api/world", headers={"Authorization": "Bearer " + token}).status_code == 401
+
+
+def test_delete_access_removes_identity_and_invite_secrets(client):
+    code = invite()
+    activated = activate(client, code, device="actor")
+    assert activated.status_code == 200
+    token = activated.json()["token"]
+    assert client.delete("/api/account?device_id=actor", headers={"Authorization": "Bearer " + token}).status_code == 200
+    conn = srv.get_db()
+    try:
+        assert conn.execute("SELECT 1 FROM beta_identities WHERE subject = 'actor'").fetchone() is None
+        row = conn.execute("SELECT subject, attempt_hash FROM beta_invites WHERE code_hash = ?",
+                           (beta.digest(beta.normalize_code(code)),)).fetchone()
+        assert row[0] is None and row[1] is None
+    finally:
+        conn.close()
+
+
+def test_beta_purchase_quota_bounds_operation_rows(client, monkeypatch):
+    monkeypatch.setattr(beta, "MAX_PURCHASE_OPERATIONS", 2)
+    headers = auth(client)
+    for i in range(2):
+        response = client.post("/api/beta/purchase", headers=headers, json={
+            "device_id": "actor", "operation_id": f"op-{i}", "product_id": "ether_pack_small",
+        })
+        assert response.status_code == 200
+    limited = client.post("/api/beta/purchase", headers=headers, json={
+        "device_id": "actor", "operation_id": "op-2", "product_id": "ether_pack_small",
+    })
+    assert limited.status_code == 429 and limited.json()["error"] == "purchase_limit"
+    conn = srv.get_db()
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM beta_purchases WHERE subject = 'actor'").fetchone()[0] == 2
+    finally:
+        conn.close()
+
+
+@pytest.mark.parametrize("path,payload,table", [
+    ("/api/me", {"device_id": "actor", "nick": "LatePlayer"}, "players"),
+    ("/api/player/register", {"device_id": "actor", "nick": "LatePlayer", "a": "fire", "b": "water"}, "players"),
+    ("/api/beta/purchase", {"device_id": "actor", "operation_id": "late", "product_id": "ether_pack_small"}, "beta_purchases"),
+    ("/api/friend/block", {"device_id": "actor", "target_device": "other"}, "blocks"),
+])
+def test_deleted_session_cannot_write_after_middleware_check(client, monkeypatch, path, payload, table):
+    headers = auth(client)
+    assert client.post("/api/me", headers=headers, json={"device_id": "actor", "nick": "Player"}).status_code == 200
+    original = beta._session
+
+    def delete_after_check(get_db, token_hash):
+        session = original(get_db, token_hash)
+        request = Request({"type": "http", "state": {"beta_token_hash": token_hash}})
+        srv.delete_account(request, "actor")
+        return session
+
+    monkeypatch.setattr(beta, "_session", delete_after_check)
+    response = client.post(path, headers=headers, json=payload)
+    assert response.status_code == 401, response.text
+    conn = srv.get_db()
+    try:
+        column = {"players": "device_id", "beta_purchases": "subject", "blocks": "blocker_device"}[table]
+        assert conn.execute(f"SELECT COUNT(*) FROM {table} WHERE {column}=?", ("actor",)).fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_delete_cleans_device_state_without_profile(client):
+    headers = auth(client)
+    conn = srv.get_db()
+    try:
+        conn.execute("INSERT INTO echoes(device_id, balance, total) VALUES ('actor', 5, 5)")
+        conn.commit()
+    finally:
+        conn.close()
+    assert client.delete("/api/account?device_id=actor", headers=headers).status_code == 200
+    conn = srv.get_db()
+    try:
+        assert conn.execute("SELECT 1 FROM echoes WHERE device_id='actor'").fetchone() is None
+    finally:
+        conn.close()
+
+
+def test_revoked_subject_cannot_retry_other_redeemed_invite(client):
+    code, attempt = invite(), secrets.token_urlsafe(32)
+    assert activate(client, code, attempt=attempt).status_code == 200
+    auth(client)
+    conn = srv.get_db()
+    try:
+        beta.revoke_invite(conn, conn.execute("SELECT MAX(id) FROM beta_invites").fetchone()[0])
+    finally:
+        conn.close()
+    assert activate(client, code, attempt=attempt).status_code == 403
+
+
+def test_trusted_proxy_ignores_forged_forwarded_prefix(monkeypatch):
+    monkeypatch.setenv("ALCHEMY_TRUSTED_PROXIES", "127.0.0.1/32,10.0.0.0/8")
+    scope = {"type": "http", "client": ("127.0.0.1", 443),
+             "headers": [(b"x-forwarded-for", b"203.0.113.99, 198.51.100.7, 10.0.0.5")]}
+    assert beta._activation_source(scope) == "198.51.100.7"
+    for value in (b"invented", b"198.51.100.7, invented"):
+        scope["headers"] = [(b"x-forwarded-for", value)]
+        assert beta._activation_source(scope) == "127.0.0.1"
+
+
+def test_health_openapi_declares_beta_flag():
+    schema = srv.app.openapi()
+    properties = schema["components"]["schemas"]["HealthResponse"]["properties"]
+    assert properties["beta"]["type"] == "boolean"
 
 
 def test_parallel_activation_one_winner(client):
@@ -186,6 +330,18 @@ def test_revoke_and_deletion_only_retry(client):
     headers = auth(client, "unregistered")
     assert client.delete("/api/account?device_id=unregistered", headers=headers).status_code == 200
     assert client.get("/api/world", headers=headers).status_code == 401
+
+
+def test_activation_source_requires_trusted_proxy(monkeypatch):
+    scope = {
+        "type": "http",
+        "client": ("127.0.0.1", 443),
+        "headers": [(b"x-forwarded-for", b"198.51.100.7")],
+    }
+    monkeypatch.delenv("ALCHEMY_TRUSTED_PROXIES", raising=False)
+    assert beta._activation_source(scope) == "127.0.0.1"
+    monkeypatch.setenv("ALCHEMY_TRUSTED_PROXIES", "127.0.0.1/32")
+    assert beta._activation_source(scope) == "198.51.100.7"
 
 
 def test_rate_limit_durable_bounded_ignores_xff(client, monkeypatch):

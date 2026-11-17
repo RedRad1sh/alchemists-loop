@@ -497,7 +497,9 @@ func _on_beta_purchase_granted(result: Dictionary) -> void:
 		if BetaAccess.pending_purchase(String(product_id)) != operation_id:
 			continue
 		var receipt_token := String(_beta_receipts.get(operation_id, ""))
-		if receipt_token == "" or not UserData.mark_processed_purchase("beta_test", receipt_token, String(product_id)):
+		if receipt_token == "":
+			return
+		if not UserData.has_processed_purchase("beta_test", receipt_token, String(product_id)) and not UserData.mark_processed_purchase("beta_test", receipt_token, String(product_id)):
 			return
 		UserData.clear_pending_purchase(String(product_id))
 		_beta_receipts.erase(operation_id)

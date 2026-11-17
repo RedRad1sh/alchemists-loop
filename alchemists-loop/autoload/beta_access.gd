@@ -27,7 +27,7 @@ func _ready() -> void:
 		load_credentials()
 
 func can_send_gameplay() -> bool:
-	return not enabled or (token != "" and device_id == UserData.get_or_create_device_id() and _transport_allowed(server_url))
+	return not enabled or (server_confirmed and token != "" and device_id == UserData.get_or_create_device_id() and _transport_allowed(server_url))
 
 func _transport_allowed(url: String) -> bool:
 	return url.begins_with("https://") or (OS.has_feature("editor") and (url.begins_with("http://127.0.0.1:") or url.begins_with("http://localhost:")))
@@ -102,7 +102,6 @@ func accept_activation(result: Dictionary) -> void:
 
 func access_revoked() -> void:
 	token = ""
-	device_id = ""
 	server_confirmed = false
 	_save_credentials()
 	_set_status("Доступ к серверу закрыт. Для входа нужен новый инвайт-код.")
@@ -113,6 +112,7 @@ func _set_status(text: String) -> void:
 	status_changed.emit()
 
 func load_credentials() -> void:
+	server_confirmed = false
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(storage_path)) if FileAccess.file_exists(storage_path) else null
 	if not parsed is Dictionary or String(parsed.get("server_url", "")) != server_url:
 		return
@@ -146,20 +146,36 @@ func clear_credentials() -> void:
 	pending_code = ""
 	server_confirmed = false
 	purchases.clear()
-	for path in [storage_path, storage_path + ".tmp"]:
-		if FileAccess.file_exists(path):
-			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	if not deletions.is_empty():
 		_save_credentials()
+	else:
+		for path in [storage_path, storage_path + ".tmp"]:
+			if FileAccess.file_exists(path):
+				DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
-func prepare_deletion(id: String) -> void:
-	if not enabled or token == "" or device_id != id:
-		return
+func prepare_deletion(id: String) -> bool:
+	if not enabled:
+		return true
 	for entry in deletions:
 		if String(entry.get("device_id", "")) == id and String(entry.get("server_url", "")) == server_url:
-			return
+			return _save_credentials()
+	if token == "":
+		return device_id == ""
+	if device_id != id:
+		return false
 	deletions.append({"device_id": id, "server_url": server_url, "token": token})
-	_save_credentials()
+	if _save_credentials():
+		return true
+	deletions.pop_back()
+	return false
+
+func pending_deletion_ids() -> Array:
+	var ids: Array = []
+	for entry in deletions:
+		var id := String(entry.get("device_id", ""))
+		if String(entry.get("server_url", "")) == server_url and id != "" and not ids.has(id):
+			ids.append(id)
+	return ids
 
 func deletion_token(id: String) -> String:
 	for entry in deletions:
