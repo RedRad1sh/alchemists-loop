@@ -430,6 +430,13 @@ func _relayout() -> void:
 	_scroll_hint.size = SCROLL_HINT_SIZE
 	_refresh_scroll_hint()
 	_layout_notes()
+	# Письмо награды и затемнение живут поверх доски и центрируются по _w/_h;
+	# при ресайзе окна без этого затемнение не кроет новую область, а письмо
+	# уезжает из центра.
+	if _scrim != null:
+		_scrim.size = Vector2(_w, _h)
+	if _popup != null:
+		_popup.position = Vector2((_w - POPUP_SIZE.x) / 2.0, (_h - POPUP_SIZE.y) / 2.0)
 
 # Поток контента: вывеска → записки баффов → дневная полка и ряд → очаг →
 # недельная полка и ряд. `top` — верх видимой полосы с учётом прокрутки.
