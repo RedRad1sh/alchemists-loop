@@ -40,6 +40,7 @@ def test_beta_export_embeds_server_and_restores_source(tmp_path, monkeypatch, re
 
     def run(command, **kwargs):
         commands.append(command)
+        assert kwargs["shell"] is False
         embedded = config.read_text(encoding="utf-8")
         assert 'config/alchemy_server="https://beta.invalid/api"' in embedded
         assert 'config/alchemy_store=""' in embedded

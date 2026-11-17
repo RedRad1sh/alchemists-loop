@@ -305,29 +305,29 @@
    "stage": "albedo"
   },
   {
-   "ether_cost": 400,
+   "ether_cost": 50,
    "fallback_name": "Ребёнок",
    "id": "child",
    "object_type": "object",
-   "process": "coniunctio",
-   "rarity": "epic",
+   "process": "putrefactio",
+   "rarity": "common",
    "recipe": [
     {
      "item_id": "person",
-     "qty": 14
+     "qty": 7
     },
     {
      "item_id": "life",
-     "qty": 23
+     "qty": 11
     },
     {
      "item_id": "clay",
-     "qty": 17
+     "qty": 8
     }
    ],
    "seed": 97868381453740,
-   "set": "earth",
-   "stage": "citrinitas"
+   "set": "water",
+   "stage": "nigredo"
   },
   {
    "ether_cost": 50,
@@ -380,91 +380,79 @@
    "stage": "nigredo"
   },
   {
-   "ether_cost": 800,
+   "ether_cost": 400,
    "fallback_name": "Уголь",
    "id": "coal",
    "object_type": "creature",
-   "process": "sublimatio",
-   "rarity": "legendary",
+   "process": "distillatio",
+   "rarity": "epic",
    "recipe": [
     {
      "item_id": "wood",
-     "qty": 19
+     "qty": 13
     },
     {
      "item_id": "tree",
-     "qty": 27
+     "qty": 21
     },
     {
      "item_id": "seed",
-     "qty": 26
-    },
-    {
-     "item_id": "plant",
-     "qty": 26
+     "qty": 20
     }
    ],
    "seed": 131670697779398,
    "set": "fire",
-   "stage": "rubedo"
+   "stage": "citrinitas"
   },
   {
-   "ether_cost": 800,
+   "ether_cost": 50,
    "fallback_name": "Монета",
    "id": "coin",
    "object_type": "creature",
-   "process": "coniunctio",
-   "rarity": "legendary",
+   "process": "calcinatio",
+   "rarity": "common",
    "recipe": [
     {
      "item_id": "gold",
-     "qty": 39
+     "qty": 14
     },
     {
      "item_id": "metal",
-     "qty": 35
+     "qty": 11
     },
     {
      "item_id": "spark",
-     "qty": 28
-    },
-    {
-     "item_id": "stone",
-     "qty": 36
+     "qty": 8
     }
    ],
    "seed": 251793431491713,
-   "set": "earth",
-   "stage": "rubedo"
+   "set": "fire",
+   "stage": "nigredo"
   },
   {
-   "ether_cost": 800,
+   "ether_cost": 50,
    "fallback_name": "Кристалл",
    "id": "crystal",
    "object_type": "abstraction",
-   "process": "coniunctio",
-   "rarity": "legendary",
+   "process": "calcinatio",
+   "rarity": "common",
    "recipe": [
     {
      "item_id": "glass",
-     "qty": 43
+     "qty": 9
     },
     {
      "item_id": "sand",
-     "qty": 25
+     "qty": 12
     },
     {
      "item_id": "stone",
-     "qty": 38
-    },
-    {
-     "item_id": "air",
-     "qty": 31
+     "qty": 8
     }
    ],
    "seed": 36393240336816,
-   "set": "earth",
-   "stage": "rubedo"
+   "set": "air",
+   "stage": "nigredo"
   },
   {
    "ether_cost": 150,
@@ -542,33 +530,29 @@
    "stage": "nigredo"
   },
   {
-   "ether_cost": 800,
+   "ether_cost": 400,
    "fallback_name": "Краска",
    "id": "dye",
    "object_type": "object",
-   "process": "coniunctio",
-   "rarity": "legendary",
+   "process": "sublimatio",
+   "rarity": "epic",
    "recipe": [
     {
      "item_id": "rainbow",
-     "qty": 27
+     "qty": 21
     },
     {
      "item_id": "sun",
-     "qty": 44
+     "qty": 14
     },
     {
      "item_id": "rain",
-     "qty": 20
-    },
-    {
-     "item_id": "sky",
-     "qty": 37
+     "qty": 26
     }
    ],
    "seed": 59244928029030,
-   "set": "air",
-   "stage": "rubedo"
+   "set": "fire",
+   "stage": "citrinitas"
   },
   {
    "ether_cost": 50,
@@ -617,7 +601,7 @@
     }
    ],
    "seed": 170513379683655,
-   "set": "air",
+   "set": "water",
    "stage": "nigredo"
   },
   {
@@ -746,29 +730,29 @@
    "stage": "albedo"
   },
   {
-   "ether_cost": 50,
+   "ether_cost": 150,
    "fallback_name": "Туман густой",
    "id": "fog",
    "object_type": "relic",
-   "process": "putrefactio",
-   "rarity": "common",
+   "process": "sublimatio",
+   "rarity": "rare",
    "recipe": [
     {
      "item_id": "cloud",
-     "qty": 9
+     "qty": 11
     },
     {
      "item_id": "steam",
-     "qty": 13
+     "qty": 18
     },
     {
      "item_id": "air",
-     "qty": 11
+     "qty": 17
     }
    ],
    "seed": 180300526598404,
-   "set": "air",
-   "stage": "nigredo"
+   "set": "earth",
+   "stage": "albedo"
   },
   {
    "ether_cost": 50,
@@ -792,7 +776,7 @@
     }
    ],
    "seed": 85547659511840,
-   "set": "water",
+   "set": "fire",
    "stage": "nigredo"
   },
   {
@@ -825,29 +809,29 @@
    "stage": "citrinitas"
   },
   {
-   "ether_cost": 150,
+   "ether_cost": 50,
    "fallback_name": "Крепость",
    "id": "fortress",
    "object_type": "object",
-   "process": "distillatio",
-   "rarity": "rare",
+   "process": "calcinatio",
+   "rarity": "common",
    "recipe": [
     {
      "item_id": "wall",
-     "qty": 17
+     "qty": 7
     },
     {
      "item_id": "brick",
-     "qty": 9
+     "qty": 11
     },
     {
      "item_id": "clay",
-     "qty": 13
+     "qty": 6
     }
    ],
    "seed": 166294702517640,
    "set": "air",
-   "stage": "albedo"
+   "stage": "nigredo"
   },
   {
    "ether_cost": 800,
@@ -904,6 +888,35 @@
    "stage": "albedo"
   },
   {
+   "ether_cost": 800,
+   "fallback_name": "Сад",
+   "id": "garden",
+   "object_type": "creature",
+   "process": "coniunctio",
+   "rarity": "legendary",
+   "recipe": [
+    {
+     "item_id": "flower",
+     "qty": 25
+    },
+    {
+     "item_id": "sun",
+     "qty": 39
+    },
+    {
+     "item_id": "sky",
+     "qty": 32
+    },
+    {
+     "item_id": "cloud",
+     "qty": 35
+    }
+   ],
+   "seed": 174795195999378,
+   "set": "fire",
+   "stage": "rubedo"
+  },
+  {
    "ether_cost": 150,
    "fallback_name": "Стекло",
    "id": "glass",
@@ -954,29 +967,29 @@
    "stage": "albedo"
   },
   {
-   "ether_cost": 50,
+   "ether_cost": 150,
    "fallback_name": "Голем",
    "id": "golem",
    "object_type": "planet",
-   "process": "putrefactio",
-   "rarity": "common",
+   "process": "sublimatio",
+   "rarity": "rare",
    "recipe": [
     {
      "item_id": "soul",
-     "qty": 10
+     "qty": 20
     },
     {
      "item_id": "life",
-     "qty": 8
+     "qty": 12
     },
     {
      "item_id": "spark",
-     "qty": 6
+     "qty": 17
     }
    ],
    "seed": 134153282398027,
-   "set": "fire",
-   "stage": "nigredo"
+   "set": "water",
+   "stage": "albedo"
   },
   {
    "ether_cost": 150,
@@ -1129,29 +1142,33 @@
    "stage": "nigredo"
   },
   {
-   "ether_cost": 150,
+   "ether_cost": 400,
    "fallback_name": "Украшение",
    "id": "jewelry",
    "object_type": "creature",
-   "process": "distillatio",
-   "rarity": "rare",
+   "process": "sublimatio",
+   "rarity": "epic",
    "recipe": [
     {
      "item_id": "crystal",
-     "qty": 13
+     "qty": 23
     },
     {
      "item_id": "glass",
-     "qty": 10
+     "qty": 17
     },
     {
      "item_id": "metal",
-     "qty": 8
+     "qty": 13
+    },
+    {
+     "item_id": "sand",
+     "qty": 22
     }
    ],
    "seed": 210471584295063,
-   "set": "fire",
-   "stage": "albedo"
+   "set": "air",
+   "stage": "citrinitas"
   },
   {
    "ether_cost": 50,
@@ -1175,7 +1192,7 @@
     }
    ],
    "seed": 165887528221084,
-   "set": "fire",
+   "set": "air",
    "stage": "nigredo"
   },
   {
@@ -1204,29 +1221,33 @@
    "stage": "nigredo"
   },
   {
-   "ether_cost": 400,
+   "ether_cost": 800,
    "fallback_name": "Кожа",
    "id": "leather",
    "object_type": "relic",
-   "process": "distillatio",
-   "rarity": "epic",
+   "process": "sublimatio",
+   "rarity": "legendary",
    "recipe": [
     {
      "item_id": "tool",
-     "qty": 28
+     "qty": 34
     },
     {
      "item_id": "beast",
-     "qty": 16
+     "qty": 44
     },
     {
      "item_id": "person",
-     "qty": 16
+     "qty": 22
+    },
+    {
+     "item_id": "life",
+     "qty": 22
     }
    ],
    "seed": 139713560239754,
-   "set": "fire",
-   "stage": "citrinitas"
+   "set": "water",
+   "stage": "rubedo"
   },
   {
    "ether_cost": 50,
@@ -1279,33 +1300,29 @@
    "stage": "nigredo"
   },
   {
-   "ether_cost": 400,
+   "ether_cost": 150,
    "fallback_name": "Свет",
    "id": "light",
    "object_type": "object",
-   "process": "coniunctio",
-   "rarity": "epic",
+   "process": "sublimatio",
+   "rarity": "rare",
    "recipe": [
     {
      "item_id": "sun",
-     "qty": 15
+     "qty": 18
     },
     {
      "item_id": "sky",
-     "qty": 16
+     "qty": 9
     },
     {
      "item_id": "cloud",
-     "qty": 26
-    },
-    {
-     "item_id": "steam",
-     "qty": 18
+     "qty": 10
     }
    ],
    "seed": 78407918493925,
    "set": "fire",
-   "stage": "citrinitas"
+   "stage": "albedo"
   },
   {
    "ether_cost": 50,
@@ -1358,29 +1375,29 @@
    "stage": "albedo"
   },
   {
-   "ether_cost": 150,
+   "ether_cost": 400,
    "fallback_name": "Машина",
    "id": "machine",
    "object_type": "relic",
-   "process": "coniunctio",
-   "rarity": "rare",
+   "process": "distillatio",
+   "rarity": "epic",
    "recipe": [
     {
      "item_id": "tool",
-     "qty": 13
+     "qty": 23
     },
     {
      "item_id": "person",
-     "qty": 9
+     "qty": 15
     },
     {
      "item_id": "life",
-     "qty": 19
+     "qty": 27
     }
    ],
    "seed": 207658151431184,
    "set": "air",
-   "stage": "albedo"
+   "stage": "citrinitas"
   },
   {
    "ether_cost": 50,
@@ -1583,29 +1600,33 @@
    "stage": "albedo"
   },
   {
-   "ether_cost": 150,
+   "ether_cost": 400,
    "fallback_name": "Человек",
    "id": "person",
    "object_type": "abstraction",
-   "process": "distillatio",
-   "rarity": "rare",
+   "process": "sublimatio",
+   "rarity": "epic",
    "recipe": [
     {
      "item_id": "life",
-     "qty": 19
+     "qty": 13
     },
     {
      "item_id": "clay",
-     "qty": 8
+     "qty": 30
     },
     {
      "item_id": "spark",
-     "qty": 17
+     "qty": 23
+    },
+    {
+     "item_id": "air",
+     "qty": 30
     }
    ],
    "seed": 24908285919621,
    "set": "earth",
-   "stage": "albedo"
+   "stage": "citrinitas"
   },
   {
    "ether_cost": 50,
@@ -1858,29 +1879,29 @@
    "stage": "nigredo"
   },
   {
-   "ether_cost": 50,
+   "ether_cost": 400,
    "fallback_name": "Смог",
    "id": "smog",
    "object_type": "creature",
    "process": "distillatio",
-   "rarity": "common",
+   "rarity": "epic",
    "recipe": [
     {
      "item_id": "smoke",
-     "qty": 8
+     "qty": 16
     },
     {
      "item_id": "dust",
-     "qty": 12
+     "qty": 24
     },
     {
      "item_id": "air",
-     "qty": 14
+     "qty": 28
     }
    ],
    "seed": 251598893698778,
-   "set": "air",
-   "stage": "nigredo"
+   "set": "earth",
+   "stage": "citrinitas"
   },
   {
    "ether_cost": 50,
@@ -1908,83 +1929,83 @@
    "stage": "nigredo"
   },
   {
-   "ether_cost": 150,
+   "ether_cost": 400,
    "fallback_name": "Снег",
    "id": "snow",
    "object_type": "abstraction",
-   "process": "distillatio",
-   "rarity": "rare",
+   "process": "sublimatio",
+   "rarity": "epic",
    "recipe": [
     {
      "item_id": "ice",
-     "qty": 13
+     "qty": 22
     },
     {
      "item_id": "mountain",
-     "qty": 17
+     "qty": 28
     },
     {
      "item_id": "stone",
-     "qty": 16
+     "qty": 23
     }
    ],
    "seed": 95456730828156,
    "set": "water",
-   "stage": "albedo"
+   "stage": "citrinitas"
   },
   {
-   "ether_cost": 400,
+   "ether_cost": 150,
    "fallback_name": "Мыло",
    "id": "soap",
    "object_type": "object",
-   "process": "coniunctio",
-   "rarity": "epic",
+   "process": "sublimatio",
+   "rarity": "rare",
    "recipe": [
     {
      "item_id": "lye",
-     "qty": 20
+     "qty": 19
     },
     {
      "item_id": "ash",
-     "qty": 24
+     "qty": 12
     },
     {
      "item_id": "plant",
-     "qty": 20
-    },
-    {
-     "item_id": "clay",
      "qty": 18
     }
    ],
    "seed": 94245257276905,
-   "set": "air",
-   "stage": "citrinitas"
+   "set": "fire",
+   "stage": "albedo"
   },
   {
-   "ether_cost": 50,
+   "ether_cost": 800,
    "fallback_name": "Душа",
    "id": "soul",
    "object_type": "relic",
-   "process": "distillatio",
-   "rarity": "common",
+   "process": "sublimatio",
+   "rarity": "legendary",
    "recipe": [
     {
      "item_id": "life",
-     "qty": 8
+     "qty": 23
     },
     {
      "item_id": "spark",
-     "qty": 13
+     "qty": 33
     },
     {
      "item_id": "air",
-     "qty": 13
+     "qty": 33
+    },
+    {
+     "item_id": "fire",
+     "qty": 45
     }
    ],
    "seed": 250150022753564,
-   "set": "water",
-   "stage": "nigredo"
+   "set": "earth",
+   "stage": "rubedo"
   },
   {
    "ether_cost": 50,
@@ -2041,29 +2062,29 @@
    "stage": "citrinitas"
   },
   {
-   "ether_cost": 50,
+   "ether_cost": 150,
    "fallback_name": "Статуя",
    "id": "statue",
    "object_type": "object",
-   "process": "calcinatio",
-   "rarity": "common",
+   "process": "distillatio",
+   "rarity": "rare",
    "recipe": [
     {
      "item_id": "gold",
-     "qty": 10
+     "qty": 12
     },
     {
      "item_id": "metal",
-     "qty": 14
+     "qty": 16
     },
     {
      "item_id": "spark",
-     "qty": 14
+     "qty": 17
     }
    ],
    "seed": 158204447578860,
-   "set": "fire",
-   "stage": "nigredo"
+   "set": "air",
+   "stage": "albedo"
   },
   {
    "ether_cost": 50,
@@ -2141,58 +2162,54 @@
    "stage": "nigredo"
   },
   {
-   "ether_cost": 400,
+   "ether_cost": 150,
    "fallback_name": "Ручей",
    "id": "stream",
    "object_type": "relic",
-   "process": "distillatio",
-   "rarity": "epic",
-   "recipe": [
-    {
-     "item_id": "snow",
-     "qty": 21
-    },
-    {
-     "item_id": "ice",
-     "qty": 18
-    },
-    {
-     "item_id": "mountain",
-     "qty": 22
-    },
-    {
-     "item_id": "stone",
-     "qty": 27
-    }
-   ],
-   "seed": 45034350786749,
-   "set": "water",
-   "stage": "citrinitas"
-  },
-  {
-   "ether_cost": 150,
-   "fallback_name": "Солнце",
-   "id": "sun",
-   "object_type": "object",
-   "process": "distillatio",
+   "process": "coniunctio",
    "rarity": "rare",
    "recipe": [
     {
+     "item_id": "snow",
+     "qty": 12
+    },
+    {
+     "item_id": "ice",
+     "qty": 11
+    },
+    {
+     "item_id": "mountain",
+     "qty": 18
+    }
+   ],
+   "seed": 45034350786749,
+   "set": "fire",
+   "stage": "albedo"
+  },
+  {
+   "ether_cost": 50,
+   "fallback_name": "Солнце",
+   "id": "sun",
+   "object_type": "object",
+   "process": "calcinatio",
+   "rarity": "common",
+   "recipe": [
+    {
      "item_id": "sky",
-     "qty": 8
+     "qty": 6
     },
     {
      "item_id": "cloud",
-     "qty": 18
+     "qty": 13
     },
     {
      "item_id": "steam",
-     "qty": 15
+     "qty": 12
     }
    ],
    "seed": 114885915277575,
    "set": "fire",
-   "stage": "albedo"
+   "stage": "nigredo"
   },
   {
    "ether_cost": 50,
@@ -2274,7 +2291,7 @@
     }
    ],
    "seed": 113829840045523,
-   "set": "air",
+   "set": "fire",
    "stage": "citrinitas"
   },
   {
@@ -2324,7 +2341,7 @@
     }
    ],
    "seed": 25112305593063,
-   "set": "fire",
+   "set": "air",
    "stage": "albedo"
   },
   {
@@ -2382,29 +2399,33 @@
    "stage": "citrinitas"
   },
   {
-   "ether_cost": 400,
+   "ether_cost": 800,
    "fallback_name": "Сокровище",
    "id": "treasure",
    "object_type": "object",
-   "process": "coniunctio",
-   "rarity": "epic",
+   "process": "calcinatio",
+   "rarity": "legendary",
    "recipe": [
     {
      "item_id": "coin",
-     "qty": 15
+     "qty": 21
     },
     {
      "item_id": "gold",
-     "qty": 30
+     "qty": 45
     },
     {
      "item_id": "metal",
-     "qty": 23
+     "qty": 36
+    },
+    {
+     "item_id": "spark",
+     "qty": 37
     }
    ],
    "seed": 172546189288480,
-   "set": "fire",
-   "stage": "citrinitas"
+   "set": "air",
+   "stage": "rubedo"
   },
   {
    "ether_cost": 150,
@@ -2457,33 +2478,33 @@
    "stage": "nigredo"
   },
   {
-   "ether_cost": 400,
+   "ether_cost": 800,
    "fallback_name": "Стена",
    "id": "wall",
    "object_type": "planet",
-   "process": "coniunctio",
-   "rarity": "epic",
+   "process": "calcinatio",
+   "rarity": "legendary",
    "recipe": [
     {
      "item_id": "brick",
-     "qty": 28
+     "qty": 34
     },
     {
      "item_id": "clay",
-     "qty": 30
+     "qty": 36
     },
     {
      "item_id": "earth",
-     "qty": 28
+     "qty": 34
     },
     {
      "item_id": "fire",
-     "qty": 25
+     "qty": 31
     }
    ],
    "seed": 171681141480757,
    "set": "earth",
-   "stage": "citrinitas"
+   "stage": "rubedo"
   },
   {
    "ether_cost": 50,
@@ -2509,35 +2530,6 @@
    "seed": 33646552430868,
    "set": "water",
    "stage": "nigredo"
-  },
-  {
-   "ether_cost": 800,
-   "fallback_name": "Вино",
-   "id": "wine",
-   "object_type": "creature",
-   "process": "coniunctio",
-   "rarity": "legendary",
-   "recipe": [
-    {
-     "item_id": "fruit",
-     "qty": 39
-    },
-    {
-     "item_id": "flower",
-     "qty": 27
-    },
-    {
-     "item_id": "sun",
-     "qty": 22
-    },
-    {
-     "item_id": "sky",
-     "qty": 45
-    }
-   ],
-   "seed": 93505285342518,
-   "set": "water",
-   "stage": "rubedo"
   },
   {
    "ether_cost": 800,
@@ -2572,13 +2564,13 @@
  "excluded": [
   "barrel",
   "cabin",
-  "garden",
   "hammer",
   "house",
   "hunt",
   "plank",
   "town",
-  "village"
+  "village",
+  "wine"
  ],
  "sets": [
   {
@@ -2588,26 +2580,26 @@
     "lava",
     "magma",
     "volcano",
-    "golem",
+    "coin",
+    "food",
     "island",
-    "king",
     "lens",
     "lightning",
     "smith",
-    "statue",
     "sun",
-    "tool",
     "adobe",
     "desert",
     "flower",
     "fulgurite",
-    "jewelry",
-    "leather",
     "light",
-    "treasure",
+    "soap",
+    "stream",
+    "telescope",
     "axe",
     "coal",
-    "fruit"
+    "dye",
+    "fruit",
+    "garden"
    ],
    "id": "fire",
    "title": "Стихия Огня"
@@ -2620,12 +2612,13 @@
     "fish",
     "ice",
     "rain",
-    "soul",
     "swamp",
+    "child",
     "dragon",
+    "egg",
     "farmer",
     "flood",
-    "food",
+    "golem",
     "hail",
     "herd",
     "lye",
@@ -2636,9 +2629,8 @@
     "sprout",
     "swimmer",
     "forest",
-    "stream",
-    "boat",
-    "wine"
+    "leather",
+    "boat"
    ],
    "id": "water",
    "title": "Стихия Воды"
@@ -2652,24 +2644,24 @@
     "cloud",
     "smoke",
     "bird",
-    "fog",
     "sky",
-    "smog",
     "storm",
-    "egg",
+    "crystal",
     "fortress",
+    "king",
     "sandstorm",
+    "statue",
     "thinker",
+    "tool",
     "tornado",
     "tree",
     "grove",
+    "jewelry",
     "machine",
     "rainbow",
-    "soap",
-    "telescope",
     "toy",
-    "wood",
-    "dye"
+    "treasure",
+    "wood"
    ],
    "id": "air",
    "title": "Стихия Воздуха"
@@ -2690,6 +2682,7 @@
     "blade",
     "ceramic",
     "chain",
+    "fog",
     "glass",
     "gold",
     "grass",
@@ -2697,14 +2690,13 @@
     "person",
     "rust",
     "seed",
-    "wall",
-    "child",
-    "coin",
-    "crystal"
+    "smog",
+    "soul",
+    "wall"
    ],
    "id": "earth",
    "title": "Стихия Земли"
   }
  ],
- "version": "cf8e48abbc88bfb2"
+ "version": "683e1c1ee2236f28"
 }

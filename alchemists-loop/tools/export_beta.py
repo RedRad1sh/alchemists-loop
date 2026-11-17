@@ -33,7 +33,7 @@ def export_beta(project: Path, godot: str, server: str, output: Path) -> int:
             artifact = Path(staging) / output.name
             result = subprocess.run([
                 godot, "--headless", "--path", str(project), "--export-release", "Closed Beta", str(artifact),
-            ], check=False)
+            ], check=False, shell=False)
             if result.returncode == 0:
                 if not artifact.is_file() or artifact.stat().st_size == 0:
                     raise RuntimeError("Godot returned success without a beta artifact")
