@@ -117,27 +117,34 @@ static func run(g: Game) -> void:
 		var tex: Texture2D = (it["icon"] as TextureRect).texture
 		filled = filled and tex != null and tex.resource_path.contains("/gi_")
 	Selftest.check("nav uses filled game-icons", filled)
-	# Друзья снизу — общая панель между шапкой и баром, не на весь экран;
-	# пункт горит, пока панель открыта, соседний пункт её закрывает.
+	# Друзья снизу — раздел того же размера и с той же рамкой, что остальные
+	# вкладки; пункт горит, пока панель открыта, соседний пункт её закрывает.
 	g._bottom_nav._on_pressed("rating")
+	var friends_tabs_rect := g._tabs_ref.get_global_rect()
+	# Рамка вкладок рисуется вокруг области контента: скрытый tab bar резервирует
+	# высоту сверху, эталон сдвигаем на ту же величину.
+	var friends_bar_h := g._tabs_ref.get_tab_bar().get_combined_minimum_size().y
+	friends_tabs_rect.position.y += friends_bar_h
+	friends_tabs_rect.size.y -= friends_bar_h
 	g._bottom_nav._on_pressed("friends")
 	var sp: Control = g._social_ui._screen if g._social_ui != null else null
 	var friends_mark: Color = (g._bottom_nav._items[2]["mark"] as ColorRect).color
 	Selftest.check("nav friends opens shared panel above the bar", sp != null
 			and g._social_ui.is_open() and friends_mark == UIStyle.BRASS
-			and sp.offset_top > 0.0 and sp.offset_bottom <= -BottomNav.NAV_H + 0.5)
+			and sp.get_global_rect().position.y > 0.0
+			and sp.get_global_rect().end.y <= g.size.y - BottomNav.NAV_H + 0.5)
 	var spanel := g.find_child("SocialPanel", true, false) as Control
 	await g.get_tree().process_frame
-	# Друзья — раздел нижнего меню, как Мир и Рейтинг: панель на всю область
-	# раздела, без затемнения и окна по центру (претензия владельца: «модалка»).
+	# Друзья — раздел нижнего меню, как Мир и Рейтинг: rect вкладок один в один,
+	# без затемнения и окна по центру (претензия владельца: «модалка»).
 	var sdim := false
 	if sp != null:
 		for c in sp.get_children():
 			sdim = sdim or c is ColorRect
 	Selftest.check("friends is a full section, not a modal", spanel != null and sp != null
 			and not sdim
-			and spanel.size.x >= sp.size.x - 2.0 * SocialUI.SECTION_M - 1.0
-			and spanel.size.y >= sp.size.y - 2.0 * SocialUI.SECTION_M - 1.0)
+			and sp.get_global_rect().position.distance_to(friends_tabs_rect.position) < 1.0
+			and sp.get_global_rect().size.distance_to(friends_tabs_rect.size) < 1.0)
 	var cauldron_icon := g._bottom_nav._items[0]["icon"] as Control
 	var world_icon := g._bottom_nav._items[1]["icon"] as Control
 	Selftest.check("cauldron shield rises above rectangular tabs",

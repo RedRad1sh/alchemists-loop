@@ -7,8 +7,6 @@ class_name SocialUI
 const Kit = preload("res://game/ui/menu_kit.gd")
 const ModalStyle = preload("res://game/ui/friends_v2_styleboxes.gd")
 const SPIRIT_INPUT_HINT := "Светик писем не читает — он же дух"
-const SECTION_M := 16.0
-const DOCK_CLEARANCE := 56.0
 
 var g: Game
 var _screen: Control = null
@@ -33,7 +31,7 @@ func build() -> void:
 		return
 	var root := Control.new()
 	root.name = "SocialScreen"
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	root.visible = false
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.z_index = 16
@@ -41,46 +39,29 @@ func build() -> void:
 	g.add_child(root)
 	_screen = root
 
-	# Нижний раздел: общая панель между шапкой и баром навигации, а не
-	# полноэкранное окно — бар остаётся живым и переключает разделы.
-	root.offset_top = ScreenRouter.HEADER_H + 46.0
-	root.offset_bottom = -(BottomNav.NAV_H + DOCK_CLEARANCE)
-
-	# Раздел нижнего меню, как Мир и Рейтинг: панель на всю область, без
-	# затемнения и окна по центру; закрывает его соседний пункт бара.
-	var margin := MarginContainer.new()
-	margin.name = "SocialMargin"
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, int(SECTION_M))
-	root.add_child(margin)
+	# Скрытый TabContainer не пересчитывает rect при ресайзе, поэтому берём раскладку его родителя.
+	var tabs_root := g._tabs_ref.get_parent() as VBoxContainer
+	tabs_root.resized.connect(_sync_rect)
+	_sync_rect()
 
 	var panel := PanelContainer.new()
 	panel.name = "SocialPanel"
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	var modal := ModalStyle.make_modal_panel()
-	modal.set_content_margin_all(20)
-	modal.shadow_size = 0
-	panel.add_theme_stylebox_override("panel", modal)
-	Kit.modal_corners(panel)
-	margin.add_child(panel)
+	panel.add_theme_stylebox_override("panel", UIStyle.tab_panel())
+	root.add_child(panel)
+	var margin := MarginContainer.new()
+	margin.name = "SocialMargin"
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_theme_constant_override("margin_left", 2)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", int(UIStyle.PAGE_TOP_M))
+	margin.add_theme_constant_override("margin_bottom", 0)
+	panel.add_child(margin)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
-	panel.add_child(box)
-
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
-	box.add_child(head)
-	var title := g._label("ДРУЗЬЯ", 23)
-	title.add_theme_font_override("font", load("res://assets/fonts/Divagon.otf"))
-	title.add_theme_color_override("font_color", Color("d8b676"))
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(title)
-	var close := g._icon_row_button("x", "Закрыть")
-	Kit.clear_button(close)
-	close.pressed.connect(self.close)
-	head.add_child(close)
+	margin.add_child(box)
+	box.add_child(UIWidgets.section(g, "ДРУЗЬЯ"))
 
 	_body = VBoxContainer.new()
 	_body.name = "SocialBody"
@@ -95,9 +76,23 @@ func build() -> void:
 	# Поиск карточки получает ответ из уже существующего house endpoint.
 	Net.house_result.connect(_on_house_result)
 
+func _sync_rect() -> void:
+	if _screen == null:
+		return
+	var tabs_root := g._tabs_ref.get_parent() as VBoxContainer
+	var hud: Control = g._hud.row
+	# Скрытый tab bar всё равно резервирует высоту над областью содержимого.
+	var bar_h: float = g._tabs_ref.get_tab_bar().get_combined_minimum_size().y
+	var top: float = hud.global_position.y + hud.size.y \
+		+ float(tabs_root.get_theme_constant("separation")) + bar_h
+	var bottom: float = tabs_root.global_position.y + tabs_root.size.y
+	_screen.global_position = Vector2(tabs_root.global_position.x, top)
+	_screen.size = Vector2(tabs_root.size.x, bottom - top)
+
 func open(tab: int = 0) -> void:
 	if _screen == null:
 		build()
+	_sync_rect()
 	_tab = clampi(tab, 0, 1)
 	_peer = ""
 	_confirm_close()

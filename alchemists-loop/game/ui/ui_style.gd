@@ -42,6 +42,7 @@ const GOLD := BRASS_HI
 const GOLD_DIM := BRASS_DIM
 const TEXT := CREAM
 const DANGER := RUBY
+const PAGE_TOP_M := 10.0
 
 # Рунический display-шрифт (заголовок игры и названия карточек сигилов).
 const RUNIC_PATH := "res://assets/fonts/Alchemist-Runic.ttf"
@@ -280,8 +281,11 @@ static func set_tabs_panel_bare(tabs: TabContainer, bare: bool) -> void:
 	if bare:
 		tabs.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 		return
-	tabs.add_theme_stylebox_override("panel",
-		UITheme.nine("frame_panel", Vector4(20, 20, 20, 20), Vector4(20, 18, 20, 18)))
+	tabs.add_theme_stylebox_override("panel", tab_panel())
+
+
+static func tab_panel() -> StyleBoxTexture:
+	return UITheme.nine("frame_panel", Vector4(20, 20, 20, 20), Vector4(20, 18, 20, 18))
 
 
 # ---------- глобальная тема ----------

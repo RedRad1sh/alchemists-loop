@@ -26,6 +26,25 @@ static func frame_button(button: Button, file: String) -> void:
 	clear_button(button)
 	artwork(button, file)
 
+## Отклик на нажатие: кнопка сжимается к центру и возвращается пружиной.
+static func press_feedback(button: Button) -> void:
+	button.pivot_offset = button.size / 2.0
+	button.resized.connect(func() -> void: button.pivot_offset = button.size / 2.0)
+	button.button_down.connect(func() -> void:
+		_press_tween(button, Vector2.ONE * 0.93, 0.06, Tween.TRANS_QUAD, Tween.EASE_OUT))
+	button.button_up.connect(func() -> void:
+		_press_tween(button, Vector2.ONE, 0.16, Tween.TRANS_BACK, Tween.EASE_OUT))
+
+static func _press_tween(button: Button, target: Vector2, duration: float,
+		trans: Tween.TransitionType, easing: Tween.EaseType) -> void:
+	if button.has_meta("press_tween"):
+		var old := button.get_meta("press_tween") as Tween
+		if old != null and old.is_valid():
+			old.kill()
+	var tween := button.create_tween()
+	tween.tween_property(button, "scale", target, duration).set_trans(trans).set_ease(easing)
+	button.set_meta("press_tween", tween)
+
 static func glow_artwork(parent: Control, file: String) -> TextureRect:
 	const PAD := 24
 	var source := texture(file)
@@ -55,24 +74,6 @@ static func glow_artwork(parent: Control, file: String) -> TextureRect:
 	parent.resized.connect(fit)
 	fit.call()
 	return rect
-
-static func modal_corners(panel: Control) -> void:
-	var overlay := Node2D.new()
-	overlay.name = "MicroCorners"
-	panel.add_child(overlay, false, Node.INTERNAL_MODE_BACK)
-	for i in 4:
-		var corner := TextureRect.new()
-		corner.texture = texture("14b_modal_micro_corner_tri.png")
-		corner.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		corner.size = Vector2(18, 18)
-		corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		corner.flip_h = (i & 1) != 0
-		corner.flip_v = (i & 2) != 0
-		overlay.add_child(corner)
-		var place := func() -> void:
-			corner.position = Vector2(panel.size.x - 18 if (i & 1) != 0 else 0, panel.size.y - 18 if (i & 2) != 0 else 0)
-		panel.resized.connect(place)
-		place.call()
 
 static func avatar_ring(avatar: Control) -> void:
 	var ring := artwork(avatar, "15_avatar_brass_ring.png", "BrassRing")

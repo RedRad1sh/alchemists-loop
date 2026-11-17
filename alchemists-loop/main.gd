@@ -2041,6 +2041,7 @@ func _make_page(tabs: TabContainer, title: String) -> VBoxContainer:
 	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_theme_constant_override("margin_right", 12)
 	margin.add_theme_constant_override("margin_left", 2)
+	margin.add_theme_constant_override("margin_top", int(UIStyle.PAGE_TOP_M))
 	scroll.add_child(margin)
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
