@@ -30,7 +30,7 @@ func on_synthesis(item_id: String) -> int:
 	if not unlocked:
 		return 0
 	var depth := _content_depth(item_id)
-	var award := mini(depth, 6) if depth > 0 and depth < Rules.INVALID_DEPTH else 0
+	var award := mini(depth, int(_bal().get_value("workshop.xp_per_synthesis_max"))) if depth > 0 and depth < Rules.INVALID_DEPTH else 0
 	award = mini(award, Rules.MAX_XP - xp)
 	xp += award
 	if opened or award > 0:
@@ -61,14 +61,27 @@ func _content_depth(item_id: String, trail: Array = []) -> int:
 func is_read_only() -> bool:
 	return not _future_state.is_empty()
 
+func _bal() -> BalanceProfile:
+	return g.balance if (g != null and g.balance != null) else BalanceConfig.baseline()
+
+func _ranks() -> Array:
+	return Rules.ranks(_bal())
+
+func _autonomy() -> Array:
+	return Rules.autonomy(_bal())
+
 func line_count() -> int:
-	return int(Rules.RANKS[rank]["lines"])
+	return int((_ranks()[rank] as Dictionary)["lines"]) + g._retort._workshop_bonus_lines()
+
+func materialize_lines() -> void:
+	while lines.size() < line_count():
+		lines.append(_new_line(_unused_id("line", _line_ids())))
 
 func queue_capacity() -> int:
-	return int(Rules.RANKS[rank]["capacity"])
+	return int((_ranks()[rank] as Dictionary)["capacity"])
 
 func offline_stage_limit() -> int:
-	return int(Rules.AUTONOMY[autonomy_level]["stages"]) + g._sigil.card_autonomy_bonus()
+	return int((_autonomy()[autonomy_level] as Dictionary)["stages"]) + g._sigil.card_autonomy_bonus()
 
 func known_target_recipe(target: String) -> bool:
 	if not g.ITEMS.has(target) or target in Game.BASE_IDS:
@@ -95,9 +108,10 @@ func rank_availability(next_rank: int) -> Dictionary:
 	var check := _command_check()
 	if not check["ok"]:
 		return check
-	if next_rank < 1 or next_rank >= Rules.RANKS.size() or next_rank != rank + 1:
+	var rtable := _ranks()
+	if next_rank < 1 or next_rank >= rtable.size() or next_rank != rank + 1:
 		return _failure("rank", "Сначала построй предыдущий ранг оборудования.")
-	var recipe: Dictionary = Rules.RANKS[next_rank]
+	var recipe: Dictionary = rtable[next_rank]
 	if xp < int(recipe["xp"]):
 		return _failure("xp", "Нужно %d мастерства Мастерской." % int(recipe["xp"]))
 	return _recipe_availability(recipe)
@@ -107,11 +121,13 @@ func autonomy_availability() -> Dictionary:
 	if not check["ok"]:
 		return check
 	var next := autonomy_level + 1
-	if next >= Rules.AUTONOMY.size():
+	var atable := _autonomy()
+	var rtable := _ranks()
+	if next >= atable.size():
 		return _failure("maximum", "Автономность уже улучшена до предела.")
-	var recipe: Dictionary = Rules.AUTONOMY[next]
+	var recipe: Dictionary = atable[next]
 	if rank < int(recipe["rank"]):
-		return _failure("rank", "Нужен ранг «%s»." % String(Rules.RANKS[int(recipe["rank"])]["name"]))
+		return _failure("rank", "Нужен ранг «%s»." % String((rtable[int(recipe["rank"])] as Dictionary)["name"]))
 	return _recipe_availability(recipe)
 
 func _recipe_availability(recipe: Dictionary) -> Dictionary:
@@ -142,14 +158,13 @@ func buy_rank(next_rank: int) -> Dictionary:
 	var check := rank_availability(next_rank)
 	if not check["ok"]:
 		return check
-	if not _spend_recipe(Rules.RANKS[next_rank]):
+	if not _spend_recipe(_ranks()[next_rank] as Dictionary):
 		return _failure("ether", "Эфира для оборудования уже недостаточно.")
 	rank = next_rank
 	# Контрактный апгрейд начисляем ДО changed.emit(): экран, перечитавший прогресс
 	# контракта в перерисовке, обязан увидеть уже начисленный пункт.
 	g._contracts.on_upgrade("workshop", "rank", next_rank)
-	while lines.size() < line_count():
-		lines.append(_new_line(_unused_id("line", _line_ids())))
+	materialize_lines()
 	changed.emit()
 	return {"ok": true, "reason": "", "rank": rank}
 
@@ -157,7 +172,7 @@ func buy_autonomy() -> Dictionary:
 	var check := autonomy_availability()
 	if not check["ok"]:
 		return check
-	if not _spend_recipe(Rules.AUTONOMY[autonomy_level + 1]):
+	if not _spend_recipe(_autonomy()[autonomy_level + 1] as Dictionary):
 		return _failure("ether", "Эфира для автономности уже недостаточно.")
 	autonomy_level += 1
 	g._contracts.on_upgrade("workshop", "autonomy", autonomy_level)
@@ -171,16 +186,18 @@ func missing_materials_preview(kind: String) -> Dictionary:
 	if not check["ok"]:
 		return check
 	var recipe: Dictionary
+	var rtable := _ranks()
+	var atable := _autonomy()
 	if kind == "rank":
-		if rank + 1 >= Rules.RANKS.size():
+		if rank + 1 >= rtable.size():
 			return _failure("maximum", "Оборудование уже улучшено до предела.")
-		recipe = Rules.RANKS[rank + 1]
+		recipe = rtable[rank + 1]
 	elif kind == "autonomy":
-		if autonomy_level + 1 >= Rules.AUTONOMY.size():
+		if autonomy_level + 1 >= atable.size():
 			return _failure("maximum", "Автономность уже улучшена до предела.")
-		recipe = Rules.AUTONOMY[autonomy_level + 1]
+		recipe = atable[autonomy_level + 1]
 		if rank < int(recipe["rank"]):
-			return _failure("rank", "Нужен ранг «%s»." % String(Rules.RANKS[int(recipe["rank"])]["name"]))
+			return _failure("rank", "Нужен ранг «%s»." % String((rtable[int(recipe["rank"])] as Dictionary)["name"]))
 	else:
 		return _failure("kind", "Выбери материалы оборудования или автономности.")
 	var deficits := {}
@@ -257,7 +274,7 @@ func job_preview(target: String, mode: String, amount: int) -> Dictionary:
 		var recipe := g._online._find_recipe(String(op["a"]), String(op["b"]))
 		var output := String(recipe.get("out", ""))
 		var first_cost := g._engine._pair_cost(String(op["a"]), String(op["b"]), discount)
-		var repeat_cost := maxi(1, int(round(Game.BREW_COST * discount)))
+		var repeat_cost := maxi(1, int(round(float(_bal().get_value("ether.brew_cost", Game.BREW_COST)) * discount)))
 		if simulated.has(output) and not g._engine.inventory.has(output):
 			first_cost = repeat_cost
 		if next_cost == 0:
@@ -390,7 +407,7 @@ func _clear_state() -> void:
 	autonomy_level = 0
 	lines = [_new_line("line_1")]
 	scheduler_cursor = 0
-	last_simulated_at = Time.get_unix_time_from_system()
+	last_simulated_at = g.game_now()
 
 func reset_prestige() -> void:
 	if is_read_only():
@@ -400,7 +417,7 @@ func reset_prestige() -> void:
 		fresh.append(_new_line(String(lines[i]["id"]) if i < lines.size() else "line_%d" % (i + 1)))
 	lines = fresh
 	scheduler_cursor = 0
-	last_simulated_at = Time.get_unix_time_from_system()
+	last_simulated_at = g.game_now()
 	changed.emit()
 
 func export_state() -> Dictionary:

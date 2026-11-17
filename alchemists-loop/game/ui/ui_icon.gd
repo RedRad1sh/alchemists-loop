@@ -1,8 +1,6 @@
 class_name UIIcon
 extends RefCounted
-# Набор векторных иконок «Atheneum» (из PR #32): assets/ui/icons — 24 px,
-# assets/ui/icons16 — 16 px (меню вкладок). База белая: тонируется modulate.
-# Тот же вид на любом DPI; шейдеров и текстурных атласов не требуют.
+# Белый геометрический контур тонируется под фон управляющего элемента.
 
 const ICON_DIR := "res://assets/ui/icons/"
 const ICON_DIR_16 := "res://assets/ui/icons16/"
@@ -50,8 +48,7 @@ static func into_button(btn: Button, icon: String, size_px: int = 20,
 	var rect := make(icon, size_px, color)
 	center.add_child(rect)
 	btn.add_child(center)
-	# Наведение: иконка чуть светлеет и подрастает — одного осветления плашки
-	# на тёмной латуни не видно.
+	# Контур остаётся неподвижным при смене состояния.
 	center.pivot_offset = btn.custom_minimum_size * 0.5
 	if not btn.mouse_entered.is_connected(_hover):
 		btn.mouse_entered.connect(_hover.bind(btn, true))
@@ -64,7 +61,7 @@ static func _hover(btn: Button, over: bool) -> void:
 	if center == null:
 		return
 	center.pivot_offset = btn.size * 0.5
-	center.scale = Vector2(1.12, 1.12) if over and not btn.disabled else Vector2.ONE
+	center.scale = Vector2.ONE
 	var base: Color = btn.get_meta("icon_color", Color.WHITE)
 	for c in center.get_children():
 		(c as CanvasItem).modulate = base.lightened(0.25) if over and not btn.disabled else base

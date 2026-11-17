@@ -7,7 +7,7 @@ static func run(g: Game) -> void:
 	Selftest.check("companion built", g._spirit._companion != null)
 	Selftest.check("companion bank", g._spirit._companion_line("idle", "") != "" and g._spirit._companion_line("success_new", "Пар") != "")
 	var saved_met := g._spirit._companion_met
-	g._spirit._companion_set_name("Тестер")
+	g._spirit._companion_set_name("Тестер", "male")
 	Selftest.check("companion naming", g._spirit._player_name == "Тестер" and g._spirit._spirit_name != "" and g._spirit._companion_met)
 	g._spirit._companion_met = saved_met
 	# U25 (re-review, Critical #1): онбординг заводит ник ТОЙ ЖЕ заявкой, что и
@@ -26,7 +26,7 @@ static func run(g: Game) -> void:
 	Net.base_url = ""
 	g._online._net_enabled = true
 	g._online._net_nick = "Т25Дефолт"
-	g._spirit._companion_set_name("Т25Занят")
+	g._spirit._companion_set_name("Т25Занят", "male")
 	Selftest.check("onboarding nick is sent as a rollback-able request",
 		g._online._net_nick == "Т25Занят"
 		and g._hub._profile_pending == true
@@ -53,15 +53,10 @@ static func run(g: Game) -> void:
 	# профиль: ник + аватар
 	Selftest.check("avatar deterministic", Avatar.spec_for("Варда") == Avatar.spec_for("Варда"))
 	var varda := Avatar.spec_for("Варда")
-	Selftest.check("avatar spec shape", varda.has("bg") and varda.has("accent")
-		and varda.has("sym") and varda.has("ring") and varda["bg"] != varda["accent"])
-	Selftest.check("avatar cross-server", int(varda["sym"]) == 3
-		and (varda["bg"] as Color) == Color("#7fcc6c")
-		and (varda["accent"] as Color) == Color("#cc6ca6")
-		and (varda["ring"] as bool) == false)
+	Selftest.check("avatar spec shape", varda.has("archetype") and varda.has("gender") and not varda.has("sym"))
+	Selftest.check("avatar cross-server", varda.archetype == "glass" and varda.face == 0 and varda.hairStyle == "glass-1")
 	var gelios := Avatar.spec_for("Гелиос")
-	Selftest.check("avatar varies by nick", gelios["sym"] != varda["sym"]
-		or gelios["bg"] != varda["bg"])
+	Selftest.check("avatar varies by nick", gelios != varda)
 	Selftest.check("nick cleaned", g._hub._clean_player_nick("  Вар   да  ") == "Вар да"
 		and g._hub._clean_player_nick("Варда!!!") == "Варда"
 		and g._hub._clean_player_nick("Х") == ""
@@ -73,6 +68,7 @@ static func run(g: Game) -> void:
 	# _send_next не делает HTTP-попыток, очередь сливается offline-результатом
 	# в несвязанный в selftest me_result), _on_net_me_result вызывается напрямую
 	# (Net.me_result коннектится только при _net_enabled, main.gd).
+	g._hub._profile_gender = "male"
 	var t28_nick0 := g._online._net_nick
 	var t28_status0 := g._engine.status_text
 	var t28_base0 := Net.base_url
@@ -82,6 +78,7 @@ static func run(g: Game) -> void:
 	var t28_dim0 := g._hub._profile_dim.visible
 	var t28_popup0 := g._hub._profile_popup.visible
 	Net.base_url = ""
+	g._online._net_enabled = true
 	g._online._net_nick = "Т28Старый"
 	g._hub._profile_nick.text = "Т28Новый"
 	g._hub._save_profile()
@@ -106,6 +103,7 @@ static func run(g: Game) -> void:
 	# «не восстанавливать _profile_nick.text» краснит именно его.
 	# Успех объявляется именно в ok-ветке и именно своей заявке: второй цикл
 	# save→ответ. Мутация «убрать печать успеха в ok-ветке» краснит этот кейс.
+	g._hub._profile_gender = "male"
 	g._hub._profile_nick.text = "Т28Новый2"
 	g._hub._save_profile()
 	g._hub._on_net_me_result({"ok": true, "nick": "Т28Новый2"})
@@ -119,6 +117,7 @@ static func run(g: Game) -> void:
 	# _profile_pending в обработчике (третий конъюнкт).
 	var t28_first0 := g._online._net_nick
 	g._online._net_nick = ""
+	g._hub._profile_gender = "male"
 	g._hub._profile_nick.text = "Т28Первый"
 	g._hub._save_profile()
 	g._hub._on_net_me_result({"ok": false, "error": "HTTP 400",
@@ -138,6 +137,7 @@ static func run(g: Game) -> void:
 	# restore: ничего из профиля/статуса/сети не оставляем изменённым.
 	g._online._net_nick = t28_nick0
 	g._engine.status_text = t28_status0
+	g._online._net_enabled = sp_enabled0
 	Net.base_url = t28_base0
 	g._hub._profile_nick.text = t28_line0
 	g._hub._profile_prev_nick = t28_prev0

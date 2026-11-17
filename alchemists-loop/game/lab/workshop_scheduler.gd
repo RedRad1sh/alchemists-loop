@@ -32,21 +32,25 @@ func _blank() -> Dictionary:
 		lines[String(line["id"])] = {"steps": 0, "items": 0, "mastery": 0, "ether_spent": 0,
 			"stages": 0, "status": "idle", "reason": "", "queue_count": line["queue"].size()}
 	return {"steps": 0, "items": 0, "mastery": 0, "ether_spent": 0,
-		"ether_gained": 0, "spring_items": 0, "craft_steps": 0, "craft_items": 0,
+		"ether_gained": 0, "spring_items": 0, "inventory_deltas": {}, "craft_steps": 0, "craft_items": 0,
 		"craft_status": "", "lines": lines, "events": 0, "simulated_seconds": 0.0,
 		"skipped_seconds": 0.0, "simulated_until": 0.0, "consumed_until": 0.0, "status": "idle"}
 
 func _writable() -> bool:
 	return workshop.unlocked and not workshop.is_read_only()
 
+func _bal() -> BalanceProfile:
+	return g.balance if (g != null and g.balance != null) else BalanceConfig.baseline()
+
 func _interval(line: Dictionary) -> float:
 	var target := ""
 	if not line["queue"].is_empty(): target = String(line["queue"][0]["target"])
 	var interval: float = g._sigil.bench_interval(target)
 	if not is_finite(interval) or interval <= EPS:
-		interval = Game.BENCH_INTERVAL
+		interval = float(_bal().get_value("events.bench_interval", Game.BENCH_INTERVAL))
 	# Ускорение карт ограничено 90%, чтобы интервал не стал нулевым.
-	return interval * (1.0 - clampf(g._sigil.card_speed_bonus() / 100.0, 0.0, 0.9))
+	return interval * (1.0 - clampf(g._sigil.card_speed_bonus() / 100.0, 0.0, 0.9)) \
+		* g._retort._workshop_speed_factor()
 
 func _token() -> Array:
 	return [_signature, _mutation]
@@ -66,7 +70,7 @@ func _resource_signature() -> int:
 func advance(delta_seconds: float, offline := false) -> Dictionary:
 	if _running or not is_finite(delta_seconds) or delta_seconds < 0.0:
 		return _blank()
-	if offline and delta_seconds < Game.OFFLINE_MIN_SEC:
+	if offline and delta_seconds < float(_bal().get_value("offline.min_sec", Game.OFFLINE_MIN_SEC)):
 		var ignored := _blank()
 		ignored["skipped_seconds"] = delta_seconds
 		return ignored
@@ -83,7 +87,7 @@ func advance(delta_seconds: float, offline := false) -> Dictionary:
 	_spring_offline_used = 0.0
 	_manual_left = g._engine._stage_ops() if offline and not workshop.is_read_only() else 0
 	_manual_block.clear()
-	var duration := minf(delta_seconds, Game.OFFLINE_CAP_SEC)
+	var duration := minf(delta_seconds, float(_bal().get_value("offline.cap_sec", Game.OFFLINE_CAP_SEC)))
 	_stats["skipped_seconds"] = delta_seconds - duration
 	var frozen: bool = g._saves._save_frozen
 	if offline: g._saves._save_frozen = true
@@ -117,7 +121,7 @@ func _normalise() -> void:
 	if not is_finite(g._engine.regen_clock): g._engine.regen_clock = 0.0
 	g._engine.regen_clock = fposmod(maxf(0.0, g._engine.regen_clock), 1.0)
 	if not is_finite(g._pages._spring_clock): g._pages._spring_clock = 0.0
-	g._pages._spring_clock = fposmod(maxf(0.0, g._pages._spring_clock), Game.SPRING_INTERVAL)
+	g._pages._spring_clock = fposmod(maxf(0.0, g._pages._spring_clock), float(_bal().get_value("spring.base_interval", Game.SPRING_INTERVAL)))
 	if not _writable(): return
 	for line in workshop.lines:
 		var old_phase: float = line["phase_seconds"]
@@ -164,7 +168,7 @@ func _spring_active() -> bool:
 ## §3.4: во время отсутствия Родник работает только купленное окно; оно
 ## расходуется вместе с прогоном, а не проверяется по часам.
 func _spring_offline_window() -> float:
-	var table: Array = SpringBalance.OFFLINE_WINDOW_SEC
+	var table: Array = SpringBalance.offline_windows(_bal())
 	var lvl := clampi(int(g._engine.spring_levels.get("offline", 0)), 0, table.size() - 1)
 	return float(table[lvl])
 
@@ -174,7 +178,8 @@ func _spring_offline_left() -> float:
 func _line_speed() -> float:
 	# Одно место для множения: _next_event и _elapse обязаны давать одинаковую
 	# скорость, иначе интервал событий и накопление фазы разъедутся.
-	return (Game.BENCH_OFFLINE_FACTOR if _offline else 1.0) \
+	var of := float(_bal().get_value("events.bench_offline_factor", Game.BENCH_OFFLINE_FACTOR))
+	return (of if _offline else 1.0) \
 		* (1.0 + g._contracts.buff_power("workshop_speed"))
 
 func _next_event(remaining: float) -> float:
@@ -182,6 +187,8 @@ func _next_event(remaining: float) -> float:
 	var rate: float = g._engine._ether_rate()
 	if is_finite(rate) and rate > 0.0 and g._engine.ether < g._engine._max_ether():
 		dt = minf(dt, maxf(EPS, (1.0 - g._engine.regen_clock) / rate))
+	if not _offline and g._engine._up_lvl("auto_gift") > 0:
+		dt = minf(dt, maxf(EPS, float(_bal().get_value("events.gift_interval")) - g._engine._gift_clock))
 	if _spring_active():
 		dt = minf(dt, maxf(EPS, g._engine.spring_interval() - g._pages._spring_clock))
 		if _offline:
@@ -215,11 +222,16 @@ func _elapse(dt: float) -> void:
 			for source in g._engine.spring_sources:
 				var granted: int = g._engine._spring_gain(String(source), amount)
 				if granted > 0:
+					_count_inventory(String(source), granted)
 					_stats["spring_items"] += granted
 					_mutation += 1
 	elif _offline and g._engine.spring_on and g._engine._mode_unlocked("spring"):
 		var interval: float = g._engine.spring_interval()
 		g._pages._spring_clock = fposmod(g._pages._spring_clock + dt, interval)
+	if not _offline:
+		var gift := g._engine._gift_tick(dt)
+		if not gift.is_empty():
+			_count_inventory(gift, 1)
 	var speed: float = _line_speed()
 	for line in workshop.lines:
 		if _timer_active(line):
@@ -269,8 +281,16 @@ func _operation(target: String, discount: float) -> Dictionary:
 	var op: Dictionary = ops[0]
 	var result: Dictionary = g._engine._commit_brew(String(op["a"]), String(op["b"]),
 		{"source": "offline_workshop" if _offline else "workshop", "production": true, "discount": discount})
+	if not result.get("failed", true):
+		_count_inventory(String(op["a"]), -1)
+		_count_inventory(String(op["b"]), -1)
+		_count_inventory(String(result["output"]), 1)
 	result["plan"] = plan
 	return result
+
+func _count_inventory(id: String, amount: int) -> void:
+	var deltas: Dictionary = _stats["inventory_deltas"]
+	deltas[id] = int(deltas.get(id, 0)) + amount
 
 func _count(result: Dictionary, line_id := "") -> void:
 	_stats["steps"] += 1
@@ -317,7 +337,7 @@ func _dispatch_lines() -> void:
 				_line_changed = true
 				continue
 			if int(line["stage_credit"]) <= 0: continue
-			var discount := Game.BLUEPRINT_DISCOUNT if g._engine._blueprints.has(target) else 1.0
+			var discount := float(_bal().get_value("brew.blueprint_discount")) if g._engine._blueprints.has(target) else 1.0
 			var result := _operation(target, discount)
 			if bool(result.get("failed", true)):
 				var code := String(result.get("reason", "recipe"))
@@ -347,7 +367,7 @@ func _dispatch_manual() -> void:
 	var target := String(job.get("item", ""))
 	var discount := float(job.get("discount", 1.0))
 	if not is_finite(discount) or discount <= 0.0 or discount > 1.0:
-		discount = Game.BLUEPRINT_DISCOUNT if g._engine._blueprints.has(target) else 1.0
+		discount = float(_bal().get_value("brew.blueprint_discount")) if g._engine._blueprints.has(target) else 1.0
 	var result := _operation(target, discount)
 	if bool(result.get("failed", true)):
 		var code := String(result.get("reason", "recipe"))
@@ -361,10 +381,12 @@ func _dispatch_manual() -> void:
 	_manual_left -= 1
 	_manual_ready = false
 	if String(result.get("output", "")) == target:
-		_blueprint(target, result, int(job["completed"]))
-		g._engine._craft_job.clear()
+		job["produced"] = int(job.get("produced", 0)) + 1
 		_stats["items"] += 1
 		_stats["craft_items"] += 1
+	if int(job.get("produced", 0)) >= int(job.get("amount", 1)):
+		_blueprint(target, result, int(job["completed"]))
+		g._engine._craft_job.clear()
 		_stats["craft_status"] = "complete"
 	elif _manual_left <= 0:
 		job["status"] = "paused_operation_cap"

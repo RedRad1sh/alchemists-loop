@@ -139,7 +139,6 @@ func build(game: Game, page: VBoxContainer) -> void:
 	r2.gui_input.connect(_on_gui_input)
 	page_host.add_child(r2)
 	_rooms.append(r2)
-	_build_workshop(r2)
 
 	_left_btn = _make_arrow(false)
 	_left_btn.pressed.connect(func() -> void: set_room(_room_idx - 1))
@@ -158,7 +157,8 @@ func build(game: Game, page: VBoxContainer) -> void:
 	dots.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_host.add_child(dots)
 	for i in _rooms.size():
-		var d := ColorRect.new()
+		var d := TextureRect.new()
+		d.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		d.custom_minimum_size = Vector2(8, 8)
 		d.size = Vector2(8, 8)
 		d.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -338,24 +338,6 @@ func _make_arrow(right: bool) -> Button:
 		btn.text = ">" if right else "<"
 		btn.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	return btn
-
-
-func _build_workshop(box: VBoxContainer) -> void:
-	var top := Control.new()
-	top.custom_minimum_size = Vector2(0, 16)
-	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(top)
-	var title := g._label("МАСТЕРСКАЯ", 20)
-	title.add_theme_color_override("font_color", UIStyle.BRASS_HI)
-	title.add_theme_color_override("font_outline_color", Color(0.06, 0.04, 0.03, 0.92))
-	title.add_theme_constant_override("outline_size", 6)
-	box.add_child(title)
-	var sub := g._label("Автоматика лаборатории: устройства созревают без тебя. Новые открываются вместе с веществами.", 13)
-	sub.add_theme_color_override("font_color", UIStyle.CREAM)
-	sub.add_theme_color_override("font_outline_color", Color(0.06, 0.04, 0.03, 0.92))
-	sub.add_theme_constant_override("outline_size", 5)
-	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(sub)
 
 
 ## Прямоугольник на плите в координатах экрана: доля uv → координаты при
@@ -577,7 +559,7 @@ func _refresh_chrome() -> void:
 		_right_btn.visible = _room_idx < _rooms.size() - 1
 	_apply_prop_visibility()
 	for i in _dots.size():
-		(_dots[i] as ColorRect).color = UIStyle.BRASS_HI if i == _room_idx else UIStyle.TEXT_MUTED
+		(_dots[i] as TextureRect).texture = load("res://assets/ui/kit_01b/13_page_dot_active.png" if i == _room_idx else "res://assets/ui/kit_01b/12_page_dot_inactive.png")
 
 
 func _on_gui_input(event: InputEvent) -> void:

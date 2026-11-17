@@ -761,7 +761,7 @@ func _build_house_toolbar(parent: Control) -> void:
 func _bar_button(text: String, min_size: Vector2, accent: Color) -> Button:
 	var b := g._small_button(text, min_size, 0)
 	b.custom_minimum_size = min_size
-	var glass := Color(0.035, 0.055, 0.085, 0.94)
+	var glass := Color(UIStyle.WOOD_DEEP, 0.96)
 	var edge := Color(UIStyle.LINE.r, UIStyle.LINE.g, UIStyle.LINE.b, 0.6)
 	var normal := _bar_box(glass, edge)
 	var hover := _bar_box(glass.lightened(0.08), Color(accent.r, accent.g, accent.b, 0.7))
@@ -783,9 +783,9 @@ func _bar_button(text: String, min_size: Vector2, accent: Color) -> Button:
 
 
 func _bar_box(bg: Color, edge: Color) -> StyleBoxFlat:
-	var sb := UIStyle.box(bg, edge, 12, 1)
-	sb.shadow_color = Color(0, 0, 0, 0.4)
-	sb.shadow_size = 8
+	var sb := UIStyle.box(bg, edge, 2, 1)
+	sb.shadow_color = Color(0, 0, 0, 0.2)
+	sb.shadow_size = 3
 	sb.shadow_offset = Vector2(0, 2)
 	return _padded(sb, 16.0, 6.0) as StyleBoxFlat
 
@@ -837,8 +837,8 @@ func _house_react(key: String) -> void:
 ## Панель лотка и подсказки: тёмное матовое стекло лаборатории с тенью ВВЕРХ на
 ## комнату. Без текстур: 9-срез доски растягивался под ширину панели и в ландшафте
 ## давал мыльные полосы вместо дерева. Лоток приезжает без скруглений (radius 0).
-func _tray_panel_style(radius: int = 14) -> StyleBoxFlat:
-	var sb := UIStyle.box(Color(0.035, 0.055, 0.085, 0.94),
+func _tray_panel_style(radius: int = 2) -> StyleBoxFlat:
+	var sb := UIStyle.box(Color(UIStyle.WOOD_DEEP, 0.96),
 		Color(UIStyle.LINE.r, UIStyle.LINE.g, UIStyle.LINE.b, 0.6), radius)
 	sb.corner_radius_bottom_left = 0
 	sb.corner_radius_bottom_right = 0
@@ -1647,7 +1647,8 @@ func _build_color_picker() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(center)
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", g._panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
+	card.add_theme_stylebox_override("panel", UIStyle.modal_panel())
+	UIStyle.decorate_frame(card)
 	center.add_child(card)
 	var col := VBoxContainer.new()
 	col.custom_minimum_size = Vector2(360, 0)
@@ -1729,7 +1730,8 @@ func _build_house_popup() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(center)
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", g._panel_style(Color(0.09, 0.13, 0.19, 0.97), 20))
+	card.add_theme_stylebox_override("panel", UIStyle.modal_panel())
+	UIStyle.decorate_frame(card)
 	center.add_child(card)
 	var col := VBoxContainer.new()
 	col.custom_minimum_size = Vector2(400, 0)
@@ -1866,6 +1868,7 @@ func _on_house_profile(week_visits: int, visitors: Array) -> void:
 	for v in visitors.slice(0, 3):
 		var d: Dictionary = v
 		var n := String(d.get("nick", ""))
+		g._online._remember_avatar(n, d.get("avatar"))
 		if n != "":
 			parts.append(n)
 	if _guests_lbl != null:

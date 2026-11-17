@@ -694,7 +694,9 @@ static func generate(card: Dictionary) -> Dictionary:
 	var seed := int(card.get("seed", 0))
 	var cached: Variant = _cache.get("%s#%d" % [card_id, seed], null)
 	if cached is Dictionary:
-		return (cached as Dictionary).duplicate(true)
+		var dup := (cached as Dictionary).duplicate(true)
+		_register_en_lore(card, dup)
+		return dup
 
 	var recipe: Array = card.get("recipe", [])
 	if not (recipe is Array) or (recipe as Array).is_empty():
@@ -918,4 +920,66 @@ static func generate(card: Dictionary) -> Dictionary:
 		"warning": warning,
 	}
 	_cache["%s#%d" % [card_id, seed]] = result.duplicate(true)
+	_register_en_lore(card, result)
 	return result
+
+
+static func _en_slug_label(slug: String) -> String:
+	var parts := slug.replace("-", "_").split("_", false)
+	var out := PackedStringArray()
+	for p in parts:
+		if not p.is_empty():
+			out.append(p.substr(0, 1).to_upper() + p.substr(1).to_lower())
+	return " ".join(out) if not out.is_empty() else "Essence"
+
+
+static func _register_en_lore(card: Dictionary, res: Dictionary) -> void:
+	if Locale == null or not Locale.has_method("register_dynamic"):
+		return
+	var proc_map := {
+		"calcinatio": "Calcination",
+		"putrefactio": "Putrefaction",
+		"distillatio": "Distillation",
+		"sublimatio": "Sublimation",
+		"coniunctio": "Conjunction",
+		"conjunctio": "Conjunction",
+		"dissolutio": "Dissolution",
+		"separatio": "Separation",
+		"fermentatio": "Fermentation",
+		"coagulatio": "Coagulation",
+	}
+	var stage_map := {
+		"nigredo": "Nigredo",
+		"albedo": "Albedo",
+		"citrinitas": "Citrinitas",
+		"rubedo": "Rubedo",
+	}
+	var proc_raw := str(card.get("process", "distillatio")).to_lower()
+	var stage_raw := str(card.get("stage", "albedo")).to_lower()
+	var proc_en := String(proc_map.get(proc_raw, _en_slug_label(proc_raw)))
+	var stage_en := String(stage_map.get(stage_raw, _en_slug_label(stage_raw)))
+	var target_en := _en_slug_label(str(card.get("id", "sigil")))
+	var reagents := PackedStringArray()
+	var recipe_arr = card.get("recipe", [])
+	if recipe_arr is Array:
+		for entry in recipe_arr:
+			if entry is Dictionary:
+				var rid := str((entry as Dictionary).get("item_id", ""))
+				if not rid.is_empty():
+					reagents.append(_en_slug_label(rid).to_lower())
+	var reag_str := " and ".join(reagents) if not reagents.is_empty() else "primal matter"
+	var title_ru := str(res.get("title", ""))
+	var desc_ru := str(res.get("description", ""))
+	var eff_ru := str(res.get("effect_hint", ""))
+	var warn_ru := str(res.get("warning", ""))
+	if not title_ru.is_empty():
+		Locale.register_dynamic(title_ru, "%s of %s — %s" % [proc_en, target_en, stage_en])
+	if not desc_ru.is_empty():
+		Locale.register_dynamic(desc_ru,
+			"Through %s in the %s phase, %s converges within the sealed alembic. The transmutation stabilizes into the %s sigil, preserving its alchemical resonance." % [proc_en.to_lower(), stage_en, reag_str, target_en])
+	if not eff_ru.is_empty():
+		Locale.register_dynamic(eff_ru,
+			"Attunes the laboratory to %s resonance during %s." % [target_en.to_lower(), stage_en.to_lower()])
+	if not warn_ru.is_empty():
+		Locale.register_dynamic(warn_ru,
+			"Caution: keep the %s seal steady throughout %s." % [stage_en.to_lower(), proc_en.to_lower()])

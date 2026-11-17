@@ -153,9 +153,7 @@ func say(text: String, mood: String = "idle") -> void:
 
 func _build_bubble() -> void:
 	_bubble = PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.07, 0.10, 0.15, 0.96)
-	sb.set_corner_radius_all(12)
+	var sb := UIStyle.panel()
 	sb.content_margin_left = 12
 	sb.content_margin_right = 12
 	sb.content_margin_top = 9

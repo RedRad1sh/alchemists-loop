@@ -17,7 +17,7 @@ extends Node
 ## инвалидирует старые картинки автоматически.
 
 const CACHE_DIR := "user://sigils"
-const FORMAT_VERSION := 4  # 4: исправлена нечитаемая Б/б в шрифте названий
+const FORMAT_VERSION := 5
 const FRAMES_PER_RENDER := 2
 
 var viewport: SubViewport

@@ -1085,6 +1085,8 @@ func _cell(side: String, e: Dictionary, pending: Array) -> TextureButton:
 ## натуральной ширине текста, и подпись в 48-px полосу ложилась на 104 px — за
 ## край кожи (кадр trade_build). Возвращает [кегль, строка].
 func _fit_name(text: String, w: float) -> Array:
+	if Locale != null and Locale.is_english():
+		text = g.tr(text)
 	var f := g.get_theme_default_font()
 	for s in [INK_FS, 8, 7]:
 		if f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, s).x <= w:
@@ -1193,7 +1195,7 @@ func _sheet_button(nm: String, text: String,
 	b.custom_minimum_size = size
 	b.mouse_filter = Control.MOUSE_FILTER_STOP
 	var sb := StyleBoxTexture.new()
-	sb.texture = board_tex("paper_note.png")
+	sb.texture = UITheme.tex("btn_brass")
 	for m in ["texture_margin_left", "texture_margin_top",
 			"texture_margin_right", "texture_margin_bottom"]:
 		sb.set(m, PAPER_FIELD)

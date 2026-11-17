@@ -186,7 +186,7 @@ func _ach_progress(a: Dictionary) -> int:
 
 func _ach_update() -> void:
 	# начислить награды за новые достижения; без сайд-эффектов в selftest
-	if g._selftest or _ach_updating:
+	if (g._selftest and not g.has_meta("progression_driver")) or _ach_updating:
 		return
 	_ach_updating = true
 	_sets_update()
@@ -348,13 +348,13 @@ func _rebuild_set_rows() -> void:
 		g._set_rows.add_child(lbl)
 
 func _quest_cap_bonus() -> int:
-	return Game.QUEST_CAP * g._guild._quests_done.size()
+	return int(g.balance.get_value("progression.quest_cap", Game.QUEST_CAP)) * g._guild._quests_done.size()
 
 func _quest_regen_bonus() -> float:
-	return Game.QUEST_REGEN * g._guild._quests_done.size()
+	return float(g.balance.get_value("progression.quest_regen", Game.QUEST_REGEN)) * g._guild._quests_done.size()
 
 func _ach_cap_bonus() -> int:
-	return Game.ACH_CAP * _ach_done.size()
+	return int(g.balance.get_value("progression.achievement_cap", Game.ACH_CAP)) * _ach_done.size()
 
 func _ach_regen_bonus() -> float:
-	return Game.ACH_REGEN * _ach_done.size()
+	return float(g.balance.get_value("progression.achievement_regen", Game.ACH_REGEN)) * _ach_done.size()

@@ -172,17 +172,17 @@ static func _factories() -> void:
 	Selftest.check("panel margins 20",
 		p != null and is_equal_approx(p.texture_margin_left, 20.0)
 		and is_equal_approx(p.texture_margin_top, 20.0))
-	Selftest.check("panel content R8",
-		p != null and is_equal_approx(p.content_margin_left, 12.0)
-		and is_equal_approx(p.content_margin_top, 10.0))
+	Selftest.check("panel content clears engraved corners",
+		p != null and p.content_margin_left >= 18.0
+		and p.content_margin_top >= 18.0)
 
 	var m := UIStyle.modal_panel() as StyleBoxTexture
 	Selftest.check("modal is frame_modal",
 		m != null and m.texture != null and m.texture.resource_path.ends_with("frame_modal.png"))
 	Selftest.check("modal margins 34", m != null and is_equal_approx(m.texture_margin_left, 34.0))
-	Selftest.check("modal content R8",
-		m != null and is_equal_approx(m.content_margin_left, 18.0)
-		and is_equal_approx(m.content_margin_top, 16.0))
+	Selftest.check("modal content clears corners and crest",
+		m != null and m.content_margin_left >= 28.0
+		and m.content_margin_top >= 40.0)
 
 	var b := Button.new()
 	UIStyle.style_button(b, 1)
@@ -212,9 +212,9 @@ static func _factories() -> void:
 	var r := row.get_theme_stylebox("normal") as StyleBoxTexture
 	Selftest.check("row is frame_panel",
 		r != null and r.texture != null and r.texture.resource_path.ends_with("frame_panel.png"))
-	Selftest.check("row content R8",
-		r != null and is_equal_approx(r.content_margin_left, 12.0)
-		and is_equal_approx(r.content_margin_top, 10.0))
+	Selftest.check("row content clears engraved corners",
+		r != null and r.content_margin_left >= 18.0
+		and r.content_margin_top >= 18.0)
 	row.free()
 
 	var cell := Button.new()
@@ -273,11 +273,11 @@ static func _main_screen(g: Game) -> void:
 			warm = float(parts[0].strip_edges()) > float(parts[2].strip_edges()) + 0.2
 	Selftest.check("field glyphs warm, not teal", warm)
 
-	var plate := g.find_child("TitlePlaque", true, false) as PanelContainer
-	var psb: StyleBox = plate.get_theme_stylebox("panel") if plate != null else null
-	Selftest.check("header title on plaque",
-		psb is StyleBoxTexture and (psb as StyleBoxTexture).texture != null
-		and (psb as StyleBoxTexture).texture.resource_path.ends_with("plaque_title.png"))
+	var chip := g.find_child("EtherChip", true, false) as Button
+	var artwork := chip.get_node_or_null("Artwork") as TextureRect if chip != null else null
+	Selftest.check("resource chip uses reference artwork",
+		artwork != null and artwork.texture != null
+		and artwork.texture.resource_path.ends_with("02a_resource_plaque_wide.png"))
 
 
 static func _warm_texts(g: Game) -> void:

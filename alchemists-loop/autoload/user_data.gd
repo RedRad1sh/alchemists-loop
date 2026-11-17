@@ -94,6 +94,7 @@ func _isolate_selftest_paths() -> void:
 func _defaults() -> Dictionary:
 	return {
 		"version": DATA_VERSION,
+		"locale": "ru",
 		"device_id": "",
 		"install_id": "",
 		"consent": {
@@ -573,3 +574,19 @@ func _write_delete_pending(ids: Array) -> void:
 		"marked_at": int(Time.get_unix_time_from_system()),
 	}))
 	file.close()
+
+
+func get_locale() -> String:
+	var raw := String(_data.get("locale", "ru")).strip_edges().to_lower()
+	if raw.begins_with("en"):
+		return "en"
+	return "ru"
+
+
+func set_locale(loc: String) -> void:
+	var norm := "en" if loc.strip_edges().to_lower().begins_with("en") else "ru"
+	if String(_data.get("locale", "ru")) == norm:
+		return
+	_data["locale"] = norm
+	_save()
+	changed.emit()

@@ -1580,7 +1580,7 @@ class TestSpirit:
             conn.close()
         assert peer.device_id == srv.SPIRIT_DEVICE
         assert peer.nick == srv.SPIRIT_NICK, peer
-        assert peer.avatar == srv.avatar_for(srv.SPIRIT_NICK), peer.avatar
+        assert peer.avatar == {"kind": "spirit"}, peer.avatar
 
     def test_no_event_no_message(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)

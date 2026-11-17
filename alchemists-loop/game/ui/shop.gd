@@ -60,7 +60,8 @@ func _build_shop_popup() -> void:
 	_popup.visible = false
 	g.add_child(_popup)
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", g._panel_style(Color(0.07, 0.11, 0.17, 0.98), 20))
+	card.add_theme_stylebox_override("panel", UIStyle.modal_panel())
+	UIStyle.decorate_frame(card)
 	_popup.add_child(card)
 	var col := VBoxContainer.new()
 	col.custom_minimum_size = Vector2(370, 0)

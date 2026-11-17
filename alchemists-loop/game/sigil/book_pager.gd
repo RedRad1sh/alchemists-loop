@@ -69,7 +69,7 @@ void fragment() {
 
 var accent := Color(0.85, 0.72, 0.42)
 var cover_color := Color(0.16, 0.09, 0.07)
-var page_color := Color(0.055, 0.055, 0.095)
+var page_color := UIStyle.WOOD_DEEP
 var current := 0
 var busy := false
 
@@ -100,14 +100,9 @@ func _ready() -> void:
 	_frame = Panel.new()
 	_frame.name = "Cover"
 	_frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var fs := StyleBoxFlat.new()
-	fs.bg_color = cover_color
-	fs.set_corner_radius_all(14)
-	fs.set_border_width_all(2)
-	fs.border_color = Color(accent.r, accent.g, accent.b, 0.55)
-	fs.shadow_color = Color(0, 0, 0, 0.6)
-	fs.shadow_size = 26
+	var fs := UIStyle.modal_panel(accent)
 	_frame.add_theme_stylebox_override("panel", fs)
+	UIStyle.decorate_frame(_frame)
 	_frame.draw.connect(_draw_page_edges)
 	_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_frame)
@@ -116,10 +111,10 @@ func _ready() -> void:
 	_paper = Panel.new()
 	_paper.name = "Paper"
 	_paper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_paper.offset_left = 16.0
-	_paper.offset_top = 10.0
-	_paper.offset_right = -10.0
-	_paper.offset_bottom = -10.0
+	_paper.offset_left = 28.0
+	_paper.offset_top = 40.0
+	_paper.offset_right = -28.0
+	_paper.offset_bottom = -28.0
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = page_color
 	ps.set_corner_radius_all(6)
@@ -206,7 +201,9 @@ func add_page(title: String, page: Control) -> int:
 	b.text = title
 	b.focus_mode = Control.FOCUS_NONE
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b.add_theme_font_size_override("font_size", 15)
+	b.add_theme_font_override("font", load("res://assets/fonts/Divagon.otf"))
+	b.add_theme_font_size_override("font_size", 17)
+	b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	b.pressed.connect(func() -> void: go_to(idx))
 	_tabs.add_child(b)
 	_tabs.move_child(b, idx)          # перед кнопкой «✕»
@@ -376,7 +373,7 @@ func _refresh_tabs(active: int) -> void:
 		var st := _tab_style(i == active)
 		for s in ["normal", "hover", "pressed", "focus"]:
 			b.add_theme_stylebox_override(s, st)
-		var col := accent if i == active else Color(0.75, 0.75, 0.8, 0.75)
+		var col := UIStyle.PAPER_HI if i == active else UIStyle.CREAM
 		for c in ["font_color", "font_hover_color", "font_pressed_color"]:
 			b.add_theme_color_override(c, col)
 

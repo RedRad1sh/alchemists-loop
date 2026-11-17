@@ -196,6 +196,17 @@ func _build_lab(page: VBoxContainer) -> void:
 	var book_title := g._label("Книга рецептов — Производство", 16)
 	book_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	book_head.add_child(book_title)
+	var quantity_row := HBoxContainer.new()
+	quantity_row.name = "BrewQtyRow"
+	lab_content.add_child(quantity_row)
+	var quantity_group := ButtonGroup.new()
+	for amount in [1, 10, 100]:
+		var choice := g._small_button("×%d" % amount, Vector2(64, 40))
+		choice.toggle_mode = true
+		choice.button_group = quantity_group
+		choice.button_pressed = amount == 1
+		choice.pressed.connect(func() -> void: g._engine._brew_quantity = amount)
+		quantity_row.add_child(choice)
 	var search := LineEdit.new()
 	search.placeholder_text = "Поиск вещества по названию…"
 	search.custom_minimum_size = Vector2(0, 40)
@@ -719,9 +730,11 @@ func _experiment_search_matches(item_id: String) -> bool:
 		return true
 	var spec: Dictionary = g.ITEMS.get(item_id, {})
 	var category := String(Game.CATEGORY_OF.get(item_id, spec.get("category", "")))
-	var haystack := _experiment_normalize_search("%s %s %s %s %s" % [
-		g._online._item_name(item_id), item_id,
-		String(spec.get("d", "")), category, _experiment_search_aliases(item_id)])
+	var ru_nm := g._online._item_name(item_id)
+	var ru_d := String(spec.get("d", ""))
+	var haystack := _experiment_normalize_search("%s %s %s %s %s %s %s" % [
+		ru_nm, g.tr(ru_nm), item_id,
+		ru_d, g.tr(ru_d), category, _experiment_search_aliases(item_id)])
 	for term in query.split(" ", false):
 		if term != "" and not haystack.contains(term):
 			return false

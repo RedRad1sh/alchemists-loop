@@ -16,7 +16,7 @@ config/use_custom_user_dir.beta=true
 config/custom_user_dir_name.beta="AlchemistsLoopBeta"
 config/description="Локальный MVP кликера-алхимика: источники, котёл, рецепты, книга."
 config/version="0.2.0"
-run/main_scene="res://main.tscn"
+run/main_scene="res://boot.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
 config/privacy_policy_url="https://example.com/alchemists-loop/privacy"
@@ -28,6 +28,7 @@ config/rustore_deeplink_scheme=""
 [autoload]
 
 UserData="*res://autoload/user_data.gd"
+Locale="*res://autoload/locale_tr.gd"
 App="*res://autoload/app.gd"
 Analytics="*res://autoload/analytics.gd"
 BetaAccess="*res://autoload/beta_access.gd"

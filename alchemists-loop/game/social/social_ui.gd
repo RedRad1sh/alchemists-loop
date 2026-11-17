@@ -4,8 +4,11 @@ class_name SocialUI
 # Сеть остаётся в Net/Social; этот класс отвечает только за представление,
 # переходы между уровнями и безопасные действия поверх кэша.
 
+const Kit = preload("res://game/ui/menu_kit.gd")
+const ModalStyle = preload("res://game/ui/friends_v2_styleboxes.gd")
 const SPIRIT_INPUT_HINT := "Светик писем не читает — он же дух"
-const SECTION_M := 6.0
+const SECTION_M := 16.0
+const DOCK_CLEARANCE := 56.0
 
 var g: Game
 var _screen: Control = null
@@ -33,7 +36,7 @@ func build() -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.visible = false
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
-	root.z_index = 20
+	root.z_index = 16
 	root.add_to_group("modal_ui")
 	g.add_child(root)
 	_screen = root
@@ -41,7 +44,7 @@ func build() -> void:
 	# Нижний раздел: общая панель между шапкой и баром навигации, а не
 	# полноэкранное окно — бар остаётся живым и переключает разделы.
 	root.offset_top = ScreenRouter.HEADER_H + 46.0
-	root.offset_bottom = -BottomNav.NAV_H
+	root.offset_bottom = -(BottomNav.NAV_H + DOCK_CLEARANCE)
 
 	# Раздел нижнего меню, как Мир и Рейтинг: панель на всю область, без
 	# затемнения и окна по центру; закрывает его соседний пункт бара.
@@ -56,7 +59,11 @@ func build() -> void:
 	var panel := PanelContainer.new()
 	panel.name = "SocialPanel"
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	panel.add_theme_stylebox_override("panel", UIStyle.modal_panel())
+	var modal := ModalStyle.make_modal_panel()
+	modal.set_content_margin_all(20)
+	modal.shadow_size = 0
+	panel.add_theme_stylebox_override("panel", modal)
+	Kit.modal_corners(panel)
 	margin.add_child(panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
@@ -65,7 +72,15 @@ func build() -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 8)
 	box.add_child(head)
-	head.add_child(UIWidgets.section(g, "ДРУЗЬЯ"))
+	var title := g._label("ДРУЗЬЯ", 23)
+	title.add_theme_font_override("font", load("res://assets/fonts/Divagon.otf"))
+	title.add_theme_color_override("font_color", Color("d8b676"))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var close := g._icon_row_button("x", "Закрыть")
+	Kit.clear_button(close)
+	close.pressed.connect(self.close)
+	head.add_child(close)
 
 	_body = VBoxContainer.new()
 	_body.name = "SocialBody"
@@ -87,6 +102,11 @@ func open(tab: int = 0) -> void:
 	_peer = ""
 	_confirm_close()
 	_trade_close()
+	if g._screens != null:
+		g._screens.close()
+	g._tabs_ref.hide()
+	if g._rooms != null:
+		g._rooms.set_scene_visible(false)
 	_screen.visible = true
 	_refresh_list()
 	if g._social != null:
@@ -100,6 +120,9 @@ func close() -> void:
 	_peer = ""
 	if _screen != null:
 		_screen.visible = false
+	g._tabs_ref.show()
+	if g._rooms != null:
+		g._rooms.set_scene_visible(g._tabs_ref.current_tab == Game.TAB_EXPERIMENT)
 	if g._bottom_nav != null:
 		g._bottom_nav._repaint()
 	Sfx.click()
@@ -154,7 +177,13 @@ func _refresh_list() -> void:
 	var titles := ["Друзья (%d)" % g._social.friends().size(),
 		"Заявки (%d)" % g._social.requests_total()]
 	for i in 2:
-		var b := g._small_button(titles[i], Vector2(140, 34), 2 if i == _tab else 0)
+		var b := g._small_button(titles[i], Vector2(0, 42))
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.clip_text = true
+		var style := ModalStyle.make_tab_active() if i == _tab else ModalStyle.make_tab_inactive()
+		for state in ["normal", "hover", "pressed"]:
+			b.add_theme_stylebox_override(state, style)
+		b.add_theme_color_override("font_color", Color("e5bc70") if i == _tab else Color("c6b294"))
 		b.pressed.connect(func() -> void:
 			_tab = i
 			_refresh_list()
@@ -192,9 +221,13 @@ func _search_row() -> void:
 	var edit := LineEdit.new()
 	edit.name = "NickInput"
 	edit.placeholder_text = "Ник игрока"
+	edit.custom_minimum_size.y = 42
+	edit.add_theme_stylebox_override("normal", ModalStyle.make_search_input())
+	edit.add_theme_stylebox_override("focus", ModalStyle.make_search_input())
 	edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(edit)
-	var find_b := g._small_button("Найти", Vector2(96, 34), 1)
+	var find_b := g._small_button("Найти", Vector2(96, 42), 1)
+	Kit.cta(find_b)
 	find_b.pressed.connect(func() -> void:
 		var nick := edit.text.strip_edges()
 		if nick != "":
@@ -292,7 +325,10 @@ static func attach(game: Game, row: HBoxContainer, nick: String) -> Button:
 
 func _friend_row(friend: Dictionary) -> Control:
 	var dev := String(friend.get("device_id", ""))
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 6)
 	var row := HBoxContainer.new()
+	column.add_child(row)
 	row.name = "FriendRow_%s" % dev
 	row.custom_minimum_size = Vector2(0, 50)
 	row.add_theme_constant_override("separation", 8)
@@ -303,10 +339,11 @@ func _friend_row(friend: Dictionary) -> Control:
 	)
 	var av := Avatar.new()
 	av.custom_minimum_size = Vector2(40, 40)
-	var spec = friend.get("avatar", {})
+	var spec = {"kind": "spirit"} if dev == Social.SPIRIT_DEVICE else friend.get("avatar", {})
 	av.setup_spec(spec if spec is Dictionary else {}, 40)
 	av.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(av)
+	Kit.avatar_ring(av)
 	# Имя, «был(а)» и превью — одна колонка с обрезкой многоточием: превью
 	# отдельной колонкой без обрезки съедало ширину, и имя падало по букве.
 	var info := VBoxContainer.new()
@@ -336,17 +373,23 @@ func _friend_row(friend: Dictionary) -> Control:
 		badge.offset_bottom = 12.0
 		av.add_child(badge)
 	if dev != Social.SPIRIT_DEVICE:
-		var swap := g._small_button("Обменять", Vector2(96, 34), 0)
+		var actions := HBoxContainer.new()
+		actions.alignment = BoxContainer.ALIGNMENT_END
+		column.add_child(actions)
+		var swap := g._small_button("Обменять", Vector2(96, 44), 0)
 		swap.tooltip_text = "Предложить обмен или подарок"
 		swap.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		swap.pressed.connect(_open_trade.bind(dev))
-		row.add_child(swap)
-		var more := g._small_button("⋮", Vector2(34, 34), 0)
+		actions.add_child(swap)
+		var more := g._small_button("⋮", Vector2(44, 44), 0)
 		more.tooltip_text = "Удалить или заблокировать"
 		more.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		more.pressed.connect(_open_confirm.bind(dev))
-		row.add_child(more)
-	return row
+		actions.add_child(more)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", ModalStyle.make_friend_row())
+	panel.add_child(column)
+	return panel
 
 
 func _one_line(l: Label) -> Label:
@@ -358,36 +401,46 @@ func _one_line(l: Label) -> Label:
 
 func _request_row(request: Dictionary) -> Control:
 	var dev := String(request.get("device_id", ""))
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 8)
 	var row := HBoxContainer.new()
 	row.name = "RequestRow_%s" % dev
-	row.custom_minimum_size = Vector2(0, 50)
 	row.add_theme_constant_override("separation", 8)
+	column.add_child(row)
 	var av := Avatar.new()
 	av.custom_minimum_size = Vector2(40, 40)
 	var spec = request.get("avatar", {})
 	av.setup_spec(spec if spec is Dictionary else {}, 40)
 	av.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(av)
+	Kit.avatar_ring(av)
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info.add_child(g._label(String(request.get("nick", "Алхимик")), 14))
+	info.add_child(_one_line(g._label(String(request.get("nick", "Алхимик")), 14)))
 	var seen := Social.last_seen_text(String(request.get("last_seen", "")), Time.get_date_string_from_system())
 	if seen != "":
-		var seen_l := g._label(seen, 11)
+		var seen_l := _one_line(g._label(seen, 11))
 		seen_l.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 		info.add_child(seen_l)
 	row.add_child(info)
-	var accept := g._small_button("Принять", Vector2(86, 34), 1)
+	var actions := HBoxContainer.new()
+	actions.alignment = BoxContainer.ALIGNMENT_END
+	column.add_child(actions)
+	var accept := g._small_button("Принять", Vector2(86, 44), 1)
 	accept.pressed.connect(func() -> void:
 		Net.friend_respond(g._online._device_id, dev, true)
 	)
-	row.add_child(accept)
-	var reject := g._small_button("Отклонить", Vector2(96, 34), 0)
+	actions.add_child(accept)
+	var reject := g._small_button("Отклонить", Vector2(96, 44), 0)
 	reject.pressed.connect(func() -> void:
 		Net.friend_respond(g._online._device_id, dev, false)
 	)
-	row.add_child(reject)
-	return row
+	actions.add_child(reject)
+	Kit.cta(accept)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", ModalStyle.make_friend_row())
+	panel.add_child(column)
+	return panel
 
 func _open_thread(peer: String) -> void:
 	if _list_scroll != null:

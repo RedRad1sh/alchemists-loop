@@ -20,7 +20,13 @@ const TAB_WORLD := 2
 const TAB_RATING := 3
 const TAB_TOOLS := 4
 
-var BREW_SECONDS := 1.2
+var BREW_SECONDS: float:
+	get:
+		return float(balance.get_value("brew.base_seconds"))
+	set(value):
+		var overrides: Dictionary = balance.metadata().get("resolved_overrides", {})
+		overrides["brew.base_seconds"] = value
+		balance = BalanceConfig.resolve(overrides)
 
 # --- данные живут в game/data/* (оп D); алиасы — ноль правок вызовов ---
 # Balance
@@ -43,7 +49,6 @@ const RESONANCE_CLAIM_GATE_MSEC := Balance.RESONANCE_CLAIM_GATE_MSEC
 const RETORT_BASE_HOURS := Balance.RETORT_BASE_HOURS
 const RETORT_CAP_EACH := Balance.RETORT_CAP_EACH
 const RETORT_CAP_FIRST := Balance.RETORT_CAP_FIRST
-const RETORT_REPEAT_ETHER := Balance.RETORT_REPEAT_ETHER
 const LETTER_MILE_EVERY := Balance.LETTER_MILE_EVERY
 const LETTER_CAP_EACH := Balance.LETTER_CAP_EACH
 const LETTER_PENDING_MAX := Balance.LETTER_PENDING_MAX
@@ -79,7 +84,6 @@ const CRAFT_STAGE_OPERATIONS := Balance.CRAFT_STAGE_OPERATIONS
 const MASTERY_STAGE_RANKS := Balance.MASTERY_STAGE_RANKS
 const MASTERY_RETORT_SPEED := Balance.MASTERY_RETORT_SPEED
 const MASTERY_RETORT_MIN_HOURS := Balance.MASTERY_RETORT_MIN_HOURS
-const MASTERY_RETORT_SLOT_RANK := Balance.MASTERY_RETORT_SLOT_RANK
 const RETORT_SLOT_MAX := Balance.RETORT_SLOT_MAX
 const CRAFT_PLAN_WARNING_OPERATIONS := Balance.CRAFT_PLAN_WARNING_OPERATIONS
 const CRAFT_PLAN_HARD_LIMIT_OPERATIONS := Balance.CRAFT_PLAN_HARD_LIMIT_OPERATIONS
@@ -236,6 +240,97 @@ var ITEMS := {
 	"grove": {"g": "tree", "name": "Роща", "color": "#228b22", "d": "Деревья, вставшие вместе."},
 	"garden": {"g": "flower", "name": "Сад", "color": "#ff69b4", "d": "Цветы, посаженные рядом."},
 	"sprout": {"g": "seed", "name": "Росток молодой", "color": "#90ee90", "d": "Семя, накормленное водой."},
+		"ember": {"g": "fire", "name": "Уголёк", "color": "#ef6b4a", "d": "Уголёк — новая ветвь стихии."},
+		"flame": {"g": "fire", "name": "Пламя", "color": "#ef6b4a", "d": "Пламя — новая ветвь стихии."},
+		"cinder": {"g": "fire", "name": "Углище", "color": "#ef6b4a", "d": "Углище — новая ветвь стихии."},
+		"furnace": {"g": "fire", "name": "Печь", "color": "#ef6b4a", "d": "Печь — новая ветвь стихии."},
+		"torch": {"g": "fire", "name": "Факел", "color": "#ef6b4a", "d": "Факел — новая ветвь стихии."},
+		"beacon": {"g": "fire", "name": "Маяк", "color": "#ef6b4a", "d": "Маяк — новая ветвь стихии."},
+		"flare": {"g": "fire", "name": "Вспышка", "color": "#ef6b4a", "d": "Вспышка — новая ветвь стихии."},
+		"phoenix": {"g": "fire", "name": "Феникс", "color": "#ef6b4a", "d": "Феникс — новая ветвь стихии."},
+		"corona": {"g": "fire", "name": "Корона света", "color": "#ef6b4a", "d": "Корона света — новая ветвь стихии."},
+		"inferno": {"g": "fire", "name": "Пекло", "color": "#ef6b4a", "d": "Пекло — новая ветвь стихии."},
+		"forge": {"g": "fire", "name": "Кузница", "color": "#ef6b4a", "d": "Кузница — новая ветвь стихии."},
+		"kiln": {"g": "fire", "name": "Горн", "color": "#ef6b4a", "d": "Горн — новая ветвь стихии."},
+		"charcoal": {"g": "fire", "name": "Древесный уголь", "color": "#ef6b4a", "d": "Древесный уголь — новая ветвь стихии."},
+		"firestone": {"g": "fire", "name": "Огненный камень", "color": "#ef6b4a", "d": "Огненный камень — новая ветвь стихии."},
+		"wildfire": {"g": "fire", "name": "Пожар", "color": "#ef6b4a", "d": "Пожар — новая ветвь стихии."},
+		"firestorm": {"g": "fire", "name": "Огненная буря", "color": "#ef6b4a", "d": "Огненная буря — новая ветвь стихии."},
+		"redstar": {"g": "fire", "name": "Красная звезда", "color": "#ef6b4a", "d": "Красная звезда — новая ветвь стихии."},
+		"brimstone": {"g": "fire", "name": "Сера", "color": "#ef6b4a", "d": "Сера — новая ветвь стихии."},
+		"salamander": {"g": "fire", "name": "Саламандра", "color": "#ef6b4a", "d": "Саламандра — новая ветвь стихии."},
+		"fireheart": {"g": "fire", "name": "Сердце огня", "color": "#ef6b4a", "d": "Сердце огня — новая ветвь стихии."},
+		"dawnfire": {"g": "fire", "name": "Рассветный огонь", "color": "#ef6b4a", "d": "Рассветный огонь — новая ветвь стихии."},
+		"hearth": {"g": "fire", "name": "Очаг", "color": "#ef6b4a", "d": "Очаг — новая ветвь стихии."},
+		"pyre": {"g": "fire", "name": "Костёр", "color": "#ef6b4a", "d": "Костёр — новая ветвь стихии."},
+		"dew": {"g": "water", "name": "Роса", "color": "#4da8c7", "d": "Роса — новая ветвь стихии."},
+		"puddle": {"g": "water", "name": "Лужа", "color": "#4da8c7", "d": "Лужа — новая ветвь стихии."},
+		"lake": {"g": "water", "name": "Озеро", "color": "#4da8c7", "d": "Озеро — новая ветвь стихии."},
+		"river": {"g": "water", "name": "Река", "color": "#4da8c7", "d": "Река — новая ветвь стихии."},
+		"ocean": {"g": "water", "name": "Океан", "color": "#4da8c7", "d": "Океан — новая ветвь стихии."},
+		"wave": {"g": "water", "name": "Волна", "color": "#4da8c7", "d": "Волна — новая ветвь стихии."},
+		"tide": {"g": "water", "name": "Прилив", "color": "#4da8c7", "d": "Прилив — новая ветвь стихии."},
+		"current": {"g": "water", "name": "Течение", "color": "#4da8c7", "d": "Течение — новая ветвь стихии."},
+		"pearl": {"g": "water", "name": "Жемчуг", "color": "#4da8c7", "d": "Жемчуг — новая ветвь стихии."},
+		"coral": {"g": "water", "name": "Коралл", "color": "#4da8c7", "d": "Коралл — новая ветвь стихии."},
+		"shell": {"g": "water", "name": "Раковина", "color": "#4da8c7", "d": "Раковина — новая ветвь стихии."},
+		"algae": {"g": "water", "name": "Водоросль", "color": "#4da8c7", "d": "Водоросль — новая ветвь стихии."},
+		"reed": {"g": "water", "name": "Камыш", "color": "#4da8c7", "d": "Камыш — новая ветвь стихии."},
+		"lotus": {"g": "water", "name": "Лотос", "color": "#4da8c7", "d": "Лотос — новая ветвь стихии."},
+		"glacier": {"g": "water", "name": "Ледник", "color": "#4da8c7", "d": "Ледник — новая ветвь стихии."},
+		"geyser": {"g": "water", "name": "Гейзер", "color": "#4da8c7", "d": "Гейзер — новая ветвь стихии."},
+		"whirlpool": {"g": "water", "name": "Водоворот", "color": "#4da8c7", "d": "Водоворот — новая ветвь стихии."},
+		"fountain": {"g": "water", "name": "Фонтан", "color": "#4da8c7", "d": "Фонтан — новая ветвь стихии."},
+		"oasis": {"g": "water", "name": "Оазис", "color": "#4da8c7", "d": "Оазис — новая ветвь стихии."},
+		"rainwater": {"g": "water", "name": "Дождевая вода", "color": "#4da8c7", "d": "Дождевая вода — новая ветвь стихии."},
+		"bluecrystal": {"g": "water", "name": "Синий кристалл", "color": "#4da8c7", "d": "Синий кристалл — новая ветвь стихии."},
+		"seastar": {"g": "water", "name": "Морская звезда", "color": "#4da8c7", "d": "Морская звезда — новая ветвь стихии."},
+		"springwell": {"g": "water", "name": "Родник", "color": "#4da8c7", "d": "Родник — новая ветвь стихии."},
+		"aqueduct": {"g": "water", "name": "Акведук", "color": "#4da8c7", "d": "Акведук — новая ветвь стихии."},
+		"breeze": {"g": "air", "name": "Бриз", "color": "#9bc6db", "d": "Бриз — новая ветвь стихии."},
+		"gust": {"g": "air", "name": "Порыв", "color": "#9bc6db", "d": "Порыв — новая ветвь стихии."},
+		"zephyr": {"g": "air", "name": "Зефир", "color": "#9bc6db", "d": "Зефир — новая ветвь стихии."},
+		"draft": {"g": "air", "name": "Сквозняк", "color": "#9bc6db", "d": "Сквозняк — новая ветвь стихии."},
+		"breath": {"g": "air", "name": "Дыхание", "color": "#9bc6db", "d": "Дыхание — новая ветвь стихии."},
+		"echo": {"g": "air", "name": "Эхо", "color": "#9bc6db", "d": "Эхо — новая ветвь стихии."},
+		"sound": {"g": "air", "name": "Звук", "color": "#9bc6db", "d": "Звук — новая ветвь стихии."},
+		"melody": {"g": "air", "name": "Мелодия", "color": "#9bc6db", "d": "Мелодия — новая ветвь стихии."},
+		"whistle": {"g": "air", "name": "Свист", "color": "#9bc6db", "d": "Свист — новая ветвь стихии."},
+		"pressure": {"g": "air", "name": "Давление", "color": "#9bc6db", "d": "Давление — новая ветвь стихии."},
+		"vapor": {"g": "air", "name": "Испарение", "color": "#9bc6db", "d": "Испарение — новая ветвь стихии."},
+		"cloudlet": {"g": "air", "name": "Облачко", "color": "#9bc6db", "d": "Облачко — новая ветвь стихии."},
+		"skybridge": {"g": "air", "name": "Небесный мост", "color": "#9bc6db", "d": "Небесный мост — новая ветвь стихии."},
+		"windmill": {"g": "air", "name": "Ветряк", "color": "#9bc6db", "d": "Ветряк — новая ветвь стихии."},
+		"sail": {"g": "air", "name": "Парус", "color": "#9bc6db", "d": "Парус — новая ветвь стихии."},
+		"kite": {"g": "air", "name": "Воздушный змей", "color": "#9bc6db", "d": "Воздушный змей — новая ветвь стихии."},
+		"airship": {"g": "air", "name": "Воздушный корабль", "color": "#9bc6db", "d": "Воздушный корабль — новая ветвь стихии."},
+		"cyclone": {"g": "air", "name": "Циклон", "color": "#9bc6db", "d": "Циклон — новая ветвь стихии."},
+		"vortex": {"g": "air", "name": "Вихрь", "color": "#9bc6db", "d": "Вихрь — новая ветвь стихии."},
+		"thunder": {"g": "air", "name": "Гром", "color": "#9bc6db", "d": "Гром — новая ветвь стихии."},
+		"songbird": {"g": "air", "name": "Певчая птица", "color": "#9bc6db", "d": "Певчая птица — новая ветвь стихии."},
+		"highwind": {"g": "air", "name": "Высотный ветер", "color": "#9bc6db", "d": "Высотный ветер — новая ветвь стихии."},
+		"pebble": {"g": "earth", "name": "Галька", "color": "#987454", "d": "Галька — новая ветвь стихии."},
+		"gravel": {"g": "earth", "name": "Гравий", "color": "#987454", "d": "Гравий — новая ветвь стихии."},
+		"ore": {"g": "earth", "name": "Руда", "color": "#987454", "d": "Руда — новая ветвь стихии."},
+		"amber": {"g": "earth", "name": "Янтарь", "color": "#987454", "d": "Янтарь — новая ветвь стихии."},
+		"gem": {"g": "earth", "name": "Самоцвет", "color": "#987454", "d": "Самоцвет — новая ветвь стихии."},
+		"fossil": {"g": "earth", "name": "Окаменелость", "color": "#987454", "d": "Окаменелость — новая ветвь стихии."},
+		"claystone": {"g": "earth", "name": "Глиняный камень", "color": "#987454", "d": "Глиняный камень — новая ветвь стихии."},
+		"pottery": {"g": "earth", "name": "Гончарное изделие", "color": "#987454", "d": "Гончарное изделие — новая ветвь стихии."},
+		"quarry": {"g": "earth", "name": "Карьер", "color": "#987454", "d": "Карьер — новая ветвь стихии."},
+		"mine": {"g": "earth", "name": "Шахта", "color": "#987454", "d": "Шахта — новая ветвь стихии."},
+		"road": {"g": "earth", "name": "Дорога", "color": "#987454", "d": "Дорога — новая ветвь стихии."},
+		"tower": {"g": "earth", "name": "Башня", "color": "#987454", "d": "Башня — новая ветвь стихии."},
+		"bridge": {"g": "earth", "name": "Мост", "color": "#987454", "d": "Мост — новая ветвь стихии."},
+		"gear": {"g": "earth", "name": "Шестерня", "color": "#987454", "d": "Шестерня — новая ветвь стихии."},
+		"anvil": {"g": "earth", "name": "Наковальня", "color": "#987454", "d": "Наковальня — новая ветвь стихии."},
+		"armor": {"g": "earth", "name": "Доспех", "color": "#987454", "d": "Доспех — новая ветвь стихии."},
+		"settlement": {"g": "earth", "name": "Поселение", "color": "#987454", "d": "Поселение — новая ветвь стихии."},
+		"kingdom": {"g": "earth", "name": "Королевство", "color": "#987454", "d": "Королевство — новая ветвь стихии."},
+		"library": {"g": "earth", "name": "Библиотека", "color": "#987454", "d": "Библиотека — новая ветвь стихии."},
+		"scroll": {"g": "earth", "name": "Свиток", "color": "#987454", "d": "Свиток — новая ветвь стихии."},
+		"rune": {"g": "earth", "name": "Руна", "color": "#987454", "d": "Руна — новая ветвь стихии."},
+		"citadel": {"g": "earth", "name": "Цитадель", "color": "#987454", "d": "Цитадель — новая ветвь стихии."},
 }
 
 var RECIPES := [
@@ -345,9 +440,101 @@ var RECIPES := [
 	{"a": "tree", "b": "tree", "out": "grove"},
 	{"a": "flower", "b": "flower", "out": "garden"},
 	{"a": "seed", "b": "water", "out": "sprout"},
+		{"a": "fire", "b": "steam", "out": "ember"},
+		{"a": "ember", "b": "fire", "out": "flame"},
+		{"a": "flame", "b": "fire", "out": "cinder"},
+		{"a": "cinder", "b": "fire", "out": "furnace"},
+		{"a": "furnace", "b": "fire", "out": "torch"},
+		{"a": "torch", "b": "fire", "out": "beacon"},
+		{"a": "beacon", "b": "fire", "out": "flare"},
+		{"a": "flare", "b": "fire", "out": "phoenix"},
+		{"a": "phoenix", "b": "fire", "out": "corona"},
+		{"a": "corona", "b": "fire", "out": "inferno"},
+		{"a": "inferno", "b": "fire", "out": "forge"},
+		{"a": "forge", "b": "fire", "out": "kiln"},
+		{"a": "kiln", "b": "fire", "out": "charcoal"},
+		{"a": "charcoal", "b": "fire", "out": "firestone"},
+		{"a": "firestone", "b": "fire", "out": "wildfire"},
+		{"a": "wildfire", "b": "fire", "out": "firestorm"},
+		{"a": "firestorm", "b": "fire", "out": "redstar"},
+		{"a": "redstar", "b": "fire", "out": "brimstone"},
+		{"a": "brimstone", "b": "fire", "out": "salamander"},
+		{"a": "salamander", "b": "fire", "out": "fireheart"},
+		{"a": "fireheart", "b": "fire", "out": "dawnfire"},
+		{"a": "dawnfire", "b": "fire", "out": "hearth"},
+		{"a": "hearth", "b": "fire", "out": "pyre"},
+		{"a": "water", "b": "dust", "out": "dew"},
+		{"a": "dew", "b": "fire", "out": "puddle"},
+		{"a": "puddle", "b": "fire", "out": "lake"},
+		{"a": "lake", "b": "fire", "out": "river"},
+		{"a": "river", "b": "fire", "out": "ocean"},
+		{"a": "ocean", "b": "fire", "out": "wave"},
+		{"a": "wave", "b": "fire", "out": "tide"},
+		{"a": "tide", "b": "fire", "out": "current"},
+		{"a": "current", "b": "fire", "out": "pearl"},
+		{"a": "pearl", "b": "fire", "out": "coral"},
+		{"a": "coral", "b": "fire", "out": "shell"},
+		{"a": "shell", "b": "fire", "out": "algae"},
+		{"a": "algae", "b": "fire", "out": "reed"},
+		{"a": "reed", "b": "fire", "out": "lotus"},
+		{"a": "lotus", "b": "fire", "out": "glacier"},
+		{"a": "glacier", "b": "fire", "out": "geyser"},
+		{"a": "geyser", "b": "fire", "out": "whirlpool"},
+		{"a": "whirlpool", "b": "fire", "out": "fountain"},
+		{"a": "fountain", "b": "fire", "out": "oasis"},
+		{"a": "oasis", "b": "fire", "out": "rainwater"},
+		{"a": "rainwater", "b": "fire", "out": "bluecrystal"},
+		{"a": "bluecrystal", "b": "fire", "out": "seastar"},
+		{"a": "seastar", "b": "fire", "out": "springwell"},
+		{"a": "springwell", "b": "fire", "out": "aqueduct"},
+		{"a": "air", "b": "clay", "out": "breeze"},
+		{"a": "breeze", "b": "fire", "out": "gust"},
+		{"a": "gust", "b": "fire", "out": "zephyr"},
+		{"a": "zephyr", "b": "fire", "out": "draft"},
+		{"a": "draft", "b": "fire", "out": "breath"},
+		{"a": "breath", "b": "fire", "out": "echo"},
+		{"a": "echo", "b": "fire", "out": "sound"},
+		{"a": "sound", "b": "fire", "out": "melody"},
+		{"a": "melody", "b": "fire", "out": "whistle"},
+		{"a": "whistle", "b": "fire", "out": "pressure"},
+		{"a": "pressure", "b": "fire", "out": "vapor"},
+		{"a": "vapor", "b": "fire", "out": "cloudlet"},
+		{"a": "cloudlet", "b": "fire", "out": "skybridge"},
+		{"a": "skybridge", "b": "fire", "out": "windmill"},
+		{"a": "windmill", "b": "fire", "out": "sail"},
+		{"a": "sail", "b": "fire", "out": "kite"},
+		{"a": "kite", "b": "fire", "out": "airship"},
+		{"a": "airship", "b": "fire", "out": "cyclone"},
+		{"a": "cyclone", "b": "fire", "out": "vortex"},
+		{"a": "vortex", "b": "fire", "out": "thunder"},
+		{"a": "thunder", "b": "fire", "out": "songbird"},
+		{"a": "songbird", "b": "fire", "out": "highwind"},
+		{"a": "earth", "b": "steam", "out": "pebble"},
+		{"a": "pebble", "b": "fire", "out": "gravel"},
+		{"a": "gravel", "b": "fire", "out": "ore"},
+		{"a": "ore", "b": "fire", "out": "amber"},
+		{"a": "amber", "b": "fire", "out": "gem"},
+		{"a": "gem", "b": "fire", "out": "fossil"},
+		{"a": "fossil", "b": "fire", "out": "claystone"},
+		{"a": "claystone", "b": "fire", "out": "pottery"},
+		{"a": "pottery", "b": "fire", "out": "quarry"},
+		{"a": "quarry", "b": "fire", "out": "mine"},
+		{"a": "mine", "b": "fire", "out": "road"},
+		{"a": "road", "b": "fire", "out": "tower"},
+		{"a": "tower", "b": "fire", "out": "bridge"},
+		{"a": "bridge", "b": "fire", "out": "gear"},
+		{"a": "gear", "b": "fire", "out": "anvil"},
+		{"a": "anvil", "b": "fire", "out": "armor"},
+		{"a": "armor", "b": "fire", "out": "settlement"},
+		{"a": "settlement", "b": "fire", "out": "kingdom"},
+		{"a": "kingdom", "b": "fire", "out": "library"},
+		{"a": "library", "b": "fire", "out": "scroll"},
+		{"a": "scroll", "b": "fire", "out": "rune"},
+		{"a": "rune", "b": "fire", "out": "citadel"},
 ]
 
 # ---------- состояние ----------
+var balance: BalanceProfile = BalanceConfig.baseline()
 var _engine: Core  # движок: варка/dnd/refresh/автоварка (R13)
 var _workshop: Workshop
 var _workshop_scheduler: RefCounted
@@ -372,6 +559,7 @@ var _screens: ScreenRouter = null  # полноэкранные экраны м�
 # interstitial в _on_tab_changed допускается только после достройки (true
 # выставляется в конце _build_ui).
 var _ui_ready := false
+var _hud: RefCounted
 var _source_col: HBoxContainer
 var _popup: Control
 var _popup_dim: ColorRect = null
@@ -460,6 +648,13 @@ func _boot_snapshot_text(path: String) -> String:
 		return ""
 	return FileAccess.get_file_as_string(path)
 
+# Narrow clock seam: ordinary gameplay always uses the actual wall clock.
+# The isolated progression driver installs its callback before boot.
+var game_clock: Callable
+
+func game_now() -> float:
+	return float(game_clock.call()) if game_clock.is_valid() else Time.get_unix_time_from_system()
+
 func _ready() -> void:
 	# U22 (T26) / U23 (T27): разбор аргументов и снимки настоящих файлов — в самом
 	# верху _ready. С U23 пути переведены на ST-двойники ещё в _ready автозагрузок
@@ -473,8 +668,9 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	_selftest = SelftestMode.enabled()
 	Juice.enabled = not _selftest
-	_analytics_text_at_boot = _boot_snapshot_text(Analytics.REAL_QUEUE_PATH)
-	_user_data_text_at_boot = _boot_snapshot_text(UserData.REAL_SAVE_PATH)
+	if not has_meta("progression_driver"):
+		_analytics_text_at_boot = _boot_snapshot_text(Analytics.REAL_QUEUE_PATH)
+		_user_data_text_at_boot = _boot_snapshot_text(UserData.REAL_SAVE_PATH)
 	_riddles = Riddles.new(self)
 	_contracts = Contracts.new(self)
 	_guild = Guild.new(self)
@@ -827,7 +1023,7 @@ func _ready() -> void:
 	# визит-днём теперь считается день, в который закрыт дневной контракт
 	# (Contracts.claim → track_visit).
 	if not _selftest and _online._net_enabled:
-		Net.me(_online._net_nick, _online._device_id)
+		Net.me_get(_online._device_id)
 		# S1: пулл инбокса при входе — сразу после me; до ответа шапку держит кэш.
 		Net.social_inbox(_online._device_id)
 		# boot-пакет: первый sync после загрузки сейва (union-рековери грантов).
@@ -1036,7 +1232,7 @@ func _ready() -> void:
 		_engine._refresh()
 	if _demo_harness._demo and _demo_harness._action_retort:
 		var now := Time.get_unix_time_from_system()
-		_retort._essences = {"fire": "Огонь", "water": "Вода", "clay": "Глина"}
+		_retort._essence_codex = {"fire-0": true, "water-0": true, "earth-1": true}
 		_retort._retort_slots = [
 			{"sub": "steam", "name": "Пар", "started": now - 4.0 * 3600.0, "dur": 8.0 * 3600.0},
 			{"sub": "glass", "name": "Стекло", "started": now - 13.0 * 3600.0, "dur": 12.0 * 3600.0},
@@ -1155,7 +1351,7 @@ func _ready() -> void:
 			Net.atlas_today(_online._device_id)
 			Net.week_status(_online._device_id)
 	if _selftest:
-		if not _demo_harness.house_capture_action():
+		if not has_meta("progression_driver") and not _demo_harness.house_capture_action():
 			_run_selftest()
 	else:
 		# Вход в игру: приветственный звук (не в selftest-прогоне).
@@ -1339,12 +1535,13 @@ func _process(delta: float) -> void:
 	if not _workshop.is_read_only() and _workshop.last_simulated_at < wall:
 		_workshop.last_simulated_at = wall
 	_saves._save_frozen = save_was_frozen
+	if not _selftest:
+		_retort._queue_advance(wall, false)
 	if int(work.get("steps", 0)) > 0 or int(work.get("spring_items", 0)) > 0:
 		_engine._refresh()
 		_saves._save_game()
 	elif int(work.get("ether_gained", 0)) > 0:
 		_engine._refresh_header()
-	_engine._gift_tick(delta)
 	_pages._experiment_tick()
 	_online._event_tick(delta)
 	if _engine.brewing and _engine._progress != null:
@@ -1462,7 +1659,7 @@ func _init_new_game() -> bool:
 func _reset_world_clock() -> void:
 	# Monotone stamps belong to one world. An explicit reset starts a new time
 	# boundary, even if the previous world was saved with a far-future clock.
-	_last_ts = Time.get_unix_time_from_system()
+	_last_ts = game_now()
 	_engine.regen_clock = 0.0
 	_engine.autosave_clock = 0.0
 	_engine._gift_clock = 0.0
@@ -1504,6 +1701,10 @@ func _build_ui() -> void:
 	# "display", которое никто не регистрировал, поэтому карточки молча падали
 	# в default_font, то есть в Manrope.
 	if _font_runic != null:
+		if _font_bold != null and not _font_runic.fallbacks.has(_font_bold):
+			var fb_arr := _font_runic.fallbacks.duplicate()
+			fb_arr.append(_font_bold)
+			_font_runic.fallbacks = fb_arr
 		th.set_font("runic", "Label", _font_runic)
 	theme = th
 
@@ -1552,100 +1753,8 @@ func _build_ui() -> void:
 	root.set_size(margin.size)
 	call_deferred("_fit_ui_root_after_layout", margin, root)
 
-	# шапка
-	var head := HBoxContainer.new()
-	head.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	root.add_child(head)
-	# Заголовок игры — рунический display-шрифт: это логотип, а не заголовок
-	# раздела. 19 px, а не 22-24: при ширине 540 px ряд из шести кнопок 46×46
-	# оставляет заголовку ~216 px, а рунический в 22 px требует 235 px и при
-	# AUTOWRAP_WORD_SMART уезжает на две строки; в 19 px это 203 px.
-	var title := _label("ПЕТЛЯ АЛХИМИКА", 15)
-	title.autowrap_mode = TextServer.AUTOWRAP_OFF
-	title.clip_text = true
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if _font_runic != null:
-		title.add_theme_font_override("font", _font_runic)
-	elif _font_xbold != null:
-		title.add_theme_font_override("font", _font_xbold)
-	title.add_theme_color_override("font_color", UIStyle.CREAM)
-	# Вывеска: заголовок на латунной плашке. Поля контента узкие (10/4), а не
-	# 36/12 набора: в шапке 46 px по высоте и ~216 px по ширине.
-	var title_plate := PanelContainer.new()
-	title_plate.name = "TitlePlaque"
-	title_plate.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_plate.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	# Поля 16 по бокам — за заклёпками в углах; надпись по центру, а не у края.
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	var plate_sb := UITheme.nine("plaque_title", Vector4(20, 16, 20, 16), Vector4(16, 7, 16, 7))
-	if plate_sb != null:
-		title_plate.add_theme_stylebox_override("panel", plate_sb)
-	title_plate.add_child(title)
-	head.add_child(title_plate)
-	# Ряд шапки — одинаковые квадраты 46×46 с иконками Atheneum 24 px. Размер
-	# задала таро-кнопка Аркана (спека: строго квадратная 46×46); остальные были
-	# 46×36, поэтому ряд шёл рваным по высоте, а аватар жил в своей 9-slice
-	# текстуре вместо общего UIStyle-хрома.
-	# Вся шапка — один материал: тёмное дерево с латунной иконкой. Раньше часть
-	# кнопок была светлой латунью без смысла за этим (претензия владельца);
-	# внимание теперь даёт только бейдж-счётчик, а не цвет плашки.
-	var quests_btn := _icon_row_button("gi_quests", "Задания Светика, достижения, комплекты, заказы")
-	quests_btn.pressed.connect(_progress_ui._open_progress_popup)
-	head.add_child(quests_btn)
-	# Счётчик доступных улучшений — бейдж на иконке (core._refresh_header), а не
-	# текст рядом с ней: Button.icon рисовался в натуральную величину SVG и
-	# вылезал за кнопку.
-	_hub._up_btn = _icon_row_button("gi_upgrade", "Улучшения")
-	_hub._up_btn.add_child(UIStyle.count_badge())
-	_place_badge(_hub._up_btn)
-	_hub._up_btn.pressed.connect(_hub._open_upgrades)
-	head.add_child(_hub._up_btn)
-	var me_btn := _header_button(0)
-	me_btn.tooltip_text = "Профиль: твоё имя и аватар"
-	me_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	me_btn.pressed.connect(_hub._open_profile)
-	var cc := CenterContainer.new()
-	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	me_btn.add_child(cc)
-	_me_avatar = _make_avatar(_online._net_nick, 24)
-	cc.add_child(_me_avatar)
-	head.add_child(me_btn)
-
-	var ether_row := HBoxContainer.new()
-	ether_row.name = "EtherRow"
-	ether_row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	ether_row.add_theme_constant_override("separation", 8)
-	root.add_child(ether_row)
-	_engine._ether_label = _label("", 14)
-	_engine._ether_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_engine._ether_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_engine._ether_label.clip_text = true
-	ether_row.add_child(_engine._ether_label)
-	# Ряд эфира — те же иконочные кнопки, что в шапке. Сверху всё открывается
-	# на весь экран или модалкой поверх всего: Дом, Лавка, Аркан Сигилов.
-	# Друзья — нижний раздел (BottomNav), их бейдж живёт там.
-	var home_btn := _icon_row_button("gi_house",
-		"Дом Светика: построй домик, обставь его, смени тему и ауру")
-	home_btn.name = "HouseEntry"
-	home_btn.pressed.connect(_home._open_workshop)
-	ether_row.add_child(home_btn)
-	var market_btn := _icon_row_button("gi_shop", "Лавка: покупки, награды за просмотр и приватность")
-	market_btn.name = "ShopBtn"
-	market_btn.pressed.connect(_shop.open)
-	ether_row.add_child(market_btn)
-	_engine._collection_label = _label("", 14)
-	_engine._collection_label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	root.add_child(_engine._collection_label)
-	_guild._quest_label = Button.new()
-	_guild._quest_label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	_guild._quest_label.flat = true
-	_guild._quest_label.add_theme_font_size_override("font_size", 13)
-	_guild._quest_label.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_guild._quest_label.tooltip_text = "Нажми, чтобы открыть задания и достижения"
-	_guild._quest_label.pressed.connect(_progress_ui._open_progress_popup)
-	root.add_child(_guild._quest_label)
+	_hud = load("res://game/ui/compact_hud.gd").new()
+	_hud.build(self, root)
 
 	var tabs := TabContainer.new()
 	tabs.name = "Tabs"
@@ -1841,6 +1950,8 @@ func _build_brew_bar() -> void:
 	srow.add_child(_engine._auto_stop_btn)
 
 func _on_tab_changed(index: int) -> void:
+	if _hud != null:
+		_hud.tab_changed(index)
 	_update_brew_bar_visibility()
 	_spirit._refresh_companion_visible()
 	if _bottom_nav != null:
@@ -1951,7 +2062,7 @@ func _make_orb(item_id: String, size_px: int) -> ElementOrb:
 
 func _make_avatar(seed: String, size_px: float) -> Avatar:
 	var av := Avatar.new()
-	av.setup(seed, size_px)
+	av.setup_spec(_online.avatar_spec(seed), size_px)
 	av.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return av
 

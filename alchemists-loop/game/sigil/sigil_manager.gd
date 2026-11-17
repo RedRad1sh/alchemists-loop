@@ -69,6 +69,14 @@ var _daily_settled := false
 ## M2: каталог уже докачан в этой сессии — повторный request_catalog no-op.
 ## Смена catalog_version в daily-ответе сбрасывает флаг и перевыпускает докачку.
 var _catalog_fetched_session := false
+# Optional request transport; result handling, cache and effects stay production.
+var transport: Callable
+
+func _transport_request(kind: String, payload: Dictionary = {}) -> bool:
+	if not transport.is_valid():
+		return false
+	transport.call(kind, payload)
+	return true
 
 
 func _ready() -> void:
@@ -230,7 +238,8 @@ func request_catalog() -> void:
 	if _catalog_fetched_session and catalog_size() > 0:
 		return
 	_catalog_settled = false
-	Net.sigil_catalog()
+	if not _transport_request("catalog"):
+		Net.sigil_catalog()
 
 
 func _on_catalog_result(result: Dictionary) -> void:
@@ -313,7 +322,8 @@ func card_recipe_for(craft: Dictionary) -> SigilRecipe:
 
 ## Серверная коллекция.
 func request_collection(device_id: String) -> void:
-	Net.sigil_collection(device_id)
+	if not _transport_request("collection", {"device_id": device_id}):
+		Net.sigil_collection(device_id)
 
 
 func _on_collection_result(result: Dictionary) -> void:
@@ -415,7 +425,7 @@ func milestone_cap_bonus() -> int:
 	for set_id in _milestones_claimed:
 		if claimed_tiers(str(set_id)).has(3):
 			sets += 1
-	return 40 * sets
+	return int(_active_balance().get_value("sigils.set_cap_bonus")) * sets
 
 
 ## Награда «6 карт комплекта»: −10% эфира крафтов этого комплекта.
@@ -426,25 +436,30 @@ func craft_ether_cost(craft: Dictionary, discount: float = 0.0) -> int:
 	var set_id := str(craft.get("set", ""))
 	var cost := float(int(craft.get("ether_cost", 0)))
 	if set_id != "" and claimed_tiers(set_id).has(6):
-		cost *= 0.9
+		cost *= float(_active_balance().get_value("sigils.set_craft_factor"))
 	return int(round(cost * (1.0 - clampf(discount, 0.0, 0.9))))
 
 
 ## Награда «13 карт комплекта»: верстак варит элементы категории комплекта
 ## вдвое быстрее. Неизвестные категория/сет — обычный интервал.
+const CARD_SPEED_PCT: Dictionary = BalanceConfig.BASELINE_DATA["sigils"]["card_speed_pct"]
+const CARD_CAP: Dictionary = BalanceConfig.BASELINE_DATA["sigils"]["card_cap"]
+const CARD_AUTONOMY: Dictionary = BalanceConfig.BASELINE_DATA["sigils"]["card_autonomy"]
+## Доля LLM-множителя хроматика, которая идёт в скорость (speed_mult 1.2 → +10%).
+const CHROMA_SPEED_SHARE: float = BalanceConfig.BASELINE_DATA["sigils"]["chroma_speed_share"]
+
+func _active_balance() -> BalanceProfile:
+	var p := get_parent()
+	if p != null and "balance" in p and p.balance != null:
+		return p.balance
+	return BalanceConfig.baseline()
+
 func bench_interval(item_id: String) -> float:
+	var base_iv := float(_active_balance().get_value("events.bench_interval", Game.BENCH_INTERVAL))
 	var set_id := str(SET_OF_CATEGORY.get(str(Game.CATEGORY_OF.get(item_id, "")), ""))
 	if set_id != "" and claimed_tiers(set_id).has(13):
-		return Game.BENCH_INTERVAL * 0.5
-	return Game.BENCH_INTERVAL
-
-
-## Бонусы открытых карт по редкости (roadmap §8.2): копии не складываются.
-const CARD_SPEED_PCT := {"common": 0.25, "rare": 0.75, "epic": 1.25, "legendary": 2.0}
-const CARD_CAP := {"common": 1.25, "rare": 3.75, "epic": 6.25, "legendary": 10.0}
-const CARD_AUTONOMY := {"common": 0.5, "rare": 1.25, "epic": 2.5, "legendary": 3.75}
-## Доля LLM-множителя хроматика, которая идёт в скорость (speed_mult 1.2 → +10%).
-const CHROMA_SPEED_SHARE := 0.5
+		return base_iv * float(_active_balance().get_value("sigils.set_speed_factor"))
+	return base_iv
 
 
 func _card_bonus_sum(table: Dictionary) -> float:
@@ -457,21 +472,23 @@ func _card_bonus_sum(table: Dictionary) -> float:
 
 ## Ускорение линий Мастерской в процентах.
 func card_speed_bonus() -> float:
-	var total := _card_bonus_sum(CARD_SPEED_PCT)
+	var b := _active_balance()
+	var total := _card_bonus_sum(b.get_value("sigils.card_speed_pct", CARD_SPEED_PCT) as Dictionary)
+	var share := float(b.get_value("sigils.chroma_speed_share", CHROMA_SPEED_SHARE))
 	for extra in _server_extras:
 		if extra is Dictionary and str(extra.get("rarity", "")) == "chromatic":
 			var fx = (extra as Dictionary).get("effects", {})
 			if fx is Dictionary and (fx as Dictionary).has("speed_mult"):
-				total += maxf(0.0, float(fx["speed_mult"]) - 1.0) * 100.0 * CHROMA_SPEED_SHARE
+				total += maxf(0.0, float(fx["speed_mult"]) - 1.0) * 100.0 * share
 	return total
 
 
 func card_cap_bonus() -> int:
-	return int(round(_card_bonus_sum(CARD_CAP)))
+	return int(round(_card_bonus_sum(_active_balance().get_value("sigils.card_cap", CARD_CAP) as Dictionary)))
 
 
 func card_autonomy_bonus() -> int:
-	return int(round(_card_bonus_sum(CARD_AUTONOMY)))
+	return int(round(_card_bonus_sum(_active_balance().get_value("sigils.card_autonomy", CARD_AUTONOMY) as Dictionary)))
 
 
 ## Клейм майлстоуна набора. Ответ приходит сигналом sigil_milestone_result
@@ -551,7 +568,8 @@ func _cached_path(item_id: String) -> String:
 	# карту/редкость на том же слоте, и по craft_id вернулся бы старый PNG
 	# («скрафтил Глину, внизу Фермер»). Соль из редкости + отображаемого
 	# имени, чтобы разные офферы одного слота не пересекались.
-	return "%s/c_%s.png" % [CACHE_DIR, (item_id + "|" + _cache_extra).sha256_text().substr(0, 24)]
+	var loc_salt := "|en" if (Locale != null and Locale.is_english()) else ""
+	return "%s/c_%s.png" % [CACHE_DIR, (item_id + "|" + _cache_extra + loc_salt).sha256_text().substr(0, 24)]
 
 
 func _load_cached_image(item_id: String) -> Image:
@@ -735,7 +753,8 @@ func request_daily(device_id: String) -> void:
 	# хэш другой, идём на сервер и обновляем кэш. Так устаревший оффер
 	# («превью common, выпала epic») не показывается.
 	_daily_settled = false
-	Net.sigil_daily(device_id)
+	if not _transport_request("daily", {"device_id": device_id}):
+		Net.sigil_daily(device_id)
 
 
 ## Обработать ответ сервера по ежедневным крафтам.
@@ -778,7 +797,8 @@ func _on_daily_result(result: Dictionary) -> void:
 ## Крафт карточки: отправить запрос на сервер.
 func craft_card(device_id: String, craft_id: String) -> void:
 	_last_device_id = device_id
-	Net.sigil_craft(device_id, craft_id)
+	if not _transport_request("craft", {"device_id": device_id, "craft_id": craft_id}):
+		Net.sigil_craft(device_id, craft_id)
 
 
 ## Обработать ответ сервера по крафту.

@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "name": "cost-40",
+  "base": "baseline",
+  "overrides": {
+    "discovery.cost": 40,
+    "ether.base_regen": 0.2,
+    "ether.regen_per_upgrade": 0.1,
+    "milestones.regen20": 0.1,
+    "milestones.regen57": 0.15,
+    "ether.max_ether": 400,
+    "spring.offline_window_sec.0": 3000.0,
+    "spring.volume_cap.0": 500,
+    "spring.volume_cap.1": 750,
+    "spring.volume_cap.2": 1000
+  }
+}

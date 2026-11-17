@@ -51,7 +51,11 @@ func _init(game: Game) -> void:
 # баффа — от настоящего unix. Смешать их значит сдвинуть одно из двух на
 # часовой пояс, поэтому шва два и они не объединяются.
 func _dt(now: Dictionary) -> Dictionary:
-	return now if not now.is_empty() else Time.get_datetime_dict_from_system()
+	if not now.is_empty():
+		return now
+	if g != null and g.game_clock.is_valid():
+		return Time.get_datetime_dict_from_unix_time(int(g.game_now()))
+	return Time.get_datetime_dict_from_system()
 
 func _unix(now_unix: int) -> int:
 	return now_unix if now_unix >= 0 else int(Time.get_unix_time_from_system())

@@ -98,16 +98,10 @@ func _ensure_nodes() -> void:
 		title.clip_text = true
 		title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		title.ellipsis_char = "…"
-		title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
-		title.add_theme_constant_override("outline_size", 6)
-		# Название карточки — рунический шрифт. Берём его напрямую через UIStyle,
-		# а не только из темы: карточка рендерится и в SubViewport, а туда тема не
-		# доходит (SubViewport рвёт цепочку). get_theme_font в таком случае отдаёт
-		# встроенный Open Sans, поэтому тема — только запасной путь.
-		var disp: Font = UIStyle.runic()
-		if disp == null:
-			disp = get_theme_font("runic", "Label")
-		title.add_theme_font_override("font", disp)
+		title.add_theme_color_override("font_outline_color", UIStyle.INK)
+		title.add_theme_constant_override("outline_size", 2)
+		title.add_theme_font_override("font", load("res://assets/fonts/Divagon.otf"))
+		title.add_theme_constant_override("line_spacing", 4)
 		add_child(title)
 	if glitch == null:
 		glitch = SigilGlitchView.new()
@@ -143,10 +137,7 @@ func _place_nodes(cr: Rect2) -> void:
 	title.add_theme_color_override("font_color", palette.ink)
 	
 	var band := options.title_rect()
-	# Клампим банд строго внутрь карты и внутрь рамки
-	band = band.intersection(Rect2(Vector2.ZERO, s).grow(-2.0))
-	# Не даем тексту прилипнуть к краю
-	band = band.grow(-2.0)
+	band = band.intersection(Rect2(Vector2.ZERO, s).grow(-(options.frame_margin + 24.0)))
 	title.position = band.position
 	title.size = band.size
 	title.pivot_offset = band.size * 0.5

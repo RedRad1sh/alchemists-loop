@@ -1818,64 +1818,28 @@ static func _contract_board_checks(g: Game) -> void:
 		_cb_restore(c, saved)
 		return
 
-	# 2. Фон — тайл досок, не кодовый прямоугольник.
-	var bg: TextureRect = board.get_node_or_null("Planks") as TextureRect
-	Selftest.check("§5.2 the board background is a tiled plank texture, not a flat rect",
+	var bg := board.get_node_or_null("Planks") as TextureRect
+	Selftest.check("board uses supplied recessed wooden frame",
 		bg != null and bg.texture != null
-		and str(bg.texture.resource_path).contains("board_planks")
-		and bg.stretch_mode == TextureRect.STRETCH_TILE)
-
-	# 3. Четыре бруса рамы из PNG.
-	var rail_t: TextureRect = board.get_node_or_null("RailTop") as TextureRect
-	var rail_b: TextureRect = board.get_node_or_null("RailBottom") as TextureRect
-	var rail_l: TextureRect = board.get_node_or_null("RailLeft") as TextureRect
-	var rail_r: TextureRect = board.get_node_or_null("RailRight") as TextureRect
-	Selftest.check("§5.2 the board has four frame rails from asset PNGs",
-		rail_t != null and rail_b != null and rail_l != null and rail_r != null
-		and rail_t.texture != null and str(rail_t.texture.resource_path).contains("frame_h")
-		and rail_l.texture != null and str(rail_l.texture.resource_path).contains("frame_v"))
-
-	# 4. Четыре кованых уголка из PNG.
-	var c0: TextureRect = board.get_node_or_null("Corner0") as TextureRect
-	var c1: TextureRect = board.get_node_or_null("Corner1") as TextureRect
-	var c2: TextureRect = board.get_node_or_null("Corner2") as TextureRect
-	var c3: TextureRect = board.get_node_or_null("Corner3") as TextureRect
-	Selftest.check("§5.2 the board has four corner irons from asset PNGs",
-		c0 != null and c1 != null and c2 != null and c3 != null
-		and c0.texture != null and str(c0.texture.resource_path).contains("corner_iron"))
-
-	# 5. Уголки зеркалятся: волокна сходятся на стыках.
-	Selftest.check("§5.2 the four corners mirror to meet grain at each joint",
-		c0 != null and c1 != null and c2 != null and c3 != null
-		and not c0.flip_h and not c0.flip_v
-		and c1.flip_h and not c1.flip_v
-		and not c2.flip_h and c2.flip_v
-		and c3.flip_h and c3.flip_v)
-
-	# 6. Две полки из PNG.
-	var sd: TextureRect = board.get_node_or_null("ShelfDaily") as TextureRect
-	var sw: TextureRect = board.get_node_or_null("ShelfWeekly") as TextureRect
-	Selftest.check("§5.2 the board has two shelf bars from asset PNGs",
-		sd != null and sw != null and sd.texture != null and sw.texture != null
-		and str(sd.texture.resource_path).contains("shelf_bar"))
+		and bg.texture.resource_path.ends_with("17_contract_board_frame.png"))
+	Selftest.check("board has no redundant riveted frame or shelves",
+		board.get_node_or_null("RailTop") == null and board.get_node_or_null("Corner0") == null
+		and board.get_node_or_null("ShelfDaily") == null)
 
 	# 7. Вывеска на двух верёвках по центру.
-	var sign: TextureRect = board.get_node_or_null("Sign") as TextureRect
+	var sign: Control = board.get_node_or_null("Sign") as Control
 	var sign_word: Label = null
 	if sign != null:
 		sign_word = sign.get_node_or_null("SignWord") as Label
-	Selftest.check("§5.2 the sign hangs from ropes with the board title",
-		sign != null and sign.texture != null
-		and str(sign.texture.resource_path).contains("sign_hang")
-		and sign_word != null and sign_word.text == ContractBoard.BOARD_TITLE)
+	Selftest.check("board heading remains legible without hanging sign",
+		sign != null and sign_word != null and sign_word.text == ContractBoard.BOARD_TITLE)
 
 	# 8. Закрытие доски — подписанная кнопка, а не безымянное кольцо: владелец
 	# не понял, как закрыть доску (баг 2026-10-20).
 	var close_btn: Button = board.get_node_or_null("Close") as Button
-	Selftest.check("§5.2 the board closes with a labeled button, not an unlabeled ring",
-		close_btn != null and close_btn.text.contains("Закрыть")
-		and close_btn.tooltip_text != ""
-		and board.get_node_or_null("Ring") == null)
+	Selftest.check("board close uses supplied cross and accessible tooltip",
+		close_btn != null and close_btn.text.is_empty()
+		and close_btn.tooltip_text != "" and close_btn.get_node_or_null("Artwork") != null)
 
 	# 8b. §C (спека 2026-10-25): кнопки доски одеты в латунную плашку. Жёлтый
 	# `UIStyle.style_button(..., 2)` даёт StyleBoxFlat, поэтому «normal — это
@@ -1883,14 +1847,13 @@ static func _contract_board_checks(g: Game) -> void:
 	# плашки без текстуры. Числа в хелпере литеральные, не константы ContractBoard:
 	# понижать поле в коде — это решение, а пин обязан его заметить.
 	var t8b_hearth: Button = board.get("_hearth_btn") as Button
-	Selftest.check("§C the board's close button is sawn in the brass plate",
-		_plate_state(close_btn) == "")
-	Selftest.check("§C the board's hearth button is sawn in the brass plate",
+	Selftest.check("board close keeps a visible focus indicator", not close_btn.get_theme_stylebox("focus") is StyleBoxEmpty)
+	Selftest.check("§C the board's hearth button is uses the shared matte material",
 		_plate_state(t8b_hearth) == "")
 
 	# 9. Доска v2: восемь карточек — 4 daily + 4 weekly (было 3+2).
-	var dr: Control = board.get_node_or_null("DailyRow") as Control
-	var wr: Control = board.get_node_or_null("WeeklyRow") as Control
+	var dr: Control = board.find_child("DailyRow", true, false) as Control
+	var wr: Control = board.find_child("WeeklyRow", true, false) as Control
 	var daily_card_count := dr.get_child_count() if dr != null else 0
 	var weekly_card_count := wr.get_child_count() if wr != null else 0
 	Selftest.check("§5.2 the board creates eight cards (4 daily + 4 weekly)",
@@ -1906,7 +1869,7 @@ static func _contract_board_checks(g: Game) -> void:
 	var t7_weekly_cards := wr.get_child_count() if wr != null else 0
 	Selftest.check("board v2 renders four cards per shelf with hearth shelf and rank strip",
 		t7_daily_cards == 4 and t7_weekly_cards == 4 and board != null
-		and board.get_node_or_null("ShelfHearth") != null
+		and board.find_child("ShelfHearth", true, false) != null
 		and board.get_node_or_null("RankStrip") != null)
 
 	# 10c. Task 7: _place — wrapping-сетка: при ширине ровно на 4 карточки
@@ -1918,10 +1881,12 @@ static func _contract_board_checks(g: Game) -> void:
 	for i in range(5):
 		t7_wrap_row.add_child(Control.new())
 	ContractBoard._place(t7_wrap_row, Vector2(100, 50))
-	var t7_wrap_ok := absf(t7_wrap_row.size.y - 108.0) < 0.01 \
-		and (t7_wrap_row.get_child(0) as Control).position == Vector2(4, 0) \
-		and (t7_wrap_row.get_child(3) as Control).position == Vector2(316, 0) \
-		and (t7_wrap_row.get_child(4) as Control).position == Vector2(160, 58)
+	var t7_wrap_ok := absf(t7_wrap_row.size.y - 322.0) < 0.01 \
+		and (t7_wrap_row.get_child(0) as Control).position == Vector2(84, 20) \
+		and (t7_wrap_row.get_child(1) as Control).position == Vector2(236, 20) \
+		and (t7_wrap_row.get_child(2) as Control).position == Vector2(84, 130) \
+		and (t7_wrap_row.get_child(3) as Control).position == Vector2(236, 130) \
+		and (t7_wrap_row.get_child(4) as Control).position == Vector2(160, 240)
 	t7_wrap_row.free()
 	Selftest.check("board v2 wrapping _place puts the fifth card on a centered second row",
 		t7_wrap_ok)
@@ -1931,7 +1896,7 @@ static func _contract_board_checks(g: Game) -> void:
 	c._streak_run = 3
 	board.refresh()
 	await g.get_tree().process_frame
-	var t7_shelf := board.get_node_or_null("ShelfHearth")
+	var t7_shelf := board.find_child("ShelfHearth", true, false)
 	var t7_hearth_btn: Button = null
 	var t7_flame_lbl: Label = null
 	if t7_shelf != null:
@@ -2148,7 +2113,7 @@ static func _contract_board_checks(g: Game) -> void:
 	c._cycle_cache = t7_cycle_saved
 
 	# 11. Полоса записок существует и пуста без баффов.
-	var notes: Control = board.get_node_or_null("Notes") as Control
+	var notes: Control = board.find_child("Notes", true, false) as Control
 	var saved_buffs := c._active_buffs.duplicate(true)
 	c._active_buffs.clear()
 	board.refresh()
@@ -2171,9 +2136,9 @@ static func _contract_board_checks(g: Game) -> void:
 	var note := notes.get_child(0) if notes.get_child_count() > 0 else null
 	var note_ok := note != null and note is TextureButton
 	if note_ok:
-		note_ok = (note as TextureButton).texture_normal != null and str((note as TextureButton).texture_normal.resource_path).contains("paper_note")
+		note_ok = (note as TextureButton).texture_normal != null and str((note as TextureButton).texture_normal.resource_path).ends_with(ContractBoard.NOTE_TEX)
 		note_ok = note_ok and note.size == ContractBoard.NOTE_SIZE
-	Selftest.check("§5.4 a note is a paper_note texture at the declared NOTE_SIZE", note_ok)
+	Selftest.check("§5.4 a note is the board note texture at the declared NOTE_SIZE", note_ok)
 
 	# 14. На записке — время Ч:ММ.
 	var time_lbl: Label = null
@@ -2193,7 +2158,7 @@ static func _contract_board_checks(g: Game) -> void:
 		pin = note.get_node_or_null("Pin") as TextureRect
 	var pin_ok := pin != null and pin.texture != null
 	if pin_ok:
-		pin_ok = str(pin.texture.resource_path).contains("nail_brass")
+		pin_ok = str(pin.texture.resource_path).ends_with("19_brass_pin_tack.png")
 	Selftest.check("§5.4 the note has a brass nail pin from an asset PNG", pin_ok)
 
 	# 16. Клик по записке показывает текст эффекта, повторный клик — обратно время.
@@ -2279,15 +2244,24 @@ static func _contract_board_checks(g: Game) -> void:
 		Selftest.check("§5.4 the popup has the reward title and an OK button",
 			pop_title != null and pop_title.text == ContractBoard.POPUP_TITLE
 			and pop_ok_btn != null)
+		# Письмо лежит на затемнении: без него текст награды сливался с листами доски.
+		var pop_paper := popup.get_node_or_null("Paper") as TextureRect
+		var scrim := board.get_node_or_null("RewardScrim") as TextureRect
+		Selftest.check("§5.4 the reward is a letter over a dimming scrim that eats taps",
+			pop_paper != null and pop_paper.texture != null
+			and String(pop_paper.texture.resource_path).ends_with(ContractBoard.LETTER_TEX)
+			and scrim != null and scrim.mouse_filter == Control.MOUSE_FILTER_STOP
+			and scrim.z_index < popup.z_index)
 		# §C: та же латунная плашка на единственной кнопке попапа (проверяется ДО
 		# onжатия: press закрывает доску награды вместе с кнопкой).
-		Selftest.check("§C the reward popup's OK button is sawn in the brass plate",
+		Selftest.check("§C the reward popup's OK button is uses the shared matte material",
 			_plate_state(pop_ok_btn) == "")
 		if pop_ok_btn != null:
 			pop_ok_btn.pressed.emit()
 		await g.get_tree().process_frame
-		Selftest.check("§5.4 pressing OK closes the reward popup",
-			board.get_node_or_null("RewardPopup") == null)
+		Selftest.check("§5.4 pressing OK closes the reward popup and its scrim",
+			board.get_node_or_null("RewardPopup") == null
+			and board.get_node_or_null("RewardScrim") == null)
 
 	# --- Точная награда по наведению (Polish 1) ---
 	# 20. Строка награды и штамп показывают при наведении точную награду:
@@ -2599,8 +2573,8 @@ static func _contract_board_checks(g: Game) -> void:
 		b7_top != null and b7_bottom != null
 		and b7_top.mouse_filter == Control.MOUSE_FILTER_STOP
 		and b7_bottom.mouse_filter == Control.MOUSE_FILTER_STOP
-		and b7_top.get_global_rect().end.y <= band_top + 0.5
-		and absf(b7_bottom.get_global_rect().position.y - band_bottom) <= 0.5)
+		and b7_top.get_global_rect().end.y <= ContractBoard.RAIL + ContractBoard.SIGN_SIZE.y + 12.0 + 0.5
+		and absf(b7_bottom.get_global_rect().position.y - (band_bottom - ContractBoard.CONTENT_BOTTOM_GAP)) <= 0.5)
 	board._scroll_to(0.0)
 	_force_set(c, [], [])
 	_clear_prog(c)
@@ -3310,20 +3284,29 @@ static func _ca_distinct(img: Image) -> int:
 static func _contract_asset_checks() -> void:
 	# Контракт имён и размеров, который читают экраны Task 9 и Task 10.
 	var sizes := {
-		"board_planks.png": Vector2i(256, 256),
-		"frame_h.png": Vector2i(256, 40),
-		"frame_v.png": Vector2i(40, 256),
+		"board_planks.png": Vector2i(480, 512),
+		"frame_h.png": Vector2i(1080, 80),
+		"frame_v.png": Vector2i(80, 1760),
 		"corner_iron.png": Vector2i(96, 96),
-		"shelf_bar.png": Vector2i(256, 28),
-		"sign_hang.png": Vector2i(600, 168),
+		"shelf_bar.png": Vector2i(920, 56),
+		"sign_hang.png": Vector2i(600, 200),
 		"paper_daily.png": Vector2i(280, 392),
 		"paper_weekly.png": Vector2i(368, 488),
-		"paper_note.png": Vector2i(264, 176),
+		"paper_daily_b.png": Vector2i(280, 392),
+		"paper_daily_c.png": Vector2i(280, 392),
+		"board_note.png": Vector2i(264, 176),
+		"paper_strip.png": Vector2i(300, 96),
+		"reward_letter.png": Vector2i(552, 800),
+		"nail_brass_b.png": Vector2i(64, 64),
+		"nail_brass_c.png": Vector2i(64, 64),
+		"nail_brass_d.png": Vector2i(64, 64),
+		"board_vignette.png": Vector2i(270, 480),
+		"popup_scrim.png": Vector2i(270, 480),
 		"nail_brass.png": Vector2i(64, 64),
 		"seal_bronze.png": Vector2i(104, 104),
 		"seal_silver.png": Vector2i(104, 104),
 		"seal_gold.png": Vector2i(104, 104),
-		"stamp_frame.png": Vector2i(264, 112),
+		"stamp_frame.png": Vector2i(264, 96),
 		"ring_pull.png": Vector2i(88, 88),
 		"plate_brass.png": Vector2i(224, 64),
 	}
@@ -3366,8 +3349,8 @@ static func _contract_asset_checks() -> void:
 	# stamp_frame и ring_pull — особые формы (рамка и кольцо с дыркой),
 	# для них отдельные проверки ниже.
 	var cutout := true
-	for f in ["paper_daily.png", "paper_weekly.png", "paper_note.png", "sign_hang.png",
-			"corner_iron.png"]:
+	for f in ["paper_daily.png", "paper_daily_b.png", "paper_daily_c.png", "paper_weekly.png",
+			"board_note.png", "paper_strip.png", "reward_letter.png", "sign_hang.png"]:
 		var img := _ca_img(CA_DIR + String(f))
 		if img == null:
 			cutout = false
@@ -3397,11 +3380,16 @@ static func _contract_asset_checks() -> void:
 		var sf_clean := true
 		for a in sf_corners:
 			sf_clean = sf_clean and float(a) < 0.05
-		# Проверяем непрозрачность верхней рамки в нескольких точках по X.
+		# Верхняя кромка непрозрачна в нескольких точках по X. Оттиск рваный —
+		# чернила проваливаются на пару пикселей, — поэтому смотрим полосу
+		# верхних 14 px, а не одну строку.
 		var sf_border := true
 		for k in 5:
 			var bx := int(sf_w * (0.2 + 0.15 * k))
-			sf_border = sf_border and sf_img.get_pixel(bx, 5).a > 0.5
+			var hit := false
+			for by in range(14):
+				hit = hit or sf_img.get_pixel(bx, by).a > 0.5
+			sf_border = sf_border and hit
 		sf_ok = sf_clean and sf_border
 	Selftest.check("§5.3 stamp_frame is a double frame with transparent interior", sf_ok)
 
@@ -3565,7 +3553,7 @@ static func _cc_assets(node: Node) -> int:
 			t = (d as TextureRect).texture
 		elif d is TextureButton:
 			t = (d as TextureButton).texture_normal
-		if t != null and str(t.resource_path).begins_with(CA_DIR):
+		if t != null and (str(t.resource_path).begins_with(CA_DIR) or str(t.resource_path).begins_with("res://assets/ui/kit_01b/")):
 			n += 1
 	return n
 
@@ -3585,7 +3573,7 @@ static func _cc_bad(node: Node, acc: Array) -> void:
 				t = (n as TextureRect).texture
 			else:
 				t = (n as TextureButton).texture_normal
-			if t == null or not str(t.resource_path).begins_with(CA_DIR):
+			if t == null or not (str(t.resource_path).begins_with(CA_DIR) or str(t.resource_path).begins_with("res://assets/ui/kit_01b/")):
 				acc.append("layer:%s" % str(n.name))
 		_cc_bad(n, acc)
 
@@ -3600,25 +3588,20 @@ static func _cc_bad(node: Node, acc: Array) -> void:
 static func _plate_state(b: Button) -> String:
 	if b == null:
 		return "нет кнопки"
-	var sb := b.get_theme_stylebox("normal") as StyleBoxTexture
-	if sb == null or sb.texture == null:
-		return "normal не StyleBoxTexture с PNG"
-	if not String(sb.texture.resource_path).ends_with("plate_brass.png"):
-		return String(sb.texture.resource_path).get_file()
-	# 36 px по бокам держат гвоздик целиком: меньше — и два куска наедут в
-	# растягиваемую середину.
-	if sb.texture_margin_left < 36.0 or sb.texture_margin_right < 36.0 \
-			or sb.texture_margin_top < 10.0 or sb.texture_margin_bottom < 10.0:
-		return "поля nine-slice уже 36/10"
+	var sb := b.get_theme_stylebox("normal") as StyleBoxFlat
+	if sb == null or sb.corner_detail != 1:
+		return "нет тёмной скошенной плашки"
+	if sb.bg_color.r > 0.2 or sb.border_width_left != 1:
+		return "плашка не тёмная с тонкой рамкой"
 	for k in ["content_margin_left", "content_margin_top",
 			"content_margin_right", "content_margin_bottom"]:
 		if float(sb.get(k)) < 6.0:
 			return "§D %s" % k
-	var hov := b.get_theme_stylebox("hover") as StyleBoxTexture
-	var prs := b.get_theme_stylebox("pressed") as StyleBoxTexture
+	var hov := b.get_theme_stylebox("hover") as StyleBoxFlat
+	var prs := b.get_theme_stylebox("pressed") as StyleBoxFlat
 	if hov == null or prs == null:
 		return "нет hover/pressed"
-	if hov.modulate_color.r <= 1.0 or prs.modulate_color.r >= 1.0:
+	if hov.bg_color.r <= sb.bg_color.r or prs.bg_color.r >= sb.bg_color.r:
 		return "hover/pressed не ярче/тусклее"
 	# «1 px вниз» при нажатии: texture_offset в Godot 4 нет, сдвиг — полем контента.
 	if not is_equal_approx(prs.content_margin_top, sb.content_margin_top - 1.0):
@@ -3758,8 +3741,8 @@ static func _contract_card_checks(g: Game) -> void:
 	var wp: TextureRect = wgold.get("_paper") if states_ok else null
 	var paper_ok := up != null and wp != null and up.texture != null and wp.texture != null
 	Selftest.check("§5.3 the weekly note hangs on bigger paper, both at the real PNG size",
-		paper_ok and Vector2(up.texture.get_size()) == Vector2(280, 392)
-		and Vector2(wp.texture.get_size()) == Vector2(368, 488)
+		paper_ok and Vector2(up.texture.get_size()) == Vector2(312, 267)
+		and Vector2(wp.texture.get_size()) == Vector2(312, 320)
 		and up.size == ContractCard.DAILY_SIZE and wp.size == ContractCard.WEEKLY_SIZE)
 
 	# 3. Наклон детерминирован по id и не больше ±4°.
@@ -3800,6 +3783,25 @@ static func _contract_card_checks(g: Game) -> void:
 		nail_ok = nail_ok and nail.get_parent() == unfinished
 	Selftest.check("§5.3 the brass nail sits on the middle of the paper's top edge", nail_ok)
 
+	# 5b. Дневная записка и гвоздь — один из вариантов по id: стабильно между
+	# вызовами, а на 30 id встречаются все силуэты бумаги и все шляпки.
+	var papers_seen := {}
+	var nails_seen := {}
+	var pick_stable := true
+	for i in range(30):
+		var vid := "daily:brew:bronze:v%d" % i
+		var pp := ContractCard.pick(vid, ContractCard.DAILY_PAPERS)
+		pick_stable = pick_stable and pp == ContractCard.pick(vid, ContractCard.DAILY_PAPERS)
+		papers_seen[pp] = true
+		nails_seen[ContractCard.pick(vid, ContractCard.NAILS)] = true
+	var up_name := String(up.texture.resource_path).get_file() if paper_ok else ""
+	var nail_name := String(nail.texture.resource_path).get_file() if nail != null and nail.texture != null else ""
+	Selftest.check("§5.3 a daily note and its nail are id-picked variants, all of them in use",
+		pick_stable and papers_seen.size() == ContractCard.DAILY_PAPERS.size()
+		and nails_seen.size() == ContractCard.NAILS.size()
+		and up_name == ContractCard.pick(String((fixtures[0] as Dictionary)["id"]), ContractCard.DAILY_PAPERS)
+		and nail_name == ContractCard.pick(String((fixtures[0] as Dictionary)["id"]), ContractCard.NAILS))
+
 	# 6. Сургуч соответствует тиру контракта.
 	var seal_ok := states_ok
 	for i in range(cards.size()):
@@ -3807,7 +3809,7 @@ static func _contract_card_checks(g: Game) -> void:
 		if seal == null or seal.texture == null:
 			seal_ok = false
 			continue
-		var want_path := "%sseal_%s.png" % [CA_DIR, String((fixtures[i] as Dictionary)["tier"])]
+		var want_path := "res://assets/contracts/" + String(ContractCard.SEALS[String((fixtures[i] as Dictionary)["tier"])])
 		if str(seal.texture.resource_path) != want_path \
 				or seal.size != Vector2(ContractCard.SEAL_SIZE, ContractCard.SEAL_SIZE):
 			seal_ok = false
@@ -3942,7 +3944,7 @@ static func _contract_card_checks(g: Game) -> void:
 	g.add_child(vein_card)
 	cards.append(vein_card)
 	var pour := _cc_button(vein_card, "Pour")
-	Selftest.check("§C the vein row's pour button is sawn in the brass plate",
+	Selftest.check("§C the vein row's pour button is uses the shared matte material",
 		_plate_state(pour) == "")
 
 	for card in cards:

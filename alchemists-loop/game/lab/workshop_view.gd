@@ -55,6 +55,8 @@ func refresh() -> void:
 	if not is_instance_valid(g) or workshop == null or is_queued_for_deletion() or _cards.is_empty():
 		return
 	_refreshing = true
+	while _cards.size() < workshop.line_count():
+		_build_card(_cards.size())
 	var rules: Dictionary = Workshop.Rules.RANKS[workshop.rank]
 	var next := workshop.rank + 1
 	_mastery.text = "%s · мастерство %d" % [rules["name"], workshop.xp]
@@ -139,7 +141,9 @@ func _build() -> void:
 	_lines_box.name = "ProductionLines"
 	_lines_box.add_theme_constant_override("separation", 12)
 	add_child(_lines_box)
-	for index in Workshop.Rules.RANKS.size():
+	# Placeholder'ы рангов сохраняют стабильные LineCard_1..4; refresh выше
+	# достраивает дополнительные карточки уже по фактическому line_count().
+	for index in maxi(workshop.line_count(), Workshop.Rules.RANKS.size()):
 		_build_card(index)
 	_upgrades_toggle = _button(self, "ToggleUpgrades", "Улучшения", _toggle_upgrades)
 	_upgrades = VBoxContainer.new()
