@@ -16,19 +16,7 @@ static func _set_chamfer(sb: StyleBoxFlat, radius: int = 6) -> void:
 
 # ==============================================================================
 # ОКНО «ДРУЗЬЯ» (Вариант 2)
-# Поверх 4 внешних углов окна положите TextureRect со спрайтом
-# 14b_modal_micro_corner_tri.png (или 14a_modal_micro_corner_L.png) + flip_h / flip_v.
 # ==============================================================================
-
-## Основная матовая подложка окна «Друзья»
-static func make_modal_panel() -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("#221B14")
-	sb.border_color = Color("#8D6E42")
-	sb.set_border_width_all(1)
-	sb.shadow_color = Color(0.0, 0.0, 0.0, 0.55)
-	sb.shadow_size = 18
-	return sb
 
 ## Активная вкладка со свечением («Друзья (1)»)
 static func make_tab_active() -> StyleBoxFlat:

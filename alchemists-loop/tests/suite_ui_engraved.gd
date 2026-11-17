@@ -60,7 +60,10 @@ static func run(g: Game) -> void:
 	var top_beam := g.find_child("TopBeam", true, false) as TextureRect
 	Selftest.check("reference top beam uses supplied artwork", top_beam != null and top_beam.texture.resource_path.ends_with("01_top_beam_panel.png"))
 	var social_panel := g._social_ui._screen.find_child("SocialPanel", true, false) as PanelContainer
-	Selftest.check("friends uses lightweight kit modal", social_panel.get_theme_stylebox("panel") is StyleBoxFlat)
+	var social_frame := social_panel.get_theme_stylebox("panel") as StyleBoxTexture
+	var shared_frame := UIStyle.tab_panel()
+	Selftest.check("friends uses the shared tab frame", social_frame != null
+		and shared_frame != null and social_frame.texture == shared_frame.texture)
 	var original_scale_size := g.get_window().content_scale_size
 	var original_window_size := g.get_window().size
 	for dimensions in [Vector2i(540, 960), Vector2i(420, 840), Vector2i(360, 800), Vector2i(540, 960)]:
@@ -70,7 +73,19 @@ static func run(g: Game) -> void:
 			g._social_ui.open(tab)
 			for frame in 4:
 				await g.get_tree().process_frame
-			_check_modal_corners(social_panel, "%s tab%d" % [dimensions, tab])
+			var friends_rect := social_panel.get_global_rect()
+			# Скрытый TabContainer не пересчитывается при ресайзе, поэтому эталон
+			# снимаем с видимых вкладок после закрытия «Друзей».
+			g._social_ui.close()
+			for frame in 2:
+				await g.get_tree().process_frame
+			var tabs_rect := g._tabs_ref.get_global_rect()
+			var bar_h := g._tabs_ref.get_tab_bar().get_combined_minimum_size().y
+			tabs_rect.position.y += bar_h
+			tabs_rect.size.y -= bar_h
+			Selftest.check("friends follows the tab rect %s tab%d" % [dimensions, tab],
+				friends_rect.position.distance_to(tabs_rect.position) < 1.0
+				and friends_rect.size.distance_to(tabs_rect.size) < 1.0)
 	g.get_window().content_scale_size = Vector2i(360, 800)
 	g.get_window().size = Vector2i(360, 800)
 	g._social._seed_demo()
@@ -79,8 +94,6 @@ static func run(g: Game) -> void:
 		for frame in 4:
 			await g.get_tree().process_frame
 		Selftest.check("friends panel fits viewport tab %d" % tab, g.get_viewport_rect().encloses(social_panel.get_global_rect()))
-		var panel_style := social_panel.get_theme_stylebox("panel") as StyleBoxFlat
-		Selftest.check("friends shadow fits viewport tab %d" % tab, g.get_viewport_rect().encloses(social_panel.get_global_rect().grow(panel_style.shadow_size)))
 		var rows := g._social_ui._body.find_child("SocialRows", true, false) as Control
 		Selftest.check("friends rows fit list width tab %d" % tab, rows.size.x <= g._social_ui._list_scroll.size.x)
 		for row in rows.get_children():
@@ -188,22 +201,6 @@ static func run(g: Game) -> void:
 			theme.has_stylebox("normal", control) and theme.has_stylebox("focus", control))
 	for icon in ["gi_cauldron", "gi_world", "gi_friends", "gi_rating", "gi_more", "gi_arcana", "x", "settings"]:
 		Selftest.check("engraved icon loads " + icon, UIIcon.texture(icon) != null)
-
-static func _check_modal_corners(panel: Control, state: String) -> void:
-	var overlay := panel.get_node("MicroCorners")
-	Selftest.check("four modal corners " + state, overlay.get_child_count() == 4)
-	var expected := [Vector2.ZERO, Vector2(panel.size.x - 18, 0), Vector2(0, panel.size.y - 18), panel.size - Vector2(18, 18)]
-	for i in 4:
-		var corner := overlay.get_child(i) as Control
-		var transform := panel.get_global_transform().affine_inverse() * corner.get_global_transform()
-		var actual := Rect2(transform * Vector2.ZERO, Vector2.ZERO)
-		for point in [Vector2(corner.size.x, 0), corner.size, Vector2(0, corner.size.y)]:
-			actual = actual.expand(transform * point)
-		var want := Rect2(expected[i], Vector2(18, 18))
-		print("CORNER ", state, " #", i, " panel=", panel.get_global_rect(), " local=", actual, " expected=", want, " global=", _drawn_bounds(corner))
-		Selftest.check("modal corner aligned %d %s" % [i, state], actual.is_equal_approx(want))
-		Selftest.check("modal corner inside panel %d %s" % [i, state], Rect2(Vector2.ZERO, panel.size).encloses(actual))
-		Selftest.check("modal corner inside screen %d %s" % [i, state], panel.get_viewport_rect().encloses(_drawn_bounds(corner)))
 
 static func _drawn_bounds(control: Control) -> Rect2:
 	var transform := control.get_global_transform()
