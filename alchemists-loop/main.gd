@@ -627,6 +627,14 @@ var _feed_list: VBoxContainer = null
 var _spirit: Spirit  # Светик (R9)
 var _social: Social  # S1 друзья: кэш инбокса, ленты, optimistic (game/social/social.gd)
 var _social_ui: SocialUI = null
+var _news_ui: NewsUI = null
+
+## «Новости»: модалка поверх вкладки «Ещё», ленивое создание (паттерн
+## SocialUI). Кнопка живёт в разделе «НОВОСТИ» вкладки «Ещё» (pages.gd).
+func _open_news() -> void:
+	if _news_ui == null:
+		_news_ui = NewsUI.new(self)
+	_news_ui.open()
 var _social_btn: Button  # S1: кнопка «Друзья» в ether_row, бейдж правит core._refresh_header
 var _admin: AdminConsole  # админ-консоль (~)
 # Размер комплекта фиксирован генератором каталога (SET_SIZE = 25).
@@ -2007,7 +2015,16 @@ func _update_brew_bar_visibility() -> void:
 
 func _load_font(path: String) -> Font:
 	if ResourceLoader.exists(path):
-		return load(path) as Font
+		var f := load(path) as Font
+		if f != null:
+			# Эмодзи-глифов нет ни в Manrope, ни в декоративных шрифтах —
+			# системный эмодзи-фолбэк последним в цепочке (docs §6).
+			var ef := UIStyle.emoji_fallback()
+			if not f.fallbacks.has(ef):
+				var fb := f.fallbacks.duplicate()
+				fb.append(ef)
+				f.fallbacks = fb
+		return f
 	return null
 
 func _ui_texture(path: String) -> Texture2D:

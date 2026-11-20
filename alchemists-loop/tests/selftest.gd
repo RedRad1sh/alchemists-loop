@@ -162,6 +162,14 @@ static func run(g: Game) -> void:
 		var i18n_s: Script = load("res://tests/suite_ui_i18n.gd")
 		if i18n_s != null and i18n_s.can_instantiate():
 			await i18n_s.run(g)
+	elif OS.get_cmdline_user_args().has("--suite=social"):
+		await SuiteSocial.run(g)
+	elif OS.get_cmdline_user_args().has("--suite=news"):
+		var news_s: Script = load("res://tests/suite_news.gd")
+		if news_s != null and news_s.can_instantiate():
+			await news_s.run(g)
+		else:
+			Selftest.check("news suite loads", false)
 	elif OS.get_cmdline_user_args().has("--suite=balance"):
 		await SuiteBalanceConfig.run(g)
 	elif OS.get_cmdline_user_args().has("--suite=catalog200"):
@@ -194,6 +202,7 @@ static func run(g: Game) -> void:
 		await SuiteSigilLore.run(g)
 		await SuiteSigilCardEffects.run(g)
 		await SuiteSocial.run(g)
+		await load("res://tests/suite_news.gd").run(g)
 		await SuiteTrades.run(g)
 		await SuiteJuice.run(g)
 		await SuiteSaveSync.run(g)

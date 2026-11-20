@@ -73,6 +73,40 @@ static func preview_cut(body: String, max_len: int) -> String:
 		cut = cut.substr(0, sp)
 	return cut + "…"
 
+const STICKER_IDS: Array[String] = [
+	"affinity", "brew", "celebrate", "cheer", "daily", "error", "essence",
+	"first", "gift", "guest", "hearth", "hi", "hint", "home_love", "look",
+	"mail", "mist", "offline", "prestige", "ritual", "sleep", "star",
+	"think", "vein", "wait", "wave",
+]
+
+static func sticker_body(id: String) -> String:
+	return "[sticker:%s]" % id
+
+static func sticker_id(body: String) -> String:
+	# Токен — всё тело сообщения: стикер шлётся отдельным сообщением и не
+	# смешивается с текстом (docs/social-emoji-and-stickers.md §6).
+	if not body.begins_with("[sticker:") or not body.ends_with("]"):
+		return ""
+	var id := body.substr(9, body.length() - 10)
+	return id if STICKER_IDS.has(id) else ""
+
+static func message_time(sent_at: String) -> String:
+	# sent_at приходит с сервера уже в игровом поясе (DAY_TZ_OFFSET) — та же
+	# шкала, что у разделителей дат; клиент пояс не пересчитывает.
+	if sent_at.length() < 16 or sent_at.substr(10, 1) != "T" or sent_at.substr(13, 1) != ":":
+		return ""
+	return sent_at.substr(11, 5)
+
+static func preview_line(friend: Dictionary) -> String:
+	var raw := String(friend.get("last_msg_preview", ""))
+	if raw == "":
+		return ""
+	var text := "Стикер" if sticker_id(raw) != "" else preview_cut(raw, 60)
+	if friend.get("last_msg_from_me", false) == true:
+		return "Вы: " + text
+	return text
+
 func refresh() -> void:
 	Net.social_inbox(g._online._device_id)
 
