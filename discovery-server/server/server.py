@@ -6029,16 +6029,16 @@ def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
                     tuple([me] + sorted(accepted_pairs.values()))).fetchall():
                 stats[row["pair_key"]] = row
 
-        # Тело, дата и направление превью — вторым запросом по собранным id
+        # Тело, дата и направление превью — запросами по собранным id
         # (N ≤ числу друзей): одна строка даёт все поля, поэтому они про одно
         # сообщение. from_device нужен, чтобы клиент отличал «Вы: …» от чужого текста.
         previews: dict[int, sqlite3.Row] = {}
         last_ids = sorted({r["last_id"] for r in stats.values() if r["last_id"] is not None})
-        if last_ids:
-            marks = ",".join("?" for _ in last_ids)
-            for row in conn.execute(
-                    "SELECT id, body, sent_at, from_device FROM messages WHERE id IN (%s)" % marks,
-                    tuple(last_ids)).fetchall():
+        for last_id in last_ids:
+            row = conn.execute(
+                "SELECT id, body, sent_at, from_device FROM messages WHERE id = ?",
+                (last_id,)).fetchone()
+            if row is not None:
                 previews[row["id"]] = row
 
         unread_total = 0
