@@ -42,7 +42,6 @@ const GOLD := BRASS_HI
 const GOLD_DIM := BRASS_DIM
 const TEXT := CREAM
 const DANGER := RUBY
-
 # Единый небольшой верхний отступ содержимого всех вкладок нижнего меню.
 const PAGE_TOP_M := 10.0
 

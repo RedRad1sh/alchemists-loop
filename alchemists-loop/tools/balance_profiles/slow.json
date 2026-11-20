@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "name": "slow",
+  "base": "baseline",
+  "overrides": {
+    "ether.base_regen": 0.25,
+    "ether.brew_cost": 16,
+    "spring.base_interval": 8.0,
+    "events.bench_interval": 55.0,
+    "retort.base_hours": 10.0
+  }
+}

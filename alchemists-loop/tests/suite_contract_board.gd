@@ -3366,7 +3366,31 @@ static func _contract_asset_checks() -> void:
 		for k in 5:
 			body = body and img.get_pixel(int(w * 0.5), int(h * (0.3 + 0.1 * k))).a > 0.9
 		cutout = cutout and clean and body
-	Selftest.check("§5.3 papers, sign and corner are cut-outs, not rectangles", cutout)
+	Selftest.check("§5.3 papers and sign are cut-outs, not rectangles", cutout)
+
+	# §5.3: corner_iron — кованый уголок-«Г»: непрозрачны только верхняя и левая
+	# кромки, тело и нижний/правый край прозрачны. В общий список бумаг не входит:
+	# там тело обязано быть непрозрачным по центру, а у уголка центр пустой.
+	var ci_ok := false
+	var ci_img := _ca_img(CA_DIR + "corner_iron.png")
+	if ci_img != null:
+		var ci_w := ci_img.get_width()
+		var ci_h := ci_img.get_height()
+		var ci_corners := [ci_img.get_pixel(1, 1).a, ci_img.get_pixel(ci_w - 2, 1).a,
+			ci_img.get_pixel(1, ci_h - 2).a, ci_img.get_pixel(ci_w - 2, ci_h - 2).a]
+		var ci_clean := true
+		for a in ci_corners:
+			ci_clean = ci_clean and float(a) < 0.05
+		var ci_top := true
+		var ci_left := true
+		for k in 5:
+			var bx := int(ci_w * (0.2 + 0.15 * k))
+			var by := int(ci_h * (0.2 + 0.15 * k))
+			ci_top = ci_top and ci_img.get_pixel(bx, 8).a > 0.9
+			ci_left = ci_left and ci_img.get_pixel(8, by).a > 0.9
+		var ci_hollow := ci_img.get_pixel(int(ci_w * 0.65), int(ci_h * 0.65)).a < 0.05
+		ci_ok = ci_clean and ci_top and ci_left and ci_hollow
+	Selftest.check("§5.3 corner_iron is an L-bracket cut-out with a transparent body", ci_ok)
 
 	# §5.3: stamp_frame — красная двойная рамка с прозрачной серединой.
 	# Углы прозрачны (cut-out), непрозрачная рамка по краям.
@@ -3794,13 +3818,27 @@ static func _contract_card_checks(g: Game) -> void:
 		pick_stable = pick_stable and pp == ContractCard.pick(vid, ContractCard.DAILY_PAPERS)
 		papers_seen[pp] = true
 		nails_seen[ContractCard.pick(vid, ContractCard.NAILS)] = true
-	var up_name := String(up.texture.resource_path).get_file() if paper_ok else ""
-	var nail_name := String(nail.texture.resource_path).get_file() if nail != null and nail.texture != null else ""
+	# Каждая карточка рендерит СВОЙ id-вариант бумаги и гвоздя, а не только первая:
+	# недельный плакат висит на высокой бумаге (не дневной вариант), гвоздь — у всех.
+	var variants_ok := states_ok
+	for i in range(cards.size()):
+		var card_i := cards[i] as ContractCard
+		var fx := fixtures[i] as Dictionary
+		var fid := String(fx["id"])
+		var nail_i: TextureRect = card_i.get("_nail")
+		if nail_i == null or nail_i.texture == null \
+				or String(nail_i.texture.resource_path).get_file() != ContractCard.pick(fid, ContractCard.NAILS):
+			variants_ok = false
+		if String(fx.get("kind", "daily")) == "weekly":
+			continue
+		var paper_i: TextureRect = card_i.get("_paper")
+		if paper_i == null or paper_i.texture == null \
+				or String(paper_i.texture.resource_path).get_file() != ContractCard.pick(fid, ContractCard.DAILY_PAPERS):
+			variants_ok = false
 	Selftest.check("§5.3 a daily note and its nail are id-picked variants, all of them in use",
 		pick_stable and papers_seen.size() == ContractCard.DAILY_PAPERS.size()
 		and nails_seen.size() == ContractCard.NAILS.size()
-		and up_name == ContractCard.pick(String((fixtures[0] as Dictionary)["id"]), ContractCard.DAILY_PAPERS)
-		and nail_name == ContractCard.pick(String((fixtures[0] as Dictionary)["id"]), ContractCard.NAILS))
+		and variants_ok)
 
 	# 6. Сургуч соответствует тиру контракта.
 	var seal_ok := states_ok

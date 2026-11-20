@@ -1,0 +1,18 @@
+{
+  "scenario": 1,
+  "name": "1h-active-5h-offline-1h-active",
+  "segments": [
+    {
+      "kind": "active",
+      "seconds": 3600
+    },
+    {
+      "kind": "offline",
+      "seconds": 18000
+    },
+    {
+      "kind": "active",
+      "seconds": 3600
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Local progression acceptance report",
+  "type": "object",
+  "required": ["schema", "runner_commit", "seed", "catalog_hash", "profile", "time", "ledger", "phases", "metrics", "verdict"],
+  "properties": {
+    "schema": {"const": 1},
+    "runner_commit": {"type": "string", "minLength": 1},
+    "seed": {"type": "integer"},
+    "catalog_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "profile": {
+      "type": "object",
+      "required": ["schema", "name", "base", "hash", "resolved_overrides"],
+      "properties": {
+        "schema": {"const": 1}, "name": {"type": "string"}, "base": {"const": "baseline"},
+        "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "resolved_overrides": {"type": "object"}
+      }
+    },
+    "time": {"type": "object", "required": ["active_seconds", "offline_seconds"], "properties": {
+      "active_seconds": {"type": "number", "minimum": 0}, "offline_seconds": {"type": "number", "minimum": 0}
+    }},
+    "ledger": {"type": "object", "required": ["operation_count", "counters", "resources"], "properties": {
+      "operation_count": {"type": "integer", "minimum": 0}, "counters": {"type": "object"}, "resources": {"type": "object"}
+    }},
+    "phases": {"type": "object", "required": ["bootstrap/catalog", "discovery", "idle", "retort", "sigil", "prestige", "post_prestige_discovery", "proof"], "additionalProperties": {
+      "type": "object", "required": ["state"], "properties": {"state": {"enum": ["pass", "fail", "incomplete", "blocked"]}}
+    }},
+    "metrics": {"type": "object", "required": ["local_elements", "simulated_real_seconds", "active_player_seconds", "uncompleted_upgrades", "uncompleted_sigil_targets", "prestige_proof", "reload_proof", "replay_proof", "retort_queue_proof", "recipes", "unexplained_resources", "ether_deficit_at_completion"], "properties": {
+      "local_elements": {"type": "object", "required": ["completed", "total"], "properties": {"completed": {"type": "integer", "minimum": 0, "maximum": 200}, "total": {"const": 200}}},
+      "simulated_real_seconds": {"type": "number", "minimum": 0}, "active_player_seconds": {"type": "number", "minimum": 0},
+      "uncompleted_upgrades": {"type": "integer", "minimum": 0}, "uncompleted_sigil_targets": {"type": "integer", "minimum": 0},
+      "unexplained_resources": {"type": "number", "minimum": 0}, "ether_deficit_at_completion": {"type": ["number", "null"], "minimum": 0},
+      "prestige_proof": {"type": "boolean"}, "reload_proof": {"type": "boolean"}, "replay_proof": {"type": "boolean"}, "retort_queue_proof": {"type": "boolean"},
+      "recipes": {"type": "object", "required": ["completed", "total"], "properties": {
+        "completed": {"type": "integer", "minimum": 0, "maximum": 196}, "total": {"const": 196}
+      }}
+    }},
+    "verdict": {"enum": ["pass", "fail", "incomplete", "invalid_profile"]}
+  },
+  "allOf": [{
+    "if": {"properties": {"verdict": {"const": "pass"}}},
+    "then": {"properties": {
+      "metrics": {"properties": {
+        "local_elements": {"properties": {"completed": {"const": 200}}},
+        "simulated_real_seconds": {"exclusiveMinimum": 3600},
+        "uncompleted_upgrades": {"const": 0}, "uncompleted_sigil_targets": {"const": 0},
+        "unexplained_resources": {"const": 0}, "ether_deficit_at_completion": {"const": 0},
+        "prestige_proof": {"const": true}, "reload_proof": {"const": true}, "replay_proof": {"const": true}, "retort_queue_proof": {"const": true},
+        "recipes": {"properties": {"completed": {"const": 196}}}
+      }},
+      "phases": {"additionalProperties": {"properties": {"state": {"const": "pass"}}}}
+    }}
+  }]
+}

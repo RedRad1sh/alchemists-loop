@@ -11,6 +11,7 @@ var _high_patterns: Array = []
 var _low_patterns: Array = []
 var _cyr_rx: RegEx = null
 var _loaded := false
+var _load_warned := false
 
 const SEPS := ["   ·   ", " · ", "  +  ", " + ", " → ", " — ", ": ", ", "]
 
@@ -18,13 +19,14 @@ const SEPS := ["   ·   ", " · ", "  +  ", " + ", " → ", " — ", ": ", ", "]
 func ensure_loaded() -> void:
 	if _loaded:
 		return
-	_loaded = true
 	_cyr_rx = RegEx.create_from_string("[А-Яа-яЁё]")
 	var f := FileAccess.open("res://data/i18n_en.json", FileAccess.READ)
 	if f == null:
+		_warn_load("не открылся res://data/i18n_en.json")
 		return
 	var parsed = JSON.parse_string(f.get_as_text())
 	if not (parsed is Dictionary):
+		_warn_load("res://data/i18n_en.json не является JSON-объектом")
 		return
 	var d: Dictionary = parsed
 	if d.get("exact") is Dictionary:
@@ -32,6 +34,14 @@ func ensure_loaded() -> void:
 	_nl_patterns = _compile_list(d.get("nl_patterns", []))
 	_high_patterns = _compile_list(d.get("high_patterns", []))
 	_low_patterns = _compile_list(d.get("low_patterns", []))
+	_loaded = true
+
+
+func _warn_load(reason: String) -> void:
+	if _load_warned:
+		return
+	_load_warned = true
+	push_warning("EnTranslation: " + reason + " — английский режим покажет русские строки")
 
 
 func _compile_list(raw: Variant) -> Array:
@@ -51,6 +61,7 @@ func _compile_list(raw: Variant) -> Array:
 			"rx": rx,
 			"en": String(item.get("en", "")),
 			"n": int(item.get("n", 0)),
+			"raw": bool(item.get("raw", false)),
 		})
 	return out
 
@@ -144,9 +155,11 @@ func _match_patterns(s: String, plist: Array, depth: int) -> String:
 			continue
 		var res := String(item["en"])
 		var n := int(item["n"])
+		# raw: захваченные группы — пользовательский текст (имя игрока), не UI-строки.
+		var raw_groups := bool(item.get("raw", false))
 		for idx in range(n):
 			var grp := m.get_string(idx + 1)
-			var tr_grp := grp if grp == s else translate_string(grp, depth + 1)
+			var tr_grp := grp if (raw_groups or grp == s) else translate_string(grp, depth + 1)
 			res = res.replace("{" + str(idx) + "}", tr_grp)
 		return res
 	return ""

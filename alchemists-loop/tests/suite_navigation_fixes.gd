@@ -81,6 +81,8 @@ static func _check_bottom_tab_consistency(g: Game) -> void:
 	var tops := {}
 	# Замер только на видимой вкладке: скрытый TabContainer не пересчитывает
 	# layout, поэтому открываем каждый раздел так же, как игрок — через нижний бар.
+static func _check_bottom_tab_consistency(g: Game) -> void:
+	var tops := {}
 	var nav_for := {Game.TAB_WORLD: 1, Game.TAB_RATING: 3, Game.TAB_TOOLS: 4}
 	for tab in [Game.TAB_WORLD, Game.TAB_RATING, Game.TAB_TOOLS]:
 		await _click_nav(g, int(nav_for[tab]))
@@ -91,10 +93,14 @@ static func _check_bottom_tab_consistency(g: Game) -> void:
 		var margin := page.get_child(0) as MarginContainer
 		Selftest.check("page uses shared top indent tab %d" % tab,
 			margin.get_theme_constant("margin_top") == int(UIStyle.PAGE_TOP_M))
+			margin.get_theme_constant("margin_top") == 10)
 		var first: Control = margin.get_child(0) as Control
 		while first is Container and first.get_child_count() > 0:
 			first = first.get_child(0) as Control
 		tops[tab] = first.global_position.y
+		Selftest.check("page heading uses shared typography tab %d" % tab,
+			first is Label and first.get_theme_font_size("font_size") == 13
+			and first.get_theme_font("font") == g._font_semi)
 	Selftest.check("world, rating and settings share one top line",
 		is_equal_approx(tops[Game.TAB_WORLD], tops[Game.TAB_RATING])
 		and is_equal_approx(tops[Game.TAB_WORLD], tops[Game.TAB_TOOLS]))
@@ -116,6 +122,29 @@ static func _check_bottom_tab_consistency(g: Game) -> void:
 	Selftest.check("friends frame is the tab frame",
 		friends_frame != null and tabs_frame != null
 		and friends_frame.texture == tabs_frame.texture)
+	var friends_margin := friends_panel.find_child("SocialMargin", true, false)
+	var friends_header: Control = null
+	if friends_margin != null:
+		friends_header = friends_margin.get_child(0).get_child(0) as Control
+	Selftest.check("friends header has no redundant close button",
+		friends_header != null and friends_header.find_children("*", "Button", true, false).is_empty())
+	var friends_title := friends_header.get_child(0) as Label if friends_header != null else null
+	Selftest.check("friends heading matches section typography",
+		friends_title != null and friends_title.get_theme_font_size("font_size") == 13
+		and friends_title.get_theme_font("font") == g._font_semi)
+	var translator := EnTranslation.new()
+	var headings := {
+		"МИР ЖИВЫХ ОТКРЫТИЙ": "WORLD OF LIVE DISCOVERIES",
+		"ГОНКА ПЕРВООТКРЫТИЙ": "DISCOVERY RACE",
+		"СВЕЖИЕ ОТКРЫТИЯ": "RECENT DISCOVERIES",
+		"ЗАЛ СЛАВЫ": "HALL OF FAME",
+		"ТОП ДЛИННЫХ ЦЕПОЧЕК": "LONGEST RECIPE CHAINS",
+		"ВСЕ ВЕЩЕСТВА": "ALL ELEMENTS",
+		"РОДОСЛОВНАЯ": "LINEAGE",
+	}
+	for source in headings:
+		Selftest.check("section heading remains translated: " + source,
+			translator.translate_string(source) == headings[source])
 	await _click_nav(g, 0)
 	for key in ["EtherChip", "ProfileEntry", "ShopBtn"]:
 		var button := g.find_child(key, true, false) as Button

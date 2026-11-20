@@ -1601,25 +1601,27 @@ func _close_sigil_craft_ritual() -> void:
 
 
 func _on_sigil_board_confirmed(craft: Dictionary) -> void:
-	if not main._engine._resource_mutation_allowed():
+	# Board lifetime is presentation-specific; debit and receipt guards are shared.
+	if _sigil_craft_screen == null or _sigil_craft_screen.is_queued_for_deletion():
 		return
-	# Повторный сигнал от закрытой доски (в том числе после sync-offline)
-	# и второй крафт до ответа не должны списывать ресурсы повторно.
-	if _sigil_craft_screen == null or _sigil_craft_screen.is_queued_for_deletion() \
-			or not _sigil_pending_craft.is_empty():
-		return
+	begin_sigil_craft(craft)
+
+
+func begin_sigil_craft(craft: Dictionary) -> bool:
+	if not main._engine._resource_mutation_allowed() or not _sigil_pending_craft.is_empty():
+		return false
 	var shortages := _sigil_shortages(craft)
 	if not shortages.is_empty():
 		main._engine.status_text = _sigil_shortage_text(shortages)
 		main._engine._refresh()
 		Sfx.error()
-		return
+		return false
 	var ether_cost: int = _sigil_ether_cost(craft)
 	if not main._engine._spend_ether(ether_cost):
 		main._engine.status_text = "Не хватает эфира: нужно %d." % ether_cost
 		main._engine._refresh()
 		Sfx.error()
-		return
+		return false
 	# Без await между проверкой всего рецепта и дебетом ингредиентов.
 	for ing in craft.get("ingredients", []):
 		var d := ing as Dictionary
@@ -1636,9 +1638,11 @@ func _on_sigil_board_confirmed(craft: Dictionary) -> void:
 	Sfx.craft_start()
 	var craft_id := str(craft.get("id", ""))
 	# Доска и ритуал меняются ДО запроса: отказ может прийти синхронно.
-	_close_sigil_craft_screen()
-	_show_sigil_craft_ritual(str(craft.get("rarity", "common")))
+	if not main.has_meta("progression_driver"):
+		_close_sigil_craft_screen()
+		_show_sigil_craft_ritual(str(craft.get("rarity", "common")))
 	main._sigil.craft_card(main._online._device_id, craft_id)
+	return true
 
 
 ## Сервер подтвердил крафт: показываем готовую карточку.
@@ -1653,6 +1657,8 @@ func _on_sigil_craft_completed(craft_id: String, rarity: String, llm_name: Strin
 	_sigil_receipt_reconcile = false
 	# Сохраняем результат
 	_pending_craft_result = {"craft_id": craft_id, "rarity": rarity, "llm_name": llm_name}
+	if main.has_meta("progression_driver"):
+		return
 
 	if _sigil_craft_ritual != null and is_instance_valid(_sigil_craft_ritual):
 		# Отдаём данные ритуалу.

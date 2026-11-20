@@ -4,7 +4,9 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
-from fastapi import APIRouter, Request, Response, Form
+from fastapi import APIRouter, Request, Response, Form, HTTPException
+import hashlib
+import beta_access
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -30,7 +32,7 @@ def _check_auth(username: str, password: str) -> bool:
 
 
 def _admin_open() -> bool:
-    return os.environ.get("ALCHEMY_DEBUG") == "1" or os.environ.get("ALCHEMY_ADMIN_OPEN") == "1"
+    return not beta_access.enabled() and (os.environ.get("ALCHEMY_DEBUG") == "1" or os.environ.get("ALCHEMY_ADMIN_OPEN") == "1")
 
 
 def _is_authenticated(request: Request) -> bool:
@@ -59,6 +61,59 @@ import time
 
 
 def setup_admin(app, get_db):
+    # Derive a per-session CSRF value with a process-local secret. It is never
+    # the bearer admin cookie itself, and becomes invalid after logout/restart.
+    csrf_key = secrets.token_bytes(32)
+
+    def csrf_for(request):
+        import hmac
+        return hmac.new(csrf_key, request.cookies.get(COOKIE_NAME, "").encode(), hashlib.sha256).hexdigest()
+
+    def beta_page(request, new_code=None):
+        if not beta_access.enabled():
+            raise HTTPException(status_code=404)
+        conn = get_db()
+        try:
+            rows = conn.execute(
+                "SELECT id,created_at,redeemed_at,revoked_at,subject FROM beta_invites ORDER BY id DESC LIMIT 500"
+            ).fetchall()
+            return templates.TemplateResponse("admin/beta.html", {
+                "request": request, "invites": rows, "new_code": new_code, "csrf_token": csrf_for(request),
+            }, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
+        finally:
+            conn.close()
+
+    def require_beta_csrf(request, token):
+        if not beta_access.enabled():
+            raise HTTPException(status_code=404)
+        if not _is_authenticated(request) or not token or not secrets.compare_digest(token.encode("utf-8"), csrf_for(request).encode("utf-8")):
+            raise HTTPException(status_code=403, detail="forbidden")
+
+    @app.get("/admin/beta", response_class=HTMLResponse)
+    @_require_auth
+    def admin_beta(request: Request):
+        return beta_page(request)
+
+    @app.post("/admin/beta/create", response_class=HTMLResponse)
+    def admin_beta_create(request: Request, csrf_token: str = Form("")):
+        require_beta_csrf(request, csrf_token)
+        conn = get_db()
+        try:
+            code = beta_access.create_invite(conn)
+        finally:
+            conn.close()
+        return beta_page(request, code)
+
+    @app.post("/admin/beta/{invite_id}/revoke", response_class=HTMLResponse)
+    def admin_beta_revoke(request: Request, invite_id: int, csrf_token: str = Form("")):
+        require_beta_csrf(request, csrf_token)
+        conn = get_db()
+        try:
+            beta_access.revoke_invite(conn, invite_id)
+        finally:
+            conn.close()
+        return beta_page(request)
+
     @app.get("/admin/login", response_class=HTMLResponse)
     def admin_login_page(request: Request):
         return templates.TemplateResponse("admin/login.html", {"request": request, "error": None})
@@ -73,7 +128,8 @@ def setup_admin(app, get_db):
             session_id = secrets.token_urlsafe(32)
             _sessions[session_id] = time.time()
             response = RedirectResponse("/admin", status_code=303)
-            response.set_cookie(COOKIE_NAME, session_id, max_age=COOKIE_MAX_AGE, httponly=True)
+            response.set_cookie(COOKIE_NAME, session_id, max_age=COOKIE_MAX_AGE,
+                                httponly=True, secure=beta_access.enabled(), samesite="strict" if beta_access.enabled() else "lax")
             return response
         return templates.TemplateResponse(
             "admin/login.html", {"request": request, "error": "Неверный логин или пароль"}

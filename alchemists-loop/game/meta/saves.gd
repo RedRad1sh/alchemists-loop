@@ -37,6 +37,13 @@ var _save_frozen := false
 # награды). Заморозка в единственной точке записи — единственный способ
 # гарантированно не пересоздать удалённый файл старым состоянием.
 
+# Язык в сейве — выбор игрока из UserData, а не активная локаль: CLI-оверрайд
+# --lang временный (persist=false) и не должен переживать перезапуск через сейв.
+func _saved_locale() -> String:
+	if UserData != null and UserData.has_method("get_locale"):
+		return UserData.get_locale()
+	return Locale.get_locale_code() if Locale != null else "ru"
+
 func _save_game() -> bool:
 	if _save_frozen:
 		return false
@@ -54,7 +61,7 @@ func _save_game() -> bool:
 	# This is the authoritative online boundary, not a timer/frame callback.
 	# Build the watermark with the resources; publish it in memory only after IO.
 	var workshop_state := g._workshop.export_state()
-	var snapshot_ts := maxf(_timestamp(g._last_ts), _timestamp(Time.get_unix_time_from_system()))
+	var snapshot_ts := maxf(_timestamp(g._last_ts), _timestamp(g.game_now()))
 	snapshot_ts = maxf(snapshot_ts, _timestamp(workshop_state.get("last_simulated_at")))
 	if not g._workshop.is_read_only():
 		workshop_state["last_simulated_at"] = snapshot_ts
@@ -132,7 +139,7 @@ func _save_game() -> bool:
 		"last_ts": snapshot_ts,
 		"sage_gold": g._engine.sage_gold,
 		"journal": g._hub._log_events.slice(0, 20),
-		"locale": Locale.get_locale_code() if Locale != null else "ru",
+		"locale": _saved_locale(),
 		"music_on": Sfx.music_on,
 		"sfx_vol": Sfx.sfx_volume,
 		"music_vol": Sfx.music_volume,
@@ -763,17 +770,17 @@ func _advance_craft_job_offline(elapsed: float) -> Dictionary:
 	return {"steps": _return_craft_steps, "status": _return_craft_status}
 
 func _grant_offline() -> void:
-	if g._selftest or g._last_ts <= 0.0:
+	if (g._selftest and not g.game_clock.is_valid()) or g._last_ts <= 0.0:
 		return
-	var now := Time.get_unix_time_from_system()
+	var now := g.game_now()
 	_return_elapsed = maxf(0.0, now - g._last_ts)
 	var queues := _workshop_queues()
 	var frozen := _save_frozen
 	_save_frozen = true
 	# Exactly one absolute replay includes ether, spring, manual chain and lines.
 	var result: Dictionary = g._workshop_scheduler.replay_offline(g._last_ts, now)
+	result["retort"] = g._retort._queue_offline_replay(g._last_ts, now)
 	_project_workshop(result, queues)
-	g._retort._queue_offline_replay(g._last_ts, now)
 	g._last_ts = maxf(_timestamp(g._last_ts), maxf(_timestamp(result.get("consumed_until")), now))
 	if _return_ether > 0:
 		g._spirit._companion_react("offline", str(_return_ether))

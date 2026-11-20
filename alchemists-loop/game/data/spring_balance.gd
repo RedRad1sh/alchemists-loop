@@ -1,41 +1,35 @@
 extends RefCounted
 class_name SpringBalance
+# Compatibility facade: single source of balance tables is BalanceConfig.
 
-const VERSION := 1
-const SPEED := [
-	{"ether": 30,  "materials": {"stone": 12}},
-	{"ether": 45,  "materials": {"brick": 20}},
-	{"ether": 65,  "materials": {"metal": 16}},
-	{"ether": 85,  "materials": {"glass": 20, "obsidian": 8}},
-	{"ether": 105, "materials": {"crystal": 14}},
-	{"ether": 125, "materials": {"gold": 12}},
-	{"ether": 140, "materials": {"tool": 10, "crystal": 12}},
-]
-const VOLUME := [
-	{"ether": 30,  "materials": {"stone": 12}},
-	{"ether": 45,  "materials": {"clay": 18}},
-	{"ether": 60,  "materials": {"stone": 40}},
-	{"ether": 80,  "materials": {"metal": 18}},
-	{"ether": 100, "materials": {"glass": 22}},
-	{"ether": 120, "materials": {"crystal": 16}},
-	{"ether": 150, "materials": {"gold": 12, "tool": 10}},
-]
-const VOLUME_CAP := [100, 250, 600, 1500, 4000, 10000, 25000, 60000]
-const SOURCES := [
-	{"ether": 90,  "materials": {"metal": 25, "glass": 12},    "req": {"speed": 3}},
-	{"ether": 130, "materials": {"crystal": 20, "gold": 12},   "req": {"speed": 5}},
-	{"ether": 170, "materials": {"tool": 18, "crystal": 22},   "req": {"speed": 6}},
-]
-const OFFLINE := [
-	{"ether": 60,  "materials": {"brick": 30},                 "req": {"volume": 3}},
-	{"ether": 90,  "materials": {"metal": 20, "glass": 14},    "req": {"volume": 4}},
-	{"ether": 120, "materials": {"crystal": 18, "gold": 12},   "req": {"volume": 5}},
-]
-const OFFLINE_WINDOW_SEC := [300.0, 3600.0, 14400.0, 43200.0]
-const MIN_INTERVAL := 0.5
-const SPEED_FACTOR := 0.85
-const PRESTIGE_KEEP_LEVEL := 3
-const MATERIAL_TIER := {
-	"stone": 0, "clay": 0, "brick": 0, "metal": 1, "glass": 1,
-	"obsidian": 2, "crystal": 3, "gold": 3, "tool": 4,
-}
+const VERSION: int = BalanceConfig.BASELINE_DATA["spring"]["version"]
+const SPEED: Array = BalanceConfig.BASELINE_DATA["spring"]["speed"]
+const VOLUME: Array = BalanceConfig.BASELINE_DATA["spring"]["volume"]
+const VOLUME_CAP: Array = BalanceConfig.BASELINE_DATA["spring"]["volume_cap"]
+const SOURCES: Array = BalanceConfig.BASELINE_DATA["spring"]["sources"]
+const OFFLINE: Array = BalanceConfig.BASELINE_DATA["spring"]["offline"]
+const OFFLINE_WINDOW_SEC: Array = BalanceConfig.BASELINE_DATA["spring"]["offline_window_sec"]
+const MIN_INTERVAL: float = BalanceConfig.BASELINE_DATA["spring"]["min_interval"]
+const SPEED_FACTOR: float = BalanceConfig.BASELINE_DATA["spring"]["speed_factor"]
+const PRESTIGE_KEEP_LEVEL: int = BalanceConfig.BASELINE_DATA["prestige"]["spring_keep_level"]
+const MATERIAL_TIER: Dictionary = BalanceConfig.BASELINE_DATA["spring"]["material_tier"]
+
+
+static func axis_table(profile: BalanceProfile, axis: String) -> Array:
+	var p: BalanceProfile = profile if profile != null else BalanceConfig.baseline()
+	match axis:
+		"speed": return p.get_value("spring.speed", []) as Array
+		"volume": return p.get_value("spring.volume", []) as Array
+		"sources": return p.get_value("spring.sources", []) as Array
+		"offline": return p.get_value("spring.offline", []) as Array
+		_: return []
+
+
+static func volume_cap(profile: BalanceProfile) -> Array:
+	var p: BalanceProfile = profile if profile != null else BalanceConfig.baseline()
+	return p.get_value("spring.volume_cap", []) as Array
+
+
+static func offline_windows(profile: BalanceProfile) -> Array:
+	var p: BalanceProfile = profile if profile != null else BalanceConfig.baseline()
+	return p.get_value("spring.offline_window_sec", []) as Array

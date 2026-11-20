@@ -267,7 +267,7 @@ func _req_missing(price: Dictionary) -> String:
 
 
 func _refresh() -> void:
-	if _game == null:
+	if _game == null or (_game._selftest and _sprite == null):
 		return
 	var e = _game._engine
 	var stage := SpringSprite.form_stage(e.spring_levels)

@@ -41,6 +41,7 @@ var _rating_me: Label = null
 var _rating_cache: Dictionary = {}
 var _rating_cache_at_ms := 0
 var _pending_requests: Dictionary = {}
+var _discovery_transport: Callable = Callable()
 # U11 (T14): корреляция запрос↔ответ. Pending хранится словарём
 # pair_key → {"a": String, "b": String, "experiment": bool, "at": int}
 # («at» — Time.get_ticks_msec на момент вставки). Инварианты:
@@ -425,8 +426,20 @@ func _grant_local_acquisition(slug: String) -> Array:
 ## -> {"ok": bool, "reason": "" | "offline" | "cooldown" | "fog" | "busy",
 ##     "retry_in": float}  — reason нужен вызывающему, чтобы объяснить игроку,
 ##     почему мир не спросили.
+func _discovery_available() -> bool:
+	return _discovery_transport.is_valid() or (_net_enabled and Net.is_available())
+
+
+func set_discovery_transport(transport: Callable) -> void:
+	_discovery_transport = transport
+
+
+func clear_discovery_transport() -> void:
+	_discovery_transport = Callable()
+
+
 func _try_net_candidate(a: String, b: String, manual: bool = false) -> Dictionary:
-	if not _net_enabled or not Net.is_available():
+	if not _discovery_available():
 		return {"ok": false, "reason": "offline", "retry_in": 0.0}
 	var key := g._pair_key(a, b)
 	var now := Time.get_ticks_msec() / 1000.0
@@ -460,7 +473,7 @@ func _start_experiment(a: String, b: String) -> bool:
 	резерват сам, выдумывать новый элемент ему не нужно (дефект 2026-10-15)."""
 	var recipe := _find_recipe(a, b)
 	if recipe.is_empty():
-		if not _net_enabled or not Net.is_available():
+		if not _discovery_available():
 			var message := ("Эксперимент требует связи с миром: "
 				+ "новый элемент нельзя создать офлайн.")
 			_set_status(message)
@@ -486,7 +499,11 @@ func _start_experiment(a: String, b: String) -> bool:
 		return false
 	if not recipe.is_empty():
 		var output := String(recipe["out"])
+		var first_open := not g._engine.inventory.has(output)
 		g._engine._experiment_succeeded(output, a, b)
+		if first_open:
+			g._engine._grant_first_open(output)
+		g._saves._save_game()
 		_set_status("Эксперимент удался: %s + %s = %s." % [_item_name(a), _item_name(b), _item_name(output)])
 		_toast("Мир уже знает эту пару: %s получен без запроса." % _item_name(output),
 			NoticeKind.INFO, 2.5)
@@ -498,7 +515,10 @@ func _start_experiment(a: String, b: String) -> bool:
 		_toast("Не удалось отправить эксперимент. Ресурсы возвращены.",
 			NoticeKind.ERROR)
 		return false
-	Net.check_pair(a, b, _net_nick, _device_id, true)
+	if _discovery_transport.is_valid():
+		_discovery_transport.call(a, b, true)
+	else:
+		Net.check_pair(a, b, _net_nick, _device_id, true)
 	_set_status("Эксперимент начат: %s + %s." % [_item_name(a), _item_name(b)])
 	_toast("Эксперимент отправлен в мир", NoticeKind.INFO, 2.5)
 	_haptic_medium()
@@ -978,7 +998,8 @@ func _forget_net_identity() -> void:
 func _retry_pending_account_delete(net: Object = null) -> void:
 	if net == null:
 		net = Net
-	for pending in UserData.get_account_delete_pending_ids():
+	var pending_ids: Array = BetaAccess.pending_deletion_ids() if BetaAccess.enabled else UserData.get_account_delete_pending_ids()
+	for pending in pending_ids:
 		net.delete_account(pending)
 
 func _on_account_delete_result(result: Dictionary) -> void:

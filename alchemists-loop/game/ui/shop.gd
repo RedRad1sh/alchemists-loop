@@ -178,6 +178,8 @@ func _rebuild() -> void:
 			continue
 		var product: Dictionary = raw
 		_list.add_child(_product_row(product))
+	if not Monetization.ads_available:
+		return
 	var divider := HSeparator.new()
 	_list.add_child(divider)
 	var ads_title := g._label("Награды за просмотр по желанию", 14)
@@ -194,7 +196,7 @@ func _product_row(product: Dictionary) -> Control:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 3)
 	var title := String(product.get("title", product.get("id", "Товар")))
-	var price := String(product.get("price_hint", "цена в магазине"))
+	var price := "тест · без оплаты" if BetaAccess.enabled else String(product.get("price_hint", "цена в магазине"))
 	var button := g._small_button("Купить · %s" % price, Vector2(0, 42), 1)
 	var product_id := String(product.get("id", ""))
 	if Monetization.is_product_owned(product_id):
@@ -303,7 +305,7 @@ func _delete_data() -> void:
 	# #8: маркер незавершённого серверного удаления переживает вайп. Если он
 	# остался (сервер был недоступен в прошлый раз) — повторный нажим шлёт
 	# DELETE по сохранённому device_id, а не по уже стёртой локальной идентичности.
-	var pending := UserData.get_account_delete_pending_ids()
+	var pending: Array = BetaAccess.pending_deletion_ids() if BetaAccess.enabled else UserData.get_account_delete_pending_ids()
 	if not pending.is_empty() and g._online._device_id == "":
 		# Вайп уже прошёл в этой сессии — остаётся только повтор серверной части.
 		# Не гейтим _net_enabled: вайп его уже сбросил. Статус ставим ДО вызова —
@@ -320,12 +322,22 @@ func _delete_data() -> void:
 		_status.text = "Будут удалены локальный прогресс, согласия и ID установки. Мировые вещества останутся, авторство будет анонимизировано сервером. На устройстве сохранится журнал уже выданных покупок (отпечаток чека, SKU и время) — это платёжная защита от повторной выдачи, а не прогресс."
 		return
 	var device_id := g._online._device_id
-	if device_id != "":
+	if device_id != "" and BetaAccess.enabled:
+		if not BetaAccess.prepare_deletion(device_id):
+			_status.text = "Не удалось сохранить запрос удаления. Данные не удалены; проверь свободное место и повтори."
+			if BetaAccess.token == "" and BetaAccess.device_id != "":
+				_status.text = "Для удаления серверных данных сначала восстанови beta-доступ по новому приглашению."
+			return
+		if BetaAccess.deletion_token(device_id) == "":
+			device_id = ""
+	if device_id != "" and not BetaAccess.enabled:
 		UserData.mark_account_delete_pending(device_id)
 	if g._online._net_enabled and device_id != "":
 		Net.delete_account(device_id)
 	g._saves._delete_local_save()
 	UserData.delete_all_local_data()
+	if BetaAccess.enabled:
+		BetaAccess.clear_credentials()
 	for path in [LOCAL_EXPORT_PATH, SERVER_EXPORT_PATH]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
