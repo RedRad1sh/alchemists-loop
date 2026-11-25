@@ -33,6 +33,8 @@ const DEFAULT_BASE := "http://127.0.0.1:8080/api"
 
 signal pair_result(pair_key: String, result: Dictionary)
 signal discover_result(pair_key: String, result: Dictionary)
+signal experiment_target_sync_result(result: Dictionary, sync_nonce: String)
+signal experiment_target_result(request_id: String, pair_key: String, result: Dictionary)
 signal world_result(result: Dictionary)
 signal hall_result(result: Dictionary)
 signal events_result(result: Dictionary)
@@ -143,6 +145,24 @@ func discover(a: String, b: String, nick: String, device_id: String, experiment 
 	_enqueue({
 		"kind": "discover", "pair_key": _pair_key(a, b),
 		"body": {"a": a, "b": b, "nick": nick, "device_id": device_id, "experiment": experiment},
+	})
+
+func experiment_target_sync(device_id: String, nick: String, sync_nonce: String = "") -> void:
+	var request_nonce := sync_nonce
+	if request_nonce == "":
+		request_nonce = "%d-%d" % [Time.get_ticks_usec(), randi()]
+	_enqueue({
+		"kind": "experiment-target-sync", "path": "/experiment/target",
+		"body": {"device_id": device_id, "nick": nick, "sync_nonce": request_nonce},
+	})
+
+func experiment_target_attempt(a: String, b: String, nick: String, device_id: String,
+		target_id: String, request_id: String) -> void:
+	_enqueue({
+		"kind": "experiment-target-attempt", "path": "/experiment/attempt",
+		"pair_key": _pair_key(a, b),
+		"body": {"a": a, "b": b, "nick": nick, "device_id": device_id,
+			"target_id": target_id, "request_id": request_id},
 	})
 
 func world(page: int = 1) -> void:
@@ -625,6 +645,13 @@ func _dispatch(req: Dictionary, parsed: Dictionary) -> void:
 			pair_result.emit(String(req["pair_key"]), parsed)
 		"discover":
 			discover_result.emit(String(req["pair_key"]), parsed)
+		"experiment-target-sync":
+			var body := req.get("body", {}) as Dictionary
+			experiment_target_sync_result.emit(parsed, String(body.get("sync_nonce", "")))
+		"experiment-target-attempt":
+			var body := req.get("body", {}) as Dictionary
+			experiment_target_result.emit(String(body.get("request_id", "")),
+				String(req.get("pair_key", "")), parsed)
 		"world":
 			world_result.emit(parsed)
 		"hall":

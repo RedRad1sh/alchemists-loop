@@ -79,7 +79,6 @@ const EXPERIMENT_ARITY_MAX := Balance.EXPERIMENT_ARITY_MAX
 const EXPERIMENT_COOLDOWN_SEC := Balance.EXPERIMENT_COOLDOWN_SEC
 const EXPERIMENT_DAILY_LIMIT := Balance.EXPERIMENT_DAILY_LIMIT
 const EXPERIMENT_COST := Balance.EXPERIMENT_COST
-const EXPERIMENT_FAILURE_REFUND := Balance.EXPERIMENT_FAILURE_REFUND
 const CRAFT_STAGE_OPERATIONS := Balance.CRAFT_STAGE_OPERATIONS
 const MASTERY_STAGE_RANKS := Balance.MASTERY_STAGE_RANKS
 const MASTERY_RETORT_SPEED := Balance.MASTERY_RETORT_SPEED
@@ -887,6 +886,8 @@ func _ready() -> void:
 		_online._device_id = _online._load_device_id()
 		Net.pair_result.connect(_online._on_net_pair_result)
 		Net.discover_result.connect(_online._on_net_discover_result)
+		Net.experiment_target_sync_result.connect(_online._on_experiment_target_sync_result)
+		Net.experiment_target_result.connect(_online._on_experiment_target_result)
 		Net.world_result.connect(_online._on_net_world_result)
 		Net.hall_result.connect(_online._on_net_hall_result)
 		Net.events_result.connect(_online._on_net_events_result)
@@ -1647,10 +1648,7 @@ func _init_new_game() -> bool:
 	_engine._experiment_day = Time.get_date_string_from_system()
 	_engine._experiment_count = 0
 	_engine._experiment_last_at = 0.0
-	_engine._experiment_pending_pair.clear()
-	# U11 (T14): сброс мира аннулирует и мир-запросы в полёте — их ответы
-	# больше не должны применяться к новому миру (иначе записи ждали бы TTL).
-	_online._pending_requests.clear()
+	_online._reset_pending_experiment_state()
 	# Квитанция незакрытого сигильного крафта — тоже часть старого мира.
 	_sigil_ui._sigil_pending_craft = {}
 	_sigil_ui._pending_craft_result = {}
@@ -1766,10 +1764,9 @@ func _build_ui() -> void:
 
 	var tabs := TabContainer.new()
 	tabs.name = "Tabs"
-	# TabContainer не должен рисоваться поверх фиксированной нижней панели.
-	# BrewBar добавлен после Margin/Root и при одинаковом z-уровне остаётся
-	# выше прокручиваемого содержимого лаборатории, но ниже modal popup.
-	tabs.z_index = 0
+	# Страницы выше декоративных предметов комнаты, но ниже нижней панели
+	# и модалок: цель и контролы не должны исчезать за доской контрактов.
+	tabs.z_index = 1
 	_tabs_ref = tabs
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	# Нижняя навигация: QTE-событие не должно появляться поверх вкладок (док §7).
@@ -1969,8 +1966,10 @@ func _on_tab_changed(index: int) -> void:
 	UIStyle.set_tabs_panel_bare(_tabs_ref, index == TAB_EXPERIMENT)
 	if _rooms != null:
 		_rooms.set_scene_visible(index == TAB_EXPERIMENT)
-	if index == TAB_EXPERIMENT and _rooms != null:
-		_rooms.refresh_unlocks()
+	if index == TAB_EXPERIMENT:
+		if _rooms != null:
+			_rooms.refresh_unlocks()
+		_online._sync_personal_target()
 	if index == TAB_WORLD:
 		_refetch_world()
 		_resonance._fetch_echoes()

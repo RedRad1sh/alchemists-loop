@@ -115,6 +115,8 @@ func _initialize() -> void:
 func _run_tests() -> void:
 	_test_default_scenario_parses()
 	_test_snapshot_shape_and_isolation()
+	_test_personal_experiment_snapshot_and_goal()
+	_test_personal_experiment_outcome_validation()
 	_test_sigil_craft_ids_normalize_to_card_ids()
 	_test_run_executes_injected_segment_hook()
 	_test_signed_deep_delta()
@@ -124,6 +126,7 @@ func _run_tests() -> void:
 	_test_run_report_shape()
 	await _test_real_action_delay_and_contract_claim()
 	await _test_real_active_session_policy()
+	await _test_personal_experiment_calibration()
 	await _test_active_session_budget_boundary()
 	await _test_real_offline_segment()
 	print("PROGRESSION_SCENARIO_TEST checks=%d failures=%d" % [_checks, _failures])
@@ -162,7 +165,7 @@ func _test_snapshot_shape_and_isolation() -> void:
 	var expected_fields := [
 		"local_discovered_ids", "local_discovered_count", "known_recipe_count",
 		"ether", "ether_cap", "ether_overflow", "inventory", "upgrade_levels",
-		"workshop", "retort", "sigils", "prestige", "gold", "clock"
+		"workshop", "retort", "sigils", "personal_experiment", "prestige", "gold", "clock"
 	]
 	var fields_present: bool = true
 	for field in expected_fields:
@@ -192,6 +195,65 @@ func _test_snapshot_shape_and_isolation() -> void:
 		and after.workshop.queues[0].queue.size() == 1
 		and after.retort.essences["fire-0"] == 3
 		and after.sigils.copies["card_common"] == 2)
+
+
+func _test_personal_experiment_snapshot_and_goal() -> void:
+	var fake := FakeGame.new()
+	fake._engine.inventory = {"fire": 0, "water": 0}
+	var target := {
+		"id": "pt-calibration", "kind": "llm", "name": "Скрытая цель", "status": "active",
+		"attempts": 3, "successful_steps": 2, "spent_ether": 34,
+		"source_pair": ["fire", "water"], "seed": 9182, "prompt": "hidden",
+		"evaluator_explanation": "hidden",
+	}
+	var game: Dictionary = {
+		"_engine": fake._engine, "_online": {"_target_state": target},
+		"ITEMS": fake.ITEMS, "RECIPES": [], "_workshop": fake._workshop,
+		"_retort": fake._retort, "_sigil": fake._sigil,
+	}
+	var snapshot: Dictionary = Scenario.snapshot(game)
+	var personal: Dictionary = snapshot.get("personal_experiment", {})
+	var expected_keys := ["target_kind", "target_status", "successful_steps", "spent_ether", "attempts"]
+	var keys_match: bool = personal.size() == expected_keys.size()
+	for key in expected_keys:
+		keys_match = keys_match and personal.has(key)
+	_check("personal experiment snapshot exposes only allowed target fields", keys_match
+		and personal.get("target_kind") == "llm" and personal.get("target_status") == "active"
+		and personal.get("successful_steps") == 2 and personal.get("spent_ether") == 34
+		and personal.get("attempts") == 3)
+	personal["attempts"] = 999
+	_check("personal experiment snapshot is isolated from authoritative target state",
+		int(Scenario.snapshot(game).get("personal_experiment", {}).get("attempts", 0)) == 3)
+	var profile := {"personal_experiment": {"enabled": true, "cost": 12}}
+	var goals: Array = Scenario.next_goals(game, profile)
+	var personal_goal: Dictionary = {}
+	for goal_value in goals:
+		if goal_value is Dictionary and goal_value.get("id") == "personal-experiment/pt-calibration":
+			personal_goal = goal_value
+			break
+	_check("active personal target goal ignores zero input stock", not personal_goal.is_empty()
+		and personal_goal.get("kind") == "personal_experiment" and personal_goal.get("available") == true
+		and personal_goal.get("reason") == "available" and personal_goal.get("missing", {}).is_empty())
+	target["status"] = "completed"
+	var completed_goals: Array = Scenario.next_goals(game, profile)
+	var completed_goal_visible := false
+	for goal_value in completed_goals:
+		if goal_value is Dictionary and goal_value.get("id") == "personal-experiment/pt-calibration":
+			completed_goal_visible = true
+			break
+	_check("completed personal target does not offer another immediate attempt", not completed_goal_visible)
+
+
+func _test_personal_experiment_outcome_validation() -> void:
+	var valid := {"scenario": 1, "segments": [{"kind": "active", "seconds": 2.0,
+		"personal_experiment_outcomes": [
+			{"status": "success", "output": "steam", "cost": 12, "request_id": "valid-success"},
+			{"status": "unavailable", "request_id": "valid-unavailable"},
+		]}]}
+	_check("personal outcome hook accepts success and technical failure", Scenario.parse(valid).get("valid", false))
+	var malformed := {"scenario": 1, "segments": [{"kind": "active", "seconds": 2.0,
+		"personal_experiment_outcomes": [{"status": "success", "output": "", "cost": 12}]}]}
+	_check("personal outcome hook rejects malformed success before execution", not Scenario.parse(malformed).get("valid", false))
 
 
 func _test_sigil_craft_ids_normalize_to_card_ids() -> void:
@@ -472,6 +534,100 @@ func _test_real_active_session_policy() -> void:
 	await process_frame
 
 
+func _test_personal_experiment_calibration() -> void:
+	var scene: PackedScene = load("res://main.tscn")
+	var game: Node = scene.instantiate()
+	game.set_meta("progression_driver", true)
+	game.game_clock = func(): return 1794614400.0
+	game.balance = BalanceConfig.baseline()
+	game.SAVE_PATH = "user://progression_scenario_personal_test_save.json"
+	game.TEMP_PATH = "user://progression_scenario_personal_test_save.tmp"
+	game.BACKUP_PATH = "user://progression_scenario_personal_test_save.bak"
+	root.add_child(game)
+	await process_frame
+	game.set_process(false)
+	var clock: RefCounted = load("res://tests/progression_clock.gd").new(game)
+	clock.set_virtual_epoch(1794614400.0)
+	game._engine.inventory = {"fire": 4, "water": 3}
+	game._engine.ether = 100
+	game._engine.ether_overflow = 0
+	game._engine._experiment_last_at = 0.0
+	game._online._target_state = {
+		"id": "pt-calibration", "kind": "llm", "name": "Скрытая цель", "status": "active",
+		"cycle_week": "2026-W48", "attempts": 3, "successful_steps": 2, "spent_ether": 34,
+		"source_pair": ["fire", "water"], "seed": 9182, "prompt": "hidden",
+		"evaluator_explanation": "hidden",
+	}
+	var profile := {"player": {"action_seconds": 1.0},
+		"personal_experiment": {"enabled": true, "cost": 12, "success_only_ether": true,
+			"consume_reagents": false, "world_target_share": 0.8, "llm_target_share": 0.2,
+			"frontier_empty_llm_share": 1.0}}
+	var strategy_script: Script = load("res://tests/progression_strategy.gd")
+	var world_plan: Dictionary = strategy_script.call("personal_target_plan",
+		"world-fixture", "2026-W48", 0, ["stone"])
+	var llm_plan: Dictionary = strategy_script.call("personal_target_plan",
+		"llm-fixture", "2026-W48", 0, ["stone"])
+	var empty_plan: Dictionary = strategy_script.call("personal_target_plan",
+		"world-fixture", "2026-W48", 0, [])
+	_check("personal calibration profile covers 80/20 and empty-frontier LLM allocation",
+		world_plan.get("kind") == "world" and llm_plan.get("kind") == "llm"
+		and empty_plan.get("kind") == "llm")
+	var scenario := {"scenario": 1, "segments": [{"kind": "active", "seconds": 10.0,
+		"policy": "session_balanced", "targets": [], "personal_experiment_outcomes": [
+			{"status": "success", "output": "steam", "output_name": " скрытая\nцель ",
+				"result_kind": "created", "acquired": true, "cost": 12, "request_id": "calibration-success",
+				"target_id": "pt-calibration", "target_kind": "llm", "cycle_week": "2026-W48"},
+			{"status": "unavailable", "request_id": "calibration-unavailable",
+				"target_id": "pt-calibration", "target_kind": "llm", "cycle_week": "2026-W48"},
+		]}]}
+	var before: Dictionary = Scenario.snapshot(game, clock)
+	var report: Dictionary = Scenario.run(game, profile, 31, scenario, clock)
+	var segment: Dictionary = report.get("segments", [])[0]
+	var after: Dictionary = segment.get("after", {})
+	var counters: Dictionary = report.get("session", {}).get("counters", {})
+	var personal_events: Array = []
+	for event_value in report.get("session", {}).get("events", []):
+		if event_value is Dictionary and event_value.get("kind") == "personal_experiment":
+			personal_events.append(event_value)
+	var statuses: Array = []
+	var ether_delta := 0
+	var privacy_ok := true
+	for event_value in personal_events:
+		var event: Dictionary = event_value
+		statuses.append(String(event.get("status", "")))
+		ether_delta += int(event.get("ether_delta", 0))
+		for hidden_key in ["source_pair", "seed", "prompt", "evaluator_explanation"]:
+			privacy_ok = privacy_ok and not event.has(hidden_key)
+	_check("personal calibration reports one success and one failure",
+		int(counters.get("personal_experiment_attempts", -1)) == 2
+		and int(counters.get("personal_experiment_successes", -1)) == 1
+		and int(counters.get("personal_experiment_failures", -1)) == 1
+		and statuses == ["success", "unavailable"])
+	_check("personal calibration completes the exact fresh LLM target once",
+		int(counters.get("personal_experiment_completions", -1)) == 1
+		and after.get("personal_experiment", {}).get("target_status") == "completed"
+		and int(after.get("personal_experiment", {}).get("attempts", -1)) == 4
+		and int(after.get("personal_experiment", {}).get("successful_steps", -1)) == 3
+		and int(after.get("personal_experiment", {}).get("spent_ether", -1)) == 46)
+	_check("personal calibration events preserve target kind and signed success-only ether delta",
+		personal_events.size() == 2 and personal_events[0].get("target_kind") == "llm"
+		and personal_events[1].get("target_kind") == "llm" and ether_delta == -12 and privacy_ok)
+	_check("personal calibration consumes no reagents and grants exactly one output",
+		int(after.inventory.get("fire", 0)) == int(before.inventory.get("fire", 0))
+		and int(after.inventory.get("water", 0)) == int(before.inventory.get("water", 0))
+		and int(after.inventory.get("steam", 0)) == int(before.inventory.get("steam", 0)) + 1)
+	_check("personal calibration ledger has no unexplained resources",
+		segment.get("ledger", {}).get("unexplained_resources", []).is_empty()
+		and report.get("verdict") == "pass")
+	var personal_snapshot: Dictionary = after.get("personal_experiment", {})
+	_check("personal calibration snapshot never exposes hidden target internals",
+		personal_snapshot.size() == 5 and not personal_snapshot.has("source_pair")
+		and not personal_snapshot.has("seed") and not personal_snapshot.has("prompt")
+		and not personal_snapshot.has("evaluator_explanation"))
+	game.queue_free()
+	await process_frame
+
+
 func _test_active_session_budget_boundary() -> void:
 	var scene: PackedScene = load("res://main.tscn")
 	var game: Node = scene.instantiate()
@@ -572,6 +728,12 @@ func _test_run_report_shape() -> void:
 			fields_present = fields_present and segment.has(field)
 	_check("run returns scenario schema 1 and complete segment results", fields_present)
 	_check("run preserves the declared scenario timeline without mutating the fake game", report.get("before") == report.get("after"))
+	var legacy_counters: Dictionary = report.get("session", {}).get("counters", {})
+	_check("old scenarios emit zero personal experiment counters", legacy_counters.has("personal_experiment_attempts")
+		and legacy_counters.has("personal_experiment_successes") and legacy_counters.has("personal_experiment_failures")
+		and int(legacy_counters.get("personal_experiment_attempts", -1)) == 0
+		and int(legacy_counters.get("personal_experiment_successes", -1)) == 0
+		and int(legacy_counters.get("personal_experiment_failures", -1)) == 0)
 	_check("run is deterministic for the same fake state and seed", report == Scenario.run(FakeGame.new(), null, 17, scenario))
 
 

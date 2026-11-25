@@ -32,7 +32,13 @@ func _ready() -> void:
 
 	await load("res://tests/suite_navigation_fixes.gd")._check_bottom_tab_consistency(g)
 	g._social._seed_demo()
-
+	g._online._target_state = {
+		"id": "pt-ui-shot-target", "kind": "llm", "name": "Скрытая цель",
+		"hint": "Соедини привычное с неожиданным.", "status": "active",
+		"successful_steps": 2, "spent_ether": 34, "generation": 1,
+	}
+	g._online._target_view_state = ""
+	g._online._render_personal_target_state()
 	var original_scale := get_window().content_scale_size
 	var original_size := get_window().size
 	for dimensions in [Vector2i(540, 960), Vector2i(360, 800)]:
@@ -42,6 +48,57 @@ func _ready() -> void:
 			g._bottom_nav._on_pressed(tab)
 			await _settle()
 			await _capture("%s-%dx%d" % [tab, dimensions.x, dimensions.y])
+		g._screens.close()
+		g._social_ui.close()
+		g._tabs_ref.current_tab = Game.TAB_EXPERIMENT
+		await _settle()
+		g._online._target_view_state = ""
+		g._online._render_personal_target_state()
+		await _capture("experiment-room-%dx%d" % [dimensions.x, dimensions.y])
+		g._pages._open_cauldron_screen()
+		await _settle()
+		g._online._target_view_state = ""
+		g._online._render_personal_target_state()
+		var target_rect := g._pages._experiment_target_card.get_global_rect()
+		var pot_rect := g._pages._experiment_cauldron.get_global_rect()
+		var recipe_rect := g._pages._experiment_recipe_line.get_global_rect()
+		var clear_rect := g._pages._experiment_clear_button.get_global_rect()
+		var viewport_rect := get_viewport().get_visible_rect()
+		Selftest.check("personal target card and cauldron fit %dx%d" % [dimensions.x, dimensions.y],
+			viewport_rect.encloses(target_rect) and viewport_rect.encloses(pot_rect)
+			and target_rect.end.y <= pot_rect.position.y)
+		Selftest.check("personal target ribbon leaves cauldron controls clear %dx%d" % [dimensions.x, dimensions.y],
+			not target_rect.intersects(recipe_rect) and not target_rect.intersects(clear_rect))
+		await _capture("experiment-cauldron-%dx%d" % [dimensions.x, dimensions.y])
+		for part_name in ["PersonalTargetCard", "TargetHead", "TargetName", "TargetState", "TargetDetailsButton", "TargetSeal"]:
+			var part := g._pages._experiment_field.find_child(part_name, true, false) as Control
+			if part != null:
+				var part_text := ""
+				if part is Label:
+					part_text = (part as Label).text
+				print("UI_GEOM ", part_name, " rect=", part.get_global_rect(), " visible=", part.is_visible_in_tree(), " text=", part_text)
+		var details_toggle := g._pages._experiment_field.find_child("TargetDetailsButton", true, false) as Button
+		var details := g._pages._experiment_field.find_child("TargetDetails", true, false) as Control
+		print("UI_DETAILS_BEFORE ", dimensions, " rect=", details.get_global_rect(), " min=", details.get_combined_minimum_size(),
+				" offsets=", details.offset_left, ",", details.offset_top, ",", details.offset_right, ",", details.offset_bottom)
+		if details_toggle != null and details != null:
+			details_toggle.pressed.emit()
+			await _settle()
+			for part_name in ["TargetDetails", "TargetHint", "TargetStats", "IconCenter"]:
+				var part := g._pages._experiment_field.find_child(part_name, true, false) as Control
+				if part != null:
+					print("UI_GEOM ", part_name, " rect=", part.get_global_rect(), " min=", part.get_combined_minimum_size(),
+						" visible=", part.is_visible_in_tree(), " anchors=", part.anchor_left, ",", part.anchor_top, ",", part.anchor_right, ",", part.anchor_bottom,
+						" offsets=", part.offset_left, ",", part.offset_top, ",", part.offset_right, ",", part.offset_bottom,
+						" flags=", part.size_flags_horizontal, ",", part.size_flags_vertical)
+			Selftest.check("personal target details stay compact %dx%d" % [dimensions.x, dimensions.y],
+				details.visible and viewport_rect.encloses(details.get_global_rect())
+					and absf(details.size.y - g._pages.TARGET_DETAILS_H) <= 0.5)
+			await _capture("experiment-details-%dx%d" % [dimensions.x, dimensions.y])
+			details_toggle.pressed.emit()
+			await _settle()
+		g._screens.close()
+		await _settle()
 	get_window().content_scale_size = original_scale
 	get_window().size = original_size
 

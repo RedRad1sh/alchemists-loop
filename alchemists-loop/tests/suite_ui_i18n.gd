@@ -235,6 +235,50 @@ static func run(g: Game) -> void:
 	if not leaks.is_empty():
 		print("[FAIL-DIAG] live UI leaks: ", leaks.slice(0, 15))
 
+	var saved_target_for_locale: Dictionary = g._online._target_state.duplicate(true)
+	var saved_target_view_for_locale: String = String(g._online.get("_target_view_state"))
+	g._online._target_state = {
+		"id": "pt-i18n-target", "kind": "world", "name": "Огонь",
+		"hint": "Жар и пламя — первостихия.", "status": "active",
+		"successful_steps": 2, "spent_ether": 34, "generation": 1,
+	}
+	g._online.set("_target_view_state", "")
+	g._online.call("_render_personal_target_state")
+	locale_node.call("set_lang", "ru")
+	var locale_target_name := g._pages._experiment_field.find_child("TargetName", true, false) as Label
+	var locale_target_state := g._pages._experiment_field.find_child("TargetState", true, false) as Label
+	var locale_target_stats := g._pages._experiment_field.find_child("TargetStats", true, false) as Label
+	Selftest.check("i18n personal target switches to Russian on locale change",
+		locale_target_name != null and locale_target_name.text == "Огонь"
+		and locale_target_state != null and locale_target_state.text.to_lower().contains("актив")
+		and locale_target_stats != null and locale_target_stats.text == "Шагов: 2 · Эфира: 34")
+	locale_node.call("set_lang", "en")
+	Selftest.check("i18n personal target switches to English on locale change",
+		locale_target_name != null and locale_target_name.text == "Fire"
+		and locale_target_state != null and locale_target_state.text == "Active"
+		and locale_target_stats != null and locale_target_stats.text == "Steps: 2 · Ether: 34")
+	var target_state_leaks: Array = []
+	for target_status in ["", "completed", "waiting_next_slot", "conflict"]:
+		g._online._target_state["status"] = target_status
+		g._online.call("_render_personal_target_state")
+		if locale_target_state == null or _has_cyrillic(locale_target_state.text):
+			target_state_leaks.append(target_status)
+	g._online._target_state["status"] = "active"
+	for target_view in ["syncing", "offline", "target_unavailable"]:
+		g._online.set("_target_view_state", target_view)
+		g._online.call("_render_personal_target_state")
+		if locale_target_state == null or _has_cyrillic(locale_target_state.text):
+			target_state_leaks.append(target_view)
+	g._online.set("_target_view_state", "")
+	var locale_target_toggle := g._pages._experiment_field.find_child("TargetDetailsButton", true, false) as Button
+	if locale_target_toggle == null or _has_cyrillic(locale_target_toggle.atr(locale_target_toggle.tooltip_text)):
+		target_state_leaks.append("details_tooltip")
+	Selftest.check("i18n personal target ribbon states have English copy", target_state_leaks.is_empty())
+	if not target_state_leaks.is_empty():
+		print("[FAIL-DIAG] target ribbon leaks: ", target_state_leaks)
+	g._online._target_state = saved_target_for_locale
+	g._online.set("_target_view_state", saved_target_view_for_locale)
+	g._online.call("_render_personal_target_state")
 
 	# Сохранение и загрузка игры восстанавливают выбранный язык ("en" -> save -> reset to "ru" -> load -> "en").
 	g._saves._save_game()

@@ -2,5 +2,10 @@
   "schema": 1,
   "name": "baseline",
   "base": "baseline",
-  "overrides": {}
+  "overrides": {
+    "personal_experiment.cost": 12,
+    "personal_experiment.world_target_share": 0.8,
+    "personal_experiment.llm_target_share": 0.2,
+    "personal_experiment.frontier_empty_llm_share": 1.0
+  }
 }

@@ -4,7 +4,11 @@
   "segments": [
     {
       "kind": "active",
-      "seconds": 3600
+      "seconds": 3600,
+      "personal_experiment_outcomes": [
+        {"status": "success", "output": "steam", "cost": 12, "request_id": "calibration-success"},
+        {"status": "unavailable", "request_id": "calibration-unavailable"}
+      ]
     },
     {
       "kind": "offline",

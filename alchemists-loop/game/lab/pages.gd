@@ -59,6 +59,7 @@ var _experiment_hint_ids: Array[String] = []
 var _experiment_recent_ids: Array[String] = []
 var _experiment_play_right := 0.0
 var _experiment_status: Label = null
+var _experiment_target_card: Control = null
 var _experiment_recipe_line: Label = null
 var _experiment_clear_button: Button = null
 var _experiment_tokens: Array = []
@@ -87,6 +88,9 @@ const CAULDRON_MOUTH_UV := Vector2(0.5, 0.372)
 const CAULDRON_MOUTH_RADII := Vector2(0.320, 0.038)
 const CAULDRON_IDLE := Color(0.95, 0.64, 0.25, 0.92)
 const SCREEN_STRIP_H := 76.0
+const TARGET_CARD_TOP := 52.0
+const TARGET_CARD_H := 44.0
+const TARGET_DETAILS_H := 112.0
 const ROOM_IDLE_HINT := "Нажми на котёл, чтобы открыть лабораторию."
 const SCREEN_IDLE_HINT := "Разложи вещества на поле и перенеси нужные в котёл."
 
@@ -285,6 +289,139 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 	_experiment_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_experiment_field.add_child(_experiment_status)
 
+	_experiment_target_card = Control.new()
+	_experiment_target_card.name = "PersonalTargetCard"
+	_experiment_target_card.custom_minimum_size = Vector2(0, TARGET_CARD_H)
+	_experiment_target_card.mouse_filter = Control.MOUSE_FILTER_STOP
+	_experiment_target_card.clip_contents = false
+	_experiment_target_card.z_index = 3
+	_experiment_target_card.gui_input.connect(_on_personal_target_input)
+	_experiment_target_card.resized.connect(_layout_personal_target_card)
+	_experiment_field.add_child(_experiment_target_card)
+
+	var target_paper := NinePatchRect.new()
+	target_paper.name = "TargetPaper"
+	target_paper.texture = ContractCard.tex("paper_strip.png")
+	# Crop the transparent canvas padding, otherwise the sheet floats off-centre in its rect.
+	target_paper.region_rect = Rect2(7, 6, 281, 77)
+	# Torn ends keep their proportion at 44 px height (77 px source → ~0.57 scale).
+	target_paper.patch_margin_left = 24
+	target_paper.patch_margin_top = 0
+	target_paper.patch_margin_right = 24
+	target_paper.patch_margin_bottom = 0
+	target_paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	target_paper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_experiment_target_card.add_child(target_paper)
+
+	var target_pin := TextureRect.new()
+	target_pin.name = "TargetPin"
+	target_pin.texture = ContractCard.Kit.texture("19_brass_pin_tack.png")
+	target_pin.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	target_pin.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	target_pin.position = Vector2(5, -4)
+	target_pin.size = Vector2(14, 14)
+	target_pin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_experiment_target_card.add_child(target_pin)
+
+	var target_seal := TextureRect.new()
+	target_seal.name = "TargetSeal"
+	target_seal.texture = ContractCard.tex("seal_bronze.png")
+	target_seal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	target_seal.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	target_seal.position = Vector2(14, 7)
+	target_seal.size = Vector2(30, 30)
+	target_seal.pivot_offset = Vector2(15, 15)
+	target_seal.rotation_degrees = -7
+	target_seal.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_experiment_target_card.add_child(target_seal)
+
+	var target_head := HBoxContainer.new()
+	target_head.name = "TargetHead"
+	target_head.add_theme_constant_override("separation", 6)
+	target_head.mouse_filter = Control.MOUSE_FILTER_PASS
+	_experiment_target_card.add_child(target_head)
+
+	var target_name := g._label("Личная цель", 16)
+	target_name.name = "TargetName"
+	target_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	target_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	target_name.autowrap_mode = TextServer.AUTOWRAP_OFF
+	target_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	target_name.add_theme_color_override("font_color", UIStyle.PAPER_INK)
+	ContractCard.paper_font(target_name, true)
+	target_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	target_head.add_child(target_name)
+
+	var target_state := g._label("", 10)
+	target_state.name = "TargetState"
+	target_state.size_flags_horizontal = Control.SIZE_SHRINK_END
+	target_state.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	target_state.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	target_state.autowrap_mode = TextServer.AUTOWRAP_OFF
+	target_state.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	target_state.add_theme_color_override("font_color", Color(0.38, 0.22, 0.12))
+	if g._font_semi != null:
+		target_state.add_theme_font_override("font", g._font_semi)
+	target_state.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	target_head.add_child(target_state)
+
+	var target_toggle := Button.new()
+	target_toggle.name = "TargetDetailsButton"
+	target_toggle.custom_minimum_size = Vector2(30, 30)
+	target_toggle.focus_mode = Control.FOCUS_ALL
+	target_toggle.tooltip_text = "Подсказка и прогресс"
+	for state_name in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		target_toggle.add_theme_stylebox_override(state_name, StyleBoxEmpty.new())
+	target_toggle.add_theme_stylebox_override("focus", UIStyle.focus_ring())
+	UIIcon.into_button(target_toggle, "chevron_down", 20, UIStyle.PAPER_INK)
+	target_toggle.pressed.connect(_toggle_personal_target_details)
+	target_head.add_child(target_toggle)
+
+	var target_details := PanelContainer.new()
+	target_details.name = "TargetDetails"
+	target_details.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	target_details.visible = false
+	var details_style := StyleBoxTexture.new()
+	details_style.texture = ContractCard.tex("paper_note.png")
+	details_style.region_rect = Rect2(16, 15, 232, 144)
+	details_style.texture_margin_left = 18
+	details_style.texture_margin_top = 18
+	details_style.texture_margin_right = 18
+	details_style.texture_margin_bottom = 18
+	details_style.content_margin_left = 22
+	details_style.content_margin_top = 16
+	details_style.content_margin_right = 22
+	details_style.content_margin_bottom = 14
+	target_details.add_theme_stylebox_override("panel", details_style)
+	# Autowrap at a transient 1 px width inflates the minimum; Control never shrinks back on its own.
+	target_details.minimum_size_changed.connect(_layout_personal_target_card)
+	_experiment_target_card.add_child(target_details)
+
+	var target_details_body := VBoxContainer.new()
+	target_details_body.add_theme_constant_override("separation", 9)
+	target_details_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	target_details.add_child(target_details_body)
+
+	var target_hint := g._label("", 13)
+	target_hint.name = "TargetHint"
+	target_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	target_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	target_hint.custom_minimum_size = Vector2(0, 42)
+	target_hint.add_theme_color_override("font_color", UIStyle.PAPER_INK)
+	ContractCard.paper_font(target_hint)
+	target_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	target_details_body.add_child(target_hint)
+
+	var target_stats := g._label("", 12)
+	target_stats.name = "TargetStats"
+	target_stats.autowrap_mode = TextServer.AUTOWRAP_OFF
+	target_stats.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	target_stats.add_theme_color_override("font_color", Color(0.38, 0.22, 0.12))
+	ContractCard.paper_font(target_stats)
+	target_stats.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	target_details_body.add_child(target_stats)
+	_layout_personal_target_card()
+
 	# Котёл — часть картины комнаты: спрайт, живое варево в его устье и тап-зона.
 	_experiment_cauldron_art = TextureRect.new()
 	_experiment_cauldron_art.name = "CauldronArt"
@@ -391,7 +528,7 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 		mode_row.add_child(mode_btn)
 		_cauldron_mode_buttons[mode_key] = mode_btn
 
-	_experiment_picker_hint = g._label("Нажми на ячейку — вещество сразу появится на поле. Добавляй нужное количество.", 11)
+	_experiment_picker_hint = g._label("Нажми на вещество — оно появится на поле. Реагенты не расходуются · эфир только за успех.", 11)
 	# autowrap без нижней границы ширины считает минимум по одной букве: метка
 	# раздувала минимум листа на 5 строк и не оставляла места ни котлу, ни
 	# сетке. На широком полотне подсказка — одна строка.
@@ -473,6 +610,8 @@ func _build_experiment_location(page: VBoxContainer) -> void:
 	_experiment_field.resized.connect(_fit_experiment_overlay)
 	_refresh_experiment_location()
 	call_deferred("_fit_experiment_overlay")
+	if g._online.has_method("_render_personal_target_state"):
+		g._online.call("_render_personal_target_state")
 
 
 func _set_experiment_rect(control: Control, rect: Rect2) -> void:
@@ -488,6 +627,81 @@ func _set_experiment_rect(control: Control, rect: Rect2) -> void:
 	control.offset_bottom = rect.end.y
 
 
+func _fit_personal_target_card(field_size: Vector2) -> float:
+	if _experiment_target_card == null:
+		return TARGET_CARD_TOP
+	var card_w := maxf(1.0, minf(460.0, field_size.x - 24.0))
+	_set_experiment_rect(_experiment_target_card,
+		Rect2(floorf((field_size.x - card_w) * 0.5), TARGET_CARD_TOP, card_w, TARGET_CARD_H))
+	_layout_personal_target_card()
+	return TARGET_CARD_TOP + TARGET_CARD_H
+
+
+func _layout_personal_target_card() -> void:
+	if _experiment_target_card == null:
+		return
+	var width := _experiment_target_card.size.x
+	var head := _experiment_target_card.find_child("TargetHead", true, false) as Control
+	if head != null:
+		# Right inset clears the torn end of the strip so status/chevron sit on solid paper.
+		head.position = Vector2(52, 4)
+		head.size = Vector2(maxf(1.0, width - 52.0 - 26.0), 36)
+		_reserve_personal_target_state_width(head)
+	var details := _experiment_target_card.find_child("TargetDetails", true, false) as Control
+	if details != null:
+		details.position = Vector2(0, TARGET_CARD_H + 4)
+		details.size = Vector2(maxf(1.0, width), TARGET_DETAILS_H)
+
+
+# The expanding title would otherwise squeeze the shrink-end status to 1 px.
+func _reserve_personal_target_state_width(head: Control) -> void:
+	var state := head.find_child("TargetState", false, false) as Label
+	if state == null:
+		return
+	var font := state.get_theme_font("font")
+	var need := 0.0
+	if font != null and state.text != "":
+		need = ceilf(font.get_string_size(state.text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+				state.get_theme_font_size("font_size")).x)
+	var toggle := head.find_child("TargetDetailsButton", false, false) as Control
+	var toggle_w := toggle.get_combined_minimum_size().x if toggle != null else 0.0
+	var room := head.size.x - toggle_w - 2.0 * head.get_theme_constant("separation")
+	var width := minf(need, maxf(0.0, room * 0.45))
+	if not is_equal_approx(state.custom_minimum_size.x, width):
+		state.custom_minimum_size.x = width
+
+
+func _set_personal_target_details(opened: bool) -> void:
+	if _experiment_target_card == null:
+		return
+	var details := _experiment_target_card.find_child("TargetDetails", true, false) as Control
+	if details != null:
+		details.visible = opened
+	var icon := _experiment_target_card.find_child("IconCenter", true, false) as Control
+	if icon != null:
+		icon.pivot_offset = icon.size * 0.5
+		icon.rotation = PI if opened else 0.0
+	# The open note covers the recipe line and «Очистить»; hide them instead of overlapping.
+	_set_experiment_picker_field_chrome()
+
+
+func _toggle_personal_target_details() -> void:
+	if _experiment_target_card == null:
+		return
+	var details := _experiment_target_card.find_child("TargetDetails", true, false) as Control
+	_set_personal_target_details(details == null or not details.visible)
+
+
+func _collapse_personal_target_details() -> void:
+	_set_personal_target_details(false)
+
+
+# Touch arrives here as emulated mouse too; handling both would toggle twice per tap.
+func _on_personal_target_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_toggle_personal_target_details()
+
+
 func _set_experiment_picker_field_chrome() -> void:
 	var on_screen := _on_cauldron_screen()
 	_experiment_cauldron_art.visible = not on_screen
@@ -497,9 +711,15 @@ func _set_experiment_picker_field_chrome() -> void:
 	if not on_screen:
 		_experiment_drawer.hide()
 	var choosing := _experiment_drawer.visible
-	for c in [_experiment_status, _experiment_recipe_line, _experiment_clear_button]:
-		(c as Control).visible = on_screen and not choosing
+	var target_open := false
+	if _experiment_target_card != null:
+		var details := _experiment_target_card.find_child("TargetDetails", true, false) as Control
+		target_open = details != null and details.visible
+	_experiment_status.visible = on_screen and not choosing
+	for c in [_experiment_recipe_line, _experiment_clear_button]:
+		(c as Control).visible = on_screen and not choosing and not target_open
 	_experiment_reopen_button.visible = on_screen and not choosing
+	_experiment_target_card.visible = _cauldron_mode == "experiment" and not choosing
 	_experiment_cauldron.visible = not choosing
 	for token in _experiment_tokens:
 		if is_instance_valid(token):
@@ -561,28 +781,33 @@ func _fit_experiment_overlay() -> void:
 			_place_cauldron(cauldron_rect)
 		_set_experiment_rect(_experiment_status,
 			Rect2(12.0, 8.0, maxf(1.0, field_size.x - 24.0), 40.0))
+		var target_bottom := _fit_personal_target_card(field_size)
 		_set_experiment_rect(_experiment_recipe_line,
-			Rect2(14.0, 52.0, maxf(1.0, field_size.x - 28.0), 24.0))
+			Rect2(14.0, target_bottom + 8.0, maxf(1.0, field_size.x - 28.0), 24.0))
 		_set_experiment_rect(_experiment_clear_button,
-			Rect2(14.0, 84.0, 96.0, 38.0))
+			Rect2(14.0, target_bottom + 40.0, 96.0, 38.0))
 	_set_experiment_picker_field_chrome()
 
 
 func _fit_cauldron_screen(field_size: Vector2) -> void:
+	var target_bottom := _fit_personal_target_card(field_size)
+	var pot_top := target_bottom + 52.0
+	var pot_room := maxf(120.0, field_size.y - pot_top - 70.0)
 	var pot_size := Vector2(minf(270.0, field_size.x * 0.52),
-			minf(242.0, field_size.y * 0.32))
+			minf(242.0, pot_room))
+	var pot_y := pot_top + maxf(0.0, (pot_room - pot_size.y) * 0.5)
 	_experiment_cauldron.custom_minimum_size = Vector2.ZERO
 	_set_experiment_rect(_experiment_cauldron,
-			Rect2((field_size - pot_size) * 0.5, pot_size))
+			Rect2(Vector2((field_size.x - pot_size.x) * 0.5, pot_y), pot_size))
 	_experiment_picker_scroll.custom_minimum_size = Vector2(0, 96)
 	_experiment_filter_row.columns = 4 if field_size.x >= 420.0 else 2
 	_set_experiment_rect(_experiment_drawer, Rect2(Vector2.ZERO, field_size))
 	_set_experiment_rect(_experiment_status,
 			Rect2(18.0, 12.0, maxf(1.0, field_size.x - 36.0), 36.0))
 	_set_experiment_rect(_experiment_recipe_line,
-			Rect2(18.0, 50.0, maxf(1.0, field_size.x - 140.0), 24.0))
+			Rect2(18.0, target_bottom + 8.0, maxf(1.0, field_size.x - 140.0), 24.0))
 	_set_experiment_rect(_experiment_clear_button,
-			Rect2(field_size.x - 114.0, 46.0, 96.0, 38.0))
+			Rect2(field_size.x - 114.0, target_bottom + 4.0, 96.0, 38.0))
 	_set_experiment_rect(_experiment_reopen_button,
 			Rect2(field_size.x - 194.0, field_size.y - 60.0, 174.0, 44.0))
 	var bounds := Rect2(Vector2.ZERO, field_size)
@@ -591,12 +816,13 @@ func _fit_cauldron_screen(field_size: Vector2) -> void:
 			continue
 		token.position = Vector2(
 				clampf(token.position.x, 16.0, maxf(16.0, field_size.x - token.size.x - 16.0)),
-				clampf(token.position.y, 70.0, maxf(70.0, field_size.y - token.size.y - 70.0)))
+				clampf(token.position.y, pot_top, maxf(pot_top, field_size.y - token.size.y - 70.0)))
 
 
 func _show_experiment_drawer() -> void:
 	if not _on_cauldron_screen():
 		_open_cauldron_screen()
+	_collapse_personal_target_details()
 	_experiment_drawer.show()
 	_experiment_picker_scroll.scroll_vertical = 0
 	_refresh_experiment_drawer()
@@ -639,6 +865,8 @@ func _set_cauldron_mode(mode: String, audible := true) -> void:
 	if g._screens == null:
 		return
 	mode = "brew" if mode == "brew" else "experiment"
+	if mode == "experiment" and g._online != null and g._online.has_method("_sync_personal_target"):
+		g._online.call("_sync_personal_target")
 	var key := "brew" if mode == "brew" else "cauldron"
 	if g._screens.key() == key:
 		return
@@ -748,13 +976,33 @@ func _experiment_reagent_priority(item_id: String) -> int:
 	return recent if recent >= 0 else 1000
 
 
+func _experiment_known_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for item_id in Game.BASE_IDS:
+		if g.ITEMS.has(item_id) and not ids.has(item_id):
+			ids.append(item_id)
+	for raw_id in g._engine.inventory.keys():
+		var item_id := String(raw_id)
+		if g.ITEMS.has(item_id) and not ids.has(item_id):
+			ids.append(item_id)
+	for raw_def in g._engine.known_recipe_defs.values():
+		if raw_def is not Dictionary:
+			continue
+		var item_id := String((raw_def as Dictionary).get("out", ""))
+		if item_id != "" and g.ITEMS.has(item_id) and not ids.has(item_id):
+			ids.append(item_id)
+	for raw_id in g._online._server_elements.keys():
+		var item_id := String(raw_id)
+		if g.ITEMS.has(item_id) and not ids.has(item_id):
+			ids.append(item_id)
+	ids.sort()
+	return ids
+
+
 func _experiment_reagent_ids(apply_filter := true) -> Array[String]:
 	var ids: Array[String] = []
 	var query_active := _experiment_reagent_search != null and _experiment_normalize_search(_experiment_reagent_search.text) != ""
-	for raw_id in g._engine.inventory.keys():
-		var item_id := String(raw_id)
-		if int(g._engine.inventory.get(item_id, 0)) <= 0 or not g.ITEMS.has(item_id):
-			continue
+	for item_id in _experiment_known_ids():
 		if apply_filter and not _experiment_search_matches(item_id):
 			continue
 		if apply_filter and not query_active:
@@ -808,12 +1056,7 @@ func _remember_experiment_reagent(item_id: String) -> void:
 
 
 func _experiment_drawer_state_signature() -> String:
-	var open_ids: Array[String] = []
-	for raw_id in g._engine.inventory.keys():
-		var item_id := String(raw_id)
-		if int(g._engine.inventory.get(item_id, 0)) > 0 and g.ITEMS.has(item_id):
-			open_ids.append(item_id)
-	open_ids.sort()
+	var open_ids := _experiment_known_ids()
 	var query := _experiment_normalize_search(_experiment_reagent_search.text) if _experiment_reagent_search != null else ""
 	var recent := ",".join(_experiment_recent_ids) if _experiment_filter == "recent" else ""
 	return "%s|%s|%s|%s|%s" % [
@@ -884,19 +1127,8 @@ func _refresh_experiment_drawer() -> void:
 		_experiment_reagent_grid.add_child(cell)
 
 
-func _experiment_reserved(item_id: String) -> int:
-	var n := 0
-	for token in _experiment_tokens:
-		if is_instance_valid(token) and token.element_id == item_id:
-			n += 1
-	for in_cauldron in _experiment_cauldron_items:
-		if in_cauldron == item_id:
-			n += 1
-	return n
-
-
 func _experiment_can_take(item_id: String) -> bool:
-	return int(g._engine.inventory.get(item_id, 0)) > _experiment_reserved(item_id)
+	return _experiment_known_ids().has(item_id)
 
 
 func _select_experiment_item(item_id: String) -> void:
@@ -910,6 +1142,7 @@ func _on_experiment_source_tapped(_orb: ElementOrb, item_id: String) -> void:
 
 func _on_experiment_source_drag_started(_orb: ElementOrb, _at: Vector2, item_id: String) -> void:
 	_experiment_drag_source = item_id
+	_collapse_personal_target_details()
 	_experiment_status.text = "Перенеси «%s» в котёл или отпусти на поле." % g._online._item_name(item_id)
 
 
@@ -934,6 +1167,15 @@ func _experiment_field_local_rect(control: Control) -> Rect2:
 
 func _experiment_position_taken(candidate: Rect2, token_size: float) -> bool:
 	var padded := candidate.grow(10.0)
+	if _experiment_target_card != null and _experiment_target_card.visible:
+		var target_rect := _experiment_field_local_rect(_experiment_target_card).grow(8.0)
+		if padded.intersects(target_rect):
+			return true
+		var details := _experiment_target_card.find_child("TargetDetails", true, false) as Control
+		if details != null and details.visible:
+			var details_rect := _experiment_field_local_rect(details).grow(6.0)
+			if padded.intersects(details_rect):
+				return true
 	var cauldron_rect := _experiment_field_local_rect(_experiment_cauldron).grow(18.0)
 	if _experiment_cauldron != null and padded.intersects(cauldron_rect):
 		return true
@@ -950,7 +1192,7 @@ func _experiment_position_taken(candidate: Rect2, token_size: float) -> bool:
 func _experiment_token_position(token_size: float) -> Vector2:
 	var min_x := 10.0
 	var max_x := _experiment_field.size.x - token_size - 10.0
-	var min_y := SCREEN_STRIP_H + 6.0
+	var min_y := TARGET_CARD_TOP + TARGET_CARD_H + 52.0 if _on_cauldron_screen() else SCREEN_STRIP_H + 6.0
 	var max_y := _experiment_field.size.y - token_size - 70.0
 	if max_x < min_x or max_y < min_y:
 		return Vector2.INF
@@ -970,7 +1212,7 @@ func _experiment_token_position(token_size: float) -> Vector2:
 
 func _experiment_spawn_token(item_id: String) -> void:
 	if not _experiment_can_take(item_id):
-		_experiment_status.text = "В запасе нет свободной порции «%s»." % g._online._item_name(item_id)
+		_experiment_status.text = "«%s» ещё не открыто для эксперимента." % g._online._item_name(item_id)
 		return
 	if _experiment_field == null:
 		return
@@ -1005,6 +1247,7 @@ func _on_experiment_token_tapped(token: ElementOrb, _bound_token: ElementOrb) ->
 
 func _on_experiment_token_drag_started(token: ElementOrb, _at: Vector2) -> void:
 	_experiment_drag_token = token
+	_collapse_personal_target_details()
 	_experiment_status.text = "Несём «%s» к котлу…" % g._online._item_name(token.element_id)
 
 
@@ -1039,7 +1282,7 @@ func _experiment_add_to_cauldron(item_id: String) -> void:
 		_experiment_status.text = "Котёл готов. Дождись ответа или освободи его."
 		return
 	if not _experiment_can_take(item_id):
-		_experiment_status.text = "Для этого реагента не хватает запаса."
+		_experiment_status.text = "Это вещество ещё не открыто для эксперимента."
 		return
 	_remember_experiment_reagent(item_id)
 	_experiment_cauldron_items.append(item_id)
@@ -1079,10 +1322,9 @@ func _refresh_experiment_cauldron() -> void:
 func _experiment_clear_cauldron() -> void:
 	if _experiment_cauldron_items.is_empty():
 		return
-	var returned := _experiment_cauldron_items.size()
 	_experiment_cauldron_items.clear()
 	_refresh_experiment_cauldron()
-	_experiment_status.text = "Котёл очищен: %d реагент(а) снова доступны в выборе." % returned
+	_experiment_status.text = "Котёл очищен. Вещества в Эксперименте не расходуются."
 	Sfx.click()
 
 
@@ -1091,7 +1333,9 @@ func _experiment_launch_pair() -> void:
 		return
 	var a := _experiment_cauldron_items[0]
 	var b := _experiment_cauldron_items[1]
-	var check := g._engine._experiment_status(a, b)
+	var target_mode := String(g._online._target_state.get("status", "")) == "active" \
+		and String(g._online._target_state.get("id", "")) != ""
+	var check := g._engine._experiment_status(a, b, target_mode)
 	if not bool(check.get("ok", false)):
 		var reason := String(check.get("reason", "Эта пара пока недоступна."))
 		_experiment_hint_ids.clear()
@@ -1099,7 +1343,7 @@ func _experiment_launch_pair() -> void:
 			_experiment_filter = "recent"
 		_experiment_cauldron_items.clear()
 		_refresh_experiment_cauldron()
-		_experiment_status.text = reason + " Реагенты возвращены на панель."
+		_experiment_status.text = reason + " Пара не отправлена: эфир и реагенты не списаны."
 		_experiment_recipe_line.text = "Котёл свободен · выбери другую пару"
 		_refresh_experiment_drawer()
 		return
@@ -1110,7 +1354,7 @@ func _experiment_launch_pair() -> void:
 	_refresh_experiment_cauldron()
 	var started := g._online._start_experiment(a, b)
 	if started:
-		_experiment_status.text = "Светик раздувает огонь… сервер проверяет эту пару."
+		_experiment_status.text = "Светик раздувает огонь… эфир спишется только за выданный успешный результат."
 	else:
 		_experiment_cauldron_items = [a, b]
 		_refresh_experiment_cauldron()
@@ -1123,7 +1367,7 @@ func _refresh_experiment_location() -> void:
 	_refresh_experiment_drawer()
 	_refresh_experiment_cauldron()
 	if _experiment_status != null and g._engine._experiment_pending_pair.size() == 2:
-		_experiment_status.text = "Светик проверяет пару на сервере… реагенты пока зарезервированы."
+		_experiment_status.text = "Светик проверяет пару… реагенты не расходуются, эфир только за успех."
 
 
 func _build_world(page: VBoxContainer) -> void:

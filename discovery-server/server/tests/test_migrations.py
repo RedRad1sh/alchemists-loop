@@ -116,3 +116,20 @@ class TestRunner:
         monkeypatch.setattr(srv, "MIGRATIONS_DIR", str(tmp_path / "nope"))
         srv.init_db()
         assert _versions(srv) == []
+
+    def test_personal_allocation_migration_applies_to_existing_schema(self, tmp_path, monkeypatch):
+        srv = _srv(tmp_path, monkeypatch)
+        d = _migrations_dir(srv, monkeypatch, tmp_path)
+        name = "009_personal_experiment_allocations.sql"
+        source = os.path.join(os.path.dirname(srv.__file__), "migrations", name)
+        with open(source, encoding="utf-8") as migration:
+            (d / name).write_text(migration.read(), encoding="utf-8")
+        srv.init_db()
+        assert _versions(srv) == [(9, name)]
+        conn = srv.get_db()
+        try:
+            columns = {row[1] for row in conn.execute(
+                "PRAGMA table_info(personal_experiment_allocations)")}
+        finally:
+            conn.close()
+        assert columns == {"device_id", "sequence", "claim_token", "claimed_at"}

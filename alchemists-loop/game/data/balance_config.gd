@@ -32,9 +32,17 @@ const BASELINE_DATA := {
 		"cooldown_sec": 1.0,
 		"daily_limit": 200,
 		"cost": 12,
-		"failure_refund": 2,
 		"candidate_chance": 0.05,
 		"candidate_cooldown": 60.0,
+	},
+	"personal_experiment": {
+		"enabled": true,
+		"cost": 12,
+		"success_only_ether": true,
+		"consume_reagents": false,
+		"world_target_share": 0.8,
+		"llm_target_share": 0.2,
+		"frontier_empty_llm_share": 1.0,
 	},
 	"upgrades": {
 		"items": [

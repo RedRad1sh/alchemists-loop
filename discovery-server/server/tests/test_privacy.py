@@ -101,6 +101,10 @@ def test_account_export_and_delete_preserves_world(tmp_path, monkeypatch):
 # Колонки, которые после удаления аккаунта законно держат device_id: чек покупки
 # остаётся привязанным к устройству ради анти-реплея (повтор чека → 409).
 _DEVICE_COLUMNS_KEPT = {("receipts", "device_id")}
+_SEED_COLUMN_VALUES = {
+    ("personal_experiment_targets", "kind"): "world",
+    ("personal_experiment_targets", "status"): "active",
+}
 
 
 def _device_columns(conn):
@@ -120,6 +124,9 @@ def _seed_row(conn, table, device_col, device):
         if name == device_col:
             cols.append(name)
             vals.append(device)
+        elif (table, name) in _SEED_COLUMN_VALUES:
+            cols.append(name)
+            vals.append(_SEED_COLUMN_VALUES[(table, name)])
         elif pk == 1 and "INT" in (ctype or "").upper():
             continue
         elif (notnull or pk) and default is None:

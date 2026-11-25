@@ -899,9 +899,9 @@ func _start_experiment(a: String, b: String) -> bool:
 		return false
 
 	if not _register_pending_pair(a, b, true):
-		g._engine._finish_experiment_inputs(a, b, true)
+		g._engine._cancel_experiment(a, b)
 		_toast(
-			"Не удалось отправить эксперимент. Ресурсы возвращены.",
+			"Не удалось отправить эксперимент. Списания не было.",
 			NoticeKind.ERROR
 		)
 		return false

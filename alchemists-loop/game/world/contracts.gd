@@ -573,8 +573,8 @@ func on_brew(output: String, a: String, b: String, first_time: bool, source: Str
 
 # §1.2: вызывается из _experiment_succeeded и _experiment_failed, обе точки
 # защищены существующим гейтом _experiment_pending_pair, поэтому срабатывает
-# ровно один раз на подтверждённый эксперимент. _finish_experiment_inputs не
-# трогаем: он означает «вход возвращён», включая сетевой сбой (rule 14).
+# ровно один раз на подтверждённый эксперимент. Сетевой сбой только снимает
+# pending и не считается подтверждённой попыткой.
 func on_experiment(_a: String, _b: String, _success: bool) -> void:
 	ensure_period()
 	_bump("experiment", 1)
