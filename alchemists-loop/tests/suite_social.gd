@@ -20,6 +20,9 @@ static func run(g: Game) -> void:
 	await _thread(g)
 	_confirm(g)
 	_search_helpers(g)
+	_messaging_helpers(g)
+	_messaging_ui(g)
+	_search_wiring(g)
 	_send_failures(g)
 	_friend_buttons(g)
 	_refusal_422(g)
@@ -428,6 +431,242 @@ static func _search_helpers(g: Game) -> void:
 	Selftest.check("friend state text", SocialUI._friend_state_text("Николя", s) == "в друзьях"
 		and SocialUI._friend_state_text("Мирра", s) == "заявка отправлена"
 		and SocialUI._friend_state_text("Некто", s) == "в друзья")
+
+
+static func _messaging_helpers(_g: Game) -> void:
+	# Переработка мессенджинга: токен стикера, время, атрибуция превью,
+	# вердикт поиска. Мутации: вернуть body/id как есть (заглушка), снять
+	# проверку каталога в sticker_id, снять T/':'-guard в message_time,
+	# снять префикс «Вы: » в preview_line, снять found/nick-ветки verdict.
+	Selftest.check("sticker token roundtrip",
+		Social.sticker_id(Social.sticker_body("hi")) == "hi")
+	Selftest.check("sticker token rejects plain text",
+		Social.sticker_id("привет [sticker:hi]") == "" and Social.sticker_id("") == "")
+	Selftest.check("sticker token rejects unknown id",
+		Social.sticker_id("[sticker:nope]") == "")
+	Selftest.check("message time HH:MM",
+		Social.message_time("2026-11-12T07:05:00") == "07:05")
+	Selftest.check("message time empty on garbage",
+		Social.message_time("") == "" and Social.message_time("вчера") == "")
+	Selftest.check("preview attributes own last message",
+		Social.preview_line({"nick": "Мира", "last_msg_preview": "го",
+			"last_msg_from_me": true}) == "Вы: го")
+	Selftest.check("preview keeps peer text plain",
+		Social.preview_line({"nick": "Мира", "last_msg_preview": "го",
+			"last_msg_from_me": false}) == "го")
+	Selftest.check("preview sticker label",
+		Social.preview_line({"nick": "Мира", "last_msg_preview": "[sticker:hi]",
+			"last_msg_from_me": false}) == "Стикер")
+	Selftest.check("preview own sticker label",
+		Social.preview_line({"nick": "Мира", "last_msg_preview": "[sticker:hi]",
+			"last_msg_from_me": true}) == "Вы: Стикер")
+	Selftest.check("search verdict not found",
+		SocialUI.search_verdict({"ok": true, "found": false, "nick": "Алх"}, "Алх") == "not_found")
+	Selftest.check("search verdict show",
+		SocialUI.search_verdict({"ok": true, "found": true, "nick": "Мира"}, "Мира") == "show")
+	Selftest.check("search verdict error",
+		SocialUI.search_verdict({"ok": false, "detail": "target_not_found"}, "Алх") == "error")
+	Selftest.check("search verdict ignores stale nick",
+		SocialUI.search_verdict({"ok": true, "found": true, "nick": "Мира"}, "Алх") == "ignore")
+
+
+static func _has_label(n: Node, text: String) -> bool:
+	if n == null:
+		return false
+	for c in n.find_children("*", "Label", true, false):
+		if String((c as Label).text) == text:
+			return true
+	return false
+
+
+static func _is_brass_cta(b: Button) -> bool:
+	if b == null:
+		return false
+	var sb := b.get_theme_stylebox("normal") as StyleBoxTexture
+	return sb != null and sb.texture != null \
+		and String(sb.texture.resource_path).ends_with("16_cta_button_brass_9slice.png")
+
+
+static func _is_back_button(b: Button) -> bool:
+	if b == null or _is_brass_cta(b):
+		return false
+	var sb := b.get_theme_stylebox("normal") as StyleBoxTexture
+	if sb == null or sb.texture == null \
+			or not String(sb.texture.resource_path).ends_with("btn_wood.png"):
+		return false
+	var icon := b.find_child("Icon_chevron_right", true, false) as TextureRect
+	return icon != null and icon.flip_h
+
+
+static func _messaging_ui(g: Game) -> void:
+	# UI переработки мессенджинга: плашка шапки, футеры статус/время,
+	# стикер-блок, пикер, кегли, эмодзи-фолбэк. Мутации: снять ThreadPlaque,
+	# вернуть «Назад» на белую cta без иконки, снять Kit.cta с «Отправить»,
+	# снять футер в _rebuild_bubbles, вернуть кегль 13/11/14, снять ветку
+	# sid != "" (стикер станет текстом), снять навешивание fallbacks в main._load_font.
+	var ui = g.get("_social_ui")
+	if ui == null or ui._screen == null:
+		Selftest.check("messaging ui available", false)
+		return
+	g._social._seed_demo()
+	ui.open(0)
+	g._social.on_inbox({"ok": true, "friends": [
+		{"device_id": "dev-b", "nick": "Николя", "unread": 0, "avatar": {},
+			"last_seen": "2026-10-10T07:10:00",
+			"last_msg_preview": "го к котлу", "last_msg_from_me": true}],
+		"incoming": [], "outgoing": [], "unread_total": 0, "requests_total": 0})
+	ui._refresh_list()
+	var row: Node = ui._body.find_child("FriendRow_dev-b", true, false)
+	var nick_ok := false
+	var sub_ok := false
+	if row != null:
+		for n in row.find_children("*", "Label", true, false):
+			var l := n as Label
+			if String(l.text) == "Николя" and int(l.get_theme_font_size("font_size")) == 15:
+				nick_ok = true
+			if String(l.text) == "Вы: го к котлу" and int(l.get_theme_font_size("font_size")) == 12:
+				sub_ok = true
+	Selftest.check("friend row nick 15", nick_ok)
+	Selftest.check("friend row preview own attribution 12", sub_ok)
+	ui._open_thread("dev-b")
+	var header: Node = ui._body.find_child("ThreadHeader", true, false)
+	var plaque: Node = ui._body.find_child("ThreadPlaque", true, false)
+	Selftest.check("thread header has plaque",
+		plaque != null and header != null and plaque.get_parent() == header)
+	var back_b: Button = header.get_child(0) as Button if header != null and header.get_child_count() > 0 else null
+	Selftest.check("back button is wood with left chevron", _is_back_button(back_b))
+	var send_b: Button = null
+	var input_row: Node = ui._body.find_child("ThreadInput", true, false)
+	if input_row != null:
+		for n in input_row.find_children("*", "Button", true, false):
+			if String((n as Button).text) == "Отправить":
+				send_b = n as Button
+	Selftest.check("send button is brass cta", _is_brass_cta(send_b))
+	var av_ok := false
+	var title_ok := false
+	if plaque != null:
+		for n in plaque.find_children("*", "Control", true, false):
+			if (n as Control).custom_minimum_size == Vector2(36, 36):
+				av_ok = true
+		for n in plaque.find_children("*", "Label", true, false):
+			var l := n as Label
+			if String(l.text) == "Николя" and int(l.get_theme_font_size("font_size")) == 16:
+				title_ok = true
+	Selftest.check("plaque carries 36px avatar", av_ok)
+	Selftest.check("plaque nick 16", title_ok)
+	var b0: Node = ui._body.find_child("Bubble_0", true, false)
+	var b1: Node = ui._body.find_child("Bubble_1", true, false)
+	Selftest.check("peer bubble footer is time", _has_label(b0, "19:00"))
+	Selftest.check("own bubble footer sent with time", _has_label(b1, "отправлено · 19:05"))
+	var body_font := -1
+	if b0 != null:
+		for n in b0.find_children("*", "Label", true, false):
+			var l := n as Label
+			if String(l.text) == "Как тебе второй круг?":
+				body_font = int(l.get_theme_font_size("font_size"))
+	Selftest.check("bubble body font 15", body_font == 15)
+	g._social.optimistic_send("dev-b", "ещё одно")
+	ui.refresh_thread()
+	Selftest.check("pending bubble footer",
+		_has_label(ui._body.find_child("Bubble_3", true, false), "отправляется…"))
+	g._social.optimistic.erase("dev-b")
+	var rows: Array = g._social.threads["dev-b"]
+	rows.append({"id": 14, "from_me": true, "body": Social.sticker_body("hi"),
+		"sent_at": "2026-10-10T07:20:00"})
+	ui.refresh_thread()
+	var bs: Node = ui._body.find_child("Bubble_3", true, false)
+	var sticker_tex: TextureRect = bs.find_child("StickerImage", true, false) as TextureRect if bs != null else null
+	Selftest.check("sticker bubble renders 140px texture",
+		sticker_tex != null and sticker_tex.custom_minimum_size == Vector2(140, 140)
+		and sticker_tex.texture != null
+		and String(sticker_tex.texture.resource_path).ends_with("stickers_512/hi.png"))
+	Selftest.check("sticker bubble keeps footer", _has_label(bs, "отправлено · 07:20"))
+	g._social._seed_demo()
+	ui.refresh_thread()
+	var pick_b: Button = ui._body.find_child("PickerBtn", true, false) as Button
+	Selftest.check("picker button present", pick_b != null)
+	if pick_b != null:
+		pick_b.pressed.emit()
+		var emoji_grid: Node = ui._body.find_child("EmojiGrid", true, false)
+		Selftest.check("picker opens emoji grid 32",
+			ui._body.find_child("SocialPicker", true, false) != null
+			and emoji_grid != null and emoji_grid.get_child_count() == 32)
+		var edit: LineEdit = ui._body.find_child("MessageInput", true, false) as LineEdit
+		if edit != null and emoji_grid != null and emoji_grid.get_child_count() > 0:
+			var first := emoji_grid.get_child(0) as Button
+			edit.text = "аб"
+			edit.caret_column = 1
+			first.pressed.emit()
+			Selftest.check("emoji inserts at caret",
+				edit.text == "а" + first.text + "б"
+				and edit.caret_column == 1 + first.text.length())
+		var seg: Node = ui._body.find_child("PickerSegments", true, false)
+		if seg != null and seg.get_child_count() == 2:
+			(seg.get_child(1) as Button).pressed.emit()
+			var sgrid: Node = ui._body.find_child("StickerGrid", true, false)
+			Selftest.check("picker stickers 26", sgrid != null and sgrid.get_child_count() == 26)
+			# Тап стикера шлёт токен отдельным сообщением через РЕАЛЬНЫЙ Net:
+			# очередь держим (inflight непуст), читаем то, что поставил вызов.
+			var saved_url := Net.base_url
+			var saved_inflight := Net._inflight.duplicate()
+			Net.base_url = "http://hold.invalid"
+			Net._inflight = {"hold": true}
+			var sb: Button = sgrid.find_child("Sticker_hi", true, false) as Button if sgrid != null else null
+			if sb != null:
+				sb.pressed.emit()
+			var sent: Dictionary = {}
+			for q in Net._queue:
+				if String(q.get("kind", "")) == "message_send":
+					sent = q
+			Net._queue.clear()
+			Net.base_url = saved_url
+			Net._inflight = saved_inflight
+			g._social.optimistic.erase("dev-b")
+			var parsed = JSON.parse_string(String(sent.get("body", "{}")))
+			var sent_body: Dictionary = parsed if parsed is Dictionary else {}
+			Selftest.check("sticker tap sends token message",
+				String(sent_body.get("body", "")) == "[sticker:hi]"
+				and String(sent_body.get("peer_device", "")) == "dev-b")
+			Selftest.check("picker closes after sticker send",
+				ui._body.find_child("SocialPicker", true, false) == null)
+	ui.close()
+	var ef = UIStyle.emoji_fallback()
+	Selftest.check("emoji fallback font configured",
+		ef != null and (ef as SystemFont).font_names.has("Segoe UI Emoji"))
+	Selftest.check("emoji fallback attached to ui fonts",
+		g._font_reg != null and g._font_reg.fallbacks.has(ef)
+		and g._font_semi != null and g._font_semi.fallbacks.has(ef))
+
+
+static func _search_wiring(g: Game) -> void:
+	# Дефект поиска: на неизвестный ник сервер отвечает ok=true/found=false —
+	# карточку строить НЕЛЬЗЯ, «Ищем…» обязано погаснуть. Мутации: вернуть
+	# ok-only проверку в _on_house_result, снять _search_card_drop, снять
+	# очистку _err_line в ветке show.
+	var ui = g.get("_social_ui")
+	if ui == null or ui._screen == null:
+		Selftest.check("search wiring available", false)
+		return
+	g._social._seed_demo()
+	ui.open(0)
+	ui._pending_search_nick = "Несуществующий"
+	ui._err_line.text = "Ищем алхимика…"
+	Net.house_result.emit({"ok": true, "found": false, "nick": "Несуществующий", "avatar": {}})
+	Selftest.check("not found: no card",
+		ui._body.find_children("SearchCard", "", true, false).is_empty())
+	Selftest.check("not found: honest line", String(ui._err_line.text) == "Такого алхимика нет.")
+	ui._pending_search_nick = "Мира"
+	ui._err_line.text = "Ищем алхимика…"
+	Net.house_result.emit({"ok": true, "found": true, "nick": "Мира", "avatar": {}, "last_seen": ""})
+	Selftest.check("found: card shown",
+		ui._body.find_children("SearchCard", "", true, false).size() == 1)
+	Selftest.check("found: searching line cleared", String(ui._err_line.text) == "")
+	ui._pending_search_nick = "Другой"
+	Net.house_result.emit({"ok": true, "found": true, "nick": "Мира", "avatar": {}})
+	Selftest.check("stale answer ignored",
+		String(ui._err_line.text) == ""
+		and ui._body.find_children("SearchCard", "", true, false).size() == 1)
+	ui.close()
 
 
 static func _send_failures(g: Game) -> void:

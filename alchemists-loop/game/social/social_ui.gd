@@ -7,6 +7,15 @@ class_name SocialUI
 const Kit = preload("res://game/ui/menu_kit.gd")
 const ModalStyle = preload("res://game/ui/friends_v2_styleboxes.gd")
 const SPIRIT_INPUT_HINT := "Светик писем не читает — он же дух"
+const STICKER_DIR := "res://assets/spirits/stickers_512/"
+# Ходовые эмодзи для чата (docs/social-emoji-and-stickers.md §1, без
+# специальных алхимических значков — они не рендерятся системным шрифтом).
+const EMOJI_SET: Array[String] = [
+	"⚡", "✨", "💛", "🔥", "💧", "💨", "🌿", "💎",
+	"🌸", "🍄", "🏠", "⚗️", "🫧", "🌫️", "📜", "🌠",
+	"🏅", "🌍", "🔮", "🕯️", "🏆", "👑", "🎁", "💡",
+	"✉️", "⏳", "💤", "✅", "❌", "😊", "😂", "🤔",
+]
 
 var g: Game
 var _screen: Control = null
@@ -22,6 +31,8 @@ var _trade: TradeUI = null
 var _err_line: Label = null
 var _search_card: Control = null
 var _pending_search_nick := ""
+var _picker: Control = null
+var _picker_tab := 0
 
 func _init(game: Game) -> void:
 	g = game
@@ -39,11 +50,16 @@ func build() -> void:
 	g.add_child(root)
 	_screen = root
 
-	# Скрытый TabContainer не пересчитывает rect при ресайзе, поэтому берём раскладку его родителя.
+	# Раздел нижнего меню, как Мир и Рейтинг: тот же rect и та же рамка, что у
+	# остальных вкладок. Rect выводим из видимой раскладки Root VBox (шапка +
+	# зазор): скрытый TabContainer при ресайзе не пересчитывается, его rect брать
+	# нельзя.
 	var tabs_root := g._tabs_ref.get_parent() as VBoxContainer
 	tabs_root.resized.connect(_sync_rect)
 	_sync_rect()
 
+	# Рамка на весь rect раздела (как панель TabContainer у остальных вкладок),
+	# поля страницы — внутри неё, один в один как _make_page.
 	var panel := PanelContainer.new()
 	panel.name = "SocialPanel"
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -61,6 +77,9 @@ func build() -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
 	margin.add_child(box)
+
+	# Заголовок в стиле секций «Настроек»; закрытие — только нижним баром,
+	# крестик здесь дублировал навигацию.
 	box.add_child(UIWidgets.section(g, "ДРУЗЬЯ"))
 
 	_body = VBoxContainer.new()
@@ -81,7 +100,8 @@ func _sync_rect() -> void:
 		return
 	var tabs_root := g._tabs_ref.get_parent() as VBoxContainer
 	var hud: Control = g._hud.row
-	# Скрытый tab bar всё равно резервирует высоту над областью содержимого.
+	# TabContainer рисует рамку вокруг области контента: скрытый tab bar всё равно
+	# резервирует высоту сверху, поэтому рамка «Друзей» начинается на той же линии.
 	var bar_h: float = g._tabs_ref.get_tab_bar().get_combined_minimum_size().y
 	var top: float = hud.global_position.y + hud.size.y \
 		+ float(tabs_root.get_theme_constant("separation")) + bar_h
@@ -166,6 +186,7 @@ func _refresh_list() -> void:
 		_body.remove_child(child)
 		child.queue_free()
 	_search_card = null
+	_picker = null
 	var seg := HBoxContainer.new()
 	seg.name = "SocialSegments"
 	_body.add_child(seg)
@@ -238,26 +259,39 @@ func _search_row() -> void:
 func _search(nick: String) -> void:
 	_pending_search_nick = nick
 	if g._online.social_rating_cache_has(nick):
+		_pending_search_nick = ""
+		_err_line.text = ""
 		_show_card(g._online.social_rating_row_by_nick(nick))
 		return
 	_err_line.text = "Ищем алхимика…"
 	Net.house_get(nick)
 
 func _on_house_result(result: Dictionary) -> void:
-	if _screen == null or not _screen.visible or _pending_search_nick == "":
+	if _screen == null or not _screen.visible:
 		return
-	var nick := String(result.get("nick", _pending_search_nick))
-	if nick != _pending_search_nick:
+	var verdict := search_verdict(result, _pending_search_nick)
+	if verdict == "ignore":
 		return
 	_pending_search_nick = ""
-	if result.get("ok", false) != true and not result.has("found"):
-		_err_line.text = _detail_text(String(result.get("detail", "")))
-		return
-	_show_card(result)
+	match verdict:
+		"error":
+			_search_card_drop()
+			_err_line.text = _detail_text(String(result.get("detail", "")))
+		"not_found":
+			_search_card_drop()
+			_err_line.text = "Такого алхимика нет."
+		"show":
+			_err_line.text = ""
+			_show_card(result)
+
+func _search_card_drop() -> void:
+	if _search_card != null and is_instance_valid(_search_card):
+		_search_card.get_parent().remove_child(_search_card)
+		_search_card.queue_free()
+	_search_card = null
 
 func _show_card(data: Dictionary) -> void:
-	if _search_card != null and is_instance_valid(_search_card):
-		_search_card.queue_free()
+	_search_card_drop()
 	_search_card = _search_card_for(data)
 	# Карточка вставляется сразу после строки поиска, над длинным списком.
 	var idx := 0
@@ -292,6 +326,19 @@ func _search_card_for(data: Dictionary) -> Control:
 	row.add_child(info)
 	attach(g, row, nick)
 	return card
+
+static func search_verdict(result: Dictionary, pending: String) -> String:
+	# Карточка строится только на тот ник, который реально искали: чужой/устаревший
+	# ответ игнорируется, found=false — «нет такого алхимика», а не карточка.
+	if pending == "":
+		return "ignore"
+	if String(result.get("nick", pending)) != pending:
+		return "ignore"
+	if result.get("ok", false) != true:
+		return "error"
+	if result.get("found", false) != true:
+		return "not_found"
+	return "show"
 
 static func _friend_state_text(nick: String, s: Social) -> String:
 	if not s.friend_by_nick(nick).is_empty():
@@ -346,13 +393,13 @@ func _friend_row(friend: Dictionary) -> Control:
 	info.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	info.add_theme_constant_override("separation", 0)
 	var nick := String(friend.get("nick", "Алхимик"))
-	info.add_child(_one_line(g._label(nick, 14)))
+	info.add_child(_one_line(g._label(nick, 15)))
 	var seen := Social.last_seen_text(String(friend.get("last_seen", "")), Time.get_date_string_from_system())
-	var sub := Social.preview_cut(String(friend.get("last_msg_preview", "")), 60)
+	var sub := Social.preview_line(friend)
 	if sub == "":
 		sub = seen
 	if sub != "":
-		var sub_l := _one_line(g._label(sub, 11))
+		var sub_l := _one_line(g._label(sub, 12))
 		sub_l.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 		info.add_child(sub_l)
 	row.add_child(info)
@@ -451,16 +498,65 @@ func _build_thread() -> void:
 	for child in _body.get_children():
 		_body.remove_child(child)
 		child.queue_free()
+	_picker = null
 	var head := HBoxContainer.new()
 	head.name = "ThreadHeader"
-	var back := g._small_button("Назад", Vector2(96, 34), 1)
+	head.add_theme_constant_override("separation", 8)
+	var back := g._small_button("", Vector2(44, 40), 0)
+	back.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	back.tooltip_text = "Назад"
+	UIIcon.into_button(back, "chevron_right", 20)
+	var back_icon := back.find_child("Icon_chevron_right", true, false) as TextureRect
+	if back_icon != null:
+		# Шеврон в ките смотрит вправо — для «Назад» зеркалим.
+		back_icon.flip_h = true
+	Kit.press_feedback(back)
 	back.pressed.connect(_close_thread)
 	head.add_child(back)
 	var friend := g._social.friend_by_device(_peer)
 	var nick := Social.SPIRIT_NICK if _peer == Social.SPIRIT_DEVICE else String(friend.get("nick", "Алхимик"))
+	# Плашка заголовка: плоская панель с тонкой латунной кромкой — рисованная
+	# доска кита мылилась при растяжении (претензия приёмки 2026-11-12).
+	var plaque := PanelContainer.new()
+	plaque.name = "ThreadPlaque"
+	plaque.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	plaque.custom_minimum_size = Vector2(0, 60)
+	var plaque_sb := StyleBoxFlat.new()
+	plaque_sb.bg_color = Color(0.17, 0.13, 0.09, 0.95)
+	plaque_sb.border_color = Color(0.85, 0.68, 0.40, 0.35)
+	plaque_sb.set_border_width_all(1)
+	plaque_sb.set_corner_radius_all(8)
+	plaque_sb.content_margin_left = 12
+	plaque_sb.content_margin_right = 12
+	plaque_sb.content_margin_top = 8
+	plaque_sb.content_margin_bottom = 8
+	plaque.add_theme_stylebox_override("panel", plaque_sb)
+	var prow := HBoxContainer.new()
+	prow.add_theme_constant_override("separation", 10)
+	plaque.add_child(prow)
+	var av := Avatar.new()
+	av.custom_minimum_size = Vector2(36, 36)
+	var spec = {"kind": "spirit"} if _peer == Social.SPIRIT_DEVICE else friend.get("avatar", {})
+	av.setup_spec(spec if spec is Dictionary else {}, 36)
+	av.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	av.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	prow.add_child(av)
+	Kit.avatar_ring(av)
+	var tcol := VBoxContainer.new()
+	tcol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tcol.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	tcol.add_theme_constant_override("separation", 0)
 	var title := g._label(nick, 16)
-	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	head.add_child(title)
+	title.autowrap_mode = TextServer.AUTOWRAP_OFF
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	tcol.add_child(title)
+	var seen := Social.last_seen_text(String(friend.get("last_seen", "")), Time.get_date_string_from_system())
+	if seen != "":
+		var seen_l := g._label(seen, 11)
+		seen_l.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
+		tcol.add_child(seen_l)
+	prow.add_child(tcol)
+	head.add_child(plaque)
 	_body.add_child(head)
 	_thread_scroll = ScrollContainer.new()
 	_thread_scroll.name = "ThreadScroll"
@@ -484,14 +580,34 @@ func _build_thread() -> void:
 			_body.add_child(UIWidgets.banner(g, "Мир не на связи", Color("#e6a84a")))
 		var input_row := HBoxContainer.new()
 		input_row.name = "ThreadInput"
+		input_row.add_theme_constant_override("separation", 6)
 		var edit := LineEdit.new()
 		edit.name = "MessageInput"
 		edit.placeholder_text = "Написать сообщение"
 		edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var send := g._small_button("Отправить", Vector2(104, 34), 1)
+		var pick := g._small_button("", Vector2(44, 40), 0)
+		pick.name = "PickerBtn"
+		pick.tooltip_text = "Эмодзи и стикеры"
+		var pick_icon := TextureRect.new()
+		pick_icon.texture = load(STICKER_DIR + "hi.png")
+		pick_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pick_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		pick_icon.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+		pick_icon.offset_left = -13
+		pick_icon.offset_right = 13
+		pick_icon.offset_top = -13
+		pick_icon.offset_bottom = 13
+		pick_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		pick.add_child(pick_icon)
+		Kit.press_feedback(pick)
+		pick.pressed.connect(_toggle_picker.bind(edit))
+		var send := g._small_button("Отправить", Vector2(104, 40), 1)
+		Kit.cta(send)
+		Kit.press_feedback(send)
 		if not Net.is_available():
 			edit.editable = false
 			send.disabled = true
+			pick.disabled = true
 		var submit := func() -> void:
 			var body := edit.text.strip_edges()
 			if body == "":
@@ -502,6 +618,7 @@ func _build_thread() -> void:
 		send.pressed.connect(submit)
 		edit.text_submitted.connect(func(_text: String) -> void: submit.call())
 		input_row.add_child(edit)
+		input_row.add_child(pick)
 		input_row.add_child(send)
 		_body.add_child(input_row)
 
@@ -526,18 +643,51 @@ func _rebuild_bubbles() -> void:
 			date_l.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
 			_thread_col.add_child(date_l)
 			previous_day = day
+		var from_me := bool(message.get("from_me", false))
+		var body := String(message.get("body", ""))
+		var sid := Social.sticker_id(body)
 		var bubble := PanelContainer.new()
 		bubble.name = "Bubble_%d" % index
-		bubble.custom_minimum_size = Vector2(180, 0)
-		bubble.size_flags_horizontal = Control.SIZE_SHRINK_END if bool(message.get("from_me", false)) else Control.SIZE_SHRINK_BEGIN
-		var accent := UIStyle.TEAL if bool(message.get("from_me", false)) else UIStyle.LINE
-		bubble.add_theme_stylebox_override("panel", g._panel_style(Color(accent.r * 0.22, accent.g * 0.22, accent.b * 0.22, 0.96), 12))
-		var label := g._label(String(message.get("body", "")), 13)
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		label.custom_minimum_size = Vector2(180, 28)
-		bubble.add_child(label)
+		bubble.size_flags_horizontal = Control.SIZE_SHRINK_END if from_me else Control.SIZE_SHRINK_BEGIN
+		var inner := VBoxContainer.new()
+		inner.add_theme_constant_override("separation", 2)
+		bubble.add_child(inner)
+		if sid != "":
+			# Стикер — картинка без фона пузыря; статус/время тем же футером.
+			bubble.custom_minimum_size = Vector2(140, 0)
+			bubble.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+			var img := TextureRect.new()
+			img.name = "StickerImage"
+			img.texture = load(STICKER_DIR + sid + ".png")
+			img.custom_minimum_size = Vector2(140, 140)
+			img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			img.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			inner.add_child(img)
+		else:
+			bubble.custom_minimum_size = Vector2(180, 0)
+			var accent := UIStyle.TEAL if from_me else UIStyle.LINE
+			bubble.add_theme_stylebox_override("panel", g._panel_style(Color(accent.r * 0.22, accent.g * 0.22, accent.b * 0.22, 0.96), 12))
+			var label := g._label(body, 15)
+			label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			label.custom_minimum_size = Vector2(180, 28)
+			inner.add_child(label)
+		var footer := g._label(_bubble_footer(message, from_me, sent_at), 10)
+		footer.name = "BubbleFooter"
+		footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if from_me else HORIZONTAL_ALIGNMENT_LEFT
+		footer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		footer.add_theme_color_override("font_color", UIStyle.TEXT_DIM)
+		inner.add_child(footer)
 		_thread_col.add_child(bubble)
 		index += 1
+
+static func _bubble_footer(message: Dictionary, from_me: bool, sent_at: String) -> String:
+	if not from_me:
+		return Social.message_time(sent_at)
+	if message.get("pending", false) == true:
+		return "отправляется…"
+	var t := Social.message_time(sent_at)
+	return "отправлено" + (" · " + t if t != "" else "")
 
 static func _ru_date(iso_day: String) -> String:
 	if iso_day.length() < 10:
@@ -553,6 +703,133 @@ static func _ru_date(iso_day: String) -> String:
 func refresh_thread() -> void:
 	if _peer != "":
 		_rebuild_bubbles()
+
+func _toggle_picker(edit: LineEdit) -> void:
+	if _picker != null and is_instance_valid(_picker):
+		_picker_hide()
+		return
+	_picker_tab = 0
+	var panel := PanelContainer.new()
+	panel.name = "SocialPicker"
+	panel.add_theme_stylebox_override("panel", g._panel_style(Color(0.09, 0.07, 0.05, 0.97), 12))
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	panel.add_child(box)
+	var seg := HBoxContainer.new()
+	seg.name = "PickerSegments"
+	seg.add_theme_constant_override("separation", 6)
+	for i in 2:
+		var b := g._small_button(["Эмодзи", "Стикеры"][i], Vector2(0, 36))
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var style := ModalStyle.make_tab_active() if i == _picker_tab else ModalStyle.make_tab_inactive()
+		for state in ["normal", "hover", "pressed"]:
+			b.add_theme_stylebox_override(state, style)
+		b.add_theme_color_override("font_color", Color("e5bc70") if i == _picker_tab else Color("c6b294"))
+		b.pressed.connect(_picker_segment.bind(i, edit))
+		seg.add_child(b)
+	box.add_child(seg)
+	var content := VBoxContainer.new()
+	content.name = "PickerContent"
+	box.add_child(content)
+	_picker = panel
+	# Пикер встаёт прямо над строкой ввода, не перекрывая пузыри.
+	var idx := 0
+	for child in _body.get_children():
+		if child.name == "ThreadInput":
+			idx = child.get_index()
+			break
+	_body.add_child(panel)
+	_body.move_child(panel, idx)
+	_picker_fill(content, edit)
+
+func _picker_hide() -> void:
+	if _picker != null and is_instance_valid(_picker):
+		_picker.get_parent().remove_child(_picker)
+		_picker.queue_free()
+	_picker = null
+
+func _picker_segment(i: int, edit: LineEdit) -> void:
+	if _picker == null or not is_instance_valid(_picker):
+		return
+	_picker_tab = i
+	var seg: HBoxContainer = _picker.find_child("PickerSegments", true, false)
+	if seg != null:
+		for j in seg.get_child_count():
+			var b := seg.get_child(j) as Button
+			if b == null:
+				continue
+			var style := ModalStyle.make_tab_active() if j == i else ModalStyle.make_tab_inactive()
+			for state in ["normal", "hover", "pressed"]:
+				b.add_theme_stylebox_override(state, style)
+			b.add_theme_color_override("font_color", Color("e5bc70") if j == i else Color("c6b294"))
+	var content: VBoxContainer = _picker.find_child("PickerContent", true, false)
+	if content == null:
+		return
+	# F1: нажатая кнопка сегмента лежит в seg, не в content — перестройка
+	# содержимого её не освобождает.
+	for child in content.get_children():
+		content.remove_child(child)
+		child.queue_free()
+	_picker_fill(content, edit)
+
+func _picker_fill(content: VBoxContainer, edit: LineEdit) -> void:
+	if _picker_tab == 0:
+		var grid := GridContainer.new()
+		grid.name = "EmojiGrid"
+		grid.columns = 8
+		grid.add_theme_constant_override("h_separation", 4)
+		grid.add_theme_constant_override("v_separation", 4)
+		for i in EMOJI_SET.size():
+			var e := EMOJI_SET[i]
+			var b := g._small_button(e, Vector2(40, 40), 0)
+			b.name = "Emoji_%d" % i
+			b.add_theme_font_size_override("font_size", 20)
+			b.pressed.connect(func() -> void:
+				if not is_instance_valid(edit):
+					return
+				var pos := edit.caret_column
+				edit.text = edit.text.substr(0, pos) + e + edit.text.substr(pos)
+				edit.caret_column = pos + e.length()
+				edit.grab_focus()
+			)
+			grid.add_child(b)
+		content.add_child(grid)
+	else:
+		var scroll := ScrollContainer.new()
+		scroll.name = "StickerScroll"
+		scroll.custom_minimum_size = Vector2(0, 280)
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		content.add_child(scroll)
+		var grid := GridContainer.new()
+		grid.name = "StickerGrid"
+		grid.columns = 3
+		grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_theme_constant_override("h_separation", 6)
+		grid.add_theme_constant_override("v_separation", 6)
+		scroll.add_child(grid)
+		for id in Social.STICKER_IDS:
+			var b := g._small_button("", Vector2(132, 132), 0)
+			# _small_button клампит высоту в 38-42 — стикеру нужен свой размер.
+			b.custom_minimum_size = Vector2(132, 132)
+			b.name = "Sticker_%s" % id
+			var img := TextureRect.new()
+			img.texture = load(STICKER_DIR + id + ".png")
+			img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			img.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			img.offset_left = 8
+			img.offset_right = -8
+			img.offset_top = 8
+			img.offset_bottom = -8
+			img.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			b.add_child(img)
+			b.pressed.connect(func() -> void:
+				g._social.send_message(_peer, Social.sticker_body(id))
+				refresh_thread()
+				_picker_hide()
+			)
+			grid.add_child(b)
 
 func _close_thread() -> void:
 	_peer = ""

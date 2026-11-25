@@ -74,6 +74,13 @@ static func run(g: Game) -> void:
 		g._engine._refresh()
 	await _check_bottom_tab_consistency(g)
 
+## Консистентность нижних вкладок (претензии владельца): единый верхний отступ,
+## «Друзья» того же размера и с той же рамкой, что остальные разделы, кнопки
+## верхней панели отвечают на нажатие сжатием.
+static func _check_bottom_tab_consistency(g: Game) -> void:
+	var tops := {}
+	# Замер только на видимой вкладке: скрытый TabContainer не пересчитывает
+	# layout, поэтому открываем каждый раздел так же, как игрок — через нижний бар.
 static func _check_bottom_tab_consistency(g: Game) -> void:
 	var tops := {}
 	var nav_for := {Game.TAB_WORLD: 1, Game.TAB_RATING: 3, Game.TAB_TOOLS: 4}
@@ -85,6 +92,7 @@ static func _check_bottom_tab_consistency(g: Game) -> void:
 		await g.get_tree().process_frame
 		var margin := page.get_child(0) as MarginContainer
 		Selftest.check("page uses shared top indent tab %d" % tab,
+			margin.get_theme_constant("margin_top") == int(UIStyle.PAGE_TOP_M))
 			margin.get_theme_constant("margin_top") == 10)
 		var first: Control = margin.get_child(0) as Control
 		while first is Container and first.get_child_count() > 0:
@@ -97,6 +105,8 @@ static func _check_bottom_tab_consistency(g: Game) -> void:
 		is_equal_approx(tops[Game.TAB_WORLD], tops[Game.TAB_RATING])
 		and is_equal_approx(tops[Game.TAB_WORLD], tops[Game.TAB_TOOLS]))
 	var tabs_rect := g._tabs_ref.get_global_rect()
+	# Рамка TabContainer рисуется вокруг области контента: скрытый tab bar
+	# резервирует высоту сверху, эталон сдвигаем на ту же величину.
 	var bar_h := g._tabs_ref.get_tab_bar().get_combined_minimum_size().y
 	tabs_rect.position.y += bar_h
 	tabs_rect.size.y -= bar_h

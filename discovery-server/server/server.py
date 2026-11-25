@@ -53,7 +53,7 @@ def _setup_logging() -> None:
 
 _setup_logging()
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, Response, UploadFile
 import secrets
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -612,6 +612,7 @@ class InboxFriend(BaseModel):
     unread: int = 0
     last_msg_at: str = ""
     last_msg_preview: str = ""
+    last_msg_from_me: bool = False
 
 
 class InboxRequest(BaseModel):
@@ -1371,6 +1372,39 @@ def init_db():
         # записывая только строку версии. Форма «schema.sql + migrations»
         # покрыта tests/test_migrations.py и tests/test_social.py::TestSchema.
         _apply_migrations(conn)
+
+        # «Алхимический вестник» (005_news.sql): heal старых БД по конвенции
+        # init_db — CREATE IF NOT EXISTS + сид при пустой таблице. На свежей
+        # БД таблица уже пришла из миграции, сид не дублируется.
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS news_items (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   title TEXT NOT NULL,
+                   body TEXT NOT NULL DEFAULT '',
+                   body_md TEXT NOT NULL DEFAULT '',
+                   tag TEXT NOT NULL DEFAULT '',
+                   published_at TEXT NOT NULL
+               )"""
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS ix_news_published "
+            "ON news_items(published_at DESC)")
+        # 006_news_content.sql: body_md + картинки статей (heal старых БД).
+        news_cols = {r["name"] for r in conn.execute("PRAGMA table_info(news_items)").fetchall()}
+        if "body_md" not in news_cols:
+            conn.execute("ALTER TABLE news_items ADD COLUMN body_md TEXT NOT NULL DEFAULT ''")
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS news_images (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   news_id INTEGER NOT NULL,
+                   mime TEXT NOT NULL,
+                   data BLOB NOT NULL,
+                   created_at TEXT NOT NULL
+               )"""
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS ix_news_images_news ON news_images(news_id)")
+        _seed_news(conn)
 
         # миграция старых БД: колонки glyph и d
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(elements)").fetchall()}
@@ -3451,6 +3485,200 @@ async def startup():
             print("[world] Админ-панель: /admin")
         else:
             print("[world] Админ-панель: /admin (ADMIN_PASS не задан — вход заблокирован)")
+
+# ---------------------------------------------------------------------------
+# «Алхимический вестник»: внутриигровые новости для клиента (RSS 2.0).
+# ---------------------------------------------------------------------------
+
+# Сид новостей — те же строки, что в migrations/005_news.sql (конвенция
+# «schema.sql + migrations»: на свежей БД сидит миграция, heal зовёт этот
+# список только при пустой таблице). Даты RFC3339. Кортеж:
+# (title, body=краткое описание, body_md=полная статья, tag, published_at).
+# {IMG} в body_md первой статьи заменяется на URL загруженной картинки.
+_NEWS_SEED: list[tuple[str, str, str, str, str]] = [
+    ("Ротация печатей у родника",
+     "Смотрители сменили печати у родника: серная ушла на покой, медная приняла вахту. "
+     "Вода отзывается на новые знаки чуть теплее обычного.",
+     "# Вахта печатей\n\n"
+     "Смотрители сменили печати у родника: **серная** ушла на покой, **медная** приняла вахту.\n\n"
+     "- вода отзывается на новые знаки чуть теплее\n"
+     "- медь даёт двойные очки до воскресенья\n\n"
+     "> Берегите эфир: подсказки экономят часы.\n\n"
+     "![Печать родника]({IMG})",
+     "родник", "2026-11-12T09:00:00+00:00"),
+    ("Найдена редкая пара: эфир и соль",
+     "Алхимик из северной мастерской сообщил о находке: эфир и соль дают устойчивый "
+     "светящийся осадок. Гильдия просит присылать образцы котлов.",
+     "# Эфир и соль\n\n"
+     "Алхимик из северной мастерской сообщил о находке: **эфир и соль** дают устойчивый "
+     "светящийся осадок.\n\n"
+     "Гильдия просит присылать образцы котлов.\n\n"
+     "- не жалейте эфира на подсказки\n"
+     "- записывайте пропорции в атлас",
+     "находки", "2026-11-10T18:30:00+00:00"),
+    ("Ярмарка обменов открывается в пятницу",
+     "В пятницу у старой печи откроется ярмарка обменов. Приносите лишние печати и "
+     "склянки — меняем без пошлины, по-честному.",
+     "# Ярмарка обменов\n\n"
+     "В пятницу у старой печи откроется ярмарка обменов.\n\n"
+     "Приносите лишние печати и склянки — меняем **без пошлины**, по-честному.\n\n"
+     "> очередь за вами",
+     "события", "2026-11-08T12:00:00+00:00"),
+    ("Светик советует: не жалейте эфира на подсказки",
+     "Дух родника напоминает: эфир копится сам, а подсказки экономят часы. Тратьте "
+     "его на улучшения и советы, не держите впрок.",
+     "# Совет духа родника\n\n"
+     "Дух родника напоминает: **эфир копится сам**, а подсказки экономят часы.\n\n"
+     "Тратьте его на улучшения и советы, не держите впрок.",
+     "советы", "2026-11-05T08:00:00+00:00"),
+    ("Жила недели: медь и роса",
+     "Жила недели — медь и роса. Попадания в неё дают двойные очки до воскресенья. "
+     "Реторта уже натоплена, очередь за вами.",
+     "# Жила недели: медь и роса\n\n"
+     "Попадания в жилу дают **двойные очки** до воскресенья.\n\n"
+     "Реторта уже натоплена, очередь за вами.",
+     "родник", "2026-11-03T10:00:00+00:00"),
+    ("Гильдия чинит крышу мастерской",
+     "После грозы гильдия чинит крышу большой мастерской. Пару дней в зале будет "
+     "пахать смолой и свежим деревом — это нормально.",
+     "# Крыша мастерской\n\n"
+     "После грозы гильдия чинит крышу большой мастерской.\n\n"
+     "Пару дней в зале будет пахать смолой и свежим деревом — это нормально.",
+     "события", "2026-10-29T15:00:00+00:00"),
+    ("Новый сорт чернил для атласа",
+     "В лавке появились чернила из сажи и смолы: записи в атласе держатся дольше и "
+     "не выцветают на свету. Пробники раздают бесплатно.",
+     "# Чернила для атласа\n\n"
+     "В лавке появились чернила из **сажи и смолы**: записи в атласе держатся дольше "
+     "и не выцветают на свету.\n\n"
+     "Пробники раздают бесплатно.",
+     "находки", "2026-10-25T09:30:00+00:00"),
+]
+
+
+def _seed_news(conn: sqlite3.Connection) -> None:
+    """Сид «Вестника» только при пустой таблице (идемпотентный heal)."""
+    if conn.execute("SELECT 1 FROM news_items LIMIT 1").fetchone() is not None:
+        return
+    conn.executemany(
+        "INSERT INTO news_items (title, body, body_md, tag, published_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        _NEWS_SEED)
+    _seed_news_image(conn)
+
+
+def _seed_news_image(conn: sqlite3.Connection) -> None:
+    """Картинка первой статьи — готовый ассет стикера (без генерации).
+    Нет ассета (деплой сервера без клиента) — строка с {IMG} убирается."""
+    row = conn.execute(
+        "SELECT id, body_md FROM news_items WHERE body_md LIKE '%{IMG}%' "
+        "ORDER BY id LIMIT 1").fetchone()
+    if row is None:
+        return
+    asset = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "..", "..", "alchemists-loop", "assets", "spirits", "stickers_512", "hi.png")
+    if os.path.isfile(asset):
+        with open(asset, "rb") as f:
+            data = f.read()
+        cur = conn.execute(
+            "INSERT INTO news_images (news_id, mime, data, created_at) VALUES (?, ?, ?, ?)",
+            (row["id"], "image/png", data, _now_iso()))
+        md = row["body_md"].replace("{IMG}", "/api/news/images/%d" % cur.lastrowid)
+    else:
+        md = "\n".join(ln for ln in row["body_md"].split("\n") if "{IMG}" not in ln)
+    conn.execute("UPDATE news_items SET body_md = ? WHERE id = ?", (md, row["id"]))
+
+
+def _rfc822(iso: str) -> str:
+    """RFC3339 → RFC822 для pubDate. Наивные даты считаем UTC; мусор → ''."""
+    from datetime import datetime, timezone
+    from email.utils import format_datetime
+    try:
+        dt = datetime.fromisoformat(iso)
+    except (TypeError, ValueError):
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return format_datetime(dt)
+
+
+@app.get("/api/news/rss")
+def news_rss():
+    """RSS 2.0 «Алхимического вестника»: item отсортированы по дате убыв.
+    description — краткое описание, content:encoded — полная статья (Markdown)."""
+    from xml.sax.saxutils import escape
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT id, title, body, body_md, tag, published_at FROM news_items "
+            "ORDER BY published_at DESC, id DESC").fetchall()
+    finally:
+        conn.close()
+    parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel>',
+        "<title>Алхимический вестник</title>",
+        "<link>https://alchemist.loop/news</link>",
+        "<description>Новости мастерской: ротация печатей, находки, события родника.</description>",
+    ]
+    for r in rows:
+        full = r["body_md"] or r["body"]
+        parts.append(
+            "<item>"
+            + "<title>%s</title>" % escape(r["title"])
+            + "<description>%s</description>" % escape(r["body"])
+            + "<content:encoded>%s</content:encoded>" % escape(full)
+            + "<pubDate>%s</pubDate>" % escape(_rfc822(r["published_at"]))
+            + '<guid isPermaLink="false">news-%s</guid>' % r["id"]
+            + "<category>%s</category>" % escape(r["tag"])
+            + "</item>")
+    parts.append("</channel></rss>")
+    return Response(content="\n".join(parts), media_type="application/rss+xml")
+
+
+# Картинки статей «Вестника»: загрузка (multipart) и отдача BLOB.
+_NEWS_IMAGE_MIME = {"image/png", "image/jpeg", "image/webp"}
+_NEWS_IMAGE_MAX = 2_000_000
+
+
+@app.post("/api/news/images")
+def news_image_upload(news_id: int = Form(...), file: UploadFile = File(...)):
+    """Картинка под статью: mime png/jpeg/webp, ≤ 2 МБ, статья должна быть."""
+    # sync def: хендлер пишет в SQLite → threadpool (правило test_u5_concurrency),
+    # поэтому файл читаем синхронно через file.file, а не await file.read().
+    if file.content_type not in _NEWS_IMAGE_MIME:
+        raise HTTPException(status_code=400, detail="unsupported image type")
+    data = file.file.read()
+    if len(data) > _NEWS_IMAGE_MAX:
+        raise HTTPException(status_code=400, detail="image too large")
+    conn = get_db()
+    try:
+        if conn.execute("SELECT 1 FROM news_items WHERE id = ?", (news_id,)).fetchone() is None:
+            raise HTTPException(status_code=404, detail="news not found")
+        cur = conn.execute(
+            "INSERT INTO news_images (news_id, mime, data, created_at) VALUES (?, ?, ?, ?)",
+            (news_id, file.content_type, data, _now_iso()))
+        conn.commit()
+        img_id = cur.lastrowid
+    finally:
+        conn.close()
+    return {"ok": True, "id": img_id, "url": "/api/news/images/%d" % img_id}
+
+
+@app.get("/api/news/images/{image_id}")
+def news_image_get(image_id: int):
+    """Отдаёт картинку статьи (BLOB) с её mime; нет такой — 404."""
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT mime, data FROM news_images WHERE id = ?", (image_id,)).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="image not found")
+    return Response(content=row["data"], media_type=row["mime"])
+
 
 # Resolve get_db dynamically so tests and explicit isolated DB configuration agree.
 beta_access.install(app, lambda: get_db(), _user_data_db_path(), admin._is_authenticated)
@@ -6821,15 +7049,16 @@ def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
                     tuple([me] + sorted(accepted_pairs.values()))).fetchall():
                 stats[row["pair_key"]] = row
 
-        # Тело и дата превью — вторым запросом по собранным id (N ≤ числу
-        # друзей): одна строка даёт оба поля, поэтому они про одно сообщение.
+        # Тело, дата и направление превью — запросами по собранным id
+        # (N ≤ числу друзей): одна строка даёт все поля, поэтому они про одно
+        # сообщение. from_device нужен, чтобы клиент отличал «Вы: …» от чужого текста.
         previews: dict[int, sqlite3.Row] = {}
         last_ids = sorted({r["last_id"] for r in stats.values() if r["last_id"] is not None})
-        if last_ids:
-            marks = ",".join("?" for _ in last_ids)
-            for row in conn.execute(
-                    "SELECT id, body, sent_at FROM messages WHERE id IN (%s)" % marks,
-                    tuple(last_ids)).fetchall():
+        for last_id in last_ids:
+            row = conn.execute(
+                "SELECT id, body, sent_at, from_device FROM messages WHERE id = ?",
+                (last_id,)).fetchone()
+            if row is not None:
                 previews[row["id"]] = row
 
         unread_total = 0
@@ -6852,7 +7081,8 @@ def social_inbox(device_id: str = Query(..., min_length=1, max_length=128)):
                 last_seen=last_seen,
                 unread=unread,
                 last_msg_at=(last["sent_at"] if last is not None else ""),
-                last_msg_preview=(_preview_line(last["body"]) if last is not None else "")))
+                last_msg_preview=(_preview_line(last["body"]) if last is not None else ""),
+                last_msg_from_me=(last["from_device"] == me if last is not None else False)))
         for peer, at in incoming_dev.items():
             row = showcase.get(peer)
             nick = row["nick"] if row is not None else ""
