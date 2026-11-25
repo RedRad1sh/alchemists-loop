@@ -1204,6 +1204,8 @@ func _mode_hint(key: String) -> String:
 # ---------- инструменты: единая вкладка-хаб (вместо растущих вкладок) ----------
 
 func _build_tools_page(page: VBoxContainer) -> void:
+	# Отступы страницы задаёт _make_page (единые для всех вкладок); своя рамка
+	# полей здесь давала «Настройкам» лишний верхний отступ против «Мира».
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 10)
 	page.add_child(col)
@@ -1237,6 +1239,12 @@ const MORE_LICENSES := [
 func _build_more_sections(page: Control, col: VBoxContainer) -> void:
 	var settings := _more_section(col, "MoreSettings", "НАСТРОЙКИ")
 	g._hub._build_sound_controls(settings)
+	var news := _more_section(col, "MoreNews", "НОВОСТИ")
+	var news_b := g._small_button("Новости", Vector2(0, 40))
+	news_b.name = "NewsOpenButton"
+	news_b.tooltip_text = "Алхимический вестник: новости сервера"
+	news_b.pressed.connect(g._open_news)
+	news.add_child(news_b)
 	var help := _more_section(col, "MoreHelp", "КАК ИГРАТЬ")
 	for line in MORE_HELP:
 		help.add_child(_more_text(String(line)))

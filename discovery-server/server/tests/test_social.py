@@ -1256,6 +1256,45 @@ class TestInbox:
         full = client.get("/api/messages", params={"device_id": a, "peer_device": b}).json()
         assert len(full["messages"][0]["body"]) == srv.MSG_MAX_LEN
 
+    def test_preview_carries_direction(self, tmp_path, monkeypatch):
+        """Превью последнего сообщения пары обязано нести направление: без него
+        строка друга показывает мой собственный текст как будто входящий, пока
+        горит unread-бейдж. Снять from_device из запроса превью — тест краснеет."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        a, b = _befriend(srv, client)
+        _send(client, b, a, "чужое последнее")
+        f = _humans(_inbox(client, a))[0]
+        assert f["last_msg_from_me"] is False, f
+        _send(client, a, b, "моё последнее")
+        f = _humans(_inbox(client, a))[0]
+        assert f["last_msg_from_me"] is True, f
+        theirs = _humans(_inbox(client, b))[0]
+        assert theirs["last_msg_from_me"] is False, theirs
+
+    def test_inbox_loads_previews_for_multiple_friends(self, tmp_path, monkeypatch):
+        """Каждый собеседник получает своё последнее сообщение, когда inbox
+        собирает несколько preview ID."""
+        srv = _srv(tmp_path, monkeypatch)
+        client = _client(srv)
+        _player(client, "Варда", "dev-a")
+        for nick, device_id in (("Мира", "dev-b"), ("Аня", "dev-c")):
+            _player(client, nick, device_id)
+            request = client.post("/api/friend/request",
+                                  json={"device_id": "dev-a", "target_nick": nick})
+            assert request.status_code == 200, request.text
+            response = client.post("/api/friend/respond",
+                                   json={"device_id": device_id,
+                                         "requester_device": "dev-a", "accept": True})
+            assert response.status_code == 200, response.text
+        _send(client, "dev-b", "dev-a", "сообщение от Миры")
+        _send(client, "dev-c", "dev-a", "сообщение от Ани")
+        friends = {f["device_id"]: f for f in _humans(_inbox(client, "dev-a"))}
+        assert friends["dev-b"]["last_msg_preview"] == "сообщение от Миры"
+        assert friends["dev-c"]["last_msg_preview"] == "сообщение от Ани"
+        assert friends["dev-b"]["last_msg_from_me"] is False
+        assert friends["dev-c"]["last_msg_from_me"] is False
+
     def test_rename_visible_immediately(self, tmp_path, monkeypatch):
         srv = _srv(tmp_path, monkeypatch)
         client = _client(srv)
