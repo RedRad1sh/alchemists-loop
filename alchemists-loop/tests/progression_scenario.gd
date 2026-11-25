@@ -34,6 +34,39 @@ static func validate(raw: Variant) -> Array:
 		var seconds: Variant = segment.get("seconds", null)
 		if _is_bool_or_not_number(seconds) or not is_finite(float(seconds)) or float(seconds) < 0.0:
 			errors.append("segments[%d].seconds must be finite and non-negative" % index)
+		if segment.has("personal_experiment_outcomes"):
+			errors.append_array(_validate_personal_experiment_outcomes(segment["personal_experiment_outcomes"], index, kind))
+	return errors
+
+
+static func _validate_personal_experiment_outcomes(raw: Variant, segment_index: int, kind: String) -> Array:
+	var errors: Array = []
+	var prefix := "segments[%d].personal_experiment_outcomes" % segment_index
+	if kind != "active":
+		errors.append(prefix + " requires an active segment")
+	if not raw is Array:
+		return [prefix + " must be an array"]
+	for index in range((raw as Array).size()):
+		var value: Variant = (raw as Array)[index]
+		var item_prefix := "%s[%d]" % [prefix, index]
+		if not value is Dictionary:
+			errors.append(item_prefix + " must be an object")
+			continue
+		var outcome: Dictionary = value
+		var status := String(outcome.get("status", ""))
+		if status.is_empty():
+			errors.append(item_prefix + ".status must be a non-empty string")
+		for key in ["request_id", "target_id", "target_kind"]:
+			if outcome.has(key) and not (outcome[key] is String):
+				errors.append(item_prefix + "." + key + " must be a string")
+		if status == "success":
+			if not (outcome.get("output", "") is String) or String(outcome.get("output", "")).is_empty():
+				errors.append(item_prefix + ".output must be a non-empty string")
+			if outcome.has("cost"):
+				var cost: Variant = outcome["cost"]
+				if _is_bool_or_not_number(cost) or not is_finite(float(cost)) \
+						or not is_equal_approx(float(cost), round(float(cost))) or float(cost) < 0.0:
+					errors.append(item_prefix + ".cost must be a finite non-negative integer")
 	return errors
 
 
@@ -88,6 +121,14 @@ static func snapshot(game: Variant, clock: Variant = null) -> Dictionary:
 	var inventory := _dict_copy(_member(engine, "inventory", {}))
 	var items := _dict_copy(_member(game, "ITEMS", {}))
 	var online: Variant = _member(game, "_online", null)
+	var target := _dict_copy(_member(online, "_target_state", {}))
+	var personal_experiment := {
+		"target_kind": String(target.get("kind", "")),
+		"target_status": String(target.get("status", "")),
+		"successful_steps": int(target.get("successful_steps", 0)),
+		"spent_ether": int(target.get("spent_ether", 0)),
+		"attempts": int(target.get("attempts", 0)),
+	}
 	var server_elements := _dict_copy(_member(online, "_server_elements", {}))
 	var discovered_ids: Array = []
 	for raw_id in inventory:
@@ -221,6 +262,7 @@ static func snapshot(game: Variant, clock: Variant = null) -> Dictionary:
 		"sigil_copies": sigil_copies.duplicate(true),
 		"sigil_effects": sigil_effects.duplicate(true),
 		"sigil_craft_records": sigil_craft_records.duplicate(true),
+		"personal_experiment": personal_experiment.duplicate(true),
 		"prestige": gold,
 		"gold": gold,
 		"prestige_gold": gold,
@@ -286,6 +328,24 @@ static func next_goals(game: Variant, profile: Variant = null) -> Array:
 	var engine: Variant = _member(game, "_engine", null)
 	var inventory := _dict_copy(_member(engine, "inventory", {}))
 	var available_ether := int(_member(engine, "ether", 0)) + int(_member(engine, "ether_overflow", 0))
+	var online: Variant = _member(game, "_online", null)
+	var target := _dict_copy(_member(online, "_target_state", {}))
+	var target_id := String(target.get("id", ""))
+	if not target_id.is_empty() and String(target.get("status", "")) == "active" \
+			and bool(_profile_value(profile, "personal_experiment.enabled", true)):
+		var cost := int(_profile_value(profile, "personal_experiment.cost", _profile_value(profile, "discovery.cost", 12)))
+		var cooldown := maxf(0.0, float(_call(engine, "_experiment_cooldown_remaining", 0.0)))
+		var reason := "available"
+		var missing: Dictionary = {}
+		if cooldown > TIME_EPSILON:
+			reason = "cooldown"
+			missing["seconds"] = cooldown
+		elif available_ether < cost:
+			reason = "ether"
+			missing["ether"] = cost - available_ether
+		goals.append({"id": "personal-experiment/" + target_id, "kind": "personal_experiment",
+			"available": reason == "available", "missing": missing, "reason": reason,
+			"target_kind": String(target.get("kind", "")), "cost": cost})
 	var upgrade_items: Array = _array_copy(_profile_value(profile, "upgrades.items", []))
 	for upgrade_value in upgrade_items:
 		if not upgrade_value is Dictionary:
@@ -719,13 +779,23 @@ static func _new_session_counters() -> Dictionary:
 		"contract_claims": 0,
 		"achievement_updates": 0,
 		"stalls": 0,
+		"personal_experiment_attempts": 0,
+		"personal_experiment_successes": 0,
+		"personal_experiment_failures": 0,
+		"personal_experiment_targets_allocated": 0,
+		"personal_experiment_world_targets": 0,
+		"personal_experiment_llm_targets": 0,
+		"personal_experiment_completions": 0,
 	}
 
 
 static func _accumulate_session_counters(target: Dictionary, source: Dictionary) -> void:
 	for key in ["player_action_seconds", "active_simulated_seconds"]:
 		target[key] = float(target.get(key, 0.0)) + float(source.get(key, 0.0))
-	for key in ["discoveries", "brews", "upgrade_purchases", "contract_claims", "achievement_updates", "stalls"]:
+	for key in ["discoveries", "brews", "upgrade_purchases", "contract_claims", "achievement_updates", "stalls",
+			"personal_experiment_attempts", "personal_experiment_successes", "personal_experiment_failures",
+			"personal_experiment_targets_allocated", "personal_experiment_world_targets",
+			"personal_experiment_llm_targets", "personal_experiment_completions"]:
 		target[key] = int(target.get(key, 0)) + int(source.get(key, 0))
 
 
@@ -766,7 +836,8 @@ static func session_balanced(context: Dictionary) -> Dictionary:
 	var start_player := float(_member(clock, "active_player_seconds", 0.0))
 	var action_seconds := maxf(0.0, float(_profile_value(profile, "player.action_seconds", ACTION_SECONDS)))
 	var targets := _session_targets(game, segment)
-	var policy_reason := ""
+	var policy_reason := _run_personal_experiment_outcomes(game, profile, segment, clock, ledger,
+		strategy_script, action_seconds, start_active + seconds, events, stalls)
 	var initial_rewards := _settle_progression_rewards(game, profile, clock, ledger, events, start_active + seconds)
 	if not bool(initial_rewards.get("ok", false)):
 		policy_reason = "active_budget_before_contract_claim"
@@ -852,10 +923,51 @@ static func session_balanced(context: Dictionary) -> Dictionary:
 	counters["upgrade_purchases"] = int(ledger_counters.get("upgrade_purchases", 0))
 	counters["contract_claims"] = int(ledger_counters.get("contract_claims", 0))
 	counters["achievement_updates"] = int(ledger_counters.get("achievement_updates", 0))
+	counters["personal_experiment_attempts"] = int(ledger_counters.get("personal_experiment_attempts", 0))
+	counters["personal_experiment_successes"] = int(ledger_counters.get("personal_experiment_successes", 0))
+	counters["personal_experiment_failures"] = int(ledger_counters.get("personal_experiment_failures", 0))
+	counters["personal_experiment_targets_allocated"] = int(ledger_counters.get("personal_experiment_targets_allocated", 0))
+	counters["personal_experiment_world_targets"] = int(ledger_counters.get("personal_experiment_world_targets", 0))
+	counters["personal_experiment_llm_targets"] = int(ledger_counters.get("personal_experiment_llm_targets", 0))
+	counters["personal_experiment_completions"] = int(ledger_counters.get("personal_experiment_completions", 0))
 	counters["stalls"] = stalls.size()
 	clock.set("ledger", previous_ledger)
 	return {"policy": ACTIVE_POLICY, "events": events, "stalls": stalls, "counters": counters,
 		"ledger": ledger_report, "reason": policy_reason}
+
+
+static func _run_personal_experiment_outcomes(game: Variant, profile: Variant, segment: Dictionary,
+		clock: Variant, ledger: Variant, strategy_script: Script, action_seconds: float,
+		active_deadline: float, events: Array, stalls: Array) -> String:
+	var engine: Variant = _member(game, "_engine", null)
+	var cooldown_seconds := float(_profile_value(profile, "discovery.cooldown_sec", 1.0))
+	for raw_outcome in _array_copy(segment.get("personal_experiment_outcomes", [])):
+		if not raw_outcome is Dictionary:
+			continue
+		var now := _clock_now(clock)
+		var cooldown := maxf(0.0, float(_member(engine, "_experiment_last_at", 0.0)) + cooldown_seconds - now)
+		var required := cooldown + action_seconds
+		if float(_member(clock, "active_seconds", 0.0)) + required > active_deadline + TIME_EPSILON:
+			clock.call("advance_active", maxf(0.0, active_deadline - float(_member(clock, "active_seconds", 0.0))))
+			_record_session_stall(stalls, events, "active_budget_before_personal_experiment",
+				"personal_experiment", clock, {"required_seconds": required})
+			return "active_budget_before_personal_experiment"
+		if cooldown > TIME_EPSILON:
+			clock.call("advance_active", cooldown)
+		if action_seconds > TIME_EPSILON:
+			clock.call("advance_active", action_seconds)
+		clock.set("active_player_seconds", float(_member(clock, "active_player_seconds", 0.0)) + action_seconds)
+		var outcome: Dictionary = raw_outcome
+		strategy_script.call("apply_experiment_outcome", game, outcome, ledger)
+		if String(strategy_script.last_reason) == "duplicate":
+			continue
+		engine.set("_experiment_last_at", _clock_now(clock))
+		var ledger_events: Array = ledger.report().get("events", [])
+		if not ledger_events.is_empty():
+			var latest: Variant = ledger_events[ledger_events.size() - 1]
+			if latest is Dictionary and String((latest as Dictionary).get("kind", "")) == "personal_experiment":
+				events.append((latest as Dictionary).duplicate(true))
+	return ""
 
 
 static func _settle_progression_rewards(game: Variant, profile: Variant, clock: Variant, ledger: Variant,

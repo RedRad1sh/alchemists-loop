@@ -173,6 +173,12 @@ static func run(g: Game) -> void:
 			Selftest.check("progression mutation detected: " + String(name), bool(cases[name]))
 	elif OS.get_cmdline_user_args().has("--suite=progression"):
 		await SuiteProgressionRunner.run(g)
+	elif OS.get_cmdline_user_args().has("--suite=save_sync"):
+		await SuiteSaveSync.run(g)
+	elif OS.get_cmdline_user_args().has("--suite=lab_modes"):
+		await SuiteLabModes.run(g)
+	elif OS.get_cmdline_user_args().has("--suite=online_ux"):
+		await SuiteOnlineUx.run(g)
 	else:
 		await SuiteBalanceConfig.run(g)
 		await SuiteCoreBrew.run(g)

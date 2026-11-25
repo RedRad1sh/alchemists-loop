@@ -94,6 +94,7 @@ var _experiment_day := ""
 var _experiment_count := 0
 var _experiment_last_at := 0.0
 var _experiment_pending_pair: Array[String] = []
+var _experiment_reserved_ether := 0
 var _craft_job: Dictionary = {}
 var _brew_quantity := 1
 var _blueprints: Dictionary = {}
@@ -336,13 +337,14 @@ func spring_purchase(axis: String) -> Dictionary:
 			if spring_levels.get(req_axis, 0) < price["req"][req_axis]:
 				return {"ok": false, "error": "requires %s >= %d" % [req_axis, price["req"][req_axis]]}
 	var ether_cost: int = price.get("ether", 0)
-	if ether < ether_cost:
+	if _available_ether() < ether_cost:
 		return {"ok": false, "error": "insufficient ether"}
 	var materials: Dictionary = price.get("materials", {})
 	for mat in materials:
 		if inventory.get(mat, 0) < materials[mat]:
 			return {"ok": false, "error": "insufficient %s" % mat}
-	ether -= ether_cost
+	if not _spend_ether(ether_cost):
+		return {"ok": false, "error": "insufficient ether"}
 	for mat in materials:
 		inventory[mat] = int(inventory.get(mat, 0)) - materials[mat]
 		_spring_burn(String(mat), int(materials[mat]))
@@ -467,7 +469,7 @@ func _experiment_cooldown_remaining() -> float:
 	var elapsed := g.game_now() - _experiment_last_at
 	return maxf(0.0, float(_bal().get_value("discovery.cooldown_sec", Game.EXPERIMENT_COOLDOWN_SEC)) - elapsed)
 
-func _experiment_status(a: String, b: String) -> Dictionary:
+func _experiment_status(a: String, b: String, target_mode := false) -> Dictionary:
 	if not _resource_mutation_allowed():
 		return {"ok": false, "reason": "Котёл завершает текущую операцию."}
 	_experiment_sync_day()
@@ -477,15 +479,12 @@ func _experiment_status(a: String, b: String) -> Dictionary:
 		return {"ok": false, "reason": "Котёл занят варкой или производством — дождись завершения."}
 	if a == "" or b == "" or not g.ITEMS.has(a) or not g.ITEMS.has(b):
 		return {"ok": false, "reason": "Выбери два известных вещества."}
-	var need_a := 2 if a == b else 1
-	if int(inventory.get(a, 0)) < need_a or int(inventory.get(b, 0)) < (2 if a == b else 1):
-		return {"ok": false, "reason": "Для эксперимента нужны оба реагента в запасе."}
 	if _experiment_pending_pair.size() == 2:
 		return {"ok": false, "reason": "Предыдущий эксперимент ещё обрабатывается — дождись ответа мира."}
 	var key := g._pair_key(a, b)
-	if known_recipes.has(key):
+	if not target_mode and known_recipes.has(key):
 		return {"ok": false, "reason": "Эта комбинация уже записана в книге рецептов."}
-	if _rejected_pairs.has(key):
+	if not target_mode and _rejected_pairs.has(key):
 		return {"ok": false, "reason": "Эта комбинация уже признана несочетаемой."}
 	var cooldown := _experiment_cooldown_remaining()
 	if cooldown > 0.0:
@@ -497,44 +496,35 @@ func _experiment_status(a: String, b: String) -> Dictionary:
 		return {"ok": false, "reason": "Для эксперимента нужно %d ⚡." % exp_cost}
 	return {"ok": true, "key": key}
 
-func _begin_experiment(a: String, b: String) -> bool:
-	var check := _experiment_status(a, b)
+func _begin_experiment(a: String, b: String, target_mode := false) -> bool:
+	var check := _experiment_status(a, b, target_mode)
 	if not bool(check.get("ok", false)):
 		status_text = String(check.get("reason", "Эксперимент недоступен."))
 		Sfx.error()
 		_refresh()
 		return false
 	var exp_cost := int(_bal().get_value("discovery.cost", Game.EXPERIMENT_COST))
-	if not _spend_ether(exp_cost):
-		return false
-	inventory[a] = int(inventory.get(a, 0)) - 1
-	inventory[b] = int(inventory.get(b, 0)) - 1
-	_spring_burn(a)
-	_spring_burn(b)
 	attempts += 1
 	_experiment_sync_day()
 	_experiment_count += 1
 	_experiment_last_at = g.game_now()
 	_experiment_pending_pair = [a, b]
+	_experiment_reserved_ether = exp_cost
 	status_text = "Эксперимент отправлен в лабораторный журнал: %s + %s…" % [g._online._item_name(a), g._online._item_name(b)]
 	Analytics.track("experiment_start", {"left": a, "right": b, "cost": exp_cost})
 	_refresh()
 	return true
 
-func _finish_experiment_inputs(a: String, b: String, full_refund: bool) -> void:
-	# U9 (T12): поздний ответ после сброса мира — pending очищен престижем/новой
-	# игрой, возвращать/списывать поверх свежего подарочного запаса нельзя.
-	# (Корреляция конкретной пары — в Online, задел U11/T14 закрыт; здесь — факт наличия pending.)
-	if _experiment_pending_pair.size() != 2:
+func _cancel_experiment(a: String, b: String, reason := "", target_mode := false,
+		target_id := "", generation := -1) -> void:
+	if not g._online._experiment_pending_matches(a, b, target_mode, target_id, generation):
 		return
-	inventory[a] = int(inventory.get(a, 0)) + 1
-	inventory[b] = int(inventory.get(b, 0)) + 1
-	_spring_unburn(a)
-	_spring_unburn(b)
-	var exp_cost := int(_bal().get_value("discovery.cost", Game.EXPERIMENT_COST))
-	var exp_ref := int(_bal().get_value("discovery.failure_refund", Game.EXPERIMENT_FAILURE_REFUND))
-	_grant_ether(exp_cost if full_refund else exp_ref, "experiment_refund")
 	_experiment_pending_pair.clear()
+	_experiment_reserved_ether = 0
+	if target_mode:
+		g._online._clear_target_attempt_receipt(a, b, target_id, generation)
+	if reason != "":
+		status_text = reason
 	_refresh()
 
 func learn_recipe(a: String, b: String, out: String = "") -> void:
@@ -547,29 +537,53 @@ func learn_recipe(a: String, b: String, out: String = "") -> void:
 		out = String(g._online._find_recipe(a, b).get("out", ""))
 	known_recipe_defs[key] = {"a": a, "b": b, "out": out}
 
-func _experiment_succeeded(slug: String, a: String, b: String) -> void:
-	# U9 (T12): зеркальный guard — успех без висящего эксперимента начислять нельзя.
-	if not _resource_mutation_allowed() or not g.ITEMS.has(slug) \
-			or not g._online._experiment_pending_matches(a, b):
-		return
+func _experiment_charge_for(slug: String, result_kind: String, server_ether_charged := -1) -> int:
+	if server_ether_charged >= 0:
+		return server_ether_charged
+	if result_kind in ["known", "reused"] and int(inventory.get(slug, 0)) > 0:
+		return 0
+	return int(_bal().get_value("discovery.cost", Game.EXPERIMENT_COST))
+
+func _experiment_can_commit(a: String, b: String, ether_cost: int, target_mode := false,
+		target_id := "", generation := -1) -> bool:
+	return _resource_mutation_allowed() \
+		and g._online._experiment_pending_matches(a, b, target_mode, target_id, generation) \
+		and ether_cost >= 0 and ether_cost <= _experiment_reserved_ether \
+		and ether + ether_overflow >= ether_cost
+
+func _experiment_succeeded(slug: String, a: String, b: String, result_kind := "created") -> bool:
+	return _commit_experiment_success(slug, a, b, result_kind, -1)
+
+func _commit_experiment_success(slug: String, a: String, b: String, result_kind: String,
+		server_ether_charged: int, target_mode := false, target_id := "", generation := -1,
+		save_after := true) -> bool:
+	if not g.ITEMS.has(slug):
+		return false
+	var exp_cost := _experiment_charge_for(slug, result_kind, server_ether_charged)
+	if not _experiment_can_commit(a, b, exp_cost, target_mode, target_id, generation) \
+			or not _settle_experiment_reserve(exp_cost):
+		return false
 	learn_recipe(a, b, slug)
 	inventory[slug] = int(inventory.get(slug, 0)) + 1
 	successes += 1
 	_experiment_pending_pair.clear()
 	_award_synthesis(slug)
 	status_text = "Эксперимент удался: открыто новое вещество «%s»." % g._online._item_name(slug)
-	Analytics.track("experiment_result", {"left": a, "right": b, "result": "created", "output": slug})
+	Analytics.track("experiment_result", {"left": a, "right": b, "result": result_kind, "output": slug})
 	g._contracts.on_experiment(a, b, true)
 	_refresh()
-	g._saves._save_game()
+	if save_after:
+		g._saves._save_game()
+	return true
 
-func _experiment_failed(a: String, b: String, reason: String = "") -> void:
+func _experiment_failed(a: String, b: String, reason := "", target_mode := false,
+		target_id := "", generation := -1) -> void:
 	# U9 (T12): поздний «not_combinable» после сброса мира — не помечаем пару
-	# отклонённой и не трогаем новый инвентарь (зеркальный guard в _finish_experiment_inputs).
-	if _experiment_pending_pair.size() != 2:
+	# отклонённой и не трогаем новый инвентарь.
+	if not g._online._experiment_pending_matches(a, b, target_mode, target_id, generation):
 		return
 	_rejected_pairs[g._pair_key(a, b)] = true
-	_finish_experiment_inputs(a, b, false)
+	_cancel_experiment(a, b, "", target_mode, target_id, generation)
 	status_text = "Эксперимент не дал результата: %s" % (reason if reason != "" else "эти вещества не сочетаются")
 	Analytics.track("experiment_result", {"left": a, "right": b, "result": "rejected"})
 	g._contracts.on_experiment(a, b, false)
@@ -577,7 +591,17 @@ func _experiment_failed(a: String, b: String, reason: String = "") -> void:
 	g._saves._save_game()
 
 func _available_ether() -> int:
-	return ether + ether_overflow
+	return maxi(0, ether + ether_overflow - _experiment_reserved_ether)
+
+func _settle_experiment_reserve(amount: int) -> bool:
+	if amount < 0 or amount > _experiment_reserved_ether:
+		return false
+	var reserved := _experiment_reserved_ether
+	_experiment_reserved_ether = 0
+	if not _spend_ether(amount):
+		_experiment_reserved_ether = reserved
+		return false
+	return true
 
 func _spend_ether(amount: int) -> bool:
 	if amount < 0 or _available_ether() < amount:

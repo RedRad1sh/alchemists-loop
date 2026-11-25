@@ -21,6 +21,7 @@ import sys
 import time
 import unicodedata
 import uuid
+from contextlib import closing
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Literal
 
@@ -32,6 +33,7 @@ import seed
 from avatar import portrait_spec
 import gen_llm
 from gen_llm import GLYPH_PARAM, GLYPHS, LLMGenerator, LLMError, TAGS, is_glyph
+from personal_experiment import choose_target_kind, normalize_target_name, target_bucket, target_snapshot
 
 # Логирование: «alchemy.llm» (gen_llm.py) и «alchemy» (этот модуль).
 # Уровень INFO по умолчанию; DEBUG при ALCHEMY_DEBUG=1 или LLM_DEBUG=1.
@@ -102,15 +104,10 @@ def _resolve_db_path() -> str:
 beta_access.validate_config(_user_data_db_path())
 DB_PATH = _resolve_db_path()
 SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:8080")
-# U5-fix (review) / I-3: TTL обязан переживать ХУДШЕЕ окно генерации, иначе
-# живой держатель лока теряет его посреди LLM-вызова и второй запрос лезет
-# генерировать ту же пару (двойная трата бюджета). Окно env-управляемое
-# (README советует поднимать LLM_TIMEOUT), поэтому НЕ хардкод: выводим из
-# фактических MAX_ATTEMPTS (gen_llm, учитывает LLM_MAX_ATTEMPTS и .env —
-# gen_llm импортирован выше) × LLM_TIMEOUT с запасом на валидацию/запись;
-# прямой override — LOCK_TTL_SEC; нижняя граница — LOCK_TTL_FLOOR.
-LOCK_TTL_FLOOR = 120.0   # сек: минимум, даже если конфигурация генерации мельче
-LOCK_TTL_MARGIN = 1.25    # запас поверх худшего окна генерации
+# Один model attempt может сделать повторный POST без optional metadata.
+LOCK_TTL_FLOOR = 120.0
+LOCK_TTL_MARGIN = 1.25
+LOCK_TTL_TRANSPORT_POSTS = 2
 
 
 def _lock_ttl_seconds() -> float:
@@ -119,10 +116,14 @@ def _lock_ttl_seconds() -> float:
         return float(override)
     attempts = int(getattr(gen_llm, "MAX_ATTEMPTS", 3))
     timeout = float(os.environ.get("LLM_TIMEOUT", "30"))
-    return max(LOCK_TTL_FLOOR, attempts * timeout * LOCK_TTL_MARGIN)
+    return max(
+        LOCK_TTL_FLOOR,
+        LOCK_TTL_TRANSPORT_POSTS * attempts * timeout * LOCK_TTL_MARGIN,
+    )
 
 
 LOCK_TTL = _lock_ttl_seconds()  # секунд: сколько пара считается «в обработке» (защита от гонок)
+PERSONAL_TARGET_ALLOCATION_TTL = 3.0 * LOCK_TTL
 # T04: после перевода генерирующих эндпоинтов в threadpool писатели — потоки;
 # ожидаем блокировку WAL-писателя не дольше этого, дальше — ошибка.
 # T09/U8 (e): нечисловое значение окружения должно падать с внятной ошибкой,
@@ -143,6 +144,7 @@ except ValueError:
 EXPERIMENT_COOLDOWN_SEC = float(os.environ.get("ALCHEMY_EXPERIMENT_COOLDOWN_SEC", "0.5"))
 EXPERIMENT_DAILY_LIMIT = int(os.environ.get("ALCHEMY_EXPERIMENT_DAILY_LIMIT", "500"))
 EXPERIMENT_GLOBAL_DAILY_LIMIT = int(os.environ.get("ALCHEMY_EXPERIMENT_GLOBAL_DAILY_LIMIT", "10000"))
+EXPERIMENT_ETHER_COST = int(os.environ.get("ALCHEMY_EXPERIMENT_ETHER_COST", "12"))
 # Письма Светика — отдельный дневной бюджет LLM-вызовов (не смешивать с
 # экспериментами): генерация намёка тоже стоит денег.
 LETTER_COOLDOWN_SEC = float(os.environ.get("ALCHEMY_LETTER_COOLDOWN_SEC", "30"))
@@ -411,6 +413,34 @@ class DiscoverResponse(BaseModel):
     challenge: Optional[dict] = None  # состояние ежедневной цели: {won, first, target_name}
     vein: Optional[dict] = None  # бонус жилы: {points, streak_added, streak_count, cap_reached} | None
     detail: Optional[str] = None  # route-level отказ (gate Task 5): "ingredient_not_granted"
+
+
+class PersonalExperimentTargetRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    nick: str = Field(..., min_length=1, max_length=64)
+
+
+class PersonalExperimentAttemptRequest(DiscoverRequest):
+    target_id: str = Field(..., min_length=1, max_length=128)
+    request_id: str = Field(..., min_length=1, max_length=128)
+
+
+class PersonalExperimentTargetResponse(BaseModel):
+    ok: bool
+    target: Optional[dict] = None
+    status: str
+    message: str
+    ether_cost: int
+
+
+class PersonalExperimentAttemptResponse(DiscoverResponse):
+    target_id: str
+    request_id: str
+    pair_key: str
+    target: Optional[dict] = None
+    ether_charged: int = 0
+    acquired: bool = False
+
 
 class EventData(BaseModel):
     pair_key: str
@@ -2099,6 +2129,995 @@ def _week_monday(week: str):
     from datetime import date as _date
     y, w = week.split("-W")
     return _date.fromisocalendar(int(y), int(w), 1)
+
+
+def _next_week_key(week: str) -> str:
+    return _week_key((_week_monday(week) + timedelta(days=7)).isoformat())
+
+
+def _set_personal_waiting_next_slot(conn, target_row):
+    next_week = _next_week_key(target_row["cycle_week"])
+    conn.execute(
+        "UPDATE personal_experiment_targets SET status = 'waiting_next_slot', "
+        "next_eligible_week = ?, version = version + 1 WHERE id = ? AND status = 'active'",
+        (next_week, target_row["id"]),
+    )
+
+
+# Только четыре вещества доступны новому игроку без персонального гранта.
+# BASE_SLUGS остаётся широким каталогом resolver и не является личным знанием.
+PERSONAL_BASE_SLUGS = frozenset({"fire", "water", "earth", "air"})
+
+
+def _personal_device_owns(conn: sqlite3.Connection, device_id: str, slug: str) -> bool:
+    return (slug in PERSONAL_BASE_SLUGS
+            or _element_granted(conn, device_id, slug)
+            or _element_authored_by(conn, device_id, slug))
+
+
+def _active_personal_target(conn: sqlite3.Connection, device_id: str):
+    return conn.execute(
+        "SELECT * FROM personal_experiment_targets "
+        "WHERE device_id = ? AND status = 'active' "
+        "ORDER BY sequence DESC LIMIT 1",
+        (device_id,),
+    ).fetchone()
+
+
+def _current_personal_target(conn: sqlite3.Connection, device_id: str):
+    return conn.execute(
+        "SELECT * FROM personal_experiment_targets "
+        "WHERE device_id = ? AND status IN ('active', 'completed', 'waiting_next_slot') "
+        "ORDER BY sequence DESC LIMIT 1",
+        (device_id,),
+    ).fetchone()
+
+
+def _personal_target_in_slot(conn: sqlite3.Connection, device_id: str, cycle_week: str):
+    current = _current_personal_target(conn, device_id)
+    if (current is not None and current["status"] in ("completed", "waiting_next_slot")
+            and current["next_eligible_week"] and cycle_week >= current["next_eligible_week"]):
+        return None
+    return current
+
+
+def _latest_personal_target(conn: sqlite3.Connection, device_id: str):
+    return conn.execute(
+        "SELECT * FROM personal_experiment_targets WHERE device_id = ? "
+        "ORDER BY sequence DESC LIMIT 1",
+        (device_id,),
+    ).fetchone()
+
+
+def _personal_target_snapshot(row) -> dict[str, object]:
+    return target_snapshot(dict(row))
+
+
+def _personal_world_frontier(conn: sqlite3.Connection, device_id: str) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, slug, name, d FROM elements ORDER BY layer, id, slug"
+    ).fetchall()
+
+
+def _select_world_target(conn: sqlite3.Connection, device_id: str,
+                         cycle_week: str, sequence: int):
+    candidates = [
+        row for row in _personal_world_frontier(conn, device_id)
+        if not _personal_device_owns(conn, device_id, row["slug"])
+    ]
+    if not candidates:
+        return None
+    index = target_bucket(device_id, cycle_week, sequence) % len(candidates)
+    return candidates[index]
+
+
+def _new_personal_llm_target(device_id: str, cycle_week: str, sequence: int) -> dict[str, str]:
+    seed = f"{device_id}|{cycle_week}|{sequence}"
+    result = get_llm().generate_personal_target(seed)
+    valid = gen_llm.validate_personal_target(result, seed)
+    if valid is None:
+        raise LLMError("некорректная персональная цель")
+    return valid
+
+
+def _insert_personal_target(conn: sqlite3.Connection, device_id: str, cycle_week: str,
+                            sequence: int, target_data: dict) -> dict[str, object]:
+    target_id = uuid.uuid4().hex
+    conn.execute(
+        "INSERT INTO personal_experiment_targets "
+        "(id, device_id, cycle_week, sequence, kind, target_slug, target_name, "
+        "target_name_norm, target_hint, status, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)",
+        (
+            target_id, device_id, cycle_week, sequence, target_data["kind"],
+            target_data["target_slug"], target_data["target_name"],
+            normalize_target_name(target_data["target_name"]), target_data["target_hint"],
+            _now_iso(),
+        ),
+    )
+    row = conn.execute(
+        "SELECT * FROM personal_experiment_targets WHERE id = ?", (target_id,)
+    ).fetchone()
+    return _personal_target_snapshot(row)
+
+
+def _claim_personal_allocation(conn: sqlite3.Connection, device_id: str, sequence: int):
+    token = uuid.uuid4().hex
+    now = time.time()
+    changed = conn.execute(
+        "INSERT INTO personal_experiment_allocations "
+        "(device_id, sequence, claim_token, claimed_at) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(device_id) DO UPDATE SET sequence = excluded.sequence, "
+        "claim_token = excluded.claim_token, claimed_at = excluded.claimed_at "
+        "WHERE personal_experiment_allocations.claimed_at <= ?",
+        (device_id, sequence, token, now, now - PERSONAL_TARGET_ALLOCATION_TTL),
+    )
+    return token if changed.rowcount == 1 else None
+
+
+def _release_personal_allocation(conn: sqlite3.Connection, device_id: str, token: str):
+    conn.execute(
+        "DELETE FROM personal_experiment_allocations WHERE device_id = ? AND claim_token = ?",
+        (device_id, token),
+    )
+
+
+def _abort_personal_allocation(conn: sqlite3.Connection, device_id: str, token: str):
+    conn.rollback()
+    try:
+        _refund_experiment(conn, device_id)
+    finally:
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            _release_personal_allocation(conn, device_id, token)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
+
+def _wait_for_personal_allocation(conn: sqlite3.Connection, device_id: str, sequence: int):
+    deadline = time.time() + PERSONAL_TARGET_ALLOCATION_TTL
+    while time.time() < deadline:
+        current = conn.execute(
+            "SELECT * FROM personal_experiment_targets "
+            "WHERE device_id = ? AND status = 'active' AND sequence >= ? "
+            "ORDER BY sequence DESC LIMIT 1",
+            (device_id, sequence),
+        ).fetchone()
+        if current is not None:
+            return _personal_target_snapshot(current)
+        claim = conn.execute(
+            "SELECT sequence, claimed_at FROM personal_experiment_allocations WHERE device_id = ?",
+            (device_id,),
+        ).fetchone()
+        if claim is None or int(claim["sequence"]) != sequence:
+            return None
+        if time.time() - float(claim["claimed_at"]) > PERSONAL_TARGET_ALLOCATION_TTL:
+            return None
+        time.sleep(0.05)
+    return None
+
+
+def _ensure_personal_target(conn: sqlite3.Connection, device_id: str, nick: str) -> dict[str, object]:
+    while True:
+        cycle_week = _week_key()
+        current = _personal_target_in_slot(conn, device_id, cycle_week)
+        if current is not None:
+            if current["status"] == "active" and current["kind"] == "world" and _personal_device_owns(
+                conn, device_id, current["target_slug"]
+            ):
+                _set_personal_waiting_next_slot(conn, current)
+                current = _personal_target_in_slot(conn, device_id, cycle_week)
+            if current is not None:
+                return _personal_target_snapshot(current)
+
+        row = conn.execute(
+            "SELECT COALESCE(MAX(sequence), 0) + 1 AS sequence "
+            "FROM personal_experiment_targets WHERE device_id = ?",
+            (device_id,),
+        ).fetchone()
+        sequence = int(row["sequence"])
+        frontier = _select_world_target(conn, device_id, cycle_week, sequence)
+        kind = choose_target_kind(device_id, cycle_week, sequence, frontier is not None)
+
+        if kind == "world":
+            target = frontier
+            return _insert_personal_target(conn, device_id, cycle_week, sequence, {
+                "kind": "world",
+                "target_slug": target["slug"],
+                "target_name": target["name"],
+                "target_hint": target["d"] or "Открой это вещество в новом эксперименте.",
+            })
+
+        claim_token = _claim_personal_allocation(conn, device_id, sequence)
+        if claim_token is None:
+            conn.commit()
+            target = _wait_for_personal_allocation(conn, device_id, sequence)
+            if target is not None:
+                return target
+            continue
+        allowed, message = _admit_experiment(conn, device_id)
+        if not allowed:
+            _release_personal_allocation(conn, device_id, claim_token)
+            conn.commit()
+            raise QuotaExceeded(message)
+        conn.commit()
+        break
+
+    try:
+        for _attempt in range(3):
+            try:
+                generated = _new_personal_llm_target(device_id, cycle_week, sequence)
+            except LLMError:
+                continue
+            conn.execute("BEGIN IMMEDIATE")
+            current = _personal_target_in_slot(conn, device_id, cycle_week)
+            if current is not None:
+                _abort_personal_allocation(conn, device_id, claim_token)
+                return _personal_target_snapshot(current)
+            name_norm = normalize_target_name(generated["name"])
+            world_conflict = conn.execute(
+                "SELECT 1 FROM elements WHERE name_norm = ? LIMIT 1",
+                (name_norm,),
+            ).fetchone()
+            active_conflict = conn.execute(
+                "SELECT 1 FROM personal_experiment_targets "
+                "WHERE target_name_norm = ? AND status = 'active' LIMIT 1",
+                (name_norm,),
+            ).fetchone()
+            if world_conflict is not None or active_conflict is not None:
+                conn.commit()
+                continue
+            target = _insert_personal_target(conn, device_id, cycle_week, sequence, {
+                "kind": "llm",
+                "target_slug": None,
+                "target_name": generated["name"],
+                "target_hint": generated["hint"],
+            })
+            _release_personal_allocation(conn, device_id, claim_token)
+            conn.commit()
+            return target
+    except Exception:
+        try:
+            _abort_personal_allocation(conn, device_id, claim_token)
+        except Exception:
+            conn.rollback()
+        raise
+
+    _abort_personal_allocation(conn, device_id, claim_token)
+    raise LLMError("персональная цель недоступна")
+
+
+@app.post("/api/experiment/target", response_model=PersonalExperimentTargetResponse)
+def personal_experiment_target(req: PersonalExperimentTargetRequest):
+    conn = get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        _upsert_player(conn, req.nick, req.device_id)
+        target = _ensure_personal_target(conn, req.device_id, req.nick)
+        conn.commit()
+        response_status = str(target["status"])
+        if response_status == "completed" and target.get("next_eligible_week", "") > _week_key():
+            response_status = "waiting_next_slot"
+        return PersonalExperimentTargetResponse(
+            ok=True, target=target, status=response_status,
+            message="Цель эксперимента готова", ether_cost=EXPERIMENT_ETHER_COST,
+        )
+    except QuotaExceeded as exc:
+        conn.rollback()
+        return PersonalExperimentTargetResponse(
+            ok=False, target=None, status="rate_limited", message=exc.text,
+            ether_cost=EXPERIMENT_ETHER_COST,
+        )
+    except LLMError:
+        conn.rollback()
+        return PersonalExperimentTargetResponse(
+            ok=False, target=None, status="target_unavailable",
+            message="Персональная цель сейчас недоступна — попробуйте позже.",
+            ether_cost=EXPERIMENT_ETHER_COST,
+        )
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _personal_response_payload(response: PersonalExperimentAttemptResponse) -> dict:
+    return response.model_dump() if hasattr(response, "model_dump") else response.dict()
+
+
+def _personal_attempt_response(
+    *, target_id: str, request_id: str, pair_key: str, status: str,
+    message: str, target: dict | None = None, discovery: DiscoveryData | None = None,
+    ether_charged: int = 0, detail: str | None = None,
+) -> PersonalExperimentAttemptResponse:
+    return PersonalExperimentAttemptResponse(
+        ok=status not in {"target_not_found", "target_stale", "request_mismatch", "ingredient_not_granted", "target_conflict"},
+        status=status, discovery=discovery, already_known=status == "known",
+        message=message, detail=detail, target_id=target_id, request_id=request_id,
+        pair_key=pair_key, target=target, ether_charged=ether_charged,
+    )
+
+
+def _personal_request_mismatch(conn, device_id, target_id, request_id, pair_key):
+    target = conn.execute(
+        "SELECT * FROM personal_experiment_targets WHERE id = ? AND device_id = ?",
+        (target_id, device_id),
+    ).fetchone()
+    return _personal_attempt_response(
+        target_id=target_id, request_id=request_id, pair_key=pair_key,
+        status="request_mismatch", message="Request id уже использован для другой попытки.",
+        target=_personal_target_snapshot(target) if target is not None else None,
+    )
+
+
+def _personal_wait_for_attempt(device_id, target_id, request_id, pair_key, deadline):
+    while True:
+        with closing(get_db()) as wait_conn:
+            row = wait_conn.execute(
+                "SELECT device_id, pair_key, status, response_json, claimed_at "
+                "FROM personal_experiment_attempts WHERE target_id = ? AND request_id = ?",
+                (target_id, request_id),
+            ).fetchone()
+            if row is None:
+                return None
+            if row["device_id"] != device_id or row["pair_key"] != pair_key:
+                return _personal_request_mismatch(
+                    wait_conn, device_id, target_id, request_id, pair_key,
+                )
+            if row["status"] != "processing":
+                return PersonalExperimentAttemptResponse.model_validate(json.loads(row["response_json"]))
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            return None
+        time.sleep(min(0.05, remaining))
+
+
+_PERSONAL_ATTEMPT_PENDING = object()
+
+
+def _personal_attempt_replay(conn: sqlite3.Connection, device_id: str, target_id: str,
+                             request_id: str, pair_key: str, wait=True):
+    row = conn.execute(
+        "SELECT device_id, pair_key, status, response_json, claimed_at "
+        "FROM personal_experiment_attempts WHERE target_id = ? AND request_id = ?",
+        (target_id, request_id),
+    ).fetchone()
+    if row is None:
+        return None
+    if row["device_id"] != device_id or row["pair_key"] != pair_key:
+        return _personal_request_mismatch(conn, device_id, target_id, request_id, pair_key)
+    if row["status"] != "processing":
+        return PersonalExperimentAttemptResponse.model_validate(json.loads(row["response_json"]))
+    if not wait:
+        return _PERSONAL_ATTEMPT_PENDING
+    claimed_at = float(row["claimed_at"] or 0.0)
+    if time.time() - claimed_at > LOCK_TTL:
+        return None
+    return _personal_wait_for_attempt(
+        device_id, target_id, request_id, pair_key, claimed_at + LOCK_TTL,
+    )
+
+
+def _personal_locked_replay(conn, target_row, req, pair_key):
+    replay = _personal_attempt_replay(
+        conn, req.device_id, req.target_id, req.request_id, pair_key, wait=False,
+    )
+    if replay is _PERSONAL_ATTEMPT_PENDING:
+        conn.rollback()
+        replay = _personal_attempt_replay(
+            conn, req.device_id, req.target_id, req.request_id, pair_key,
+        )
+        if replay is not None:
+            return replay
+        return _personal_attempt_response(
+            target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+            status="target_stale", message="Цель устарела.",
+            target=_personal_target_snapshot(target_row),
+        )
+    if replay is not None:
+        conn.rollback()
+    return replay
+
+
+def _personal_claim_llm_attempt(conn, target_row, req, pair_key):
+    token = uuid.uuid4().hex
+    while True:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT device_id, pair_key, status, response_json, claim_token, claimed_at "
+            "FROM personal_experiment_attempts WHERE target_id = ? AND request_id = ?",
+            (target_row["id"], req.request_id),
+        ).fetchone()
+        if row is not None:
+            if row["device_id"] != req.device_id or row["pair_key"] != pair_key:
+                conn.rollback()
+                return _personal_request_mismatch(
+                    conn, req.device_id, target_row["id"], req.request_id, pair_key,
+                ), None
+            if row["status"] != "processing":
+                conn.rollback()
+                return PersonalExperimentAttemptResponse.model_validate(
+                    json.loads(row["response_json"])
+                ), None
+            claimed_at = float(row["claimed_at"] or 0.0)
+            if time.time() - claimed_at <= LOCK_TTL:
+                conn.rollback()
+                replay = _personal_attempt_replay(
+                    conn, req.device_id, target_row["id"], req.request_id, pair_key,
+                )
+                if replay is not None:
+                    return replay, None
+                continue
+            changed = conn.execute(
+                "UPDATE personal_experiment_attempts SET claim_token = ?, claimed_at = ? "
+                "WHERE target_id = ? AND request_id = ? AND status = 'processing' "
+                "AND claim_token = ? AND claimed_at = ?",
+                (token, time.time(), target_row["id"], req.request_id,
+                 row["claim_token"], row["claimed_at"]),
+            )
+            if changed.rowcount != 1:
+                conn.rollback()
+                continue
+        else:
+            current = conn.execute(
+                "SELECT * FROM personal_experiment_targets WHERE id = ?",
+                (target_row["id"],),
+            ).fetchone()
+            if current is None or current["status"] != "active":
+                conn.rollback()
+                return _personal_attempt_response(
+                    target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+                    status="target_stale", message="Цель устарела.",
+                    target=_personal_target_snapshot(current) if current is not None else None,
+                ), None
+            conn.execute(
+                "INSERT INTO personal_experiment_attempts "
+                "(target_id, device_id, request_id, pair_key, status, response_json, "
+                "claim_token, claimed_at, created_at) VALUES (?, ?, ?, ?, 'processing', '', ?, ?, ?)",
+                (target_row["id"], req.device_id, req.request_id, pair_key,
+                 token, time.time(), _now_iso()),
+            )
+        conn.commit()
+        return None, token
+
+
+def _personal_claim_is_current(conn, req, claim_token):
+    row = conn.execute(
+        "SELECT status, claim_token FROM personal_experiment_attempts "
+        "WHERE target_id = ? AND request_id = ?",
+        (req.target_id, req.request_id),
+    ).fetchone()
+    return row is not None and row["status"] == "processing" and row["claim_token"] == claim_token
+
+
+def _personal_claim_cleanup(conn, req, claim_token):
+    conn.execute("BEGIN IMMEDIATE")
+    conn.execute(
+        "DELETE FROM personal_experiment_attempts WHERE target_id = ? AND request_id = ? "
+        "AND status = 'processing' AND claim_token = ?",
+        (req.target_id, req.request_id, claim_token),
+    )
+    conn.commit()
+
+
+def _personal_target_row(conn: sqlite3.Connection, device_id: str, target_id: str):
+    return conn.execute(
+        "SELECT * FROM personal_experiment_targets WHERE id = ? AND device_id = ?",
+        (target_id, device_id),
+    ).fetchone()
+
+
+def _personal_target_refresh(conn, target_row):
+    current = conn.execute(
+        "SELECT * FROM personal_experiment_targets WHERE id = ?", (target_row["id"],)
+    ).fetchone()
+    return _personal_target_snapshot(current)
+
+
+def _personal_target_mark_waiting(conn, target_row):
+    next_week = _week_key(_week_monday(target_row["cycle_week"]).toordinal() if False else None)
+    current_week = _week_key()
+    next_eligible = _week_key(_week_monday(target_row["cycle_week"]).fromordinal(
+        _week_monday(target_row["cycle_week"]).toordinal() + 7
+    ).isoformat())
+    conn.execute(
+        "UPDATE personal_experiment_targets SET status = 'waiting_next_slot', "
+        "next_eligible_week = ?, version = version + 1 WHERE id = ?",
+        (next_eligible, target_row["id"]),
+    )
+
+
+def _personal_target_completion(conn, target_row, discovery: DiscoveryData | None,
+                                accepted: bool) -> bool:
+    if not accepted:
+        return False
+    if target_row["kind"] == "world":
+        if discovery is None or discovery.slug != target_row["target_slug"]:
+            return False
+    else:
+        if discovery is None or normalize_target_name(discovery.name) != target_row["target_name_norm"]:
+            return False
+    return True
+
+
+def _personal_attempt_record(conn, target_row, req, pair_key, response, ether_charged,
+                             claim_token=None):
+    payload = json.dumps(_personal_response_payload(response), ensure_ascii=False)
+    result_slug = response.discovery.slug if response.discovery else None
+    if claim_token is None:
+        conn.execute(
+            "INSERT INTO personal_experiment_attempts "
+            "(target_id, device_id, request_id, pair_key, status, result_slug, "
+            "ether_charged, response_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                target_row["id"], req.device_id, req.request_id, pair_key, response.status,
+                result_slug, ether_charged, payload, _now_iso(),
+            ),
+        )
+        return
+    changed = conn.execute(
+        "UPDATE personal_experiment_attempts SET status = ?, result_slug = ?, "
+        "ether_charged = ?, response_json = ?, claim_token = NULL, claimed_at = NULL "
+        "WHERE target_id = ? AND request_id = ? AND status = 'processing' AND claim_token = ?",
+        (
+            response.status, result_slug, ether_charged, payload,
+            target_row["id"], req.request_id, claim_token,
+        ),
+    )
+    if changed.rowcount != 1:
+        raise RuntimeError("personal experiment claim lost before finalize")
+
+
+def _personal_record_early(conn, target_row, req, pair_key, response):
+    conn.execute("BEGIN IMMEDIATE")
+    replay = _personal_locked_replay(conn, target_row, req, pair_key)
+    if replay is not None:
+        return replay
+    _personal_attempt_record(conn, target_row, req, pair_key, response, 0)
+    conn.commit()
+    return response
+
+
+def _personal_finalize(conn, target_row, req, pair_key, response, successful, ether_charged,
+                       complete=False):
+    charged = ether_charged if successful else 0
+    if successful and complete:
+        conn.execute(
+            "UPDATE personal_experiment_targets SET attempts = attempts + 1, "
+            "successful_steps = successful_steps + 1, spent_ether = spent_ether + ?, "
+            "status = 'completed', completed_at = ?, completed_request_id = ?, "
+            "next_eligible_week = ?, version = version + 1 WHERE id = ? AND status = 'active'",
+            (charged, _now_iso(), req.request_id, _next_week_key(_week_key()), target_row["id"]),
+        )
+    elif successful:
+        conn.execute(
+            "UPDATE personal_experiment_targets SET attempts = attempts + 1, "
+            "successful_steps = successful_steps + 1, spent_ether = spent_ether + ?, "
+            "version = version + 1 WHERE id = ? AND status = 'active'",
+            (charged, target_row["id"]),
+        )
+    else:
+        conn.execute(
+            "UPDATE personal_experiment_targets SET attempts = attempts + 1, version = version + 1 "
+            "WHERE id = ? AND status = 'active'",
+            (target_row["id"],),
+        )
+    snapshot = _personal_target_refresh(conn, target_row)
+    response.target = snapshot
+    response.ether_charged = charged
+    response.acquired = successful
+    return response
+
+
+def _personal_evaluate_target(conn, target_row, req):
+    llm = get_llm()
+    if not llm.available():
+        return "unavailable", None
+    reserved = False
+    if req.device_id:
+        allowed, _message = _admit_experiment(conn, req.device_id)
+        if not allowed:
+            return "rate_limited", None
+        reserved = True
+    try:
+        a_info = _parent(conn, req.a)
+        b_info = _parent(conn, req.b)
+        raw = llm.evaluate_personal_target(
+            target_row["target_name"], a_info["name"], b_info["name"], ""
+        )
+    except LLMError:
+        if reserved:
+            _refund_experiment(conn, req.device_id)
+        return "unavailable", None
+    except Exception:
+        if reserved:
+            _refund_experiment(conn, req.device_id)
+        raise
+    valid = gen_llm.validate_target_result(raw)
+    if valid is None:
+        if reserved:
+            _refund_experiment(conn, req.device_id)
+        return "invalid", None
+    if valid["outcome"] != "invalid" and not gen_llm.semantic_check(
+        valid["name"], a_info["name"], b_info["name"]
+    )[0]:
+        if reserved:
+            _refund_experiment(conn, req.device_id)
+        return "invalid", None
+    return valid["outcome"], valid
+
+
+def _personal_evaluator_response(target_id, request_id, pair_key, status, target):
+    messages = {
+        "invalid": "Целевой evaluator вернул некорректный результат.",
+        "unavailable": "Целевой evaluator сейчас недоступен.",
+        "rate_limited": "Эксперимент можно отправить позже.",
+    }
+    return _personal_attempt_response(
+        target_id=target_id, request_id=request_id, pair_key=pair_key,
+        status=status, message=messages[status], target=target,
+    )
+
+
+def _personal_llm_attempt(conn, target_row, req, pair_key):
+    response, claim_token = _personal_claim_llm_attempt(conn, target_row, req, pair_key)
+    if response is not None:
+        return response
+    try:
+        return _personal_llm_attempt_claimed(
+            conn, target_row, req, pair_key, claim_token,
+        )
+    except Exception:
+        conn.rollback()
+        _personal_claim_cleanup(conn, req, claim_token)
+        raise
+
+
+def _personal_llm_attempt_claimed(conn, target_row, req, pair_key, claim_token):
+    outcome, evaluated = _personal_evaluate_target(conn, target_row, req)
+    if outcome in ("invalid", "unavailable", "rate_limited"):
+        conn.execute("BEGIN IMMEDIATE")
+        if not _personal_claim_is_current(conn, req, claim_token):
+            conn.rollback()
+            replay = _personal_attempt_replay(
+                conn, req.device_id, req.target_id, req.request_id, pair_key,
+            )
+            if replay is not None:
+                return replay
+            return _personal_attempt_response(
+                target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+                status="target_stale", message="Цель устарела.",
+                target=_personal_target_snapshot(target_row),
+            )
+        current = conn.execute(
+            "SELECT * FROM personal_experiment_targets WHERE id = ?", (target_row["id"],)
+        ).fetchone()
+        if current["status"] != "active":
+            response = _personal_attempt_response(
+                target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+                status="target_stale", message="Цель устарела.",
+                target=_personal_target_snapshot(current),
+            )
+            _personal_attempt_record(
+                conn, current, req, pair_key, response, 0, claim_token=claim_token,
+            )
+            conn.commit()
+            return response
+        response = _personal_evaluator_response(
+            req.target_id, req.request_id, pair_key, outcome,
+            _personal_target_snapshot(current),
+        )
+        if outcome != "rate_limited":
+            response = _personal_finalize(conn, current, req, pair_key, response, False, 0)
+        _personal_attempt_record(
+            conn, current, req, pair_key, response, 0, claim_token=claim_token,
+        )
+        conn.commit()
+        return response
+
+    conn.execute("BEGIN IMMEDIATE")
+    if not _personal_claim_is_current(conn, req, claim_token):
+        conn.rollback()
+        replay = _personal_attempt_replay(
+            conn, req.device_id, req.target_id, req.request_id, pair_key,
+        )
+        if replay is not None:
+            return replay
+        return _personal_attempt_response(
+            target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+            status="target_stale", message="Цель устарела.",
+            target=_personal_target_snapshot(target_row),
+        )
+    current = conn.execute(
+        "SELECT * FROM personal_experiment_targets WHERE id = ?", (target_row["id"],)
+    ).fetchone()
+    if current["status"] != "active":
+        response = _personal_attempt_response(
+            target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+            status="target_stale", message="Цель устарела.",
+            target=_personal_target_snapshot(current),
+        )
+        _personal_attempt_record(
+            conn, current, req, pair_key, response, 0, claim_token=claim_token,
+        )
+        conn.commit()
+        return response
+
+    recipe_row = conn.execute(
+        "SELECT r.*, e.slug, e.name, e.color, e.layer, e.category, e.glyph, e.d, "
+        "e.author, e.author_device, e.tag, e.created_at "
+        "FROM recipes r JOIN elements e ON e.id = r.out_id WHERE r.pair_key = ?",
+        (pair_key,),
+    ).fetchone()
+    if recipe_row is not None:
+        known_response = _known_discovery(conn, recipe_row, pair_key, req.a, req.b)
+        discovery = known_response.discovery if known_response is not None else None
+        if outcome == "target":
+            response = _personal_attempt_response(
+                target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+                status="target_conflict", message="Эта пара уже ведёт к существующему веществу.",
+                discovery=discovery, target=_personal_target_snapshot(current),
+            )
+            response = _personal_finalize(conn, current, req, pair_key, response, False, 0)
+            _personal_attempt_record(
+                conn, current, req, pair_key, response, 0, claim_token=claim_token,
+            )
+            conn.commit()
+            return response
+        if normalize_target_name(evaluated["name"]) != normalize_target_name(recipe_row["name"]):
+            response = _personal_attempt_response(
+                target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+                status="invalid", message="Evaluator не подтвердил существующий результат.",
+                discovery=discovery, target=_personal_target_snapshot(current),
+            )
+            response = _personal_finalize(conn, current, req, pair_key, response, False, 0)
+            _personal_attempt_record(
+                conn, current, req, pair_key, response, 0, claim_token=claim_token,
+            )
+            conn.commit()
+            return response
+        acquired = not _personal_device_owns(conn, req.device_id, recipe_row["slug"])
+        if acquired:
+            _grant_recipe(conn, req.device_id, pair_key, req.a, req.b, recipe_row["slug"], "personal_experiment")
+        response = _personal_attempt_response(
+            target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+            status="known", message="Промежуточный результат уже известен миру.",
+            discovery=discovery, target=_personal_target_snapshot(current),
+        )
+        response = _personal_finalize(
+            conn, current, req, pair_key, response, acquired,
+            EXPERIMENT_ETHER_COST if acquired else 0,
+        )
+        _personal_attempt_record(
+            conn, current, req, pair_key, response, response.ether_charged,
+            claim_token=claim_token,
+        )
+        conn.commit()
+        return response
+
+    if conn.execute("SELECT 1 FROM rejected_pairs WHERE pair_key = ?", (pair_key,)).fetchone():
+        response = _personal_attempt_response(
+            target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+            status="not_combinable", message="Эта пара не сочетается.",
+            target=_personal_target_snapshot(current),
+        )
+        response = _personal_finalize(conn, current, req, pair_key, response, False, 0)
+        _personal_attempt_record(
+                conn, current, req, pair_key, response, 0, claim_token=claim_token,
+            )
+        conn.commit()
+        return response
+
+    name = evaluated["name"]
+    if outcome == "target" and normalize_target_name(name) != current["target_name_norm"]:
+        response = _personal_attempt_response(
+            target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+            status="target_conflict", message="Evaluator вернул другое имя цели.",
+            target=_personal_target_snapshot(current),
+        )
+        response = _personal_finalize(conn, current, req, pair_key, response, False, 0)
+        _personal_attempt_record(
+                conn, current, req, pair_key, response, 0, claim_token=claim_token,
+            )
+        conn.commit()
+        return response
+
+    existing = conn.execute(
+        "SELECT id, slug, name, color, layer, category, glyph, d, author, author_device, tag, created_at "
+        "FROM elements WHERE name_norm = ? ORDER BY id LIMIT 1",
+        (normalize_target_name(name),),
+    ).fetchone()
+    if existing is not None and outcome == "target":
+        response = _personal_attempt_response(
+            target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+            status="target_conflict", message="Имя цели уже занято мировым веществом.",
+            target=_personal_target_snapshot(current),
+        )
+        response = _personal_finalize(conn, current, req, pair_key, response, False, 0)
+        _personal_attempt_record(
+                conn, current, req, pair_key, response, 0, claim_token=claim_token,
+            )
+        conn.commit()
+        return response
+
+    a_info = _parent(conn, req.a)
+    b_info = _parent(conn, req.b)
+    category = _result_category(a_info, b_info)
+    nick = _upsert_player(conn, req.nick, req.device_id)
+    owned_before = _personal_device_owns(
+        conn, req.device_id, existing["slug"] if existing is not None else ""
+    )
+    if existing is not None:
+        discovery = _link_existing(
+            conn, req.a, req.b, a_info, b_info, pair_key, nick, existing, req.device_id
+        )
+    else:
+        public_description = "Создано из «%s» и «%s»." % (a_info["name"], b_info["name"])
+        discovery = _materialize(
+            conn, req.a, req.b, a_info, b_info, pair_key, nick, name, category,
+            "llm", _fallback_glyph(name, category), public_description, category,
+            req.device_id,
+        )
+    acquired = not owned_before
+    if acquired:
+        _grant_recipe(conn, req.device_id, pair_key, req.a, req.b, discovery.slug, "personal_experiment")
+    complete = outcome == "target" and acquired
+    if complete:
+        conn.execute(
+            "UPDATE personal_experiment_targets SET target_slug = ? WHERE id = ?",
+            (discovery.slug, current["id"]),
+        )
+    response = _personal_attempt_response(
+        target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+        status="created", message="Персональный результат принят.", discovery=discovery,
+        target=_personal_target_snapshot(current),
+    )
+    response = _personal_finalize(
+        conn, current, req, pair_key, response, acquired,
+        EXPERIMENT_ETHER_COST if acquired else 0, complete=complete,
+    )
+    _personal_attempt_record(
+            conn, current, req, pair_key, response, response.ether_charged,
+            claim_token=claim_token,
+        )
+    conn.commit()
+    return response
+
+
+@app.post("/api/experiment/attempt", response_model=PersonalExperimentAttemptResponse)
+def personal_experiment_attempt(req: PersonalExperimentAttemptRequest):
+    pair_key = canonical_pair_key(req.a, req.b)
+    conn = get_db()
+    try:
+        target_row = _personal_target_row(conn, req.device_id, req.target_id)
+        if target_row is None:
+            return _personal_attempt_response(
+                target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+                status="target_not_found", message="Цель не принадлежит этому игроку.",
+            )
+        replay = _personal_attempt_replay(
+            conn, req.device_id, req.target_id, req.request_id, pair_key,
+        )
+        if replay is not None:
+            return replay
+        active = _active_personal_target(conn, req.device_id)
+        if active is None or active["id"] != target_row["id"]:
+            return _personal_attempt_response(
+                target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+                status="target_stale", message="Цель устарела.",
+            )
+        for slug in (req.a, req.b):
+            if not _personal_device_owns(conn, req.device_id, slug):
+                granted = conn.execute("SELECT 1 FROM elements WHERE slug = ?", (slug,)).fetchone()
+                response = _personal_attempt_response(
+                    target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+                    status="ingredient_not_granted" if granted else "invalid",
+                    message="Ингредиент ещё не открыт этим игроком." if granted else "Ингредиент не найден.",
+                    detail="ingredient_not_granted" if granted else None,
+                    target=_personal_target_snapshot(target_row),
+                )
+                return _personal_record_early(conn, target_row, req, pair_key, response)
+
+        if target_row["kind"] == "llm":
+            return _personal_llm_attempt(conn, target_row, req, pair_key)
+
+        recipe_row = conn.execute(
+            "SELECT r.*, e.slug, e.name, e.color, e.layer, e.category, e.glyph, e.d, e.author, e.tag, e.created_at "
+            "FROM recipes r JOIN elements e ON e.id = r.out_id WHERE r.pair_key = ?",
+            (pair_key,),
+        ).fetchone()
+        if target_row["kind"] == "world" and _personal_device_owns(conn, req.device_id, target_row["target_slug"]):
+            conn.execute("BEGIN IMMEDIATE")
+            replay = _personal_locked_replay(conn, target_row, req, pair_key)
+            if replay is not None:
+                return replay
+            _set_personal_waiting_next_slot(conn, target_row)
+            response = _personal_attempt_response(
+                target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+                status="target_already_owned", message="Целевое вещество уже открыто этим игроком.",
+                target=_personal_target_refresh(conn, target_row),
+            )
+            _personal_attempt_record(conn, target_row, req, pair_key, response, 0)
+            conn.commit()
+            return response
+        if recipe_row is None and conn.execute(
+            "SELECT 1 FROM rejected_pairs WHERE pair_key = ?", (pair_key,)
+        ).fetchone():
+            response = _personal_attempt_response(
+                target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+                status="not_combinable", message="Эта пара не сочетается.", target=_personal_target_snapshot(target_row),
+            )
+            conn.execute("BEGIN IMMEDIATE")
+            replay = _personal_locked_replay(conn, target_row, req, pair_key)
+            if replay is not None:
+                return replay
+            response = _personal_finalize(conn, target_row, req, pair_key, response, False, 0)
+            _personal_attempt_record(conn, target_row, req, pair_key, response, 0)
+            conn.commit()
+            return response
+        if recipe_row is None:
+            response = _personal_attempt_response(
+                target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+                status="unavailable", message="Пара ещё не оценена сервером.", target=_personal_target_snapshot(target_row),
+            )
+            conn.execute("BEGIN IMMEDIATE")
+            replay = _personal_locked_replay(conn, target_row, req, pair_key)
+            if replay is not None:
+                return replay
+            response = _personal_finalize(conn, target_row, req, pair_key, response, False, 0)
+            _personal_attempt_record(conn, target_row, req, pair_key, response, 0)
+            conn.commit()
+            return response
+
+        known_response = _known_discovery(conn, recipe_row, pair_key, req.a, req.b)
+        discovery = known_response.discovery if known_response is not None else None
+        conn.execute("BEGIN IMMEDIATE")
+        replay = _personal_locked_replay(conn, target_row, req, pair_key)
+        if replay is not None:
+            return replay
+        current_target = conn.execute(
+            "SELECT * FROM personal_experiment_targets WHERE id = ?", (target_row["id"],)
+        ).fetchone()
+        if current_target["status"] != "active":
+            conn.rollback()
+            return _personal_attempt_response(
+                target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+                status="target_stale", message="Цель устарела.",
+                target=_personal_target_snapshot(current_target),
+            )
+        target_acquired = not _personal_device_owns(conn, req.device_id, recipe_row["slug"])
+        if target_acquired:
+            _grant_recipe(conn, req.device_id, pair_key, req.a, req.b, recipe_row["slug"], "personal_experiment")
+        accepted = target_acquired
+        response_status = "known"
+        response = _personal_attempt_response(
+            target_id=req.target_id, request_id=req.request_id, pair_key=pair_key,
+            status=response_status, message="Пара уже известна миру.", discovery=discovery,
+            target=_personal_target_snapshot(target_row),
+        )
+        response = _personal_finalize(
+            conn, target_row, req, pair_key, response, accepted,
+            EXPERIMENT_ETHER_COST if accepted else 0,
+            complete=accepted and recipe_row["slug"] == target_row["target_slug"],
+        )
+        _personal_attempt_record(conn, target_row, req, pair_key, response, response.ether_charged)
+        conn.commit()
+        return response
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        replay = _personal_attempt_replay(
+            conn, req.device_id, req.target_id, req.request_id, pair_key,
+        )
+        if replay is not None:
+            return replay
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def _week_tags(conn: sqlite3.Connection) -> list:
@@ -4386,7 +5405,8 @@ def delete_account(request: Request, device_id: str = Query(..., min_length=1, m
             # F3 (приватность): цикл-модель жилы добавила свои таблицы —
             # личные находки, прожилки и журнал вливаний тоже чистим.
             "personal_discoveries", "vein_streaks", "vein_pour_log",
-            "trade_counts", "device_grants",
+            "personal_experiment_attempts", "personal_experiment_targets",
+            "personal_experiment_allocations", "trade_counts", "device_grants",
             "sigil_crafts", "sigil_daily", "sigil_milestones",
             "experiment_limits", "letter_limits", "atlas_limits",
         ]:

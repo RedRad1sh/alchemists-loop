@@ -14,11 +14,32 @@ class FailSendNet extends NetBase:
 		attempts += 1
 		return ERR_CANT_CONNECT
 
+class CaptureNet extends NetBase:
+	var last_url := ""
+	var last_body := ""
+	var last_method := 0
+	func _try_send(url: String, _headers: PackedStringArray, method: int, body: String) -> int:
+		last_url = url
+		last_body = body
+		last_method = method
+		return ERR_CANT_CONNECT
+
+class TargetAttemptSink extends RefCounted:
+	var request_ids: Array[String] = []
+	var pair_keys: Array[String] = []
+	var results: Array[Dictionary] = []
+	func catch(request_id: String, pair_key: String, result: Dictionary) -> void:
+		request_ids.append(request_id)
+		pair_keys.append(pair_key)
+		results.append(result)
+
 # подписчик на *_*_result: collects dispatched dicts
 class OfflineSink extends RefCounted:
 	var results: Array[Dictionary] = []
-	func catch(res: Dictionary) -> void:
+	var nonces: Array[String] = []
+	func catch(res: Dictionary, sync_nonce: String = "") -> void:
 		results.append(res)
+		nonces.append(sync_nonce)
 
 # подписчик на Net.error: считает эмиссии (F1: слив очереди при пустом base_url
 # не имеет права эмитировать error — только offline-результаты через _dispatch).
@@ -230,6 +251,127 @@ static func run(g: Game) -> void:
 	g._engine._spring_tick(Game.SPRING_INTERVAL + 0.01)
 	Selftest.check("spring drop", int(g._engine.inventory.get("water", 0)) == a_before + 1)
 	g._engine.spring_on = false
+	# ============ Experiment: no-reagent start, success-only ether ============
+	var exp_inv_before := g._engine.inventory.duplicate(true)
+	var exp_known_before := g._engine.known_recipes.duplicate(true)
+	var exp_rejected_before := g._engine._rejected_pairs.duplicate(true)
+	var exp_pending_before := g._engine._experiment_pending_pair.duplicate()
+	var exp_reserved_before := g._engine._experiment_reserved_ether
+	var exp_ether_before := g._engine.ether
+	var exp_overflow_before := g._engine.ether_overflow
+	var exp_attempts_before := g._engine.attempts
+	var exp_successes_before := g._engine.successes
+	var exp_day_before := g._engine._experiment_day
+	var exp_count_before := g._engine._experiment_count
+	var exp_last_at_before := g._engine._experiment_last_at
+	var exp_pair := g._pair_key("fire", "water")
+	g._engine.inventory["fire"] = 0
+	g._engine.inventory["water"] = 0
+	g._engine.known_recipes.erase(exp_pair)
+	g._engine._rejected_pairs.erase(exp_pair)
+	g._engine._experiment_pending_pair.clear()
+	g._engine._experiment_reserved_ether = 0
+	g._engine._experiment_day = ""
+	g._engine._experiment_count = 0
+	g._engine._experiment_last_at = 0.0
+	g._engine.ether = Game.EXPERIMENT_COST
+	g._engine.ether_overflow = 0
+	var exp_visible_before := g._engine.ether
+	var exp_available_before := g._engine._available_ether()
+	var exp_started := g._engine._begin_experiment("fire", "water")
+	Selftest.check("experiment starts with zero reagent stock", exp_started)
+	Selftest.check("experiment start keeps visible ether and reserves its cost",
+		g._engine.ether == exp_visible_before
+		and g._engine._available_ether() == exp_available_before - Game.EXPERIMENT_COST)
+	Selftest.check("reserved experiment ether cannot fund a parallel spend",
+		not g._engine._spend_ether(1) and g._engine.ether == exp_visible_before)
+	g._engine.ether = exp_visible_before
+	g._engine._cancel_experiment("earth", "air")
+	Selftest.check("mismatched cancel keeps the experiment reserve",
+		g._engine._available_ether() == exp_available_before - Game.EXPERIMENT_COST)
+	g._engine._cancel_experiment("fire", "water")
+	Selftest.check("cancel releases reserve without a debit",
+		g._engine._available_ether() == exp_available_before and g._engine.ether == exp_visible_before)
+	g._engine._experiment_pending_pair = ["fire", "water"]
+	g._engine._experiment_reserved_ether = Game.EXPERIMENT_COST
+	var exp_failed_visible_before := g._engine.ether
+	var exp_failed_available_before := g._engine._available_ether()
+	g._engine._experiment_failed("fire", "water")
+	Selftest.check("experiment failure keeps reagents",
+		g._engine.inventory.get("fire", 0) == 0
+		and g._engine.inventory.get("water", 0) == 0
+		and g._engine._experiment_pending_pair.is_empty())
+	Selftest.check("experiment failure releases reserve without ether debit",
+		g._engine.ether == exp_failed_visible_before
+		and g._engine._available_ether() == exp_failed_available_before + Game.EXPERIMENT_COST)
+	g._engine._rejected_pairs.erase(exp_pair)
+	g._engine._experiment_last_at = 0.0
+	g._engine._experiment_count = 0
+	var exp_success_started := g._engine._begin_experiment("fire", "water")
+	var exp_success_available_before := g._engine._available_ether()
+	var exp_success_visible_before := g._engine.ether
+	g._engine._experiment_succeeded("steam", "fire", "water")
+	var exp_success_available_after := g._engine._available_ether()
+	Selftest.check("experiment success settles its reserve and charges once",
+		exp_success_started and exp_success_visible_before - g._engine.ether == Game.EXPERIMENT_COST
+		and exp_success_available_before == exp_success_available_after)
+	g._engine._experiment_succeeded("steam", "fire", "water")
+	Selftest.check("experiment duplicate success does not charge twice", exp_success_available_after == g._engine._available_ether())
+	g._engine.known_recipes.erase(exp_pair)
+	g._engine._rejected_pairs.erase(exp_pair)
+	g._engine._experiment_last_at = 0.0
+	g._engine._experiment_count = 0
+	g._engine.ether = Game.EXPERIMENT_COST
+	g._engine.ether_overflow = 0
+	var reused_started := g._engine._begin_experiment("fire", "water")
+	var reused_available_before := g._engine._available_ether()
+	var reused_visible_before := g._engine.ether
+	g._engine._experiment_succeeded("steam", "fire", "water", "known")
+	Selftest.check("experiment known owned output releases reserve without ether debit",
+		reused_started and g._engine.ether == reused_visible_before
+		and g._engine._available_ether() == reused_available_before + Game.EXPERIMENT_COST
+		and int(g._engine.inventory.get("steam", 0)) == int(exp_inv_before.get("steam", 0)) + 2)
+	g._engine.known_recipes[exp_pair] = true
+	g._engine._experiment_last_at = 0.0
+	g._engine._experiment_count = 0
+	var target_started := g._engine._begin_experiment("fire", "water", true)
+	Selftest.check("target experiment may resolve a locally known pair", target_started)
+	g._engine._cancel_experiment("fire", "water")
+
+	var reserve_spring_levels := g._engine.spring_levels.duplicate(true)
+	var reserve_spring_inventory := g._engine.inventory.duplicate(true)
+	g._engine.inventory["stone"] = 99
+	g._engine.known_recipes.erase(exp_pair)
+	g._engine._rejected_pairs.erase(exp_pair)
+	g._engine._experiment_last_at = 0.0
+	g._engine._experiment_count = 0
+	g._engine.spring_levels["speed"] = 0
+	g._engine.ether = Game.EXPERIMENT_COST + 29
+	g._engine.ether_overflow = 0
+	var reserve_spring_started := g._engine._begin_experiment("fire", "water")
+	var reserve_spring_result: Dictionary = g._engine.spring_purchase("speed")
+	Selftest.check("spring purchase cannot consume pending experiment ether",
+		reserve_spring_started and not bool(reserve_spring_result.get("ok", false))
+		and String(reserve_spring_result.get("error", "")).contains("ether")
+		and g._engine.ether == Game.EXPERIMENT_COST + 29 and g._engine.spring_levels["speed"] == 0
+		and int(g._engine.inventory.get("stone", 0)) == 99)
+	g._engine._cancel_experiment("fire", "water")
+	g._engine.spring_levels = reserve_spring_levels
+	g._engine.inventory = reserve_spring_inventory
+	g._engine.inventory = exp_inv_before
+	g._engine.known_recipes = exp_known_before
+	g._engine._rejected_pairs = exp_rejected_before
+	g._engine._experiment_pending_pair.clear()
+	for exp_raw in exp_pending_before:
+		g._engine._experiment_pending_pair.append(String(exp_raw))
+	g._engine._experiment_reserved_ether = exp_reserved_before
+	g._engine.ether = exp_ether_before
+	g._engine.ether_overflow = exp_overflow_before
+	g._engine.attempts = exp_attempts_before
+	g._engine.successes = exp_successes_before
+	g._engine._experiment_day = exp_day_before
+	g._engine._experiment_count = exp_count_before
+	g._engine._experiment_last_at = exp_last_at_before
 	# ============ U11 (T14/T15): корреляция запрос↔ответ и grant world-opened ============
 	# Обработчики дёргаются напрямую синтезированными сигналами по pair_key;
 	# pending заполняется вызовами _register_pending_pair — Net не трогаем
@@ -355,22 +497,42 @@ static func run(g: Game) -> void:
 		"out": {"slug": "u14_ttl", "name": "U14-TTL", "color": "#112233", "glyph": "fire", "layer": 1}})
 	Selftest.check("t14 stale pending pruned", not g._engine.inventory.has("u14_ttl")
 		and g._online._pending_requests.is_empty())
-	# F1: TTL-prune ЖИВОГО эксперимента не осирочивает его — возвращает реагенты
-	# и полный эфир (иначе _experiment_pending_pair size 2 блокировал бы варку,
-	# «Начать заново» и престиж до перезапуска). Прунинг — обычным входом: поздний
-	# ответ той же пары (запись изымается уже после prune → ответ дропается).
+	# F1: TTL-prune живого эксперимента только снимает pending; поздний ответ
+	# не применяется, а неизрасходованные реагенты и эфир остаются нетронутыми.
 	g._engine._experiment_pending_pair = ["u14_exp_a", "u14_exp_b"]
 	Selftest.check("u11 prune-exp register", g._online._register_pending_pair("u14_exp_a", "u14_exp_b", true))
 	var u11_expkey := g._pair_key("u14_exp_a", "u14_exp_b")
 	var u11_expiring: Dictionary = g._online._pending_requests[u11_expkey]
 	u11_expiring["at"] = Time.get_ticks_msec() - g._online.PENDING_TTL_MSEC - 1000
 	var u11_avail0 := g._engine.ether + g._engine.ether_overflow
-	g._online._on_net_pair_result(u11_expkey, {"ok": true, "found": true, "status": "known"})
-	Selftest.check("u11 prune-exp refunds reagents", g._engine._experiment_pending_pair.is_empty()
-		and int(g._engine.inventory.get("u14_exp_a", 0)) == 1
-		and int(g._engine.inventory.get("u14_exp_b", 0)) == 1)
-	Selftest.check("u11 prune-exp refunds ether", g._online._pending_requests.is_empty()
-		and g._engine.ether + g._engine.ether_overflow == u11_avail0 + Game.EXPERIMENT_COST)
+	var u11_exp_a_before := int(g._engine.inventory.get("u14_exp_a", 0))
+	var u11_exp_b_before := int(g._engine.inventory.get("u14_exp_b", 0))
+	g._online._on_net_pair_result(u11_expkey, {"ok": true, "found": true, "status": "known",
+		"out": {"slug": "u14_exp_late", "name": "U14-поздний", "color": "#112233", "glyph": "fire", "layer": 1}})
+	Selftest.check("u11 prune-exp keeps reagents", g._engine._experiment_pending_pair.is_empty()
+		and int(g._engine.inventory.get("u14_exp_a", 0)) == u11_exp_a_before
+		and int(g._engine.inventory.get("u14_exp_b", 0)) == u11_exp_b_before)
+	Selftest.check("u11 prune-exp keeps ether and drops late result", g._online._pending_requests.is_empty()
+		and g._engine.ether + g._engine.ether_overflow == u11_avail0
+		and not g.ITEMS.has("u14_exp_late") and not g._engine.inventory.has("u14_exp_late")
+		and not g._engine.known_recipes.has(u11_expkey))
+	# Недостаток эфира не должен частично зарегистрировать серверный элемент
+	# или рецепт до отказа success commit.
+	g._engine._experiment_pending_pair = ["fire", "water"]
+	g._engine.ether = 0
+	g._engine.ether_overflow = 0
+	var u11_atomic_inv := g._engine.inventory.duplicate(true)
+	var u11_atomic_known := g._engine.known_recipes.duplicate(true)
+	var u11_atomic_recipes := g.RECIPES.duplicate(true)
+	var u11_atomic_items := g.ITEMS.duplicate(true)
+	g._online._experiment_outcome({"slug": "u11_no_ether", "name": "U11-без эфира",
+		"color": "#112233", "glyph": "fire", "layer": 1}, "fire", "water")
+	Selftest.check("experiment insufficient ether leaves graph unchanged",
+		g._engine.ether + g._engine.ether_overflow == 0
+		and not g.ITEMS.has("u11_no_ether") and not g._engine.inventory.has("u11_no_ether")
+		and g._engine.inventory == u11_atomic_inv and g._engine.known_recipes == u11_atomic_known
+		and g.RECIPES == u11_atomic_recipes and g.ITEMS == u11_atomic_items
+		and g._engine._experiment_pending_pair.is_empty())
 	# restore: мир после блока U11 — точно таким же, как до него.
 	g._engine.inventory = u11_inv
 	g._engine.known_recipes = u11_known
@@ -411,6 +573,652 @@ static func run(g: Game) -> void:
 		and g._engine.ether == u11_ether and g._engine.ether_overflow == u11_ether_overflow
 		and g._contracts._pts_total == u11_cb4_pts
 		and g._contracts._visit_days.size() == u11_cb4_days)
+
+	# ============ personal target transport ============
+	var pt_inv := g._engine.inventory.duplicate(true)
+	var pt_known := g._engine.known_recipes.duplicate(true)
+	var pt_rejected := g._engine._rejected_pairs.duplicate(true)
+	var pt_recipes := g.RECIPES.duplicate(true)
+	var pt_srv_recipes := g._online._server_recipes.duplicate(true)
+	var pt_srv_authors := g._online._server_authors.duplicate(true)
+	var pt_srv_els := g._online._server_elements.duplicate(true)
+	var pt_srv_layers := g._online._server_layers.duplicate(true)
+	var pt_items := g.ITEMS.duplicate(true)
+	var pt_colors := g._item_colors.duplicate(true)
+	var pt_layer_cache := g._engine._layer_cache.duplicate(true)
+	var pt_pending := g._online._pending_requests.duplicate(true)
+	var pt_exp_pair := g._engine._experiment_pending_pair.duplicate()
+	var pt_reserved := g._engine._experiment_reserved_ether
+	var pt_receipt: Dictionary = g._online._target_attempt_receipt.duplicate(true)
+	var pt_sync_in_flight := g._online._target_sync_in_flight
+	var pt_sync_nonce := g._online._target_sync_nonce
+	var pt_view_state := g._online._target_view_state
+	var pt_resume_wait := g._online._resume_experiment_wait
+	var pt_ether := g._engine.ether
+	var pt_overflow := g._engine.ether_overflow
+	var pt_attempts := g._engine.attempts
+	var pt_successes := g._engine.successes
+	var pt_day := g._engine._experiment_day
+	var pt_count := g._engine._experiment_count
+	var pt_last_at := g._engine._experiment_last_at
+	var pt_popup := g._popup.visible
+	var pt_popup_dim := g._popup_dim.visible
+	var pt_status := g._engine.status_text
+	var pt_has_target_state := false
+	for pt_property in g._online.get_script().get_script_property_list():
+		if String(pt_property["name"]) == "_target_state":
+			pt_has_target_state = true
+	var pt_target_old: Dictionary = {}
+	if pt_has_target_state:
+		pt_target_old = g._online.get("_target_state").duplicate(true)
+	var pt_target := {
+		"id": "pt-target", "kind": "llm", "slug": "pt-hidden", "name": "Скрытая цель",
+		"hint": "Соедини привычное с неожиданным.", "status": "active", "cycle_week": "2026-W48",
+		"attempts": 0, "successful_steps": 0, "spent_ether": 0, "generation": 7,
+		"next_eligible_week": ""}
+	if pt_has_target_state:
+		g._online.set("_target_state", pt_target.duplicate(true))
+
+	var pt_capture := CaptureNet.new()
+	pt_capture.base_url = "https://unit.test/api"
+	if pt_capture.has_method("experiment_target_sync"):
+		pt_capture.call("experiment_target_sync", "pt-device", "Pt", "pt-sync-nonce")
+	var pt_sync_body: Dictionary = {}
+	if pt_capture.last_body != "":
+		pt_sync_body = JSON.parse_string(pt_capture.last_body) as Dictionary
+	var pt_sync_body_ok := pt_sync_body.size() == 3 \
+		and String(pt_sync_body.get("device_id", "")) == "pt-device" \
+		and String(pt_sync_body.get("nick", "")) == "Pt" \
+		and String(pt_sync_body.get("sync_nonce", "")) == "pt-sync-nonce"
+	Selftest.check("net target sync route and body", pt_capture.has_method("experiment_target_sync")
+		and String(pt_capture.last_url).ends_with("/api/experiment/target")
+		and pt_capture.last_method == HTTPClient.METHOD_POST and pt_sync_body_ok)
+	if pt_capture.has_method("experiment_target_attempt"):
+		pt_capture.call("experiment_target_attempt", "fire", "water", "Pt", "pt-device", "pt-target", "pt-request")
+	var pt_attempt_body: Dictionary = {}
+	if pt_capture.last_body != "":
+		pt_attempt_body = JSON.parse_string(pt_capture.last_body) as Dictionary
+	var pt_attempt_keys := ["a", "b", "nick", "device_id", "target_id", "request_id"]
+	var pt_attempt_body_ok := pt_attempt_body.size() == pt_attempt_keys.size()
+	for pt_key in pt_attempt_keys:
+		pt_attempt_body_ok = pt_attempt_body_ok and pt_attempt_body.has(String(pt_key))
+	Selftest.check("net target attempt route hides target internals", pt_capture.has_method("experiment_target_attempt")
+		and String(pt_capture.last_url).ends_with("/api/experiment/attempt")
+		and pt_capture.last_method == HTTPClient.METHOD_POST and pt_attempt_body_ok
+		and String(pt_attempt_body.get("a", "")) == "fire" and String(pt_attempt_body.get("b", "")) == "water"
+		and String(pt_attempt_body.get("target_id", "")) == "pt-target"
+		and String(pt_attempt_body.get("request_id", "")) == "pt-request")
+	pt_capture.free()
+
+	var pt_dispatch := NetBase.new()
+	var pt_sync_sink := OfflineSink.new()
+	var pt_attempt_sink := TargetAttemptSink.new()
+	if pt_dispatch.has_signal("experiment_target_sync_result"):
+		pt_dispatch.experiment_target_sync_result.connect(pt_sync_sink.catch)
+	if pt_dispatch.has_signal("experiment_target_result"):
+		pt_dispatch.experiment_target_result.connect(pt_attempt_sink.catch)
+	var pt_pair := g._pair_key("fire", "water")
+	pt_dispatch._dispatch({"kind": "experiment-target-sync",
+		"body": {"sync_nonce": "pt-dispatch-nonce"}}, {"ok": true, "target": pt_target})
+	pt_dispatch._dispatch({"kind": "experiment-target-attempt", "pair_key": pt_pair,
+		"body": {"request_id": "pt-request"}}, {"ok": true, "status": "known"})
+	Selftest.check("net target dispatch preserves request correlation",
+		pt_dispatch.has_signal("experiment_target_sync_result") and pt_dispatch.has_signal("experiment_target_result")
+		and pt_sync_sink.results.size() == 1 and pt_sync_sink.nonces == ["pt-dispatch-nonce"]
+		and pt_attempt_sink.request_ids == ["pt-request"]
+		and pt_attempt_sink.pair_keys == [pt_pair] and pt_attempt_sink.results.size() == 1)
+	pt_dispatch.free()
+
+	g._engine.inventory["steam"] = 0
+	g._engine._experiment_pending_pair = ["fire", "water"]
+	g._engine._experiment_reserved_ether = int(g._engine._bal().get_value("discovery.cost", Game.EXPERIMENT_COST))
+	g._online._pending_requests[pt_pair] = {
+		"a": "fire", "b": "water", "experiment": true, "target_mode": true,
+		"target_id": "pt-target", "request_id": "pt-request", "generation": 7,
+		"cycle_week": "2026-W48",
+		"reserved_cost": g._engine._experiment_reserved_ether,
+		"at": Time.get_ticks_msec()}
+	var pt_mode_available := g._engine._available_ether()
+	var pt_mode_inv := g._engine.inventory.duplicate(true)
+	var pt_mode_known := g._engine.known_recipes.duplicate(true)
+	g._online._on_net_pair_result(pt_pair, {"ok": true, "found": true, "status": "known",
+		"out": {"slug": "steam", "name": "Steam", "color": "#88aabb", "glyph": "fire", "layer": 1}})
+	Selftest.check("ordinary pair response cannot consume target pending",
+		g._online._pending_requests.has(pt_pair) and g._engine._experiment_pending_pair == ["fire", "water"]
+		and g._engine.inventory == pt_mode_inv and g._engine.known_recipes == pt_mode_known
+		and g._engine._available_ether() == pt_mode_available)
+	g._online._pending_requests.clear()
+	g._engine._experiment_pending_pair.clear()
+	g._engine._experiment_reserved_ether = 0
+	g._engine.inventory = pt_inv
+	g._engine.known_recipes = pt_known
+
+	var pt_register_args := 0
+	for pt_method in g._online.get_method_list():
+		if String(pt_method["name"]) == "_register_pending_pair":
+			pt_register_args = (pt_method["args"] as Array).size()
+	var pt_registered := false
+	if pt_register_args >= 9:
+		pt_registered = g._online.callv("_register_pending_pair",
+			["fire", "water", true, true, "pt-target", "pt-request", 7, "2026-W48",
+				int(g._engine._bal().get_value("discovery.cost", Game.EXPERIMENT_COST))])
+	var pt_registered_entry: Dictionary = g._online._pending_requests.get(pt_pair, {})
+	Selftest.check("target pending stores correlation fields", pt_registered
+		and bool(pt_registered_entry.get("target_mode", false))
+		and String(pt_registered_entry.get("target_id", "")) == "pt-target"
+		and String(pt_registered_entry.get("request_id", "")) == "pt-request"
+		and int(pt_registered_entry.get("generation", -1)) == 7
+		and String(pt_registered_entry.get("cycle_week", "")) == "2026-W48"
+		and int(pt_registered_entry.get("reserved_cost", -1)) >= 0)
+	g._online._pending_requests.clear()
+
+	var pt_restore_graph := func() -> void:
+		g._engine.inventory = pt_inv.duplicate(true)
+		g._engine.known_recipes = pt_known.duplicate(true)
+		g._engine._rejected_pairs = pt_rejected.duplicate(true)
+		g.RECIPES = pt_recipes.duplicate(true)
+		g._online._server_recipes = pt_srv_recipes.duplicate(true)
+		g._online._server_authors = pt_srv_authors.duplicate(true)
+		g._online._server_elements = pt_srv_els.duplicate(true)
+		g._online._server_layers = pt_srv_layers.duplicate(true)
+		g.ITEMS = pt_items.duplicate(true)
+		g._item_colors = pt_colors.duplicate(true)
+		g._engine._layer_cache = pt_layer_cache.duplicate(true)
+		g._popup.visible = pt_popup
+		g._popup_dim.visible = pt_popup_dim
+		g._online._pending_requests.clear()
+		g._engine._experiment_pending_pair.clear()
+		g._engine._experiment_reserved_ether = 0
+		g._engine.ether = pt_ether
+		g._engine.ether_overflow = pt_overflow
+	var pt_reset_target := func() -> void:
+		if pt_has_target_state:
+			g._online.set("_target_state", pt_target.duplicate(true))
+	var pt_seed_target := func() -> void:
+		g._engine._experiment_pending_pair = ["fire", "water"]
+		g._engine._experiment_reserved_ether = int(g._engine._bal().get_value("discovery.cost", Game.EXPERIMENT_COST))
+		g._online._pending_requests[pt_pair] = {
+			"a": "fire", "b": "water", "experiment": true, "target_mode": true,
+			"target_id": "pt-target", "request_id": "pt-request", "generation": 7,
+			"cycle_week": "2026-W48",
+			"reserved_cost": g._engine._experiment_reserved_ether,
+			"at": Time.get_ticks_msec()}
+	var pt_make_response := func(status: String, charge: int, snapshot_status: String) -> Dictionary:
+		var snapshot: Dictionary = pt_target.duplicate(true)
+		snapshot["status"] = snapshot_status
+		if snapshot_status == "completed":
+			snapshot["next_eligible_week"] = "2026-W49"
+		var response := {
+			"ok": status not in ["target_conflict", "target_stale", "target_not_found", "request_mismatch", "ingredient_not_granted"],
+			"status": status, "target_id": "pt-target", "request_id": "pt-request", "pair_key": pt_pair,
+			"target": snapshot, "ether_charged": charge, "acquired": charge > 0, "message": status}
+		if status in ["created", "known", "reused"]:
+			response["discovery"] = {"slug": "steam", "name": "Steam", "color": "#88aabb",
+				"glyph": "fire", "layer": 1, "a": "fire", "b": "water", "author": "Pt", "reused": false}
+		return response
+	var pt_sync_handler_ready := pt_has_target_state \
+		and g._online.has_method("_on_experiment_target_sync_result")
+	if pt_sync_handler_ready:
+		var pt_sync_raw: Dictionary = pt_target.duplicate(true)
+		pt_sync_raw["target_name_norm"] = "скрытая цель"
+		pt_sync_raw["source_pair"] = ["fire", "water"]
+		pt_sync_raw["seed"] = 123
+		pt_sync_raw["evaluator_reason"] = "hidden"
+		g._online.call("_on_experiment_target_sync_result", {"ok": true, "target": pt_sync_raw})
+		var pt_sync_state: Dictionary = g._online.get("_target_state")
+		Selftest.check("target sync filters hidden fields and preserves generation",
+			String(pt_sync_state.get("id", "")) == "pt-target"
+			and int(pt_sync_state.get("generation", -1)) == 7
+			and not pt_sync_state.has("target_name_norm") and not pt_sync_state.has("source_pair")
+			and not pt_sync_state.has("seed") and not pt_sync_state.has("evaluator_reason"))
+		var pt_next_raw: Dictionary = pt_sync_raw.duplicate(true)
+		pt_next_raw["id"] = "pt-next"
+		g._online.call("_on_experiment_target_sync_result", {"ok": true, "target": pt_next_raw})
+		Selftest.check("target sync increments generation for a new target",
+			String(g._online.get("_target_state").get("id", "")) == "pt-next"
+			and int(g._online.get("_target_state").get("generation", -1)) == 8)
+		pt_reset_target.call()
+	else:
+		Selftest.check("target sync handler exists", false)
+
+	var pt_sync_lifecycle_ready := g._online.has_method("_sync_personal_target")
+	if pt_sync_lifecycle_ready:
+		var pt_life_net_base := Net.base_url
+		var pt_life_net_available := Net._available
+		var pt_life_net_enabled := g._online._net_enabled
+		var pt_life_transport := g._online._discovery_transport
+		var pt_life_has_inflight := false
+		var pt_life_has_view := false
+		var pt_life_has_nonce := false
+		var pt_life_inflight_old: Variant = false
+		var pt_life_view_old: Variant = ""
+		var pt_life_nonce_old: Variant = ""
+		for pt_life_property in g._online.get_property_list():
+			var pt_life_name := String(pt_life_property["name"])
+			if pt_life_name == "_target_sync_in_flight":
+				pt_life_has_inflight = true
+				pt_life_inflight_old = g._online.get(pt_life_name)
+			elif pt_life_name == "_target_view_state":
+				pt_life_has_view = true
+				pt_life_view_old = g._online.get(pt_life_name)
+			elif pt_life_name == "_target_sync_nonce":
+				pt_life_has_nonce = true
+				pt_life_nonce_old = g._online.get(pt_life_name)
+		var pt_life_online_connected := Net.experiment_target_sync_result.is_connected(g._online._on_experiment_target_sync_result)
+		if pt_life_online_connected:
+			Net.experiment_target_sync_result.disconnect(g._online._on_experiment_target_sync_result)
+		var pt_life_sync_sink := OfflineSink.new()
+		var pt_life_attempt_sink := TargetAttemptSink.new()
+		Net.experiment_target_sync_result.connect(pt_life_sync_sink.catch)
+		Net.experiment_target_result.connect(pt_life_attempt_sink.catch)
+
+		pt_reset_target.call()
+		g._online._net_enabled = false
+		var pt_life_offline_before: Dictionary = g._online.get("_target_state").duplicate(true)
+		g._online.call("_sync_personal_target")
+		Selftest.check("target offline sync preserves cached snapshot",
+			g._online.get("_target_state") == pt_life_offline_before and pt_life_sync_sink.results.is_empty())
+
+		g._online._net_enabled = true
+		g._online.clear_discovery_transport()
+		Net.base_url = "https://unit.test/api"
+		Net._available = true
+		g._online.call("_sync_personal_target")
+		g._online.call("_sync_personal_target")
+		var pt_life_inflight: Variant = g._online.get("_target_sync_in_flight") if pt_life_has_inflight else false
+		var pt_life_sync_nonce := String(pt_life_sync_sink.nonces[0]) \
+			if pt_life_sync_sink.nonces.size() == 1 else ""
+		Selftest.check("target duplicate opens suppress in-flight sync",
+			pt_life_sync_sink.results.size() == 1 and bool(pt_life_inflight)
+			and pt_life_sync_nonce != "")
+
+		g._online.call("_on_experiment_target_sync_result",
+			{"ok": true, "target": pt_target}, pt_life_sync_nonce)
+		pt_life_inflight = g._online.get("_target_sync_in_flight") if pt_life_has_inflight else true
+		Selftest.check("target sync success clears in-flight guard", not bool(pt_life_inflight))
+
+		if not pt_life_online_connected:
+			Net.experiment_target_sync_result.connect(g._online._on_experiment_target_sync_result)
+		pt_life_sync_sink.results.clear()
+		var pt_life_cached_before_offline: Dictionary = g._online.get("_target_state").duplicate(true)
+		g._online.call("_sync_personal_target")
+		pt_life_inflight = g._online.get("_target_sync_in_flight") if pt_life_has_inflight else true
+		Selftest.check("target offline result clears in-flight guard",
+			pt_life_sync_sink.results.size() == 1 and not bool(pt_life_inflight)
+			and g._online.get("_target_state") == pt_life_cached_before_offline)
+
+		var pt_life_completed: Dictionary = pt_target.duplicate(true)
+		pt_life_completed["status"] = "completed"
+		pt_life_completed["next_eligible_week"] = "2099-W01"
+		g._online.call("_on_experiment_target_sync_result", {"ok": true, "target": pt_life_completed})
+		pt_life_sync_sink.results.clear()
+		pt_life_attempt_sink.request_ids.clear()
+		pt_life_attempt_sink.pair_keys.clear()
+		g._online.call("_sync_personal_target")
+		Selftest.check("target waiting slot asks server without creating another target",
+			pt_life_sync_sink.results.size() == 1 and pt_life_attempt_sink.request_ids.is_empty()
+			and String(g._online.get("_target_state").get("status", "")) == "completed")
+
+		Net.experiment_target_sync_result.disconnect(pt_life_sync_sink.catch)
+		Net.experiment_target_result.disconnect(pt_life_attempt_sink.catch)
+		if not pt_life_online_connected:
+			Net.experiment_target_sync_result.disconnect(g._online._on_experiment_target_sync_result)
+		Net.base_url = pt_life_net_base
+		Net._available = pt_life_net_available
+		g._online._net_enabled = pt_life_net_enabled
+		g._online._discovery_transport = pt_life_transport
+		if pt_life_has_inflight:
+			g._online.set("_target_sync_in_flight", pt_life_inflight_old)
+		if pt_life_has_view:
+			g._online.set("_target_view_state", pt_life_view_old)
+		if pt_life_has_nonce:
+			g._online.set("_target_sync_nonce", pt_life_nonce_old)
+		pt_reset_target.call()
+	else:
+		Selftest.check("target sync lifecycle method exists", false)
+
+	var pt_target_result_ready := pt_has_target_state \
+		and g._online.has_method("_on_experiment_target_result")
+
+	if pt_target_result_ready:
+		pt_reset_target.call()
+		pt_restore_graph.call()
+		var pt_reserve_state: Dictionary = g._online.get("_target_state").duplicate(true)
+		pt_reserve_state["kind"] = "world"
+		pt_reserve_state["slug"] = "steam"
+		g._online.set("_target_state", pt_reserve_state)
+		g._engine._experiment_pending_pair.clear()
+		g._engine._experiment_day = ""
+		g._engine._experiment_count = 0
+		g._engine._experiment_last_at = 0.0
+		g._engine.ether = Game.EXPERIMENT_COST + 10
+		g._engine.ether_overflow = 0
+		var pt_reserve_started := g._engine._begin_experiment("fire", "water", true)
+		var pt_reserve_registered := g._online._register_pending_pair("fire", "water", true,
+			true, "pt-target", "pt-request", 7, "2026-W48",
+			g._engine._experiment_reserved_ether)
+		var pt_reserve_visible := g._engine.ether
+		var pt_reserve_available := g._engine._available_ether()
+		var pt_reserve_response: Dictionary = pt_make_response.call("known", 7, "completed")
+		pt_reserve_response["target"]["kind"] = "world"
+		pt_reserve_response["target"]["slug"] = "steam"
+		g._online.call("_on_experiment_target_result", "pt-request", pt_pair, pt_reserve_response)
+		Selftest.check("target success settles configured reserve at server charge",
+			pt_reserve_started and pt_reserve_registered
+			and pt_reserve_available == pt_reserve_visible - Game.EXPERIMENT_COST
+			and pt_reserve_visible - g._engine.ether == 7
+			and g._engine._available_ether() == g._engine.ether)
+		pt_restore_graph.call()
+
+		pt_reset_target.call()
+		pt_seed_target.call()
+		g._engine.inventory["steam"] = 1
+		g._engine.ether = maxi(g._engine.ether, Game.EXPERIMENT_COST + 10)
+		var pt_success_visible := g._engine.ether
+		var pt_success_inventory := int(g._engine.inventory.get("steam", 0))
+		var pt_success_state: Dictionary = g._online.get("_target_state").duplicate(true)
+		pt_success_state["kind"] = "world"
+		pt_success_state["slug"] = "steam"
+		g._online.set("_target_state", pt_success_state)
+		var pt_success_response: Dictionary = pt_make_response.call("known", 7, "completed")
+		pt_success_response["target"]["kind"] = "world"
+		pt_success_response["target"]["slug"] = "steam"
+		g._online.call("_on_experiment_target_result", "pt-request", pt_pair, pt_success_response)
+		var pt_success_available_after := g._engine._available_ether()
+		Selftest.check("target response forwards server ether charge",
+			pt_success_visible - g._engine.ether == 7
+			and pt_success_available_after == g._engine.ether
+			and int(g._engine.inventory.get("steam", 0)) == pt_success_inventory + 1
+			and String(g._online.get("_target_state").get("status", "")) == "completed")
+		g._online.call("_on_experiment_target_result", "pt-request", pt_pair, pt_success_response)
+		Selftest.check("target duplicate response does not charge twice",
+			g._engine._available_ether() == pt_success_available_after
+			and int(g._engine.inventory.get("steam", 0)) == pt_success_inventory + 1)
+		pt_restore_graph.call()
+
+		pt_reset_target.call()
+		pt_seed_target.call()
+		var pt_zero_target: Dictionary = g._online.get("_target_state")
+		pt_zero_target["slug"] = ""
+		g._online.set("_target_state", pt_zero_target)
+		g._engine.inventory["steam"] = 0
+		g._engine.ether = maxi(g._engine.ether, Game.EXPERIMENT_COST + 1)
+		var pt_zero_visible := g._engine.ether
+		var pt_zero_response: Dictionary = pt_make_response.call("known", 0, "completed")
+		pt_zero_response["target"]["slug"] = "pt-realized"
+		pt_zero_response["target"]["successful_steps"] = 1
+		g._online.call("_on_experiment_target_result", "pt-request", pt_pair, pt_zero_response)
+		Selftest.check("target zero-acquisition completed snapshot cannot complete llm",
+			g._online._pending_requests.is_empty() and g._engine._experiment_pending_pair.is_empty()
+			and g._engine.ether == pt_zero_visible
+			and g._engine._available_ether() == pt_zero_visible
+			and int(g._engine.inventory.get("steam", 0)) == 0 and g.ITEMS == pt_items
+			and String(g._online.get("_target_state").get("status", "")) == "active"
+			and not bool(g._online.get("_target_state").get("completed", false))
+			and String(g._online.get("_target_state").get("slug", "")) == ""
+			and String(g._online.get("_target_state").get("next_eligible_week", "")) == "")
+		pt_restore_graph.call()
+
+		pt_reset_target.call()
+		pt_seed_target.call()
+		g._engine.inventory["steam"] = 0
+		var pt_free_visible := g._engine.ether
+		var pt_free_available := g._engine._available_ether()
+		var pt_free_response: Dictionary = pt_make_response.call("created", 0, "active")
+		pt_free_response["acquired"] = true
+		g._online.call("_on_experiment_target_result", "pt-request", pt_pair, pt_free_response)
+		Selftest.check("target acquired zero server charge grants once without debit",
+			g._online._pending_requests.is_empty()
+			and g._engine.ether == pt_free_visible
+			and g._engine._available_ether() == pt_free_available + int(g._engine._bal().get_value("discovery.cost", Game.EXPERIMENT_COST))
+			and int(g._engine.inventory.get("steam", 0)) == 1)
+		pt_restore_graph.call()
+
+		pt_reset_target.call()
+		pt_seed_target.call()
+		g._engine.inventory["steam"] = 0
+		g._engine.ether = maxi(g._engine.ether, Game.EXPERIMENT_COST + 10)
+		var pt_llm_known_visible := g._engine.ether
+		var pt_llm_known_response: Dictionary = pt_make_response.call("known", 12, "completed")
+		g._online.call("_on_experiment_target_result", "pt-request", pt_pair, pt_llm_known_response)
+		Selftest.check("target llm known cannot complete",
+			int(g._engine.inventory.get("steam", 0)) == 1
+			and pt_llm_known_visible - g._engine.ether == 12
+			and g._engine._available_ether() == g._engine.ether
+			and String(g._online.get("_target_state").get("status", "")) == "active")
+		pt_restore_graph.call()
+
+		pt_reset_target.call()
+		pt_seed_target.call()
+		g._engine.inventory["steam"] = 0
+		var pt_llm_created_visible := g._engine.ether
+		var pt_llm_created_response: Dictionary = pt_make_response.call("created", 7, "completed")
+		pt_llm_created_response["target"]["slug"] = "pt-realized"
+		pt_llm_created_response["discovery"]["name"] = "  СКРЫТАЯ   ЦЕЛЬ  "
+		var pt_llm_created_target: Dictionary = g._online.get("_target_state")
+		pt_llm_created_target["slug"] = ""
+		g._online.set("_target_state", pt_llm_created_target)
+		g._online.call("_on_experiment_target_result", "pt-request", pt_pair, pt_llm_created_response)
+		Selftest.check("target llm created completes with exact normalized name and realized slug",
+			int(g._engine.inventory.get("steam", 0)) == 1
+			and pt_llm_created_visible - g._engine.ether == 7
+			and g._engine._available_ether() == g._engine.ether
+			and String(g._online.get("_target_state").get("status", "")) == "completed"
+			and String(g._online.get("_target_state").get("slug", "")) == "pt-realized")
+		pt_restore_graph.call()
+
+		pt_reset_target.call()
+		pt_seed_target.call()
+		g._engine.inventory["steam"] = 0
+		var pt_llm_reused_visible := g._engine.ether
+		var pt_llm_reused_response: Dictionary = pt_make_response.call("created", 7, "completed")
+		pt_llm_reused_response["discovery"]["name"] = "Скрытая цель"
+		pt_llm_reused_response["discovery"]["reused"] = true
+		g._online.call("_on_experiment_target_result", "pt-request", pt_pair, pt_llm_reused_response)
+		Selftest.check("target llm reused created result cannot complete",
+			int(g._engine.inventory.get("steam", 0)) == 1
+			and pt_llm_reused_visible - g._engine.ether == 7
+			and String(g._online.get("_target_state").get("status", "")) == "active"
+			and not bool(g._online.get("_target_state").get("completed", false)))
+		pt_restore_graph.call()
+
+		pt_reset_target.call()
+		pt_seed_target.call()
+		g._engine.inventory["steam"] = 0
+		var pt_missing_charge_visible := g._engine.ether
+		var pt_missing_charge_available := g._engine._available_ether()
+		var pt_missing_charge_inventory := g._engine.inventory.duplicate(true)
+		var pt_missing_charge_response: Dictionary = pt_make_response.call("created", 12, "completed")
+		pt_missing_charge_response.erase("ether_charged")
+		g._online.call("_on_experiment_target_result", "pt-request", pt_pair, pt_missing_charge_response)
+		Selftest.check("target success without server charge is rejected",
+			g._online._pending_requests.is_empty() and g._engine._experiment_pending_pair.is_empty()
+			and g._engine.inventory == pt_missing_charge_inventory
+			and g._engine.ether == pt_missing_charge_visible
+			and g._engine._available_ether() == pt_missing_charge_available + int(g._engine._bal().get_value("discovery.cost", Game.EXPERIMENT_COST)))
+		pt_restore_graph.call()
+
+		pt_reset_target.call()
+		pt_seed_target.call()
+		var pt_mismatch_available := g._engine._available_ether()
+		var pt_mismatch_inventory := g._engine.inventory.duplicate(true)
+		var pt_wrong_response: Dictionary = pt_make_response.call("known", 12, "completed")
+		g._online.call("_on_experiment_target_result", "wrong-request", pt_pair, pt_wrong_response)
+		var pt_wrong_request_kept := g._online._pending_requests.has(pt_pair) \
+			and g._engine.inventory == pt_mismatch_inventory \
+			and g._engine._available_ether() == pt_mismatch_available
+		pt_wrong_response["target_id"] = "other-target"
+		g._online.call("_on_experiment_target_result", "pt-request", pt_pair, pt_wrong_response)
+		Selftest.check("target mismatch response keeps pending slot", pt_wrong_request_kept
+			and g._online._pending_requests.has(pt_pair) and g._engine.inventory == pt_mismatch_inventory
+			and g._engine._available_ether() == pt_mismatch_available)
+		pt_restore_graph.call()
+
+		pt_reset_target.call()
+		pt_seed_target.call()
+		if pt_has_target_state:
+			var pt_stale_state: Dictionary = g._online.get("_target_state").duplicate(true)
+			pt_stale_state["generation"] = 8
+			g._online.set("_target_state", pt_stale_state)
+		var pt_stale_visible := g._engine.ether
+		var pt_stale_available := g._engine._available_ether()
+		var pt_stale_inventory := g._engine.inventory.duplicate(true)
+		g._online.call("_on_experiment_target_result", "pt-request", pt_pair,
+			pt_make_response.call("known", 12, "completed"))
+		Selftest.check("target stale generation releases reserve without graph or visible ether mutation",
+			g._online._pending_requests.is_empty()
+			and g._engine.inventory == pt_stale_inventory and g.ITEMS == pt_items
+			and g._engine.ether == pt_stale_visible
+			and g._engine._available_ether() == pt_stale_available + int(g._engine._bal().get_value("discovery.cost", Game.EXPERIMENT_COST)))
+		pt_restore_graph.call()
+
+		pt_reset_target.call()
+		pt_seed_target.call()
+		var pt_false_complete_target: Dictionary = g._online.get("_target_state")
+		pt_false_complete_target["slug"] = ""
+		g._online.set("_target_state", pt_false_complete_target)
+		var pt_false_complete_visible := g._engine.ether
+		var pt_false_complete_inventory := g._engine.inventory.duplicate(true)
+		var pt_false_complete_response: Dictionary = pt_make_response.call("not_combinable", 12, "completed")
+		pt_false_complete_response["target"]["slug"] = "pt-realized"
+		g._online.call("_on_experiment_target_result", "pt-request", pt_pair, pt_false_complete_response)
+		Selftest.check("target failure completed snapshot cannot complete llm",
+			g._online._pending_requests.is_empty() and g._engine._experiment_pending_pair.is_empty()
+			and g._engine.inventory == pt_false_complete_inventory and g.ITEMS == pt_items
+			and g._engine.ether == pt_false_complete_visible
+			and g._engine._available_ether() == pt_false_complete_visible
+			and String(g._online.get("_target_state").get("status", "")) == "active"
+			and not bool(g._online.get("_target_state").get("completed", false))
+			and String(g._online.get("_target_state").get("slug", "")) == ""
+			and String(g._online.get("_target_state").get("next_eligible_week", "")) == "")
+		pt_restore_graph.call()
+
+		pt_reset_target.call()
+		pt_seed_target.call()
+		var pt_malformed_ok_target: Dictionary = g._online.get("_target_state")
+		pt_malformed_ok_target["slug"] = ""
+		g._online.set("_target_state", pt_malformed_ok_target)
+		var pt_malformed_ok_visible := g._engine.ether
+		var pt_malformed_ok_inventory := g._engine.inventory.duplicate(true)
+		var pt_malformed_ok_response: Dictionary = pt_make_response.call("created", 12, "completed")
+		pt_malformed_ok_response["ok"] = 1
+		pt_malformed_ok_response["target"]["slug"] = "pt-realized"
+		g._online.call("_on_experiment_target_result", "pt-request", pt_pair, pt_malformed_ok_response)
+		Selftest.check("target malformed ok completed snapshot cannot complete llm",
+			g._online._pending_requests.is_empty() and g._engine._experiment_pending_pair.is_empty()
+			and g._engine.inventory == pt_malformed_ok_inventory and g.ITEMS == pt_items
+			and g._engine.ether == pt_malformed_ok_visible
+			and g._engine._available_ether() == pt_malformed_ok_visible
+			and String(g._online.get("_target_state").get("status", "")) == "active"
+			and not bool(g._online.get("_target_state").get("completed", false))
+			and String(g._online.get("_target_state").get("slug", "")) == ""
+			and String(g._online.get("_target_state").get("next_eligible_week", "")) == "")
+		pt_restore_graph.call()
+
+		for pt_failure_status in ["not_combinable", "unavailable", "target_conflict", "target_stale", "target_already_owned"]:
+			pt_reset_target.call()
+			pt_seed_target.call()
+			var pt_failure_visible := g._engine.ether
+			var pt_failure_available := g._engine._available_ether()
+			var pt_failure_inventory := g._engine.inventory.duplicate(true)
+			var pt_failure_response: Dictionary = pt_make_response.call(String(pt_failure_status), 12,
+				"waiting_next_slot" if String(pt_failure_status) == "target_already_owned" else "active")
+			if String(pt_failure_status) == "target_conflict":
+				pt_failure_response["discovery"] = {"slug": "pt_forbidden", "name": "Forbidden",
+					"color": "#112233", "glyph": "fire", "layer": 1, "a": "fire", "b": "water", "author": "Pt"}
+			g._online.call("_on_experiment_target_result", "pt-request", pt_pair, pt_failure_response)
+			Selftest.check("target failure %s keeps graph and ether" % pt_failure_status,
+				g._online._pending_requests.is_empty() and g._engine._experiment_pending_pair.is_empty()
+				and g._engine.inventory == pt_failure_inventory and not g.ITEMS.has("pt_forbidden")
+				and g._engine.ether == pt_failure_visible
+				and g._engine._available_ether() == pt_failure_available + int(g._engine._bal().get_value("discovery.cost", Game.EXPERIMENT_COST)))
+			pt_restore_graph.call()
+	else:
+		Selftest.check("target response handler exists", false)
+
+	var pt_net_base := Net.base_url
+	var pt_net_available := Net._available
+	var pt_net_enabled := g._online._net_enabled
+	var pt_device := g._online._device_id
+	var pt_nick := g._online._net_nick
+	var pt_transport := g._online._discovery_transport
+	var pt_connect_online := Net.has_signal("experiment_target_result") \
+		and not Net.experiment_target_result.is_connected(g._online._on_experiment_target_result)
+	if pt_connect_online:
+		Net.experiment_target_result.connect(g._online._on_experiment_target_result)
+	var pt_route_sink := TargetAttemptSink.new()
+	if Net.has_signal("experiment_target_result"):
+		Net.experiment_target_result.connect(pt_route_sink.catch)
+	if pt_has_target_state:
+		pt_reset_target.call()
+		g._online.clear_discovery_transport()
+		g._online._net_enabled = true
+		g._online._device_id = "pt-device"
+		g._online._net_nick = "Pt"
+		Net.base_url = ""
+		Net._available = true
+		g._engine.inventory["steam"] = 1
+		g._engine.known_recipes[pt_pair] = true
+		g._engine._rejected_pairs.erase(pt_pair)
+		g._engine._experiment_day = ""
+		g._engine._experiment_count = 0
+		g._engine._experiment_last_at = 0.0
+		g._engine.ether = maxi(g._engine.ether, Game.EXPERIMENT_COST + 1)
+		var pt_route_available := g._engine._available_ether()
+		var pt_route_inventory := g._engine.inventory.duplicate(true)
+		var pt_route_started := g._online._start_experiment("fire", "water")
+		var pt_route_reserved_available := pt_route_available - int(g._engine._bal().get_value("discovery.cost", Game.EXPERIMENT_COST))
+		Selftest.check("active target routes locally known pair through target attempt",
+			pt_route_started and not g._online._find_recipe("fire", "water").is_empty()
+			and pt_route_sink.request_ids.size() == 1 and String(pt_route_sink.request_ids[0]) != ""
+			and pt_route_sink.pair_keys == [pt_pair] and g._engine.inventory == pt_route_inventory
+			and g._engine._available_ether() == pt_route_reserved_available)
+		Selftest.check("target offline response preserves replay pending without charge",
+			g._online._pending_requests.has(pt_pair)
+			and g._engine._experiment_pending_pair == ["fire", "water"]
+			and not g._online._target_attempt_receipt.is_empty()
+			and g._engine.inventory == pt_route_inventory
+			and g._engine._available_ether() == pt_route_reserved_available)
+	else:
+		Selftest.check("active target state exists", false)
+	if Net.has_signal("experiment_target_result"):
+		Net.experiment_target_result.disconnect(pt_route_sink.catch)
+	if pt_connect_online:
+		Net.experiment_target_result.disconnect(g._online._on_experiment_target_result)
+	Net.base_url = pt_net_base
+	Net._available = pt_net_available
+	g._online._net_enabled = pt_net_enabled
+	g._online._device_id = pt_device
+	g._online._net_nick = pt_nick
+	g._online._discovery_transport = pt_transport
+	pt_restore_graph.call()
+	g._engine.ether = pt_ether
+	g._engine.ether_overflow = pt_overflow
+	g._engine.attempts = pt_attempts
+	g._engine.successes = pt_successes
+	g._engine._experiment_day = pt_day
+	g._engine._experiment_count = pt_count
+	g._engine._experiment_last_at = pt_last_at
+	g._engine.status_text = pt_status
+	g._online._pending_requests = pt_pending.duplicate(true)
+	g._engine._experiment_pending_pair.clear()
+	for pt_raw in pt_exp_pair:
+		g._engine._experiment_pending_pair.append(String(pt_raw))
+	g._engine._experiment_reserved_ether = pt_reserved
+	g._online._target_attempt_receipt = pt_receipt.duplicate(true)
+	g._online._target_sync_in_flight = pt_sync_in_flight
+	g._online._target_sync_nonce = pt_sync_nonce
+	g._online._target_view_state = pt_view_state
+	g._online._resume_experiment_wait = pt_resume_wait
+	if pt_has_target_state:
+		g._online.set("_target_state", pt_target_old)
+	Selftest.check("personal target transport state restored",
+		g._engine.inventory == pt_inv and g.ITEMS == pt_items and not g.ITEMS.has("pt_forbidden")
+		and g._engine.ether == pt_ether and g._engine.ether_overflow == pt_overflow
+		and g._online._pending_requests == pt_pending
+		and g._online._target_attempt_receipt == pt_receipt)
+
+	# ============ /personal target transport ============
 
 	# ============ U13 (T17): окно «claim отголосков в пути» ============
 	# Трата асинхронная, поэтому окно — не кадр, а round-trip до ответа мира.

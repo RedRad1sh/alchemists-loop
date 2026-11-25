@@ -1403,14 +1403,16 @@ static func run(g: Game) -> void:
 	Selftest.check("§6.26 _experiment_failed moves the experiment contract by 1 (a failure is still an experiment)",
 		c5.progress(exp_id) == 1)
 	g._engine._experiment_pending_pair = ["fire", "air"]
+	g._engine._experiment_reserved_ether = int(g._engine._bal().get_value("discovery.cost", Game.EXPERIMENT_COST))
 	g._engine._experiment_succeeded("steam", "fire", "air")
 	Selftest.check("§6.26 _experiment_succeeded moves the experiment contract by 1",
 		c5.progress(exp_id) == 2)
 	g._engine._experiment_pending_pair = ["fire", "air"]
-	g._engine._finish_experiment_inputs("fire", "air", true)   # только возврат входов
-	Selftest.check("§6.26 returning the inputs does not move the experiment contract",
+	g._engine._cancel_experiment("fire", "air")
+	Selftest.check("§6.26 cancelling an uncharged experiment does not move the experiment contract",
 		c5.progress(exp_id) == 2)
 	g._engine._experiment_pending_pair.clear()
+	g._engine._experiment_reserved_ether = 0
 	c5.on_experiment("fire", "air", false)
 	c5.on_experiment("fire", "air", true)
 	Selftest.check("§2.1 experiment counts successes and failures alike", c5.progress(exp_id) == 4)

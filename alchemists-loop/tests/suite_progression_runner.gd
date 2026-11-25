@@ -17,6 +17,7 @@ static func run(g: Game) -> void:
 	var saved_defs: Dictionary = g._engine.known_recipe_defs.duplicate(true)
 	var saved_pending: Dictionary = g._online._pending_requests.duplicate(true)
 	var saved_experiment_pending: Array = g._engine._experiment_pending_pair.duplicate(true)
+	var saved_experiment_reserved: int = g._engine._experiment_reserved_ether
 	var fixture_catalog := {"fixture_success": {
 		"name": "Fixture Success", "color": "#8899aa", "g": "fire",
 		"d": "Deterministic fixture result.", "category": "огонь"}}
@@ -27,11 +28,11 @@ static func run(g: Game) -> void:
 	g._online._net_enabled = false
 	var key := g._pair_key("fire", "fire")
 	var started := g._online._start_experiment("fire", "fire")
-	Selftest.check("progression fixture: real experiment transaction registers pending request before response",
+	Selftest.check("progression fixture: real experiment transaction registers pending request without consuming reagents",
 		started and fixture.requests().size() == 1
 		and g._online._pending_requests.has(key)
 		and g._engine._experiment_pending_pair.size() == 2
-		and int(g._engine.inventory.get("fire", 0)) == 0)
+		and int(g._engine.inventory.get("fire", 0)) == 2)
 	fixture.respond_success(key, "fixture_success")
 	Selftest.check("progression fixture: success uses production result handler and saves output",
 		not g._online._pending_requests.has(key)
@@ -60,6 +61,7 @@ static func run(g: Game) -> void:
 	var stale_key := g._pair_key("earth", "earth")
 	g._online._pending_requests.clear()
 	g._engine._experiment_pending_pair.clear()
+	g._engine._experiment_reserved_ether = 0
 	var before_stale: Dictionary = g._engine.inventory.duplicate(true)
 	fixture.respond_stale(stale_key)
 	Selftest.check("progression fixture: stale response cannot grant an element after pending is cleared",
@@ -107,6 +109,7 @@ static func run(g: Game) -> void:
 	g._engine.known_recipes.erase(g._pair_key("fire", "water"))
 	var targets := {"steam": true}
 	var frontier := ProgressionStrategy.next_frontier(g, targets)
+	var strategy_before := ProgressionScenario.snapshot(g)
 	var strategy_ledger := ProgressionLedger.new()
 	var strategy_ok := ProgressionStrategy.discover_and_brew(g, frontier, strategy_ledger)
 	Selftest.check("progression strategy: deterministic frontier reaches steam through real experiment path",
@@ -114,6 +117,13 @@ static func run(g: Game) -> void:
 		and strategy_ok and int(g._engine.inventory.get("steam", 0)) == 1
 		and g._engine.known_recipes.has(g._pair_key("fire", "water"))
 		and int(strategy_ledger.report().get("counters", {}).get("discoveries", 0)) == 1)
+	Selftest.check("progression strategy: real experiment ledger grants output without reagent debit",
+		int(g._engine.inventory.get("fire", 0)) == int(strategy_before.inventory.get("fire", 0))
+		and int(g._engine.inventory.get("water", 0)) == int(strategy_before.inventory.get("water", 0))
+		and strategy_ledger.report().get("unexplained_resources", []).is_empty())
+
+	_test_personal_experiment_outcomes(g)
+	_test_personal_target_semantics(g)
 
 	var idle_runner := ProgressionRunner.new(g, 19, BalanceConfig.baseline())
 	var idle_before := idle_runner.clock.now()
@@ -158,6 +168,7 @@ static func run(g: Game) -> void:
 	g._engine.known_recipe_defs = saved_defs
 	g._online._pending_requests = saved_pending
 	g._engine._experiment_pending_pair = saved_experiment_pending
+	g._engine._experiment_reserved_ether = saved_experiment_reserved
 
 
 static func _test_review_regressions(g: Game) -> void:
@@ -359,7 +370,7 @@ static func _test_clock_and_receipts(g: Game) -> void:
 	g._engine.known_recipes.erase(g._pair_key("water", "water"))
 	var started := g._engine._begin_experiment("water", "water")
 	var cooldown := g._engine._experiment_cooldown_remaining()
-	g._engine._finish_experiment_inputs("water", "water", true)
+	g._engine._cancel_experiment("water", "water")
 	runner.clock.advance_active(cooldown)
 	Selftest.check("progression clock: injected epoch expires real cooldown without resetting bookkeeping",
 		started and cooldown > 0.0 and g._engine._experiment_cooldown_remaining() == 0.0
@@ -471,6 +482,282 @@ static func _test_tasks_8_to_12_contracts(g: Game) -> void:
 		metrics.has("local_elements") and metrics.has("recipes")
 		and metrics.has("uncompleted_upgrades") and metrics.has("uncompleted_sigil_targets")
 		and metrics.has("prestige_proof") and metrics.has("simulated_real_seconds"))
+
+
+static func _test_personal_experiment_outcomes(g: Game) -> void:
+	var saved_inventory: Dictionary = g._engine.inventory.duplicate(true)
+	var saved_ether: int = g._engine.ether
+	var saved_overflow: int = g._engine.ether_overflow
+	var saved_target: Dictionary = g._online._target_state.duplicate(true)
+	g._engine.inventory = {"fire": 4, "water": 3}
+	g._engine.ether = 100
+	g._engine.ether_overflow = 7
+	var strategy_script: Script = load("res://tests/progression_strategy.gd")
+	var helper_exists: bool = strategy_script.has_method("apply_experiment_outcome")
+	var ledger := ProgressionLedger.new()
+	ledger.start(g)
+	var before: Dictionary = ProgressionScenario.snapshot(g)
+	var success_ok := false
+	if helper_exists:
+		success_ok = bool(strategy_script.call("apply_experiment_outcome", g,
+			{"status": "success", "output": "steam", "cost": 12, "request_id": "personal-success"}, ledger))
+	var after_success: Dictionary = ProgressionScenario.snapshot(g)
+	Selftest.check("personal experiment success is accepted", helper_exists and success_ok)
+	Selftest.check("personal experiment success consumes no reagents",
+		int(after_success.inventory.get("fire", 0)) == int(before.inventory.get("fire", 0))
+		and int(after_success.inventory.get("water", 0)) == int(before.inventory.get("water", 0)))
+	Selftest.check("personal experiment success grants one output and charges configured cost once",
+		int(after_success.inventory.get("steam", 0)) == int(before.inventory.get("steam", 0)) + 1
+		and int(before.ether_available) - int(after_success.ether_available) == 12)
+	var duplicate_ok := true
+	if helper_exists:
+		duplicate_ok = bool(strategy_script.call("apply_experiment_outcome", g,
+			{"status": "success", "output": "steam", "cost": 12, "request_id": "personal-success"}, ledger))
+	Selftest.check("personal experiment duplicate outcome cannot debit or grant twice",
+		helper_exists and not duplicate_ok and ProgressionScenario.snapshot(g) == after_success)
+	var unavailable_ok := true
+	if helper_exists:
+		unavailable_ok = bool(strategy_script.call("apply_experiment_outcome", g,
+			{"status": "unavailable", "request_id": "personal-unavailable"}, ledger))
+	Selftest.check("personal experiment unavailable is unsuccessful without economic delta",
+		helper_exists and not unavailable_ok and ProgressionScenario.snapshot(g) == after_success)
+	var refusal_ok := true
+	if helper_exists:
+		refusal_ok = bool(strategy_script.call("apply_experiment_outcome", g,
+			{"status": "not_combinable", "request_id": "personal-refusal"}, ledger))
+	Selftest.check("personal experiment semantic failure is unsuccessful without economic delta",
+		helper_exists and not refusal_ok and ProgressionScenario.snapshot(g) == after_success)
+	var malformed_ok := true
+	if helper_exists:
+		malformed_ok = bool(strategy_script.call("apply_experiment_outcome", g,
+			{"status": "success", "output": "", "cost": 12, "request_id": "personal-malformed"}, ledger))
+	Selftest.check("personal experiment malformed success cannot mutate economy",
+		helper_exists and not malformed_ok and ProgressionScenario.snapshot(g) == after_success)
+	var unaffordable_ok := true
+	if helper_exists:
+		unaffordable_ok = bool(strategy_script.call("apply_experiment_outcome", g,
+			{"status": "success", "output": "steam", "cost": 999, "request_id": "personal-unaffordable"}, ledger))
+	Selftest.check("personal experiment unaffordable success cannot partially grant or debit",
+		helper_exists and not unaffordable_ok and ProgressionScenario.snapshot(g) == after_success)
+	var ledger_inventory: Dictionary = {}
+	var ledger_ether_delta := 0
+	for event in ledger.report().get("events", []):
+		var deltas: Dictionary = event.get("deltas", {})
+		ledger_ether_delta += int(deltas.get("ether", 0)) + int(deltas.get("reserve", 0))
+		for item in deltas.get("inventory", {}):
+			ledger_inventory[item] = int(ledger_inventory.get(item, 0)) + int(deltas.inventory[item])
+	Selftest.check("personal experiment ledger reconciles one grant and one debit",
+		ledger_inventory.get("steam", 0) == 1 and ledger_inventory.get("fire", 0) == 0
+		and ledger_inventory.get("water", 0) == 0 and ledger_ether_delta == -12
+		and ledger.report().get("unexplained_resources", []).is_empty())
+	var anonymous_ledger := ProgressionLedger.new()
+	strategy_script.call("apply_experiment_outcome", g,
+		{"status": "success", "output": "steam", "cost": 12}, anonymous_ledger)
+	strategy_script.call("apply_experiment_outcome", g, {"status": "unavailable"}, anonymous_ledger)
+	var anonymous_events := 0
+	for event in anonymous_ledger.report().get("events", []):
+		if String(event.get("kind", "")) == "personal_experiment" and event.has("status"):
+			anonymous_events += 1
+	Selftest.check("personal experiment outcomes without request ids still produce distinct semantic events",
+		anonymous_events == 2 and anonymous_ledger.report().get("unexplained_resources", []).is_empty())
+	g._engine.inventory = saved_inventory
+	g._engine.ether = saved_ether
+	g._engine.ether_overflow = saved_overflow
+	g._online._target_state = saved_target
+
+
+static func _test_personal_target_semantics(g: Game) -> void:
+	var saved_inventory: Dictionary = g._engine.inventory.duplicate(true)
+	var saved_ether: int = g._engine.ether
+	var saved_overflow: int = g._engine.ether_overflow
+	var saved_recipes: Dictionary = g._engine.known_recipes.duplicate(true)
+	var saved_target: Dictionary = g._online._target_state.duplicate(true)
+	var strategy_script: Script = load("res://tests/progression_strategy.gd")
+	var bucket_ok := false
+	var kind_ok := false
+	if strategy_script.has_method("personal_target_bucket") and strategy_script.has_method("choose_personal_target_kind"):
+		var expected_buckets := [5, 38, 16]
+		bucket_ok = true
+		for sequence in range(expected_buckets.size()):
+			bucket_ok = bucket_ok and int(strategy_script.call("personal_target_bucket",
+				"device-bucket", "2026-W48", sequence)) == int(expected_buckets[sequence])
+		kind_ok = String(strategy_script.call("choose_personal_target_kind",
+			"world-fixture", "2026-W48", 0, true)) == "world" \
+			and String(strategy_script.call("choose_personal_target_kind",
+				"llm-fixture", "2026-W48", 0, true)) == "llm" \
+			and String(strategy_script.call("choose_personal_target_kind",
+				"llm-fixture", "2026-W48", 0, false)) == "llm"
+	Selftest.check("personal target bucket matches server SHA-256 modulo 100 fixtures",
+		bucket_ok and kind_ok)
+
+	var world_targets := 0
+	var llm_targets := 0
+	var plan_ok := strategy_script.has_method("personal_target_plan")
+	if plan_ok:
+		for sequence in range(10000):
+			var plan: Dictionary = strategy_script.call("personal_target_plan",
+				"calibration-device", "2026-W48", sequence, ["stone"])
+			if String(plan.get("kind", "")) == "world":
+				world_targets += 1
+			elif String(plan.get("kind", "")) == "llm":
+				llm_targets += 1
+			else:
+				plan_ok = false
+		var empty_plan: Dictionary = strategy_script.call("personal_target_plan",
+			"calibration-device", "2026-W48", 0, [])
+		plan_ok = plan_ok and String(empty_plan.get("kind", "")) == "llm" \
+			and String(empty_plan.get("slug", "")) == ""
+	Selftest.check("personal target calibration reproduces 8035 world and 1965 LLM targets",
+		plan_ok and world_targets == 8035 and llm_targets == 1965)
+
+	var next_week_ok := false
+	if strategy_script.has_method("next_personal_week"):
+		next_week_ok = String(strategy_script.call("next_personal_week", "2026-W48")) == "2026-W49" \
+			and String(strategy_script.call("next_personal_week", "2026-W53")) == "2027-W01" \
+			and String(strategy_script.call("next_personal_week", "2027-W52")) == "2028-W01"
+	Selftest.check("personal target next eligible week handles ISO year boundaries", next_week_ok)
+
+	g._engine.inventory = {"fire": 4, "water": 3}
+	g._engine.ether = 100
+	g._engine.ether_overflow = 7
+	g._online._target_state = {
+		"id": "pt-llm", "kind": "llm", "slug": "", "name": "СЖЁННЫЙ СВЕТ",
+		"status": "active", "cycle_week": "2026-W48", "attempts": 2,
+		"successful_steps": 1, "spent_ether": 12, "next_eligible_week": "", "completed": false,
+	}
+	var completion_ledger := ProgressionLedger.new()
+	completion_ledger.start(g)
+	var before_completion_ether := g._engine.ether + g._engine.ether_overflow
+	var completion_ok := bool(strategy_script.call("apply_experiment_outcome", g, {
+		"status": "success", "output": "steam", "output_name": " сжеНный\tсвет ",
+		"result_kind": "created", "acquired": true, "cost": 12,
+		"request_id": "llm-fresh-exact", "target_id": "pt-llm", "target_kind": "llm",
+		"cycle_week": "2026-W48",
+	}, completion_ledger))
+	var completed_target: Dictionary = g._online._target_state
+	Selftest.check("personal LLM target completes only on fresh acquired exact normalized name",
+		completion_ok and String(completed_target.get("status", "")) == "completed"
+		and bool(completed_target.get("completed", false))
+		and int(completed_target.get("attempts", 0)) == 3
+		and int(completed_target.get("successful_steps", 0)) == 2
+		and int(completed_target.get("spent_ether", 0)) == 24
+		and String(completed_target.get("next_eligible_week", "")) == "2026-W49"
+		and before_completion_ether - (g._engine.ether + g._engine.ether_overflow) == 12
+		and int(g._engine.inventory.get("steam", 0)) == 1
+		and int(completion_ledger.report().get("counters", {}).get("personal_experiment_completions", 0)) == 1)
+
+	var allocation_ok := strategy_script.has_method("allocate_personal_target")
+	var allocation_ledger := ProgressionLedger.new()
+	allocation_ledger.start(g)
+	var completed_before_slot: Dictionary = g._online._target_state.duplicate(true)
+	if allocation_ok:
+		var blocked: Dictionary = strategy_script.call("allocate_personal_target", g,
+			"device-bucket", "2026-W48", 2, ["stone"], allocation_ledger)
+		allocation_ok = blocked.is_empty() and g._online._target_state == completed_before_slot
+		var next_target: Dictionary = strategy_script.call("allocate_personal_target", g,
+			"device-bucket", "2026-W49", 2, ["stone"], allocation_ledger)
+		allocation_ok = allocation_ok and String(next_target.get("status", "")) == "active" \
+			and String(next_target.get("cycle_week", "")) == "2026-W49" \
+			and String(next_target.get("id", "")) != String(completed_before_slot.get("id", ""))
+	Selftest.check("personal target allocation waits for the next eligible server week",
+		allocation_ok and int(allocation_ledger.report().get("counters", {}).get(
+			"personal_experiment_targets_allocated", 0)) == 1)
+
+	var negative_ok := strategy_script.has_method("apply_experiment_outcome")
+	var negative_cases := [
+		{"result_kind": "known", "output_name": "СЖЁННЫЙ СВЕТ", "request_id": "llm-known"},
+		{"result_kind": "reused", "output_name": "СЖЁННЫЙ СВЕТ", "request_id": "llm-reused"},
+		{"result_kind": "created", "output_name": "Другой свет", "request_id": "llm-nonexact"},
+	]
+	for negative_case in negative_cases:
+		g._engine.inventory = {"fire": 4, "water": 3}
+		g._engine.ether = 100
+		g._engine.ether_overflow = 7
+		g._online._target_state = {
+			"id": "pt-llm", "kind": "llm", "slug": "", "name": "СЖЁННЫЙ СВЕТ",
+			"status": "active", "cycle_week": "2026-W48", "attempts": 2,
+			"successful_steps": 1, "spent_ether": 12, "next_eligible_week": "", "completed": false,
+		}
+		var negative_ledger := ProgressionLedger.new()
+		negative_ledger.start(g)
+		var negative_outcome: Dictionary = negative_case.duplicate(true)
+		negative_outcome.merge({
+			"status": "success", "output": "steam", "acquired": true, "cost": 12,
+			"target_id": "pt-llm", "target_kind": "llm", "cycle_week": "2026-W48",
+		}, true)
+		var negative_accepted := bool(strategy_script.call("apply_experiment_outcome", g,
+			negative_outcome, negative_ledger))
+		negative_ok = negative_ok and negative_accepted \
+			and String(g._online._target_state.get("status", "")) == "active" \
+			and int(g._online._target_state.get("attempts", 0)) == 3 \
+			and int(g._online._target_state.get("successful_steps", 0)) == 2 \
+			and int(g._online._target_state.get("spent_ether", 0)) == 24
+	Selftest.check("personal LLM known reused and nonexact results progress without completion",
+		negative_ok)
+
+	g._engine.inventory = {"fire": 4, "water": 3}
+	g._engine.ether = 100
+	g._engine.ether_overflow = 7
+	g._online._target_state = {
+		"id": "pt-world", "kind": "world", "slug": "steam", "name": "Steam",
+		"status": "active", "cycle_week": "2026-W48", "attempts": 0,
+		"successful_steps": 0, "spent_ether": 0, "next_eligible_week": "", "completed": false,
+	}
+	var world_ledger := ProgressionLedger.new()
+	world_ledger.start(g)
+	var world_ok := bool(strategy_script.call("apply_experiment_outcome", g, {
+		"status": "success", "output": "steam", "result_kind": "known", "acquired": true,
+		"cost": 12, "request_id": "world-fresh", "target_id": "pt-world",
+		"target_kind": "world", "cycle_week": "2026-W48",
+	}, world_ledger))
+	var before_mismatch := ProgressionScenario.snapshot(g)
+	var mismatch_ok := bool(strategy_script.call("apply_experiment_outcome", g, {
+		"status": "success", "output": "steam", "result_kind": "known", "acquired": true,
+		"cost": 12, "request_id": "world-foreign", "target_id": "pt-foreign",
+		"target_kind": "world", "cycle_week": "2026-W48",
+	}, world_ledger))
+	Selftest.check("personal world target completes by slug and rejects a foreign target without debit",
+		world_ok and String(g._online._target_state.get("status", "")) == "completed" \
+		and not mismatch_ok and ProgressionScenario.snapshot(g) == before_mismatch)
+
+	g._online._target_state = {
+		"id": "pt-persistent", "kind": "llm", "slug": "", "name": "СЖЁННЫЙ СВЕТ",
+		"status": "active", "cycle_week": "2026-W48", "attempts": 2,
+		"successful_steps": 1, "spent_ether": 12, "next_eligible_week": "", "completed": false,
+	}
+	var persistent_ledger := ProgressionLedger.new()
+	persistent_ledger.start(g)
+	strategy_script.call("apply_experiment_outcome", g, {
+		"status": "unavailable", "request_id": "next-week-failure", "target_id": "pt-persistent",
+		"target_kind": "llm", "cycle_week": "2026-W49",
+	}, persistent_ledger)
+	Selftest.check("personal unfinished target persists across a server week boundary",
+		String(g._online._target_state.get("id", "")) == "pt-persistent" \
+		and String(g._online._target_state.get("cycle_week", "")) == "2026-W48" \
+		and String(g._online._target_state.get("status", "")) == "active" \
+		and int(g._online._target_state.get("attempts", 0)) == 3)
+
+	g._engine.inventory = {"fire": 4, "water": 3}
+	g._engine.ether = 100
+	g._engine.ether_overflow = 7
+	g._engine.known_recipes[g._pair_key("fire", "water")] = true
+	var brew_ledger := ProgressionLedger.new()
+	brew_ledger.start(g)
+	var brew_cost := g._engine._pair_cost("fire", "water")
+	var brew_before_ether := g._engine.ether + g._engine.ether_overflow
+	var ordinary_brew_ok := bool(strategy_script.call("discover_and_brew", g,
+		{"a": "fire", "b": "water", "out": "steam"}, brew_ledger))
+	Selftest.check("personal target simulation leaves ordinary brew cost and reagent debit unchanged",
+		ordinary_brew_ok and int(g._engine.inventory.get("fire", 0)) == 3 \
+		and int(g._engine.inventory.get("water", 0)) == 2 \
+		and int(g._engine.inventory.get("steam", 0)) == 1 \
+		and brew_before_ether - (g._engine.ether + g._engine.ether_overflow) == brew_cost)
+
+	g._engine.inventory = saved_inventory
+	g._engine.ether = saved_ether
+	g._engine.ether_overflow = saved_overflow
+	g._engine.known_recipes = saved_recipes
+	g._online._target_state = saved_target
 
 
 static func _test_live_progress(runner: ProgressionRunner) -> void:

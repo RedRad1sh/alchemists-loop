@@ -70,7 +70,6 @@ const EXPERIMENT_ARITY_MAX: int = BalanceConfig.BASELINE_DATA["discovery"]["arit
 const EXPERIMENT_COOLDOWN_SEC: float = BalanceConfig.BASELINE_DATA["discovery"]["cooldown_sec"]
 const EXPERIMENT_DAILY_LIMIT: int = BalanceConfig.BASELINE_DATA["discovery"]["daily_limit"]
 const EXPERIMENT_COST: int = BalanceConfig.BASELINE_DATA["discovery"]["cost"]
-const EXPERIMENT_FAILURE_REFUND: int = BalanceConfig.BASELINE_DATA["discovery"]["failure_refund"]
 const CRAFT_STAGE_OPERATIONS: int = BalanceConfig.BASELINE_DATA["caps"]["craft_stage_operations"]
 
 const MASTERY_STAGE_RANKS: Array = BalanceConfig.BASELINE_DATA["mastery"]["stage_ranks"]

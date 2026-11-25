@@ -41,6 +41,11 @@ var _rating_me: Label = null
 var _rating_cache: Dictionary = {}
 var _rating_cache_at_ms := 0
 var _pending_requests: Dictionary = {}
+var _target_state: Dictionary = {}
+var _target_attempt_receipt: Dictionary = {}
+var _target_view_state := ""
+var _target_sync_in_flight := false
+var _target_sync_nonce := ""
 var _discovery_transport: Callable = Callable()
 # U11 (T14): корреляция запрос↔ответ. Pending хранится словарём
 # pair_key → {"a": String, "b": String, "experiment": bool, "at": int}
@@ -58,7 +63,7 @@ var _discovery_transport: Callable = Callable()
 #   clear при сбросах мира (main.gd `_init_new_game`, hub.gd `_do_prestige`,
 #   saves.gd `_load_game`).
 # * prune — не только удаление: просроченная запись ЭКСПЕРИМЕНТА при прунинге
-#   возвращает реагенты и эфир (_prune_pending_requests), иначе осиротевший
+#   снимает pending без списания/возврата, иначе осиротевший
 #   _experiment_pending_pair намертво блокировал бы варку/престиж/новую игру.
 const PENDING_TTL_MSEC := 120000
 var _resume_experiment_wait := false
@@ -110,6 +115,8 @@ const TOAST_MAX := 4
 
 func _init(game: Game) -> void:
 	g = game
+	if Locale != null:
+		Locale.locale_changed.connect(_render_personal_target_state)
 
 # ---------- рейтинг ----------
 
@@ -350,57 +357,83 @@ func _set_status(text: String) -> void:
 func _prune_pending_requests() -> void:
 	# U11 (T14): устаревание записей pending — по времени вставки (см. блок
 	# комментария у _pending_requests). Вызывается на каждой регистрации/изъятии.
-	# Не только удаляет: просроченный живой эксперимент разрешаем так же, как
-	# offline-refund в _tick_pending_experiment (возврат реагентов и полного
-	# эфира), иначе осиротевший _experiment_pending_pair заблокирует три системы.
+	# Просроченный эксперимент только отменяем: ресурсы ещё не потрачены.
 	var now := Time.get_ticks_msec()
 	for key in _pending_requests.keys():
 		var entry: Dictionary = _pending_requests[key]
-		if now - int(entry.get("at", now)) <= PENDING_TTL_MSEC:
+		# Durable target attempts reconcile through server replay, not a local deadline.
+		if bool(entry.get("target_mode", false)) \
+				or now - int(entry.get("at", now)) <= PENDING_TTL_MSEC:
 			continue
 		_pending_requests.erase(String(key))
 		var ea := String(entry.get("a", ""))
 		var eb := String(entry.get("b", ""))
-		# не трогаем чужой/свежий эксперимент и уже сброшенный мир (U9-контракт):
-		# возврат только когда висящий pending совпадает с этой записью.
-		if bool(entry.get("experiment", false)) and _experiment_pending_matches(ea, eb):
-			g._engine._finish_experiment_inputs(ea, eb, true)
-			_set_status("Мир не ответил вовремя: реагенты и эфир возвращены.")
+		if bool(entry.get("experiment", false)):
+			var target_mode := bool(entry.get("target_mode", false))
+			var target_id := String(entry.get("target_id", ""))
+			var generation := int(entry.get("generation", -1))
+			if target_mode:
+				g._engine._cancel_experiment(ea, eb, "", true, target_id, generation)
+				_clear_target_attempt_receipt(ea, eb, target_id, generation)
+			elif _experiment_pending_matches(ea, eb):
+				g._engine._cancel_experiment(ea, eb)
+			_set_status("Мир не ответил вовремя: эксперимент отменён без списания.")
 			g._saves._save_game()
 	if _pending_requests.is_empty():
 		_hide_network_pending()
 
-func _register_pending_pair(a: String, b: String, is_experiment: bool) -> bool:
+func _register_pending_pair(a: String, b: String, is_experiment: bool, target_mode := false,
+		target_id := "", request_id := "", generation := -1, cycle_week := "",
+		reserved_cost := -1) -> bool:
 	# True — слот свободен и занят этой парой; False — pending уже ждёт ответа
 	# (этой или другой пары) либо a/b пусты: запрос отправлять нельзя.
 	if a == "" or b == "":
+		return false
+	if target_mode and (target_id == "" or request_id == "" or generation < 0 \
+			or cycle_week == "" or reserved_cost < 0):
 		return false
 	_prune_pending_requests()
 	if not _pending_requests.is_empty():
 		return false
 	_pending_requests[g._pair_key(a, b)] = {
-		"a": a, "b": b, "experiment": is_experiment, "at": Time.get_ticks_msec()}
+		"a": a, "b": b, "experiment": is_experiment, "target_mode": target_mode,
+		"target_id": target_id, "request_id": request_id, "generation": generation,
+		"cycle_week": cycle_week, "reserved_cost": reserved_cost,
+		"at": Time.get_ticks_msec()}
 	_show_network_pending(is_experiment)
 	return true
 
-func _take_pending_pair(pair_key: String) -> Dictionary:
+func _take_pending_pair(pair_key: String, target_mode := false, target_id := "",
+		request_id := "", generation := -1) -> Dictionary:
 	# Изъекает pending-запись по pair_key из сигнала Net; {} — записи нет
 	# (дубликат/запоздалый ответ, ответ после сброса или prune).
 	_prune_pending_requests()
 	if not _pending_requests.has(pair_key):
 		return {}
 	var entry: Dictionary = _pending_requests[pair_key]
+	if bool(entry.get("target_mode", false)) != target_mode:
+		return {}
+	if target_mode and (String(entry.get("target_id", "")) != target_id \
+			or String(entry.get("request_id", "")) != request_id \
+			or int(entry.get("generation", -1)) != generation):
+		return {}
 	_pending_requests.erase(pair_key)
 	if _pending_requests.is_empty():
 		_hide_network_pending()
 	return entry
 
-func _experiment_pending_matches(a: String, b: String) -> bool:
+func _experiment_pending_matches(a: String, b: String, target_mode := false,
+		target_id := "", generation := -1) -> bool:
 	# U11 (T14): закрывает задел U9 — сверка пары ответа с висящим экспериментом
 	# (порядок-insensitive, через ту же нормализацию _pair_key).
 	var pending: Array = g._engine._experiment_pending_pair
-	return pending.size() == 2 \
-		and g._pair_key(String(pending[0]), String(pending[1])) == g._pair_key(a, b)
+	if pending.size() != 2 \
+			or g._pair_key(String(pending[0]), String(pending[1])) != g._pair_key(a, b):
+		return false
+	if target_mode:
+		return String(_target_state.get("id", "")) == target_id \
+			and int(_target_state.get("generation", -1)) == generation
+	return true
 
 func _grant_local_acquisition(slug: String) -> Array:
 	# единая точка «первое локальное получение вещества из мира»: +1 в инвентарь
@@ -472,8 +505,17 @@ func _start_experiment(a: String, b: String) -> bool:
 	Пара, лежащая в локальном g.RECIPES, разрешается без сети: клиент знает
 	резерват сам, выдумывать новый элемент ему не нужно (дефект 2026-10-15)."""
 	var recipe := _find_recipe(a, b)
-	if recipe.is_empty():
-		if not _discovery_available():
+	var target_mode := String(_target_state.get("status", "")) == "active" \
+		and String(_target_state.get("id", "")) != ""
+	if target_mode or recipe.is_empty():
+		if target_mode and not (_net_enabled and Net.is_available()):
+			var message := "Личная цель требует связи с миром."
+			_set_status(message)
+			_toast(message, NoticeKind.ERROR, 4.0)
+			_haptic_error()
+			Sfx.error()
+			return false
+		if not target_mode and not _discovery_available():
 			var message := ("Эксперимент требует связи с миром: "
 				+ "новый элемент нельзя создать офлайн.")
 			_set_status(message)
@@ -481,11 +523,8 @@ func _start_experiment(a: String, b: String) -> bool:
 			_haptic_error()
 			Sfx.error()
 			return false
-		# U11 (T14): начинаем эксперимент только на свободный pending-слот — иначе
-		# реагенты были бы съедены, а ответ чужой пары применён к эксперименту.
-		# Локальной паре слот не нужен: она не регистрирует запрос и завершается
-		# в этом же вызове, коррелируемого ответа, который мог бы «приехать не
-		# туда», у неё нет по построению.
+		# Сетевой ответ занимает общий pending-слот; локальная пара завершается
+		# синхронно и этого слота не требует.
 		_prune_pending_requests()
 		if not _pending_requests.is_empty():
 			var message := ("Предыдущий запрос ещё обрабатывается. "
@@ -495,12 +534,42 @@ func _start_experiment(a: String, b: String) -> bool:
 			_haptic_error()
 			Sfx.error()
 			return false
-	if not g._engine._begin_experiment(a, b):
+	if not g._engine._begin_experiment(a, b, target_mode):
 		return false
+	if target_mode:
+		var target_id := String(_target_state.get("id", ""))
+		var generation := int(_target_state.get("generation", -1))
+		var cycle_week := String(_target_state.get("cycle_week", ""))
+		var request_id := _new_target_request_id()
+		var reserved_cost := g._engine._experiment_reserved_ether
+		if not _register_pending_pair(a, b, true, true, target_id, request_id, generation,
+				cycle_week, reserved_cost):
+			g._engine._cancel_experiment(a, b, "", true, target_id, generation)
+			_toast("Не удалось отправить цель. Списания не было.", NoticeKind.ERROR)
+			return false
+		var pending: Dictionary = _pending_requests[g._pair_key(a, b)]
+		_target_attempt_receipt = {
+			"a": a, "b": b, "target_id": target_id, "request_id": request_id,
+			"generation": generation, "cycle_week": cycle_week,
+			"at": int(pending.get("at", Time.get_ticks_msec())), "reserved_cost": reserved_cost}
+		if not g._saves._save_game():
+			_take_pending_pair(g._pair_key(a, b), true, target_id, request_id, generation)
+			g._engine._cancel_experiment(a, b, "", true, target_id, generation)
+			_clear_target_attempt_receipt()
+			_toast("Не удалось сохранить попытку. Списания не было.", NoticeKind.ERROR)
+			return false
+		Net.experiment_target_attempt(a, b, _net_nick, _device_id, target_id, request_id)
+		if _pending_requests.has(g._pair_key(a, b)):
+			_set_status("Личная цель отправлена в мир: %s + %s." % [_item_name(a), _item_name(b)])
+			_toast("Эксперимент отправлен в мир", NoticeKind.INFO, 2.5)
+			_haptic_medium()
+		return true
 	if not recipe.is_empty():
 		var output := String(recipe["out"])
 		var first_open := not g._engine.inventory.has(output)
-		g._engine._experiment_succeeded(output, a, b)
+		if not g._engine._experiment_succeeded(output, a, b, "known"):
+			_set_status("Эксперимент не завершён: недостаточно эфира или котёл занят.")
+			return false
 		if first_open:
 			g._engine._grant_first_open(output)
 		g._saves._save_game()
@@ -509,10 +578,9 @@ func _start_experiment(a: String, b: String) -> bool:
 			NoticeKind.INFO, 2.5)
 		_haptic_success()
 		return true
-	# Слот пуст и иных потребителей в этом кадре нет — регистрация успешна by construction.
 	if not _register_pending_pair(a, b, true):
-		g._engine._finish_experiment_inputs(a, b, true)
-		_toast("Не удалось отправить эксперимент. Ресурсы возвращены.",
+		g._engine._cancel_experiment(a, b)
+		_toast("Не удалось отправить эксперимент. Списания не было.",
 			NoticeKind.ERROR)
 		return false
 	if _discovery_transport.is_valid():
@@ -525,7 +593,58 @@ func _start_experiment(a: String, b: String) -> bool:
 	g._saves._save_game()
 	return true
 
+func _resume_pending_target_attempt() -> bool:
+	var receipt := _filter_personal_target_attempt(_target_attempt_receipt)
+	if receipt.is_empty():
+		return false
+	var a := String(receipt["a"])
+	var b := String(receipt["b"])
+	var target_id := String(receipt["target_id"])
+	var request_id := String(receipt["request_id"])
+	var cycle_week := String(receipt["cycle_week"])
+	var generation := int(_target_state.get("generation", -1))
+	if String(_target_state.get("id", "")) != target_id or generation < 0 \
+			or String(_target_state.get("cycle_week", "")) != cycle_week:
+		_resume_experiment_wait = false
+		_set_status("Ответ цели сохранён; нужна сверка активной цели с миром.")
+		return false
+	if not _net_enabled or not Net.is_available():
+		_resume_experiment_wait = true
+		_target_view_state = "offline"
+		_render_personal_target_state()
+		_set_status("Ответ цели сохранён; ждём связь с миром для продолжения.")
+		return false
+	g._engine._experiment_pending_pair = [a, b]
+	g._engine._experiment_reserved_ether = int(receipt["reserved_cost"])
+	var pair_key := g._pair_key(a, b)
+	var now := Time.get_ticks_msec()
+	if _pending_requests.has(pair_key):
+		var existing: Dictionary = _pending_requests[pair_key]
+		if not bool(existing.get("target_mode", false)) \
+				or String(existing.get("target_id", "")) != target_id \
+				or String(existing.get("request_id", "")) != request_id \
+				or int(existing.get("generation", -1)) != generation:
+			_resume_experiment_wait = false
+			return false
+		existing["at"] = now
+		_pending_requests[pair_key] = existing
+	elif not _register_pending_pair(a, b, true, true, target_id, request_id, generation,
+			cycle_week, int(receipt["reserved_cost"])):
+		_resume_experiment_wait = true
+		return false
+	receipt["generation"] = generation
+	receipt["at"] = now
+	_target_attempt_receipt = receipt
+	g._saves._save_game()
+	_resume_experiment_wait = false
+	_set_status("Продолжаем сохранённую личную цель: %s + %s…" % [_item_name(a), _item_name(b)])
+	Net.experiment_target_attempt(a, b, _net_nick, _device_id, target_id, request_id)
+	return true
+
 func _resume_pending_experiment() -> void:
+	if not _target_attempt_receipt.is_empty():
+		_resume_pending_target_attempt()
+		return
 	if g._engine._experiment_pending_pair.size() != 2 or not _net_enabled:
 		return
 	var a := String(g._engine._experiment_pending_pair[0])
@@ -537,7 +656,7 @@ func _resume_pending_experiment() -> void:
 	if not Net.is_available() or not _register_pending_pair(a, b, true):
 		# нет связи ИЛИ регистрация не удалась (пустой slug из сейва): запрос
 		# не отправляем — без записи pending он некоррелируем (дефект T14).
-		# Сохранённая пара ждёт; 8-секундный дедлайн вернёт реагенты штатно.
+		# Сохранённая пара ждёт; 8-секундный дедлайн отменит её без списания.
 		_resume_experiment_wait = true
 		_resume_experiment_deadline = Time.get_ticks_msec() / 1000.0 + 8.0
 		_set_status("Эксперимент сохранён; ждём связь с миром для продолжения.")
@@ -547,6 +666,10 @@ func _resume_pending_experiment() -> void:
 	Net.check_pair(a, b, _net_nick, _device_id, true)
 
 func _tick_pending_experiment() -> void:
+	if not _target_attempt_receipt.is_empty():
+		if _resume_experiment_wait and Net.is_available():
+			_resume_pending_target_attempt()
+		return
 	if not _resume_experiment_wait or g._engine._experiment_pending_pair.size() != 2:
 		return
 	if Net.is_available():
@@ -557,39 +680,403 @@ func _tick_pending_experiment() -> void:
 	var a := String(g._engine._experiment_pending_pair[0])
 	var b := String(g._engine._experiment_pending_pair[1])
 	_resume_experiment_wait = false
-	g._engine._finish_experiment_inputs(a, b, true)
-	_set_status("Эксперимент не был отправлен: реагенты и эфир возвращены.")
+	g._engine._cancel_experiment(a, b)
+	_set_status("Эксперимент не был отправлен: списания не было.")
 	g._saves._save_game()
 
-func _experiment_outcome(out: Dictionary, a: String, b: String, created: bool = false) -> void:
-	# U9 (T12): поздний ответ эксперимента после сброса мира (престиж/новая игра
-	# чистят _experiment_pending_pair) не должен регистрировать рецепты, дарить
-	# вещества и списывать свежий подарочный запас — дропаем без эффектов.
+const PERSONAL_TARGET_ATTEMPT_KEYS := [
+	"a", "b", "target_id", "request_id", "generation", "cycle_week", "at", "reserved_cost"]
+const PERSONAL_TARGET_SNAPSHOT_KEYS := [
+	"id", "kind", "slug", "name", "hint", "status", "cycle_week", "attempts",
+	"successful_steps", "spent_ether", "next_eligible_week", "completed"]
+
+func _filter_personal_target_snapshot(raw: Variant, advance_generation: bool = true) -> Dictionary:
+	if typeof(raw) != TYPE_DICTIONARY:
+		return {}
+	var source: Dictionary = raw
+	var target_id := String(source.get("id", ""))
+	var kind := String(source.get("kind", ""))
+	var status := String(source.get("status", ""))
+	if target_id == "" or kind not in ["world", "llm"] \
+			or status not in ["active", "completed", "waiting_next_slot", "conflict"]:
+		return {}
+	var snapshot: Dictionary = {}
+	for key in PERSONAL_TARGET_SNAPSHOT_KEYS:
+		if source.has(key):
+			snapshot[key] = source[key]
+	for key in ["attempts", "successful_steps", "spent_ether"]:
+		snapshot[key] = maxi(0, int(source.get(key, 0)))
+	if not snapshot.has("next_eligible_week"):
+		snapshot["next_eligible_week"] = ""
+	if not snapshot.has("completed"):
+		snapshot["completed"] = status == "completed"
+	var generation := int(_target_state.get("generation", 0))
+	if String(_target_state.get("id", "")) != target_id:
+		generation += 1
+	if not advance_generation:
+		generation = maxi(0, int(source.get("generation", generation)))
+	snapshot["generation"] = generation
+	return snapshot
+
+func _filter_personal_target_attempt(raw: Variant) -> Dictionary:
+	if typeof(raw) != TYPE_DICTIONARY:
+		return {}
+	var source: Dictionary = raw
+	for key in PERSONAL_TARGET_ATTEMPT_KEYS:
+		if not source.has(key):
+			return {}
+	var a := String(source.get("a", ""))
+	var b := String(source.get("b", ""))
+	var target_id := String(source.get("target_id", ""))
+	var request_id := String(source.get("request_id", ""))
+	var cycle_week := String(source.get("cycle_week", ""))
+	if a == "" or b == "" or not g.ITEMS.has(a) or not g.ITEMS.has(b) \
+			or target_id == "" or request_id == "" or cycle_week == "":
+		return {}
+	var generation_raw = source.get("generation", null)
+	var at_raw = source.get("at", null)
+	var cost_raw = source.get("reserved_cost", null)
+	if typeof(generation_raw) not in [TYPE_INT, TYPE_FLOAT] \
+			or typeof(at_raw) not in [TYPE_INT, TYPE_FLOAT] \
+			or typeof(cost_raw) not in [TYPE_INT, TYPE_FLOAT]:
+		return {}
+	var generation := int(generation_raw)
+	var at := int(at_raw)
+	var reserved_cost := int(cost_raw)
+	if generation < 0 or at < 0 or reserved_cost < 0 \
+			or not is_finite(float(generation_raw)) or not is_finite(float(at_raw)) \
+			or not is_finite(float(cost_raw)):
+		return {}
+	return {
+		"a": a, "b": b, "target_id": target_id, "request_id": request_id,
+		"generation": generation, "cycle_week": cycle_week, "at": at,
+		"reserved_cost": reserved_cost}
+
+func _clear_target_attempt_receipt(a := "", b := "", target_id := "", generation := -1) -> void:
+	if _target_attempt_receipt.is_empty():
+		return
+	if a != "" and (g._pair_key(a, b) != g._pair_key(
+			String(_target_attempt_receipt.get("a", "")), String(_target_attempt_receipt.get("b", ""))) \
+			or String(_target_attempt_receipt.get("target_id", "")) != target_id \
+			or (generation >= 0 and int(_target_attempt_receipt.get("generation", -1)) != generation)):
+		return
+	_target_attempt_receipt.clear()
+
+func _reset_pending_experiment_state() -> void:
+	_pending_requests.clear()
+	_target_attempt_receipt.clear()
+	_resume_experiment_wait = false
+	if g != null and g._engine != null:
+		g._engine._experiment_pending_pair.clear()
+		g._engine._experiment_reserved_ether = 0
+	_hide_network_pending()
+
+func _restore_pending_target_attempt(raw: Variant) -> bool:
+	var receipt := _filter_personal_target_attempt(raw)
+	if receipt.is_empty() or String(_target_state.get("status", "")) != "active" \
+			or String(_target_state.get("id", "")) != String(receipt.get("target_id", "")) \
+			or String(_target_state.get("cycle_week", "")) != String(receipt.get("cycle_week", "")):
+		return false
+	var generation := int(_target_state.get("generation", -1))
+	if generation < 0:
+		return false
+	receipt["generation"] = generation
+	receipt["at"] = Time.get_ticks_msec()
+	_target_attempt_receipt = receipt
+	g._engine._experiment_pending_pair = [String(receipt["a"]), String(receipt["b"])]
+	g._engine._experiment_reserved_ether = int(receipt["reserved_cost"])
+	var entry := receipt.duplicate(true)
+	entry["experiment"] = true
+	entry["target_mode"] = true
+	_pending_requests = {g._pair_key(String(receipt["a"]), String(receipt["b"])): entry}
+	_show_network_pending(true)
+	return true
+
+func _normalized_target_name(value: String) -> String:
+	var normalized := value.strip_edges().to_lower().replace("ё", "е")
+	normalized = normalized.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+	return " ".join(normalized.split(" ", false))
+
+func _new_target_request_id() -> String:
+	return "%d-%d" % [Time.get_ticks_usec(), randi()]
+
+func _sync_personal_target() -> void:
+	if not _net_enabled:
+		_target_sync_in_flight = false
+		_target_sync_nonce = ""
+		_target_view_state = "offline"
+		_render_personal_target_state()
+		return
+	if not _target_attempt_receipt.is_empty():
+		if _resume_experiment_wait or _pending_requests.is_empty():
+			_resume_pending_target_attempt()
+		return
+	if _target_sync_in_flight:
+		return
+	_target_sync_in_flight = true
+	_target_sync_nonce = _new_target_request_id()
+	_target_view_state = "syncing"
+	_render_personal_target_state()
+	Net.experiment_target_sync(_device_id, _net_nick, _target_sync_nonce)
+
+
+func _render_personal_target_state(_new_locale: String = "") -> void:
+	if g == null or g._pages == null or g._pages._experiment_field == null:
+		return
+	var card := g._pages._experiment_field.find_child("PersonalTargetCard", true, false) as Control
+	if card == null:
+		return
+	var title := card.find_child("TargetName", true, false) as Label
+	var hint := card.find_child("TargetHint", true, false) as Label
+	var stats := card.find_child("TargetStats", true, false) as Label
+	var state := card.find_child("TargetState", true, false) as Label
+	if title != null:
+		var target_name := String(_target_state.get("name", "")) if not _target_state.is_empty() else "Личная цель"
+		title.text = g.tr(target_name)
+	if hint != null:
+		var target_hint := String(_target_state.get("hint", "")) if not _target_state.is_empty() else \
+			("Получаем личную цель…" if _target_view_state == "syncing" else "Цель появится после связи с миром.")
+		hint.text = g.tr(target_hint)
+	if stats != null:
+		stats.text = "%s %d · %s %d" % [
+			g.tr("Шагов:"), maxi(0, int(_target_state.get("successful_steps", 0))),
+			g.tr("Эфира:"), maxi(0, int(_target_state.get("spent_ether", 0)))]
+	if state != null:
+		var state_text := "Ожидаем"
+		match _target_view_state:
+			"syncing":
+				state_text = "Синхронизация…"
+			"offline":
+				state_text = "Нет связи"
+			"target_unavailable":
+				state_text = "Недоступна"
+		if _target_view_state == "":
+			match String(_target_state.get("status", "")):
+				"active":
+					state_text = "Активна"
+				"completed":
+					state_text = "Выполнена"
+				"waiting_next_slot":
+					state_text = "Следующая"
+				"conflict":
+					state_text = "Сверка"
+		state.text = g.tr(state_text)
+		if g._pages != null:
+			g._pages._layout_personal_target_card()
+
+
+func _on_experiment_target_sync_result(result: Dictionary, sync_nonce: String = "") -> void:
+	if sync_nonce == "":
+		if _target_sync_in_flight:
+			return
+	elif _target_sync_nonce == "" or sync_nonce != _target_sync_nonce:
+		return
+	_target_sync_in_flight = false
+	_target_sync_nonce = ""
+	if result.get("offline", false) == true or result.get("auth_required", false) == true:
+		_target_view_state = "offline"
+		_render_personal_target_state()
+		return
+	if result.get("ok", false) != true:
+		_target_view_state = "target_unavailable"
+		_render_personal_target_state()
+		return
+	var target_raw: Variant = result.get("target")
+	var authoritative_status := String(result.get("status", ""))
+	if authoritative_status in ["waiting_next_slot", "completed"] and typeof(target_raw) == TYPE_DICTIONARY:
+		var normalized_target: Dictionary = (target_raw as Dictionary).duplicate(false)
+		normalized_target["status"] = authoritative_status
+		normalized_target["completed"] = authoritative_status == "completed"
+		target_raw = normalized_target
+	var snapshot := _filter_personal_target_snapshot(target_raw)
+	if snapshot.is_empty():
+		_target_view_state = "target_unavailable"
+		_render_personal_target_state()
+		return
+	if not _target_attempt_receipt.is_empty():
+		_target_view_state = ""
+		_render_personal_target_state()
+		return
+	_target_state = snapshot
+	_target_view_state = ""
+	_render_personal_target_state()
+	g._saves._save_game()
+
+func _reject_personal_target_completion(snapshot: Dictionary) -> void:
+	snapshot["status"] = "active"
+	snapshot["completed"] = false
+	snapshot["slug"] = String(_target_state.get("slug", ""))
+	snapshot["next_eligible_week"] = String(_target_state.get("next_eligible_week", ""))
+
+func _on_experiment_target_result(request_id: String, pair_key: String, result: Dictionary) -> void:
+	_prune_pending_requests()
+	if request_id == "" or pair_key == "" or not _pending_requests.has(pair_key):
+		return
+	var pending: Dictionary = _pending_requests[pair_key]
+	if not bool(pending.get("target_mode", false)) \
+			or String(pending.get("request_id", "")) != request_id:
+		return
+	var a := String(pending.get("a", ""))
+	var b := String(pending.get("b", ""))
+	var target_id := String(pending.get("target_id", ""))
+	var generation := int(pending.get("generation", -1))
+	if String(_target_state.get("id", "")) != target_id \
+			or int(_target_state.get("generation", -1)) != generation \
+			or String(_target_state.get("status", "")) != "active":
+		_reset_pending_experiment_state()
+		g._saves._save_game()
+		return
+	if result.get("offline", false) == true or result.get("auth_required", false) == true:
+		_resume_experiment_wait = true
+		_target_view_state = "offline"
+		_render_personal_target_state()
+		_set_status("Ответ цели сохранён; ждём связь с миром для продолжения.")
+		return
+	if String(result.get("request_id", "")) != request_id \
+			or String(result.get("target_id", "")) != target_id \
+			or String(result.get("pair_key", "")) != pair_key:
+		return
+	var status := String(result.get("status", ""))
+	var response_ok := typeof(result.get("ok", false)) == TYPE_BOOL \
+		and bool(result.get("ok", false))
+	var snapshot := _filter_personal_target_snapshot(result.get("target"))
+	if not snapshot.is_empty():
+		var target_kind := String(_target_state.get("kind", ""))
+		var previous_slug := String(_target_state.get("slug", ""))
+		var snapshot_slug := String(snapshot.get("slug", ""))
+		var slug_matches := previous_slug == snapshot_slug
+		if target_kind == "llm" and previous_slug == "" and snapshot_slug != "" \
+				and String(snapshot.get("status", "")) == "completed":
+			slug_matches = true
+		if String(snapshot.get("id", "")) != target_id \
+				or String(snapshot.get("kind", "")) != target_kind or not slug_matches:
+			snapshot = {}
+	if not snapshot.is_empty() and String(snapshot.get("status", "")) == "completed" \
+			and (not response_ok or result.get("acquired", false) != true \
+			or not status in ["created", "known", "reused"]):
+		_reject_personal_target_completion(snapshot)
+	var message := g._clean_str(result.get("message", ""))
+	if status in ["created", "known", "reused"] and response_ok:
+		if snapshot.is_empty() or not result.has("ether_charged") \
+				or int(result.get("ether_charged", -1)) < 0 \
+				or typeof(result.get("acquired", null)) != TYPE_BOOL:
+			_take_pending_pair(pair_key, true, target_id, request_id, generation)
+			g._engine._cancel_experiment(a, b, "Мир вернул неполный ответ цели: списания не было.",
+				true, target_id, generation)
+			g._saves._save_game()
+			return
+		if not bool(result.get("acquired", false)):
+			_take_pending_pair(pair_key, true, target_id, request_id, generation)
+			_target_state = snapshot
+			_render_personal_target_state()
+			g._engine._cancel_experiment(a, b, message, true, target_id, generation)
+			g._saves._save_game()
+			return
+		var discovery_raw = result.get("discovery")
+		if typeof(discovery_raw) != TYPE_DICTIONARY:
+			_take_pending_pair(pair_key, true, target_id, request_id, generation)
+			g._engine._cancel_experiment(a, b, "Мир вернул неполный результат цели: списания не было.",
+				true, target_id, generation)
+			g._saves._save_game()
+			return
+		var discovery: Dictionary = discovery_raw
+		var slug := String(discovery.get("slug", ""))
+		if slug == "" or String(discovery.get("name", "")) == "" \
+				or g._pair_key(String(discovery.get("a", "")), String(discovery.get("b", ""))) != pair_key:
+			_take_pending_pair(pair_key, true, target_id, request_id, generation)
+			g._engine._cancel_experiment(a, b, "Мир вернул результат не для этой пары: списания не было.",
+				true, target_id, generation)
+			g._saves._save_game()
+			return
+		var ether_charged := int(result.get("ether_charged", -1))
+		if not g._engine._experiment_can_commit(a, b, ether_charged, true, target_id, generation):
+			_resume_experiment_wait = true
+			_set_status("Результат цели сохранён; ждём возможности завершить эксперимент.")
+			g._saves._save_game()
+			return
+		if String(_target_state.get("kind", "")) == "llm":
+			var exact_target := status == "created" \
+				and not bool(discovery.get("reused", false)) \
+				and _normalized_target_name(String(discovery.get("name", ""))) \
+				== _normalized_target_name(String(_target_state.get("name", "")))
+			if not exact_target and String(snapshot.get("status", "")) == "completed":
+				_reject_personal_target_completion(snapshot)
+		elif String(snapshot.get("status", "")) == "completed" \
+				and String(snapshot.get("slug", "")) != slug:
+			_reject_personal_target_completion(snapshot)
+		var first_open := not g._engine.inventory.has(slug)
+		_apply_server_element(discovery)
+		_register_server_recipe(a, b, slug)
+		g._engine.learn_recipe(a, b, slug)
+		g._sync.mark_dirty()
+		if not g._engine._commit_experiment_success(slug, a, b, status, ether_charged,
+				true, target_id, generation, false):
+			_resume_experiment_wait = true
+			_set_status("Результат цели сохранён; ждём возможности завершить эксперимент.")
+			g._saves._save_game()
+			return
+		_target_state = snapshot
+		_clear_target_attempt_receipt(a, b, target_id, generation)
+		_take_pending_pair(pair_key, true, target_id, request_id, generation)
+		_render_personal_target_state()
+		var first_milestones: Array = []
+		if first_open:
+			first_milestones = g._engine._grant_first_open(slug)
+		g._contracts._fair_report_brew(a, b)
+		g._spirit._companion_react_discovery(slug)
+		_server_authors[slug] = g._clean_str(discovery.get("author", _net_nick))
+		_remember_avatar(_server_authors[slug], discovery.get("avatar"))
+		_rebuild_world_grid()
+		g._show_discovery_popup(slug, a, b, first_milestones)
+		if message != "":
+			_set_status(message)
+		g._saves._save_game()
+		return
+	if _take_pending_pair(pair_key, true, target_id, request_id, generation).is_empty():
+		return
+	if not snapshot.is_empty():
+		_target_state = snapshot
+		_render_personal_target_state()
+	if status == "not_combinable":
+		g._engine._experiment_failed(a, b, message, true, target_id, generation)
+	else:
+		g._engine._cancel_experiment(a, b, message, true, target_id, generation)
+		_set_status(message if message != "" else "Эксперимент отменён без списания.")
+	g._saves._save_game()
+
+func _experiment_outcome(out: Dictionary, a: String, b: String, created: bool = false,
+		result_kind := "") -> void:
 	if g._engine._experiment_pending_pair.size() != 2:
 		print("NETEXPERIMENT stale pair=", a, " + ", b)
 		_set_status("Поздний ответ эксперимента проигнорирован: лаборатория уже была сброшена.")
 		return
-	# U11 (T14): задел U9 закрыт — поздний ответ СТАРОЙ пары, пока висит новый
-	# эксперимент, тоже дропается (сверка pair_key, defense-in-depth:
-	# обработчики Net проверяют то же до вызова).
 	if not _experiment_pending_matches(a, b):
 		print("NETEXPERIMENT mismatch pair=", a, " + ", b)
 		_set_status("Поздний ответ эксперимента проигнорирован: он не про текущую пару.")
 		return
-	var slug := _apply_server_element(out)
-	if slug == "":
-		g._engine._finish_experiment_inputs(a, b, true)
+	var slug := String(out.get("slug", ""))
+	if slug == "" or String(out.get("name", "")) == "":
+		g._engine._cancel_experiment(a, b)
 		Analytics.track("experiment_result", {"left": a, "right": b, "result": "invalid"})
-		_set_status("Мир вернул неполный результат — реагенты восстановлены.")
+		_set_status("Мир вернул неполный результат: эксперимент отменён без списания.")
 		return
+	var kind := result_kind
+	if kind == "":
+		kind = "reused" if bool(out.get("reused", false)) else "created"
+	var ether_cost := g._engine._experiment_charge_for(slug, kind)
+	if not g._engine._experiment_can_commit(a, b, ether_cost):
+		g._engine._cancel_experiment(a, b)
+		Analytics.track("experiment_result", {"left": a, "right": b, "result": "unpaid"})
+		_set_status("Эксперимент не завершён: недостаточно эфира или котёл занят.")
+		return
+	_apply_server_element(out)
 	_register_server_recipe(a, b, slug)
 	g._engine.learn_recipe(a, b, slug)
 	g._sync.mark_dirty()
-	# first_open — до инкремента; грант первооткрытия — ПОСЛЕ _experiment_succeeded
-	# (она делает inventory[slug]+=1): иначе _check_milestones не учтёт это вещество
-	# и веха на N веществ сработает на одно открытие позже. (Круг удалён: Task 4.)
 	var first_open := not g._engine.inventory.has(slug)
-	g._engine._experiment_succeeded(slug, a, b)
+	if not g._engine._experiment_succeeded(slug, a, b, kind):
+		g._engine._cancel_experiment(a, b)
+		return
 	var first_milestones: Array = []
 	if first_open:
 		first_milestones = g._engine._grant_first_open(slug)
@@ -626,7 +1113,9 @@ func _on_net_pair_result(pair_key: String, result: Dictionary) -> void:
 		return
 	if result.get("ok", false) == true and result.get("found", false) == true:
 		if is_experiment:
-			_experiment_outcome(result.get("out", {}) as Dictionary, a, b)
+			var out := result.get("out", {}) as Dictionary
+			var kind := "reused" if bool(out.get("reused", false)) else "known"
+			_experiment_outcome(out, a, b, false, kind)
 			return
 		var slug := _apply_server_element(result.get("out", {}))
 		if slug != "":
@@ -666,17 +1155,17 @@ func _on_net_pair_result(pair_key: String, result: Dictionary) -> void:
 		if _register_pending_pair(a, b, is_experiment):
 			Net.discover(a, b, _net_nick, _device_id, is_experiment)
 		elif is_experiment:
-			# Bug 4: регистрация не удалась — возвращаем реагенты, иначе
+			# Регистрация не удалась — снимаем pending без списания.
 			# _experiment_pending_pair остаётся висеть и блокирует котёл.
-			g._engine._finish_experiment_inputs(a, b, true)
-			_set_status("Эксперимент не был отправлен: реагенты и эфир возвращены.")
+			g._engine._cancel_experiment(a, b)
+			_set_status("Эксперимент не был отправлен: списания не было.")
 			g._saves._save_game()
 	else:
 		var msg := g._clean_str(result.get("message", ""))
 		if is_experiment:
-			g._engine._finish_experiment_inputs(a, b, true)
+			g._engine._cancel_experiment(a, b)
 			Analytics.track("experiment_result", {"left": a, "right": b, "result": "unavailable"})
-			_set_status("Эксперимент отложен: %s" % (msg if msg != "" else "мир недоступен"))
+			_set_status("Эксперимент отложен без списания: %s" % (msg if msg != "" else "мир недоступен"))
 			return
 		_set_status("Мир не ответил: %s" % msg if msg != "" else "Туман рассеялся… (мир недоступен)")
 
@@ -704,14 +1193,10 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 		var db := g._clean_str(disc.get("b", ""))
 		if da == "" or db == "" or g._pair_key(da, db) != pair_key:
 			print("NETDISCOVER dropped: discovery pair mismatch for pair=", pair_key)
-			# p2 (батч 4): ошибочный ответ НЕ должен оставлять эксперимент висеть
-			# навсегда. Если pending-пара эксперимента ещё совпадает с висящей —
-			# возвращаем реагенты/эфир ровно один раз (U9-контракт: не трогаем
-			# чужой/сброшенный эксперимент).
 			if is_experiment and _experiment_pending_matches(a, b):
-				g._engine._finish_experiment_inputs(a, b, true)
-				_set_status("Эксперимент отменён: мир ответил некорректно. Ресурсы возвращены.")
-				_toast("Эксперимент отменён: ответ мира повреждён. Ресурсы возвращены.",
+				g._engine._cancel_experiment(a, b)
+				_set_status("Эксперимент отменён: мир ответил некорректно. Списания не было.")
+				_toast("Эксперимент отменён: ответ мира повреждён. Списания не было.",
 					NoticeKind.WARNING, 4.0)
 			return
 	if is_experiment and not _experiment_pending_matches(a, b):
@@ -726,7 +1211,8 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 	var reused := bool(disc.get("reused", false))
 	if status == "created" or status == "known":
 		if is_experiment:
-			_experiment_outcome(disc, a, b, status == "created" and not reused)
+			var result_kind := "known" if status == "known" else ("reused" if reused else "created")
+			_experiment_outcome(disc, a, b, status == "created" and not reused, result_kind)
 			return
 		var slug := _apply_server_element(disc)
 		if slug != "":
@@ -803,9 +1289,9 @@ func _on_net_discover_result(pair_key: String, result: Dictionary) -> void:
 	else:
 		var msg := g._clean_str(result.get("message", ""))
 		if is_experiment:
-			g._engine._finish_experiment_inputs(a, b, true)
+			g._engine._cancel_experiment(a, b)
 			Analytics.track("experiment_result", {"left": a, "right": b, "result": "unavailable"})
-			_set_status("Эксперимент отложен: %s" % (msg if msg != "" else "мир недоступен"))
+			_set_status("Эксперимент отложен без списания: %s" % (msg if msg != "" else "мир недоступен"))
 			return
 		_set_status("Мир не ответил: %s" % msg if msg != "" else "Туман рассеялся… (мир недоступен)")
 
@@ -989,6 +1475,7 @@ func _forget_net_identity() -> void:
 	# старый device_id больше не должен уходить на сервер: почти все Net-вызовы
 	# гейтятся _net_enabled и непустым _device_id (resonance/retention/riddles/
 	# home). Само удаление сервера — исключение: оно идёт ДО вызова этого метода.
+	_reset_pending_experiment_state()
 	_net_enabled = false
 	_device_id = ""
 	_net_nick = ""

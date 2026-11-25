@@ -44,6 +44,9 @@ func _saved_locale() -> String:
 		return UserData.get_locale()
 	return Locale.get_locale_code() if Locale != null else "ru"
 
+func _personal_target_snapshot() -> Dictionary:
+	return g._online._filter_personal_target_snapshot(g._online._target_state, false)
+
 func _save_game() -> bool:
 	if _save_frozen:
 		return false
@@ -66,6 +69,8 @@ func _save_game() -> bool:
 	if not g._workshop.is_read_only():
 		workshop_state["last_simulated_at"] = snapshot_ts
 	var house_block := _house_block()
+	var personal_target := _personal_target_snapshot()
+	var personal_attempt := g._online._filter_personal_target_attempt(g._online._target_attempt_receipt)
 	var data := {
 		"version": Game.SAVE_VERSION,
 		"device_id": g._online._device_id,
@@ -77,7 +82,9 @@ func _save_game() -> bool:
 		"experiment_day": g._engine._experiment_day,
 		"experiment_count": g._engine._experiment_count,
 		"experiment_last_at": g._engine._experiment_last_at,
-		"experiment_pending_pair": g._engine._experiment_pending_pair,
+		"personal_experiment_target": personal_target,
+		"personal_experiment_generation": maxi(0, int(g._online._target_state.get("generation", 0))),
+		"personal_experiment_attempt": personal_attempt,
 		"sigil_pending_craft": g._sigil_pending_craft,
 		"craft_job": g._engine._craft_job,
 		"blueprints": g._engine._blueprints,
@@ -546,16 +553,21 @@ func _load_game() -> void:
 	g._engine._experiment_day = String(data.get("experiment_day", ""))
 	g._engine._experiment_count = clampi(int(data.get("experiment_count", 0)), 0, Game.EXPERIMENT_DAILY_LIMIT)
 	g._engine._experiment_last_at = maxf(0.0, float(data.get("experiment_last_at", 0.0)))
-	g._engine._experiment_pending_pair.clear()
-	# U11 (T14): загрузка сейва аннулирует pending-записи прежней сессии —
-	# их ответы не должны примениться к загруженному состоянию.
-	g._online._pending_requests.clear()
-	var saved_pending = data.get("experiment_pending_pair", [])
-	if saved_pending is Array and saved_pending.size() == 2:
-		var pending_a := String(saved_pending[0])
-		var pending_b := String(saved_pending[1])
-		if g.ITEMS.has(pending_a) and g.ITEMS.has(pending_b):
-			g._engine._experiment_pending_pair = [pending_a, pending_b]
+	g._online._reset_pending_experiment_state()
+	g._online._target_sync_in_flight = false
+	g._online._target_view_state = ""
+	var saved_personal_target: Variant = data.get("personal_experiment_target", null)
+	var restored_target := g._online._filter_personal_target_snapshot(saved_personal_target, false)
+	if restored_target.is_empty():
+		g._online._target_state = {}
+	else:
+		var saved_generation := int(data.get("personal_experiment_generation",
+			int((saved_personal_target as Dictionary).get("generation", 0))))
+		restored_target["generation"] = maxi(0, saved_generation) + 1
+		g._online._target_state = restored_target
+	if not g._online._restore_pending_target_attempt(data.get("personal_experiment_attempt", null)):
+		g._online._clear_target_attempt_receipt()
+	g._online._render_personal_target_state()
 	# Квитанция незакрытого сигильного крафта: по ней возврат списанного возможен
 	# только если она пережила перезапуск. Форма неизвестна — принимаем ровно то,
 	# из чего возврат определим (id, сохранённый дебет, список ингредиентов);

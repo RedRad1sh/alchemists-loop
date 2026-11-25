@@ -147,7 +147,8 @@ func _validate_operation(game: Game, source: String, before: Dictionary, after: 
 			var output := String(contract.get("output", ""))
 			var experiment_cost := int(game.balance.get_value("discovery.cost"))
 			ether = -experiment_cost
-			if not output.is_empty() and not before.inventory.has(output):
+			if not output.is_empty() and not before.inventory.has(output) \
+					and not (game._selftest and not game.has_meta("progression_driver")):
 				var rarity: Dictionary = game._engine._rarity_of(output)
 				ether += int(rarity.get("bounty", 0))
 				for milestone in Game.MILESTONES:
