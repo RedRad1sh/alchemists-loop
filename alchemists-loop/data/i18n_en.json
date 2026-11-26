@@ -1,5 +1,13 @@
 {
   "exact": {
+    "Рунный пуф": "Rune Pouf",
+    "Готический трон": "Gothic Throne",
+    "Звёздное кресло": "Starry Armchair",
+    "Звёздная кровать": "Starry Bed",
+    "Фонарь на кронштейне": "Bracket Lantern",
+    "Полка алхимика": "Alchemist's Shelf",
+    "Лежанка на поддонах": "Pallet Bed",
+    "Кресло-бочка": "Barrel Armchair",
     "Линии": "Lines",
     "свободна": "idle",
     "пауза": "paused",
