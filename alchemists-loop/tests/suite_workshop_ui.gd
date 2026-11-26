@@ -108,8 +108,26 @@ static func _visual_controls(g: Game, w: Workshop, view: Node) -> void:
 	_press(view, "AmountMax_line_1")
 	Selftest.check("workshop max for stock is the stack cap", _text(view, "Amount_line_1") == str(Game.CRAFT_INVENTORY_STACK_CAP))
 	Selftest.check("workshop plus stops at stack cap", (_node(view, "AmountPlus_line_1") as Button).disabled)
+	# Возврат к одной штуке без сотен нажатий «−»: каждое пересчитывает план.
+	view._drafts[0]["amount"] = 1
+	view.refresh()
 	_press(view, "ModeBatch_line_1")
 	Selftest.check("workshop selector never enqueues", w.lines[0]["queue"].is_empty())
+	# Разделы экрана — отдельные страницы, а не одно полотно.
+	_press(view, "SectionLines")
+	Selftest.check("workshop lines section hides composer and equipment",
+		scene.is_visible_in_tree() and not (_node(view, "Composer_line_1") as Control).is_visible_in_tree()
+		and not (_node(view, "WorkshopUpgrades") as Control).is_visible_in_tree())
+	_press(view, "SectionCompose")
+	Selftest.check("workshop compose section shows only the new job form",
+		(_node(view, "Composer_line_1") as Control).is_visible_in_tree() and not scene.is_visible_in_tree()
+		and not (_node(view, "Queue_line_1") as Control).is_visible_in_tree()
+		and not (_node(view, "WorkshopUpgrades") as Control).is_visible_in_tree())
+	_press(view, "ToggleUpgrades")
+	Selftest.check("workshop equipment section shows only upgrades",
+		(_node(view, "WorkshopUpgrades") as Control).is_visible_in_tree() and not scene.is_visible_in_tree()
+		and not (_node(view, "LineCard_1") as Control).is_visible_in_tree())
+	_press(view, "SectionLines")
 	_choose(view, "line_1", "steam", 1)
 
 static func _guided_controls(g: Game, w: Workshop, view: Node) -> void:

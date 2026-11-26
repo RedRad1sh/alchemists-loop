@@ -23,6 +23,10 @@ var _live_hash := 0
 var _status := ""
 var _experiment_needed := false
 var _selected_line := 0
+## Раздел экрана: «lines» — сцена и очередь, «compose» — новое задание,
+## «equip» — оборудование. Разделы не складываются в одно полотно.
+var _section := "lines"
+var _section_buttons := {}
 var _scene: Control
 var _tabs: HBoxContainer
 var _tab_buttons: Array[Button] = []
@@ -104,7 +108,7 @@ func refresh() -> void:
 	_seal.tooltip_text = "Печать улучшается отдельно от оборудования мастерской. Ранг печати: %d." % g._engine.mastery_rank
 	_wallet.text = "Доступно эфира: %d" % g._engine._available_ether()
 	_wallet.tooltip_text = "%d активного + %d резерва. Списывается по мере работы; очередь не резервирует ресурсы." % [g._engine.ether, g._engine.ether_overflow]
-	_upgrades_toggle.text = "Скрыть улучшения" if _upgrades.visible else "Улучшения · %s · %d линии" % [rules["name"], rules["lines"]]
+	_upgrades_toggle.tooltip_text = "%s · %d линии" % [rules["name"], rules["lines"]]
 	var locked := not workshop.unlocked or workshop.is_read_only()
 	_buy_equipment.disabled = locked or next >= Workshop.Rules.RANKS.size()
 	_buy_autonomy.disabled = locked or autonomy_next >= Workshop.Rules.AUTONOMY.size()
@@ -122,6 +126,7 @@ func refresh() -> void:
 	_experiment.visible = _experiment_needed or known.is_empty() or _needs_recipe_navigation()
 	for button in _guide_buttons:
 		button.disabled = locked or known.is_empty()
+	(_section_buttons["compose"] as Button).disabled = locked or known.is_empty()
 	if _line_for_card(_selected_line).is_empty():
 		_selected_line = 0
 	_sync_selection()
@@ -187,6 +192,13 @@ func _build() -> void:
 	_command_status = _label(self, "CommandStatus", "", 14)
 	_command_status.add_theme_color_override("font_color", UIStyle.HIGHLIGHT)
 	_experiment = _button(self, "OpenExperiment", "Открыть новый рецепт в Эксперименте", _open_experiment)
+	var sections := HBoxContainer.new()
+	sections.name = "WorkshopSections"
+	sections.add_theme_constant_override("separation", 6)
+	add_child(sections)
+	_section_buttons["lines"] = _button(sections, "SectionLines", "Линии", _show_section.bind("lines"))
+	_section_buttons["compose"] = _button(sections, "SectionCompose", "Новое задание", _show_section.bind("compose"))
+	sections.resized.connect(_fit_row.bind(sections))
 	_scene = WorkshopSceneScript.new()
 	_scene.call("setup", g)
 	_scene.connect("station_pressed", _select_line)
@@ -203,7 +215,8 @@ func _build() -> void:
 	# достраивает дополнительные карточки уже по фактическому line_count().
 	for index in maxi(workshop.line_count(), Workshop.Rules.RANKS.size()):
 		_build_card(index)
-	_upgrades_toggle = _button(self, "ToggleUpgrades", "Улучшения", _toggle_upgrades)
+	_upgrades_toggle = _button(sections, "ToggleUpgrades", "Улучшения", _toggle_upgrades)
+	_section_buttons["equip"] = _upgrades_toggle
 	var upgrades_panel := PanelContainer.new()
 	upgrades_panel.name = "UpgradesPanel"
 	upgrades_panel.add_theme_stylebox_override("panel", UIStyle.panel())
@@ -234,8 +247,15 @@ func _build() -> void:
 	_buy_autonomy = _button(_upgrades, "BuyAutonomy", "Продлить работу без меня", _buy_autonomy_command, 1)
 	_plan_autonomy = _button(_upgrades, "PlanAutonomyMaterials", "Изготовить материалы улучшения", _plan_materials.bind("autonomy"))
 	_seal = _dim(_label(_upgrades, "ArchiveSeal", "", 13))
+	# Длинные команды оборудования переносятся по словам: в вертикальном
+	# столбце перенос не схлопывает кнопку, а ширину страницы держит экран.
+	for wide in [_buy_equipment, _plan_rank, _buy_autonomy, _plan_autonomy]:
+		wide.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		wide.custom_minimum_size.x = 0
 	_upgrades.hide()
 	upgrades_panel.hide()
+	_fit_row(sections)
+	_apply_section()
 	var tail := Control.new()
 	tail.name = "BottomSpacer"
 	tail.custom_minimum_size = Vector2(0, 16)
@@ -243,8 +263,34 @@ func _build() -> void:
 	add_child(tail)
 
 func _toggle_upgrades() -> void:
-	_upgrades.visible = not _upgrades.visible
+	_show_section("lines" if _section == "equip" else "equip")
+
+## Разделы экрана как вкладки Реторты: видна одна страница, а не всё сразу.
+func _show_section(key: String) -> void:
+	_section = key
+	_apply_section()
 	refresh()
+
+func _apply_section() -> void:
+	if _upgrades == null:
+		return
+	_upgrades.visible = _section == "equip"
+	_scene.visible = _section == "lines"
+	_tabs.visible = _section != "equip"
+	_lines_box.visible = _section != "equip"
+	for ui in _cards:
+		var on_lines := _section == "lines"
+		(ui["composer"] as Control).visible = _section == "compose"
+		(ui["queue"] as Control).visible = on_lines
+		# Новое задание открывается вкладкой раздела; дубль в карточке не нужен.
+		(ui["new_job"] as Control).visible = false
+		(ui["details_toggle"] as Control).visible = on_lines
+		if not on_lines:
+			(ui["note"] as Control).visible = false
+			(ui["queue_head"] as Control).visible = false
+			(ui["details"] as Control).visible = false
+	for k in _section_buttons:
+		_mark(_section_buttons[k], k == _section)
 
 func _toggle_guide() -> void:
 	_guide_steps.visible = not _guide_steps.visible
@@ -309,6 +355,8 @@ func _build_card(index: int) -> void:
 	var tab := _button(_tabs, "LineTab_%d" % (index + 1), WorkshopSceneScript.roman(index), _select_line.bind(index))
 	tab.toggle_mode = true
 	tab.custom_minimum_size = Vector2(56, 48)
+	if _tabs.get_child_count() == 1:
+		_tabs.resized.connect(_fit_row.bind(_tabs))
 	_tab_buttons.append(tab)
 	var page := VBoxContainer.new()
 	page.name = "LinePage_%d" % (index + 1)
@@ -394,6 +442,7 @@ func _build_card(index: int) -> void:
 	for b in [mode_batch, mode_stock]:
 		(b as Button).toggle_mode = true
 		(b as Button).button_group = group
+	modes.resized.connect(_fit_row.bind(modes))
 	var stepper := HBoxContainer.new()
 	stepper.name = "Stepper_" + suffix
 	stepper.add_theme_constant_override("separation", 6)
@@ -515,24 +564,25 @@ func _soft_disabled(button: Button) -> void:
 		button.add_theme_stylebox_override("disabled", faded)
 	button.add_theme_color_override("font_disabled_color", Color(UIStyle.CREAM, 0.55))
 
-## Текст задания занимает строку целиком, если рядом не помещаются действия.
-func _fit_job_text(flow: Control, info: Label) -> void:
-	var actions := 3.0 * 48.0 + 8.0 + 6.0
-	var want := flow.size.x - actions if flow.size.x - actions >= 170.0 else flow.size.x
-	if absf(info.custom_minimum_size.x - want) > 0.5:
-		info.custom_minimum_size.x = maxf(0.0, want)
+func _fit_row(row: Control) -> void:
+	var narrow := row.get_viewport_rect().size.x < 420.0 if row.is_inside_tree() else false
+	for child in row.get_children():
+		var b := child as Button
+		if b == null:
+			continue
+		b.add_theme_font_size_override("font_size", 14 if narrow else 16)
+		b.clip_text = true
+		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		b.custom_minimum_size.x = 48
 
 func _toggle_composer(index: int) -> void:
-	_set_composer(index, not (_cards[index]["composer"] as Control).visible)
+	_set_composer(index, _section != "compose")
 
 func _set_composer(index: int, open: bool) -> void:
-	var ui: Dictionary = _cards[index]
-	(ui["composer"] as Control).visible = open
-	var toggle: Button = ui["new_job"]
-	toggle.text = "Свернуть" if open else "Новое задание"
-	# Открытый выбор — второстепенная деревянная кнопка: главная там «Добавить».
-	UIStyle.style_button(toggle, 0 if open else 1)
-	_soft_disabled(toggle)
+	if index != _selected_line:
+		_select_line(index)
+	_section = "compose" if open else "lines"
+	_apply_section()
 
 func _select_line(index: int) -> void:
 	if index < 0 or index >= _cards.size() or _line_for_card(index).is_empty():
@@ -718,7 +768,7 @@ func _animate_cards() -> void:
 		var line := _line_for_card(i)
 		var q: Array = line.get("queue", [])
 		var note: Control = ui["note"]
-		note.visible = not q.is_empty()
+		note.visible = not q.is_empty() and _section == "lines"
 		if q.is_empty():
 			continue
 		var job: Dictionary = q[0]
@@ -852,10 +902,7 @@ func _refresh_card(index: int, known: Array[String], locked: bool) -> void:
 		ui["state"].text = "%s · следующий этап через %d с" % [g._online._item_name(active_target), maxi(0, int(ceil(interval - float(line.get("phase_seconds", 0.0)))))]
 	ui["pause"].text = "Продолжить" if line["paused"] else "Пауза"
 	var empty: bool = line["queue"].is_empty()
-	(ui["queue_head"] as Control).visible = not empty
-	# Пустая линия сразу показывает выбор рецепта: первое действие — одно касание.
-	if empty and not known.is_empty() and not (ui["composer"] as Control).visible and not bool(ui.get("composer_touched", false)):
-		_set_composer(index, true)
+	(ui["queue_head"] as Control).visible = not empty and _section == "lines"
 	_update_quote(index)
 	_refresh_queue(index, line)
 
@@ -878,30 +925,31 @@ func _refresh_queue(index: int, line: Dictionary) -> void:
 			slot.name = "JobSlot_" + id
 			slot.add_theme_stylebox_override("panel", _well_style(Vector4(10, 8, 8, 8)))
 			ui["queue"].add_child(slot)
+			# На узком экране действия встают отдельной строкой под текстом:
+			# иначе три кнопки сжимали подпись в столбец и раздвигали страницу.
+			var narrow := get_viewport_rect().size.x < 420.0 if is_inside_tree() else false
+			var stack := VBoxContainer.new()
+			stack.add_theme_constant_override("separation", 4)
+			slot.add_child(stack)
 			var row := HBoxContainer.new()
 			row.add_theme_constant_override("separation", 6)
-			slot.add_child(row)
+			stack.add_child(row)
 			var orb_box := CenterContainer.new()
 			orb_box.custom_minimum_size = Vector2(36, 36)
 			orb_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			orb_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			row.add_child(orb_box)
 			orb_box.add_child(g._engine._mini_orb(String(job["target"]), 32))
-			# На узком экране действия переносятся под текст, а не сжимают его
-			# до столбца в одну букву.
-			var flow := HFlowContainer.new()
-			flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			flow.alignment = FlowContainer.ALIGNMENT_END
-			flow.add_theme_constant_override("h_separation", 6)
-			flow.add_theme_constant_override("v_separation", 4)
-			row.add_child(flow)
-			var info := _label(flow, "JobInfo_" + id, "", 14)
-			flow.resized.connect(_fit_job_text.bind(flow, info))
+			var info := _label(row, "JobInfo_" + id, "", 14)
 			info.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 			info.mouse_filter = Control.MOUSE_FILTER_PASS
 			var actions := HBoxContainer.new()
 			actions.add_theme_constant_override("separation", 4)
-			flow.add_child(actions)
+			if narrow:
+				actions.alignment = BoxContainer.ALIGNMENT_END
+				stack.add_child(actions)
+			else:
+				row.add_child(actions)
 			var up := _icon_button(actions, "Up_" + id, "↑", "chevron_down", _move_job.bind(String(line["id"]), id, -1), true)
 			var down := _icon_button(actions, "Down_" + id, "↓", "chevron_down", _move_job.bind(String(line["id"]), id, 1), false)
 			_icon_button(actions, "Remove_" + id, "Удалить", "x", _remove_job.bind(String(line["id"]), id), false)

@@ -44,6 +44,13 @@ func _ready() -> void:
 			scroll.scroll_vertical = 0
 		await _settle()
 		await _capture("workshop-top-%dx%d" % [dimensions.x, dimensions.y])
+		if OS.get_cmdline_user_args().has("--widths"):
+			for sec in ["lines", "compose", "equip"]:
+				view._show_section(sec)
+				await _settle()
+				_dump_widths(view, sec, dimensions.x)
+			view._show_section("lines")
+			await _settle()
 		if scroll != null:
 			scroll.scroll_vertical = 100000
 			await _settle()
@@ -51,8 +58,7 @@ func _ready() -> void:
 		view._set_composer(0, true)
 		await _settle()
 		if scroll != null:
-			var composer: Control = view._cards[0]["composer"]
-			scroll.scroll_vertical = int(composer.global_position.y - scroll.global_position.y + scroll.scroll_vertical - 60.0)
+			scroll.scroll_vertical = 0
 			await _settle()
 		await _capture("workshop-compose-%dx%d" % [dimensions.x, dimensions.y])
 		if scroll != null:
@@ -60,6 +66,13 @@ func _ready() -> void:
 			await _settle()
 			await _capture("workshop-compose-end-%dx%d" % [dimensions.x, dimensions.y])
 		view._set_composer(0, false)
+		view._show_section("equip")
+		await _settle()
+		if scroll != null:
+			scroll.scroll_vertical = 0
+			await _settle()
+		await _capture("workshop-equip-%dx%d" % [dimensions.x, dimensions.y])
+		view._show_section("lines")
 		g._screens.close()
 	print("WORKSHOP_SHOTS done")
 	get_tree().quit()
@@ -115,3 +128,18 @@ func _capture(file_name: String) -> void:
 	var path := output_dir.path_join(file_name + ".png")
 	image.save_png(path if path.is_absolute_path() else ProjectSettings.globalize_path(path))
 	print("WORKSHOP_CAPTURE ", path)
+
+
+## Диагностика переполнения по ширине: узлы, чей минимум шире родителя.
+func _dump_widths(root: Control, tag: String, screen_w: int) -> void:
+	print("WIDTH %s screen=%d view=%.0f min=%.0f" % [tag, screen_w, root.size.x, root.get_combined_minimum_size().x])
+	var stack: Array = [root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		for c in n.get_children():
+			if c is Control and (c as Control).is_visible_in_tree():
+				var cc := c as Control
+				var m := cc.get_combined_minimum_size().x
+				if screen_w < 400 and m > 200.0:
+					print("  WIDE %s min=%.0f size=%.0f" % [str(root.get_path_to(cc)), m, cc.size.x])
+				stack.append(cc)

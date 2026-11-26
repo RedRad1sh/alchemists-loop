@@ -152,6 +152,8 @@ static func run(g: Game) -> void:
 		await SuiteHouseV2.run(g)
 	elif OS.get_cmdline_user_args().has("--suite=experiment_recovery"):
 		await load("res://tests/suite_experiment_recovery.gd").run(g)
+	elif OS.get_cmdline_user_args().has("--suite=workshop_ui"):
+		await load("res://tests/suite_workshop_ui.gd").run(g)
 	elif OS.get_cmdline_user_args().has("--suite=contracts"):
 		await SuiteContractBoard.run(g)
 	elif OS.get_cmdline_user_args().has("--suite=navigation"):
