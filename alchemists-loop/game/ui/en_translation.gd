@@ -85,7 +85,6 @@ func _get_message(src_message: StringName, _context: StringName = &"") -> String
 		return _cache[s]
 	var tr_str := translate_string(s, 0)
 	if tr_str == s:
-		_cache[s] = &""
 		return &""
 	var sn := StringName(tr_str)
 	_cache[s] = sn
