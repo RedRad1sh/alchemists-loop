@@ -814,9 +814,7 @@ func _do_prestige() -> void:
 	# U9 (T12): сонные корутины варки/верстака/автоплана видят смену поколения
 	# и молча выходят без коммита; bookkeeping эксперимента не переживает сброс.
 	g._engine.brew_epoch += 1
-	g._engine._experiment_pending_pair.clear()
-	# U11 (T14): престиж аннулирует и pending-записи мир-запросов в полёте.
-	g._online._pending_requests.clear()
+	g._online._reset_pending_experiment_state()
 	# Квитанция незакрытого сигильного крафта — тоже часть старого мира.
 	g._sigil_ui._sigil_pending_craft = {}
 	g._sigil_ui._pending_craft_result = {}

@@ -52,6 +52,15 @@ static func run(g: Game) -> void:
 	var h2: String = BalanceConfig.profile_hash(BalanceConfig.baseline())
 	Selftest.check("balance_config: baseline profile_hash is deterministic across fresh instances",
 		h1.length() == 64 and h1 == h2 and h1 == String(meta.get("hash", "")))
+	var personal_balance: Dictionary = base.section("personal_experiment")
+	Selftest.check("balance_config: personal experiment keeps success-only no-reagent invariants",
+		bool(personal_balance.get("enabled", false))
+		and bool(personal_balance.get("success_only_ether", false))
+		and not bool(personal_balance.get("consume_reagents", true))
+		and int(personal_balance.get("cost", -1)) == 12
+		and is_equal_approx(float(personal_balance.get("world_target_share", -1.0)), 0.8)
+		and is_equal_approx(float(personal_balance.get("llm_target_share", -1.0)), 0.2)
+		and is_equal_approx(float(personal_balance.get("frontier_empty_llm_share", -1.0)), 1.0))
 
 	# --- 2. Full parity with existing balance facades ---
 	# Ether & brew
@@ -80,7 +89,6 @@ static func run(g: Game) -> void:
 		and is_equal_approx(float(base.get_value("discovery.cooldown_sec", -1.0)), Balance.EXPERIMENT_COOLDOWN_SEC)
 		and int(base.get_value("discovery.daily_limit", -1)) == Balance.EXPERIMENT_DAILY_LIMIT
 		and int(base.get_value("discovery.cost", -1)) == Balance.EXPERIMENT_COST
-		and int(base.get_value("discovery.failure_refund", -1)) == Balance.EXPERIMENT_FAILURE_REFUND
 		and is_equal_approx(float(base.get_value("discovery.candidate_chance", -1.0)), Balance.CANDIDATE_CHANCE)
 		and is_equal_approx(float(base.get_value("discovery.candidate_cooldown", -1.0)), Balance.CANDIDATE_COOLDOWN))
 

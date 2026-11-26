@@ -175,14 +175,23 @@ static func _network(g: Game, w) -> void:
 	g._engine._experiment_last_at = 0.0
 	g._engine._experiment_count = 0
 	g._engine._experiment_day = ""
+	var experiment_out := out.duplicate(true)
+	experiment_out["slug"] = "st_mastery_experiment"
+	var experiment_result := {"ok": true, "found": true, "status": "known", "out": experiment_out}
+	var exp_available_before := g._engine._available_ether()
+	var exp_visible_before := g._engine.ether + g._engine.ether_overflow
 	var began: bool = g._engine._begin_experiment(a, b)
-	Selftest.check("mastery paid experiment begins with real debit", began)
+	Selftest.check("mastery experiment begins without debit", began
+		and g._engine.ether + g._engine.ether_overflow == exp_visible_before
+		and g._engine._available_ether() == exp_available_before - Game.EXPERIMENT_COST)
 	if began:
 		g._online._register_pending_pair(a, b, true)
-		g._online._on_net_pair_result(pair, result)
-		Selftest.check("mastery paid experiment awards once", w.xp == 8)
-		g._online._on_net_pair_result(pair, result)
-		Selftest.check("mastery paid experiment duplicate adds zero", w.xp == 8)
+		g._online._on_net_pair_result(pair, experiment_result)
+		Selftest.check("mastery accepted experiment awards and charges once", w.xp == 8
+			and exp_available_before - g._engine._available_ether() == Game.EXPERIMENT_COST)
+		g._online._on_net_pair_result(pair, experiment_result)
+		Selftest.check("mastery paid experiment duplicate adds zero", w.xp == 8
+			and exp_available_before - g._engine._available_ether() == Game.EXPERIMENT_COST)
 	var xp_before: int = w.xp
 	g._online._register_pending_pair(a, b, false)
 	g._online._pending_requests[pair]["at"] = Time.get_ticks_msec() - Online.PENDING_TTL_MSEC - 1

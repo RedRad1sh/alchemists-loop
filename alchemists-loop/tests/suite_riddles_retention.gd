@@ -645,9 +645,12 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 	for outcome in [found, {"status": "created", "discovery": element}]:
 		g._engine.inventory["fire"] = 2
 		g._engine.inventory["water"] = 2
+		g._engine.inventory["steam"] = 1
 		g._engine.known_recipes.erase(pair)
 		g._engine._experiment_last_at = 0.0
 		g._engine._experiment_count = 0
+		g._engine.ether = maxi(g._engine.ether, Game.EXPERIMENT_COST)
+		var exp_available_before := g._engine._available_ether()
 		var started := g._engine._begin_experiment("fire", "water")
 		var registered := g._online._register_pending_pair("fire", "water", true)
 		count_before = g._contracts.progress(s4_b2_id)
@@ -658,6 +661,8 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 		Selftest.check("circle experiment %s repeat moves no counter" % ("found" if outcome.has("out") else "created"),
 			started and registered and g._contracts.progress(s4_b2_id) == count_before
 			and g._engine._experiment_pending_pair.is_empty())
+		Selftest.check("circle reused experiment %s does not charge ether" % ("found" if outcome.has("out") else "created"),
+			g._engine._available_ether() == exp_available_before)
 		count_before = g._contracts.progress(s4_b2_id)
 		g._online._on_net_pair_result(pair, found)
 		g._online._on_net_discover_result(pair, known)

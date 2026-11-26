@@ -254,6 +254,185 @@ static func _read_save_off_catalog_migration(g: Game) -> void:
 	Selftest.check("save_sync: _read_save keeps off-catalog v3 key as known-but-not-brewable", \
 		kept and out_empty and not_brewable)
 
+static func _personal_target_save_load(g: Game) -> void:
+	var raw_target := {
+		"id": "pt-save-target", "kind": "llm", "slug": "pt-save-hidden", "name": "Сохранённая цель",
+		"hint": "Найди новую связь.", "status": "active", "cycle_week": "2026-W48",
+		"attempts": 2, "successful_steps": 1, "spent_ether": 12, "next_eligible_week": "",
+		"source_pair": ["fire", "water"], "seed": 77, "prompt": "SECRET_PROMPT",
+		"evaluator_explanation": "SECRET_EXPLANATION"}
+	g._online._on_experiment_target_sync_result({"ok": true, "target": raw_target})
+	g._engine._experiment_pending_pair = ["fire", "water"]
+	g._saves._save_game()
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(g.SAVE_PATH))
+	var raw: Dictionary = parsed if parsed is Dictionary else {}
+	var saved_value: Variant = raw.get("personal_experiment_target", null)
+	var saved_target: Dictionary = saved_value if saved_value is Dictionary else {}
+	var allowed_keys := ["id", "kind", "slug", "name", "hint", "status", "cycle_week", "attempts",
+		"successful_steps", "spent_ether", "next_eligible_week", "completed", "generation"]
+	var only_allowed := saved_value is Dictionary
+	for key in saved_target.keys():
+		only_allowed = only_allowed and allowed_keys.has(String(key))
+	var saved_generation := int(raw.get("personal_experiment_generation", -1))
+	Selftest.check("save_sync: personal target save shape is allowlisted",
+		only_allowed and String(saved_target.get("id", "")) == "pt-save-target"
+		and not saved_target.has("source_pair") and not saved_target.has("seed")
+		and not saved_target.has("prompt") and not saved_target.has("evaluator_explanation")
+		and saved_generation == int(saved_target.get("generation", -2)))
+	g._online._target_state = {}
+	g._online._pending_requests["stale"] = {"a": "fire", "b": "water", "at": Time.get_ticks_msec()}
+	g._engine._experiment_pending_pair = ["fire", "water"]
+	g._saves._load_game()
+	Selftest.check("save_sync: target state survives save shape", g._online._target_state.get("status", "") == "active")
+	Selftest.check("save_sync: target load increments generation and clears pending",
+		int(g._online._target_state.get("generation", -1)) == saved_generation + 1
+		and g._online._pending_requests.is_empty() and g._engine._experiment_pending_pair.is_empty())
+
+	var malformed: Dictionary = raw.duplicate(true)
+	malformed["personal_experiment_target"] = "broken"
+	malformed["personal_experiment_generation"] = saved_generation
+	var f := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+	f.store_string(JSON.stringify(malformed))
+	f.close()
+	g._online._target_state = {"id": "stale-target", "status": "active", "generation": 99}
+	g._online._pending_requests["stale"] = {"a": "fire", "b": "water", "at": Time.get_ticks_msec()}
+	g._engine._experiment_pending_pair = ["fire", "water"]
+	g._saves._load_game()
+	Selftest.check("save_sync: malformed personal target is ignored and pending is cleared",
+		g._online._target_state.is_empty() and g._online._pending_requests.is_empty()
+		and g._engine._experiment_pending_pair.is_empty())
+	_wipe(g)
+
+static func _personal_target_attempt_replay(g: Game) -> void:
+	var saved_target: Dictionary = g._online._target_state.duplicate(true)
+	var saved_receipt: Dictionary = g._online._target_attempt_receipt.duplicate(true)
+	var saved_pending: Dictionary = g._online._pending_requests.duplicate(true)
+	var saved_pair: Array = g._engine._experiment_pending_pair.duplicate()
+	var saved_reserve: int = g._engine._experiment_reserved_ether
+	var saved_ether: int = g._engine.ether
+	var saved_overflow: int = g._engine.ether_overflow
+	var saved_attempts: int = g._engine.attempts
+	var saved_successes: int = g._engine.successes
+	var saved_day: String = g._engine._experiment_day
+	var saved_count: int = g._engine._experiment_count
+	var saved_last_at: float = g._engine._experiment_last_at
+	var saved_net_enabled: bool = g._online._net_enabled
+	var saved_net_available: bool = Net._available
+	var saved_net_queue: Array[Dictionary] = Net._queue.duplicate()
+	var saved_net_inflight: Dictionary = Net._inflight.duplicate(true)
+	var saved_layers: Dictionary = g._online._server_layers.duplicate(true)
+	var saved_authors: Dictionary = g._online._server_authors.duplicate(true)
+	var cost := int(g._engine._bal().get_value("discovery.cost", Game.EXPERIMENT_COST))
+	var raw_target := {
+		"id": "pt-replay-target", "kind": "world", "slug": "steam", "name": "Пар",
+		"hint": "Соедини огонь и воду.", "status": "active", "cycle_week": "2026-W48",
+		"attempts": 0, "successful_steps": 0, "spent_ether": 0, "next_eligible_week": ""}
+	g._online._target_state = {}
+	g._online._target_attempt_receipt.clear()
+	g._online._pending_requests.clear()
+	g._engine._experiment_pending_pair.clear()
+	g._engine._experiment_reserved_ether = 0
+	g._engine.ether = 100
+	g._engine.ether_overflow = 0
+	g._engine._experiment_day = g._engine._experiment_day_key()
+	g._engine._experiment_count = 0
+	g._engine._experiment_last_at = 0.0
+	g._engine.inventory["steam"] = 1
+	g._online._on_experiment_target_sync_result({"ok": true, "target": raw_target})
+	g._online._net_enabled = true
+	Net._available = true
+	Net._inflight = {"kind": "selftest-hold"}
+	Net._queue.clear()
+	var started: bool = g._online._start_experiment("fire", "water")
+	var request_id := ""
+	if not Net._queue.is_empty():
+		var queued_body: Dictionary = (Net._queue.back() as Dictionary).get("body", {})
+		request_id = String(queued_body.get("request_id", ""))
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(g.SAVE_PATH))
+	var raw_save: Dictionary = parsed if parsed is Dictionary else {}
+	var receipt: Dictionary = raw_save.get("personal_experiment_attempt", {})
+	var receipt_keys := ["a", "b", "target_id", "request_id", "generation", "cycle_week", "at", "reserved_cost"]
+	var receipt_shape := receipt is Dictionary and (receipt as Dictionary).size() == receipt_keys.size()
+	for key in receipt_keys:
+		receipt_shape = receipt_shape and receipt.has(key)
+	Selftest.check("save_sync: target attempt receipt is durable before response",
+		started and request_id != "" and receipt_shape
+		and String(receipt.get("request_id", "")) == request_id
+		and String(receipt.get("target_id", "")) == "pt-replay-target"
+		and String(receipt.get("cycle_week", "")) == "2026-W48"
+		and int(receipt.get("reserved_cost", -1)) == cost)
+	var saved_generation := int(raw_save.get("personal_experiment_generation", -1))
+	g._online._pending_requests.clear()
+	g._engine._experiment_pending_pair.clear()
+	g._engine._experiment_reserved_ether = 0
+	g._saves._load_game()
+	var restored_generation := int(g._online._target_state.get("generation", -1))
+	var restored_pending: Dictionary = g._online._pending_requests.get(g._pair_key("fire", "water"), {})
+	Selftest.check("save_sync: target attempt load restores correlation and reserve",
+		restored_generation == saved_generation + 1
+		and g._engine._experiment_pending_pair == ["fire", "water"]
+		and g._engine._experiment_reserved_ether == cost
+		and String(restored_pending.get("request_id", "")) == request_id
+		and int(restored_pending.get("generation", -1)) == restored_generation)
+	var replayed := false
+	if g._online.has_method("_resume_pending_target_attempt"):
+		replayed = bool(g._online.call("_resume_pending_target_attempt"))
+	var replay_request_id := ""
+	if not Net._queue.is_empty():
+		var replay_body: Dictionary = (Net._queue.back() as Dictionary).get("body", {})
+		replay_request_id = String(replay_body.get("request_id", ""))
+	Selftest.check("save_sync: target attempt replay keeps request identity",
+		replayed and replay_request_id == request_id)
+	var completed_target: Dictionary = raw_target.duplicate(true)
+	completed_target["status"] = "completed"
+	completed_target["completed"] = true
+	completed_target["attempts"] = 1
+	completed_target["successful_steps"] = 1
+	completed_target["spent_ether"] = cost
+	var response := {
+		"ok": true, "status": "created", "request_id": request_id,
+		"target_id": "pt-replay-target", "pair_key": g._pair_key("fire", "water"),
+		"target": completed_target, "ether_charged": cost, "acquired": true,
+		"discovery": {"slug": "steam", "name": "Пар", "a": "fire", "b": "water"}}
+	var inventory_before := int(g._engine.inventory.get("steam", 0))
+	var ether_before := g._engine.ether + g._engine.ether_overflow
+	g._online._on_experiment_target_result(request_id, g._pair_key("fire", "water"), response)
+	Selftest.check("save_sync: replayed accepted target result grants and charges once",
+		int(g._engine.inventory.get("steam", 0)) == inventory_before + 1
+		and g._engine.ether + g._engine.ether_overflow == ether_before - cost
+		and g._online._pending_requests.is_empty()
+		and g._engine._experiment_pending_pair.is_empty()
+		and g._engine._experiment_reserved_ether == 0
+		and String(g._online._target_state.get("status", "")) == "completed")
+	g._online._on_experiment_target_result(request_id, g._pair_key("fire", "water"), response)
+	Selftest.check("save_sync: duplicate target replay cannot grant or charge twice",
+		int(g._engine.inventory.get("steam", 0)) == inventory_before + 1
+		and g._engine.ether + g._engine.ether_overflow == ether_before - cost)
+	g._saves._save_game()
+	parsed = JSON.parse_string(FileAccess.get_file_as_string(g.SAVE_PATH))
+	raw_save = parsed if parsed is Dictionary else {}
+	Selftest.check("save_sync: settled target attempt receipt is not persisted",
+		not raw_save.has("personal_experiment_attempt") or (raw_save["personal_experiment_attempt"] as Dictionary).is_empty())
+	g._online._target_state = saved_target
+	g._online._target_attempt_receipt = saved_receipt
+	g._online._pending_requests = saved_pending
+	g._engine._experiment_pending_pair = saved_pair
+	g._engine._experiment_reserved_ether = saved_reserve
+	g._engine.ether = saved_ether
+	g._engine.ether_overflow = saved_overflow
+	g._engine.attempts = saved_attempts
+	g._engine.successes = saved_successes
+	g._engine._experiment_day = saved_day
+	g._engine._experiment_count = saved_count
+	g._engine._experiment_last_at = saved_last_at
+	g._online._net_enabled = saved_net_enabled
+	Net._available = saved_net_available
+	Net._queue = saved_net_queue
+	Net._inflight = saved_net_inflight
+	g._online._server_layers = saved_layers
+	g._online._server_authors = saved_authors
+	_wipe(g)
+
 static func run(g: Game) -> void:
 	var saved_recipes: Array = g.RECIPES.duplicate()
 	var saved_known: Dictionary = g._engine.known_recipes.duplicate()
@@ -262,6 +441,10 @@ static func run(g: Game) -> void:
 	var saved_book_sig: int = g._engine._book_sig
 	var saved_client_rev: int = g._engine.client_rev
 	var saved_anchor_ts: float = g._engine.anchor_accrual_ts
+	var saved_target: Dictionary = g._online._target_state.duplicate(true)
+	var saved_receipt: Dictionary = g._online._target_attempt_receipt.duplicate(true)
+	var saved_pending: Dictionary = g._online._pending_requests.duplicate(true)
+	var saved_exp_pair: Array = g._engine._experiment_pending_pair.duplicate()
 	g.SAVE_PATH = ST_PATH
 	g.TEMP_PATH = ST_TEMP
 	g.BACKUP_PATH = ST_BAK
@@ -282,6 +465,9 @@ static func run(g: Game) -> void:
 	_reconcile_contract(g)
 	_wipe(g)
 	_read_save_off_catalog_migration(g)
+	_wipe(g)
+	_personal_target_save_load(g)
+	_personal_target_attempt_replay(g)
 	g.SAVE_PATH = "user://alchemy_save.json"
 	g.TEMP_PATH = "user://alchemy_save.tmp"
 	g.BACKUP_PATH = "user://alchemy_save.bak"
@@ -292,3 +478,9 @@ static func run(g: Game) -> void:
 	g._engine._book_sig = saved_book_sig
 	g._engine.client_rev = saved_client_rev
 	g._engine.anchor_accrual_ts = saved_anchor_ts
+	g._online._target_state = saved_target
+	g._online._target_attempt_receipt = saved_receipt
+	g._online._pending_requests = saved_pending
+	g._engine._experiment_pending_pair.clear()
+	for item in saved_exp_pair:
+		g._engine._experiment_pending_pair.append(String(item))

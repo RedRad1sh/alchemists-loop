@@ -38,6 +38,7 @@ func _init(game: Game) -> void:
 	g._engine._auto = false
 	g._pages._bench_busy = false
 	g._engine._experiment_pending_pair.clear()
+	g._engine._experiment_reserved_ether = 0
 	g._online._pending_requests.clear()
 
 func capture(object: Object) -> void:

@@ -96,10 +96,12 @@ static func run(g: Game) -> void:
 	var st_over: int = g._engine.ether_overflow
 	var st_attempts: int = g._engine.attempts
 	var st_pending_pair: Array = g._engine._experiment_pending_pair.duplicate()
+	var st_reserved_ether: int = g._engine._experiment_reserved_ether
 	var st_net_on: bool = g._online._net_enabled
 	var st_status: String = g._engine.status_text
 	var st_fire_water_known = g._engine.known_recipes.has(g._pair_key("fire", "water"))
 	g._engine._experiment_pending_pair.clear()
+	g._engine._experiment_reserved_ether = 0
 	# оба реагента в запасе, эфир с запасом
 	g._engine.inventory["water"] = int(g._engine.inventory.get("water", 0)) + 2
 	g._engine.inventory["air"] = int(g._engine.inventory.get("air", 0)) + 2
@@ -133,6 +135,7 @@ static func run(g: Game) -> void:
 	Net._available = st_avail
 	g._online._pending_requests.clear()
 	g._engine._experiment_pending_pair = st_pending_pair
+	g._engine._experiment_reserved_ether = st_reserved_ether
 
 	# ---- 5b: локально разрешимая пара не требует связи с миром (дефект 2026-10-15) ----
 	# fire+water лежит в g.RECIPES (main.gd:254 → steam): ответ клиент знает сам,
@@ -145,21 +148,45 @@ static func run(g: Game) -> void:
 	var st5b_unlocked: bool = g._workshop.unlocked
 	g._engine.known_recipes.erase(g._pair_key("fire", "water"))
 	g._engine.inventory["fire"] = int(g._engine.inventory.get("fire", 0)) + 2
+	g._engine.inventory["steam"] = 0
 	var steam_before := int(g._engine.inventory.get("steam", 0))
 	var fire_before := int(g._engine.inventory.get("fire", 0))
 	var water_before := int(g._engine.inventory.get("water", 0))
+	var local_available_before := g._engine._available_ether()
 	var started_local := g._online._start_experiment("fire", "water")
 	Selftest.check("start experiment resolves locally known pair offline",
 		started_local
 		and int(g._engine.inventory.get("steam", 0)) == steam_before + 1
-		and int(g._engine.inventory.get("fire", 0)) == fire_before - 1
-		and int(g._engine.inventory.get("water", 0)) == water_before - 1
+		and int(g._engine.inventory.get("fire", 0)) == fire_before
+		and int(g._engine.inventory.get("water", 0)) == water_before
+		and local_available_before - g._engine._available_ether() == Game.EXPERIMENT_COST
 		and g._engine.known_recipes.has(g._pair_key("fire", "water")))
 	Selftest.check("start experiment local pair does not claim world is offline",
 		not g._engine.status_text.contains("требует связи с миром"))
 	Selftest.check("start experiment local pair leaves no pending request",
 		g._online._pending_requests.is_empty()
 		and g._engine._experiment_pending_pair.is_empty())
+	var known_owned_inventory: int = int(g._engine.inventory.get("steam", 0))
+	var known_owned_ether: int = g._engine.ether + g._engine.ether_overflow
+	var known_owned_popup: bool = g._popup.visible
+	var known_owned_dim: bool = g._popup_dim.visible
+	g._engine.ether = 50
+	g._engine.ether_overflow = 0
+	g._engine._experiment_pending_pair = ["fire", "water"]
+	g._engine._experiment_reserved_ether = Game.EXPERIMENT_COST
+	var known_owned_registered: bool = g._online._register_pending_pair("fire", "water", true)
+	var known_owned_visible: int = g._engine.ether + g._engine.ether_overflow
+	g._online._on_net_discover_result(g._pair_key("fire", "water"), {
+		"status": "known", "discovery": {"slug": "steam", "name": "Steam", "layer": 1,
+			"a": "fire", "b": "water", "reused": false}})
+	Selftest.check("known discover response for owned output grants copy without ether debit",
+		known_owned_registered and known_owned_inventory > 0
+		and int(g._engine.inventory.get("steam", 0)) == known_owned_inventory + 1
+		and g._engine.ether + g._engine.ether_overflow == known_owned_visible
+		and g._engine._experiment_reserved_ether == 0
+		and g._online._pending_requests.is_empty())
+	g._popup.visible = known_owned_popup
+	g._popup_dim.visible = known_owned_dim
 	Net._available = st_avail
 	g._engine.successes = st5b_successes
 	g._engine._experiment_count = st5b_exp_count

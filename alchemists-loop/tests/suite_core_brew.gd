@@ -93,6 +93,16 @@ static func run(g: Game) -> void:
 	Selftest.check("place B", g._engine._place_into_slot("water", "B") and g._engine.selected == ["fire", "water"])
 	Selftest.check("discovery surcharge quoted", g._engine._pair_cost("fire", "water") == Game.BREW_COST + 4)
 	Selftest.check("can brew now", g._engine._can_brew())
+	var brew_zero_stock := int(g._engine.inventory.get("fire", 0))
+	g._engine.inventory["fire"] = 0
+	g._engine.selected.clear()
+	var brew_zero_commit: Dictionary = g._engine._commit_brew("fire", "water")
+	Selftest.check("brew stock gate excludes zero-stock item",
+		not g._engine._orb_can_take("fire") and bool(brew_zero_commit.get("failed", false))
+		and String(brew_zero_commit.get("reason", "")) == "ingredients"
+		and int(g._engine.inventory.get("fire", 0)) == 0 and g._engine.selected.is_empty())
+	g._engine.inventory["fire"] = brew_zero_stock
+	g._engine.selected = ["fire", "water"]
 
 	# варка
 	g.BREW_SECONDS = 0.05
@@ -108,6 +118,8 @@ static func run(g: Game) -> void:
 	for k in range(lv0 + 1, g._spirit._companion_level + 1):
 		lv_grant += 20 * k
 	Selftest.check("brew steam", int(g._engine.inventory.get("steam", 0)) == 1 and g._engine.successes == 1)
+	Selftest.check("brew consumes one input reagent",
+		int(g._engine.inventory.get("fire", 0)) == 4 and int(g._engine.inventory.get("water", 0)) == 4)
 	Selftest.check("brew cost", g._engine.ether - lv_grant <= e0 - Game.BREW_COST + 1)
 	Selftest.check("known recipe loses surcharge", g._engine._pair_cost("fire", "water") == Game.BREW_COST)
 
@@ -272,7 +284,7 @@ static func run(g: Game) -> void:
 		and g._engine.known_recipes.size() >= k_before)
 	Selftest.check("craft persistence", int(g._engine._craft_job.get("completed", -1)) == 2
 		and g._engine._blueprints.has("house"))
-	Selftest.check("experiment pending persistence", g._engine._experiment_pending_pair == ["fire", "water"])
+	Selftest.check("experiment pending is invalidated on load", g._engine._experiment_pending_pair.is_empty())
 	g._engine._craft_job.clear()
 	g._engine._experiment_pending_pair.clear()
 	var migration_path := "user://craft_v2_migration_test.json"
@@ -478,7 +490,7 @@ static func run(g: Game) -> void:
 	var u9_rejected := g._engine._rejected_pairs.size()
 	g._online._experiment_outcome({"slug": "st_ghost", "name": "Призрак", "color": "#112233", "glyph": "fire"},
 		"fire", "water")
-	g._engine._finish_experiment_inputs("fire", "water", true)
+	g._engine._cancel_experiment("fire", "water")
 	g._engine._experiment_failed("fire", "water")
 	Selftest.check("stale experiment responses dropped after reset", g._engine.inventory == u9_inv_snapshot
 		and g._engine._available_ether() == u9_avail0 and not g.ITEMS.has("st_ghost")

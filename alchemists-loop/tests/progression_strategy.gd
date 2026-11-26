@@ -157,9 +157,10 @@ static func discover_and_brew(game: Game, target: Dictionary, ledger: Progressio
 	var known_before := game._engine.known_recipes.has(game._pair_key(a, b))
 	var before := int(game._engine.inventory.get(output, 0))
 	var succeeded := false
-	var debit := {a: -1}
-	debit[b] = int(debit.get(b, 0)) - 1
-	debit[output] = int(debit.get(output, 0)) + 1
+	var debit := {output: 1}
+	if known_before:
+		debit[a] = int(debit.get(a, 0)) - 1
+		debit[b] = int(debit.get(b, 0)) - 1
 	var cost := game._engine._pair_cost(a, b) if known_before else int(game.balance.get_value("discovery.cost"))
 	var reward := 0
 	if not game._engine.inventory.has(output) and (not game._selftest or game.has_meta("progression_driver")):
@@ -183,6 +184,224 @@ static func discover_and_brew(game: Game, target: Dictionary, ledger: Progressio
 		return false
 	ledger.increment_counter("discoveries" if not known_before else "brews")
 	return game._engine.known_recipes.has(game._pair_key(a, b))
+
+static func apply_experiment_outcome(game: Game, outcome: Dictionary, ledger: ProgressionLedger) -> bool:
+	var status := String(outcome.get("status", ""))
+	var request_id := String(outcome.get("request_id", ""))
+	var operation_id := "" if request_id.is_empty() else "personal_experiment:" + request_id
+	if not request_id.is_empty():
+		for event_value in ledger.report().get("events", []):
+			if event_value is Dictionary and String((event_value as Dictionary).get("operation_id", "")) == operation_id:
+				last_reason = "duplicate"
+				return false
+	var target: Dictionary = game._online._target_state.duplicate(true)
+	var target_mode := outcome.has("target_id")
+	var target_id := String(outcome.get("target_id", ""))
+	var target_matches := not target_mode
+	if target_mode:
+		target_matches = not target_id.is_empty() and String(target.get("id", "")) == target_id \
+			and String(target.get("status", "")) == "active"
+		if outcome.has("target_kind"):
+			target_matches = target_matches and String(outcome["target_kind"]) == String(target.get("kind", ""))
+	var target_kind := String(outcome.get("target_kind", target.get("kind", "")))
+	var result_kind := String(outcome.get("result_kind", "reused" if bool(outcome.get("reused", false)) \
+		else ("known" if String(outcome.get("server_status", "")) == "known" else "created")))
+	var acquired := bool(outcome.get("acquired", true))
+	var acquired_valid := not outcome.has("acquired") or outcome["acquired"] is bool
+	var before_ether := game._engine._available_ether()
+	var succeeded := false
+	var charged := 0
+	var rejection := ""
+	if not target_matches:
+		rejection = "target_mismatch"
+	elif status == "success":
+		var output := String(outcome.get("output", ""))
+		var default_cost := int(game.balance.get_value("personal_experiment.cost",
+			game.balance.get_value("discovery.cost", Game.EXPERIMENT_COST)))
+		var raw_cost: Variant = outcome.get("cost", default_cost)
+		var cost_valid := typeof(raw_cost) == TYPE_INT or typeof(raw_cost) == TYPE_FLOAT
+		if cost_valid:
+			cost_valid = not is_nan(float(raw_cost)) and not is_inf(float(raw_cost)) \
+				and is_equal_approx(float(raw_cost), round(float(raw_cost))) and float(raw_cost) >= 0.0
+		var cost := int(raw_cost) if cost_valid else -1
+		if result_kind not in ["created", "known", "reused"]:
+			rejection = "invalid_result_kind"
+		elif not acquired_valid or not acquired:
+			rejection = "not_acquired"
+		elif output.is_empty() or not game.ITEMS.has(output):
+			rejection = "invalid_output"
+		elif int(game._engine.inventory.get(output, 0)) >= Game.CRAFT_INVENTORY_STACK_CAP:
+			rejection = "inventory_cap"
+		elif not cost_valid:
+			rejection = "invalid_cost"
+		elif game._engine._available_ether() < cost:
+			rejection = "insufficient_ether"
+		else:
+			var contract := {"ether": -cost, "inventory": {output: 1}}
+			succeeded = bool(ledger.perform(game, "personal_experiment", func():
+				if not game._engine._spend_ether(cost):
+					return false
+				game._engine.inventory[output] = int(game._engine.inventory.get(output, 0)) + 1
+				return true, contract))
+			if succeeded:
+				charged = cost
+				last_reason = "accepted"
+			else:
+				rejection = "commit_failed"
+	else:
+		last_reason = "unsuccessful:" + status
+		ledger.reconcile(game)
+	if not rejection.is_empty():
+		last_reason = rejection
+		ledger.reconcile(game)
+	if target_mode and target_matches:
+		_advance_personal_target(game, target, outcome, succeeded, charged, result_kind, ledger)
+	ledger.increment_counter("personal_experiment_attempts")
+	ledger.increment_counter("personal_experiment_successes" if succeeded else "personal_experiment_failures")
+	ledger.record({
+		"operation_id": operation_id,
+		"kind": "personal_experiment",
+		"status": status,
+		"accepted": succeeded,
+		"target_kind": target_kind,
+		"result_kind": result_kind,
+		"ether_delta": game._engine._available_ether() - before_ether,
+		"deltas": {},
+		"at": game.game_now(),
+	})
+	return succeeded
+
+
+static func _advance_personal_target(game: Game, target: Dictionary, outcome: Dictionary, accepted: bool,
+		charged: int, result_kind: String, ledger: ProgressionLedger) -> void:
+	var next_target: Dictionary = target.duplicate(true)
+	next_target["attempts"] = int(target.get("attempts", 0)) + 1
+	if accepted:
+		next_target["successful_steps"] = int(target.get("successful_steps", 0)) + 1
+		next_target["spent_ether"] = int(target.get("spent_ether", 0)) + charged
+		var completed := false
+		var kind := String(target.get("kind", ""))
+		if kind == "world":
+			completed = String(outcome.get("output", "")) == String(target.get("slug", ""))
+		elif kind == "llm" and result_kind == "created" and bool(outcome.get("acquired", false)):
+			completed = _normalized_personal_name(String(outcome.get("output_name", ""))) \
+				== _normalized_personal_name(String(target.get("name", "")))
+		if completed:
+			next_target["status"] = "completed"
+			next_target["completed"] = true
+			next_target["next_eligible_week"] = next_personal_week(String(outcome.get("cycle_week",
+				String(target.get("cycle_week", "")))))
+			ledger.increment_counter("personal_experiment_completions")
+	game._online._target_state = next_target
+
+
+static func personal_target_bucket(device_id: String, cycle_week: String, sequence: int) -> int:
+	var value := "%s|%s|%d" % [device_id, cycle_week, sequence]
+	var context := HashingContext.new()
+	context.start(HashingContext.HASH_SHA256)
+	context.update(value.to_utf8_buffer())
+	var digest := context.finish()
+	var bucket := 0
+	for byte in digest:
+		bucket = (bucket * 256 + int(byte)) % 100
+	return bucket
+
+
+static func choose_personal_target_kind(device_id: String, cycle_week: String, sequence: int,
+		world_available: bool) -> String:
+	if not world_available:
+		return "llm"
+	return "world" if personal_target_bucket(device_id, cycle_week, sequence) < 80 else "llm"
+
+
+static func personal_target_plan(device_id: String, cycle_week: String, sequence: int,
+		world_frontier: Array) -> Dictionary:
+	var candidates: Array = []
+	for raw_slug in world_frontier:
+		var slug := String(raw_slug)
+		if not slug.is_empty() and not candidates.has(slug):
+			candidates.append(slug)
+	candidates.sort()
+	var bucket := personal_target_bucket(device_id, cycle_week, sequence)
+	if candidates.is_empty() or bucket >= 80:
+		return {"kind": "llm", "slug": "", "bucket": bucket}
+	return {"kind": "world", "slug": String(candidates[bucket % candidates.size()]), "bucket": bucket}
+
+
+static func allocate_personal_target(game: Game, device_id: String, cycle_week: String, sequence: int,
+		world_frontier: Array, ledger: ProgressionLedger) -> Dictionary:
+	var current: Dictionary = game._online._target_state.duplicate(true)
+	if not String(current.get("id", "")).is_empty():
+		if String(current.get("status", "")) == "active":
+			return current
+		if String(current.get("status", "")) not in ["completed", "waiting_next_slot"]:
+			return {}
+		var next_eligible := String(current.get("next_eligible_week", ""))
+		if not next_eligible.is_empty() and cycle_week < next_eligible:
+			return {}
+	var plan := personal_target_plan(device_id, cycle_week, sequence, world_frontier)
+	var kind := String(plan.get("kind", ""))
+	var slug := String(plan.get("slug", ""))
+	var item: Dictionary = game.ITEMS.get(slug, {})
+	var target := {
+		"id": "sim-personal-%d-%s" % [sequence, kind],
+		"kind": kind,
+		"slug": slug,
+		"name": String(item.get("name", slug)) if kind == "world" else "Синтетическая LLM цель",
+		"hint": "Открой это вещество в новом эксперименте." if kind == "world" else "Завершите персональную LLM-цель.",
+		"status": "active",
+		"cycle_week": cycle_week,
+		"attempts": 0,
+		"successful_steps": 0,
+		"spent_ether": 0,
+		"next_eligible_week": "",
+		"completed": false,
+		"generation": int(current.get("generation", 0)) + 1,
+	}
+	game._online._target_state = target
+	ledger.increment_counter("personal_experiment_targets_allocated")
+	ledger.increment_counter("personal_experiment_%s_targets" % kind)
+	ledger.reconcile(game)
+	return target
+
+
+static func next_personal_week(cycle_week: String) -> String:
+	var parts := cycle_week.split("-W", false)
+	if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
+		return ""
+	var year := int(parts[0])
+	var week := int(parts[1])
+	if year < 1 or week < 1 or week > _weeks_in_iso_year(year):
+		return ""
+	week += 1
+	if week > _weeks_in_iso_year(year):
+		year += 1
+		week = 1
+	return "%04d-W%02d" % [year, week]
+
+
+static func _weeks_in_iso_year(year: int) -> int:
+	var weekday := _iso_weekday(_date_unix(year, 1, 1))
+	if weekday == 4 or weekday == 3 and year % 4 == 0 and (year % 100 != 0 or year % 400 == 0):
+		return 53
+	return 52
+
+
+static func _date_unix(year: int, month: int, day: int) -> int:
+	return int(Time.get_unix_time_from_datetime_dict({"year": year, "month": month, "day": day,
+		"hour": 0, "minute": 0, "second": 0}))
+
+
+static func _iso_weekday(unix_time: int) -> int:
+	return (int(unix_time / 86400) + 3) % 7 + 1
+
+
+static func _normalized_personal_name(value: String) -> String:
+	var normalized := value.strip_edges().to_lower().replace("ё", "е")
+	for whitespace in ["\r", "\n", "\t", "\v", "\f", "\u00A0", "\u202F"]:
+		normalized = normalized.replace(whitespace, " ")
+	return " ".join(normalized.split(" ", false))
+
 
 static func _can_advance(clock: ProgressionClock, seconds: float, active_deadline: float) -> bool:
 	return active_deadline < 0.0 or clock.active_seconds + seconds <= active_deadline + TIME_EPSILON

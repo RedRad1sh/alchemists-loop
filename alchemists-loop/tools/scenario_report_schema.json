@@ -118,8 +118,20 @@
   "definitions": {
     "snapshot": {
       "type": "object",
-      "required": ["inventory", "upgrade_levels", "workshop", "retort", "sigils", "clock", "ether", "ether_overflow", "ether_available", "ether_cap", "gold", "known_recipe_count", "local_discovered_count", "local_discovered_ids"],
+      "required": ["inventory", "upgrade_levels", "workshop", "retort", "sigils", "personal_experiment", "clock", "ether", "ether_overflow", "ether_available", "ether_cap", "gold", "known_recipe_count", "local_discovered_count", "local_discovered_ids"],
       "properties": {
+        "personal_experiment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["target_kind", "target_status", "successful_steps", "spent_ether", "attempts"],
+          "properties": {
+            "target_kind": {"type": "string"},
+            "target_status": {"type": "string"},
+            "successful_steps": {"type": "integer", "minimum": 0},
+            "spent_ether": {"type": "number", "minimum": 0},
+            "attempts": {"type": "integer", "minimum": 0}
+          }
+        },
         "local_discovered_ids": {"type": "array", "items": {"type": "string"}},
         "local_discovered_count": {"type": "integer", "minimum": 0},
         "ether": {"type": "number", "minimum": 0},

@@ -37,6 +37,7 @@ LLM решает сочетимость и имя; дополнительно о
 Ротация моделей сохраняется: модели из LLM_MODELS перебираются по кругу.
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -205,8 +206,9 @@ def is_glyph(glyph: str) -> bool:
     return lo <= n <= hi
 
 SYSTEM_PROMPT = """\
-Ты — генератор результатов для логической игры-алхимии (жанр Little Alchemy 2).
-Это НЕ игра свободных ассоциаций и НЕ Infinite Craft.
+Ты — генератор результатов для логической игры-алхимии.
+Используй широкое пространство осмысленных связей, как в Infinite Craft, но не принимай
+случайную склейку, общую категорию или бессвязную ассоциацию.
 
 Твой ответ — РОВНО один JSON-объект и ничего больше: без пояснений, без текста
 до/после, без обёрток в ```, без слова «вот». Формат строго:
@@ -251,7 +253,16 @@ description — одна короткая фраза на русском (до 2
   Огонь+Вода=Пар, Лёд+Огонь=Вода;
 - reference — ОБА понятия вместе прямо и недвусмысленно отсылают к известному
   явлению поп-культуры (мем, игра, фильм, музыка), и результат — каноническое
-  имя этой отсылки (пример: Кольцо+Магия=Кольцо Всевластия).
+  имя этой отсылки (пример: Кольцо+Магия=Кольцо Всевластия);
+- бытовая — предметы характерно встречаются в одном действии или ситуации;
+- metaphor — образный перенос, если каждый вход нужен для образа;
+- compound — настоящее составное слово или устойчивое словосочетание;
+- morphology — словообразовательная связь корней и морфем;
+- prefix_suffix — осмысленное приставочное или суффиксальное образование;
+- group — пара, множество, стая, роща или повторяющийся объект;
+- abstract — абстрактное понятие, которое нельзя получить только из общей категории;
+- poetic_ironic — иронический или поэтический результат с коротким объяснением;
+- recursive — связь, пригодная как один шаг следующей цепочки.
 
 Правила:
 1. В результате должны участвовать ОБА входных понятия.
@@ -287,13 +298,49 @@ description — одна короткая фраза на русском (до 2
 VALIDATOR_PROMPT = """\
 Ты — проверяющий для игры-алхимии. Даны два вещества и кандидат-результат.
 Ответь {"valid": true}, если результат разумно объясним обоими входными
-веществами: прямое взаимодействие, естественная пара/группа, характерное
-свойство или известная связь. Допустимы и неожиданные, но осмысленные сочетания
-(ирония, поэзия, бытовые связи), если оба вещества реально участвуют в смысле.
-Отсылка к поп-культуре/игре допустима, если оба вещества указывают на неё.
-Грубый мусор — случайная склейка имён, результат без всякой связи с входными —
-{"valid": false}. Если есть хоть какое-то осмысленное объяснение — склоняйся к true.
+веществами. Разрешены физические, бытовые, метафорические, составные,
+морфемные, приставочно-суффиксальные, групповые, абстрактные, культурные,
+иронические и поэтические связи. Разреши настоящий recursive-chain шаг, если
+текущая пара сама является одним понятным шагом.
+Случайная склейка, результат только из общей категории, бессвязный результат,
+результат с участием одного входа или скрытая многошаговая цепочка —
+{"valid": false}. Оба входа должны быть необходимы по тесту удаления.
 Верни ровно один JSON-объект и ничего больше.
+"""
+
+TARGET_RELATIONS = frozenset({
+    "physical", "бытовая", "metaphor", "compound", "morphology",
+    "prefix_suffix", "group", "abstract", "cultural", "poetic_ironic", "recursive",
+})
+TARGET_OUTCOMES = frozenset({"target", "intermediate", "invalid"})
+
+LOCAL_PERSONAL_TARGETS = (
+    {"name": "Рассвет", "hint": "Найди образ света, который приходит после тьмы.",
+     "pair": ("Огонь", "Воздух"), "relation": "metaphor"},
+    {"name": "Стеклянный дождь", "hint": "Найди образ небесной влаги, ставшей хрупкой и прозрачной.",
+     "pair": ("Вода", "Песок"), "relation": "compound"},
+    {"name": "Память ветра", "hint": "Найди след, который движение оставляет в мельчайших частицах.",
+     "pair": ("Воздух", "Пыль"), "relation": "metaphor"},
+)
+
+TARGET_GENERATOR_PROMPT = """\
+Ты создаёшь персональную цель для игры-алхимии. Верни ровно один JSON-объект:
+{"name":"...","hint":"..."}. Название — конкретное русское слово или
+словосочетание, только кириллица и пробелы, без цифр, дефисов и подчёркиваний,
+до 40 символов. Подсказка короткая, образная и не раскрывает исходную пару.
+Seed нужен только для воспроизводимого выбора и не должен попасть в ответ.
+"""
+
+TARGET_EVALUATOR_PROMPT = """\
+Ты проверяешь одну пару веществ относительно скрытой персональной цели.
+Верни ровно один JSON-объект с outcome: target, intermediate или invalid.
+Для target имя обязано совпасть с целью. Для intermediate предложи один
+самостоятельный результат, пригодный как следующий вход. Для invalid не
+добавляй имя. Разрешены физические, бытовые, метафорические, составные,
+морфемные, приставочно-суффиксальные, групповые (множество и повторение),
+абстрактные, культурные, иронические, поэтические и recursive-chain связи.
+Оба входа должны участвовать; случайная склейка, общая категория и скрытая
+многошаговая цепочка запрещены.
 """
 
 # Сообщения обратной связи для retry (раздельные каналы).
@@ -446,6 +493,48 @@ def validate_result(res: dict) -> dict | None:
     return out
 
 
+def validate_target_name(name: str) -> bool:
+    return (
+        isinstance(name, str)
+        and 0 < len(name) <= 40
+        and all(("а" <= ch <= "я") or ("А" <= ch <= "Я") or ch in "ёЁ " for ch in name)
+    )
+
+
+def validate_personal_target(res: dict, seed: str = "") -> dict | None:
+    if not isinstance(res, dict):
+        return None
+    name = str(res.get("name", "")).strip()
+    hint = " ".join(str(res.get("hint", "")).strip().split())
+    if not validate_target_name(name) or not hint or len(hint) > 240:
+        return None
+    if seed and seed.strip().casefold() in f"{name} {hint}".casefold():
+        return None
+    return {"name": name, "hint": hint}
+
+
+def validate_target_result(res: dict) -> dict | None:
+    """Техническая проверка target evaluator outcome."""
+    if not isinstance(res, dict):
+        return None
+    outcome = str(res.get("outcome", "")).strip().lower()
+    if outcome not in TARGET_OUTCOMES:
+        return None
+    if outcome == "invalid":
+        return {"outcome": "invalid"}
+    name = str(res.get("name", "")).strip()
+    relation = str(res.get("relation", "")).strip().lower()
+    description = " ".join(str(res.get("description", "")).strip().split())
+    if not validate_target_name(name) or relation not in TARGET_RELATIONS or not description:
+        return None
+    return {
+        "outcome": outcome,
+        "name": name,
+        "relation": relation,
+        "description": description[:160],
+    }
+
+
 def validate_hint(res: dict) -> dict | None:
     """Техническая проверка намёка для письма: {"hint": "..."}. None — невалиден."""
     if not isinstance(res, dict):
@@ -461,6 +550,10 @@ def validate_hint(res: dict) -> dict | None:
 # generate() отдаёт такое имя как есть, а сервер привязывает пару
 # к существующему веществу через дедупликацию имён (_link_existing).
 SAME_AS_INGREDIENT = "совпадает с одним из ингредиентов"
+CATEGORY_ONLY_RESULTS = frozenset({
+    "красный", "красное", "съедобное", "живое", "твердое", "мягкое",
+    "круглое", "большое", "маленькое", "вещество", "предмет", "цвет",
+})
 
 
 def semantic_check(name: str, a_name: str, b_name: str) -> tuple[bool, str]:
@@ -475,6 +568,8 @@ def semantic_check(name: str, a_name: str, b_name: str) -> tuple[bool, str]:
     bl = b_name.strip().lower()
     if nl == al or nl == bl:
         return False, SAME_AS_INGREDIENT
+    if nl in CATEGORY_ONLY_RESULTS:
+        return False, "результат только из общей категории"
     compact = nl.replace(" ", "")
     if compact in (al + bl, bl + al):
         return False, "механическая склейка ингредиентов"
@@ -1037,6 +1132,88 @@ class LLMGenerator:
             url = base + "/chat/completions"
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         return url, headers
+
+    def _target_call(self, system_prompt: str, user_prompt: str, validator) -> dict:
+        if self.provider == "off" or not self.api_key or not self.models:
+            raise LLMError("target provider недоступен")
+        errors = []
+        for model in self._gen_chain()[:MAX_ATTEMPTS]:
+            try:
+                raw = self._call_target_once(model, system_prompt, user_prompt)
+            except LLMError as exc:
+                errors.append(str(exc))
+                continue
+            parsed = _extract_json(raw)
+            valid = validator(parsed) if isinstance(parsed, dict) else None
+            if valid is not None:
+                return valid
+            errors.append("ответ target provider не соответствует контракту")
+        raise LLMError("; ".join(errors) or "target provider не ответил")
+
+    def _call_target_once(self, model: str, system_prompt: str, user_prompt: str) -> str:
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.8,
+            "max_tokens": 512,
+            "max_completion_tokens": 512,
+            "reasoning_effort": "none",
+            "response_format": {"type": "json_object"},
+        }
+        url, headers = self._endpoint(model)
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=self.timeout)
+        except requests.RequestException as exc:
+            raise LLMError(f"сеть: {exc.__class__.__name__}") from exc
+        if response.status_code in (400, 503) and any(
+            key in response.text.lower()
+            for key in ("response_format", "json", "reasoning", "max_tokens", "unsupported", "provider", "filter")
+        ):
+            payload.pop("response_format", None)
+            payload.pop("reasoning_effort", None)
+            payload.pop("max_completion_tokens", None)
+            payload.pop("max_tokens", None)
+            try:
+                response = requests.post(url, json=payload, headers=headers, timeout=self.timeout)
+            except requests.RequestException as exc:
+                raise LLMError(f"сеть: {exc.__class__.__name__}") from exc
+        if response.status_code != 200:
+            raise LLMError(f"HTTP {response.status_code}: {_http_error_text(response)}")
+        try:
+            return response.json()["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise LLMError("неожиданный формат target provider") from exc
+
+    def generate_personal_target(self, seed: str) -> dict:
+        """Создать персональную цель без раскрытия source pair клиенту."""
+        if self.provider in ("mock", "local"):
+            index = int(hashlib.sha256(seed.encode("utf-8")).hexdigest(), 16) % len(LOCAL_PERSONAL_TARGETS)
+            target = LOCAL_PERSONAL_TARGETS[index]
+            return {"name": target["name"], "hint": target["hint"]}
+        return self._target_call(
+            TARGET_GENERATOR_PROMPT, f"Seed: {seed}",
+            lambda result: validate_personal_target(result, seed),
+        )
+
+    def evaluate_personal_target(self, target_name: str, a_name: str, b_name: str,
+                                 known_context: str = "") -> dict:
+        """Проверить одну пару относительно скрытой персональной цели."""
+        if self.provider in ("mock", "local"):
+            for target in LOCAL_PERSONAL_TARGETS:
+                if target_name == target["name"] and {a_name, b_name} == set(target["pair"]):
+                    return {
+                        "outcome": "target", "name": target_name, "relation": target["relation"],
+                        "description": f"Оба входа необходимы для образа «{target_name}».",
+                    }
+            return {"outcome": "invalid"}
+        return self._target_call(
+            TARGET_EVALUATOR_PROMPT,
+            f"Цель: {target_name}\nВход A: {a_name}\nВход B: {b_name}\nКонтекст: {known_context}",
+            validate_target_result,
+        )
 
     # ------------------------------------------------------------------
     # Заглушка mock — детерминированная эмуляция «решения модели» для тестов.
