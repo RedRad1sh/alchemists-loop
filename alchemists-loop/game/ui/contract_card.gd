@@ -80,18 +80,13 @@ func _init(game: Game) -> void:
 func setup(c: Dictionary) -> void:
 	_c = c
 	var weekly := String(c.get("kind", "daily")) == "weekly"
-	var sz := WEEKLY_SIZE if weekly else DAILY_SIZE
-	var w := sz.x
-	var h := sz.y
+	var w := WEEKLY_SIZE.x if weekly else DAILY_SIZE.x
 	if _hang == null:
 		_build()
-	custom_minimum_size = sz
-	_hang.size = sz
-	# Пивот — точка, в которую вбит гвоздь: лист качается вокруг него, а не вокруг центра.
+	# Пивот — гвоздь: лист качается вокруг него, а не вокруг центра.
 	_hang.pivot_offset = Vector2(w / 2.0, 0.0)
 	_hang.rotation_degrees = rot_deg(String(c["id"]))
 	scale = Vector2.ONE
-	_paper.size = sz
 	_paper.texture = tex("paper_weekly.png") if weekly else tex("paper_daily.png")
 	_title.position = Vector2(PAD, 16.0)
 	_title.size = Vector2(w - 2.0 * PAD, 22.0)
@@ -99,19 +94,11 @@ func setup(c: Dictionary) -> void:
 		TIER_INK.get(String(c.get("tier", "bronze")), INK))
 	_count.position = Vector2(PAD, 44.0)
 	_count.size = Vector2(w - 2.0 * PAD, 26.0)
-	# Тело карточки — между счётчиком и наградой; размеры существующих полей не
-	# тронуты (бриф Task 7), полоса тела берёт оставшееся paper-окно. Награда
-	# садится над полосой штампа, поэтому штамп (§D) не наезжает на текст.
-	var stamp_top := h - STAMP_BAND
-	var reward_h := 62.0 if weekly else 46.0
 	_detail.position = Vector2(PAD, DETAIL_TOP)
-	_detail.size = Vector2(w - 2.0 * PAD, stamp_top - reward_h - 4.0 - DETAIL_TOP - DETAIL_GAP)
-	_reward.position = Vector2(PAD, stamp_top - 4.0 - reward_h)
-	_reward.size = Vector2(w - 2.0 * PAD, reward_h)
-	_seal.position = Vector2(w - SEAL_SIZE + 4.0, h - SEAL_SIZE + 4.0)
+	_detail.size.x = w - 2.0 * PAD
+	_reward.size.x = w - 2.0 * PAD
 	_seal.size = Vector2(SEAL_SIZE, SEAL_SIZE)
 	_seal.texture = tex("seal_%s.png" % String(c.get("tier", "bronze")))
-	_stamp.position = Vector2(4.0, h - STAMP_BAND + 2.0)
 	_stamp.size = STAMP_SIZE
 	# Гвоздь — ребёнок карточки, не листа: он в доске и не поворачивается.
 	_nail.position = Vector2(w / 2.0 - NAIL_SIZE / 2.0, -NAIL_SIZE / 2.0)
@@ -128,10 +115,31 @@ func setup(c: Dictionary) -> void:
 	_stamp.tooltip_text = tip
 	_stamp.visible = done or g._contracts.is_ready(id)
 	_stamp.disabled = done
-	# Материал OWN: у каждой карточки свой экземпляр, иначе одна полученная записка
-	# обесцветила бы всю доску.
+	# У каждой карточки свой материал: получение не обесцвечивает соседей.
 	_fade.set_shader_parameter("amount", 1.0 if done else 0.0)
 	_fill_detail(id, String(c.get("type", "")))
+	_layout_content()
+
+
+## Высоту бумаги определяют строки, а не фиксированное окно с обрезкой.
+## Минимумы меняются после переноса Label и сортировки вложенных контейнеров.
+func _layout_content() -> void:
+	if _c.is_empty():
+		return
+	var weekly := String(_c.get("kind", "daily")) == "weekly"
+	var sz := WEEKLY_SIZE if weekly else DAILY_SIZE
+	var detail_h := _detail.get_combined_minimum_size().y
+	var reward_h := maxf(62.0 if weekly else 46.0, _reward.get_minimum_size().y)
+	sz.y = maxf(sz.y, DETAIL_TOP + detail_h + DETAIL_GAP + reward_h + 4.0 + STAMP_BAND)
+	custom_minimum_size = sz
+	size = sz
+	_hang.size = sz
+	_paper.size = sz
+	_detail.size = Vector2(sz.x - 2.0 * PAD, detail_h)
+	_reward.size = Vector2(sz.x - 2.0 * PAD, reward_h)
+	_reward.position = Vector2(PAD, sz.y - STAMP_BAND - 4.0 - reward_h)
+	_seal.position = Vector2(sz.x - SEAL_SIZE + 4.0, sz.y - SEAL_SIZE + 4.0)
+	_stamp.position = Vector2(4.0, sz.y - STAMP_BAND + 2.0)
 
 ## §D: заголо обязан влезть во внутреннюю полосу бумаги. Label с autowrap OFF
 ## считает минимальную ширину по натуральной ширине текста, а `size` в Godot
@@ -192,19 +200,21 @@ func _build() -> void:
 	_detail.add_theme_constant_override("separation", 2)
 	_detail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hang.add_child(_detail)
+	_detail.minimum_size_changed.connect(_layout_content, CONNECT_DEFERRED)
 
 	_reward = g._label("", 11)
 	_reward.name = "Reward"
 	_reward.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_reward.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_reward.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	_reward.clip_text = true
+	_reward.clip_text = false
 	# Строка награды ловит мышь: наведение показывает точную награду (§5.3),
 	# потому что «Быстрая варка» без процента и срока для игрока — загадка.
 	# PASS, а не STOP: тултип остаётся, а hover и тап уходят бумаге.
 	_reward.mouse_filter = Control.MOUSE_FILTER_PASS
 	_reward.add_theme_color_override("font_color", INK)
 	_hang.add_child(_reward)
+	_reward.minimum_size_changed.connect(_layout_content, CONNECT_DEFERRED)
 
 	_seal = TextureRect.new()
 	_seal.name = "Seal"
@@ -427,8 +437,8 @@ func _fill_detail(id: String, type: String) -> void:
 				l.tooltip_text = "мир: %s" % hint
 		_detail.add_child(l)
 
-# Жила: мини-капли VeinDrop текущего цикла; у registered — «Влить». Три ряда
-# влезают в weekly-полосу (184×244), остальные сворачиваются в «…ещё N».
+# Жила: мини-капли VeinDrop текущего цикла; у registered — «Влить».
+# Показываем три ряда и «…ещё N»; высота бумаги учитывает все эти строки.
 func _fill_vein() -> void:
 	var rows: Array = g._contracts.vein_drop_rows()
 	var shown := mini(rows.size(), 3)

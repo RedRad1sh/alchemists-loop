@@ -1789,6 +1789,7 @@ static func run(g: Game) -> void:
 	_contract_asset_checks()
 	# §5.3: карточка навешивает ноды в дерево и крутит улучшения игрока, всё возвращает назад.
 	await _contract_card_checks(g)
+	await _contract_layout_checks(g)
 	# §5.2/§5.4: доска открывается в дереве, кликает штампом и выдаёт награды; инвентарь,
 	# Дом и состояние доски возвращаются в конце своего блока.
 	await _contract_board_checks(g)
@@ -1798,6 +1799,75 @@ static func run(g: Game) -> void:
 	# доска v2 Task 6 (спека §6): сейв v5, блок contracts v2 и presence-миграция
 	# старых retention-ключей — свой блок со своими путями сейва и откатом.
 	_cb_save_v5_checks(g)
+
+static func _contract_layout_checks(g: Game) -> void:
+	# Регрессия ревью UI: полные награды и три ряда «Влить» не помещались
+	# в фиксированные полосы. Проверяем готовые прямоугольники, не константы.
+	var c := g._contracts
+	var saved := _cb_snapshot(c)
+	_clear_prog(c)
+	_force_set(c, [
+		_mk(c, "daily", "goal_day", "gold", 1),
+		_mk(c, "daily", "brew", "bronze", 15),
+		_mk(c, "daily", "discover", "silver", 1),
+		_mk(c, "daily", "chain_brew", "gold", 2),
+	], [
+		_mk(c, "weekly", "vein", "gold", 1),
+		_mk(c, "weekly", "fair", "gold", 3),
+		_mk(c, "weekly", "upgrade", "gold", 4),
+		_mk(c, "weekly", "variety", "gold", 8),
+	])
+	ContractBoard.open(g)
+	var board := g.get_node("ContractBoard") as ContractBoard
+	for count in [3, 5]:
+		c._cycle_cache = {"cycle_id": "layout-cycle"}
+		c._vein_finds = []
+		for i in range(count):
+			c._vein_finds.append({"id": "layout-%d" % i, "tag": "Свет",
+				"points": 1, "pair_key": "a+b", "cycle_id": "layout-cycle",
+				"status": "registered"})
+		board.refresh()
+		# Контейнеры, переносы Label и отложенный пересчёт родительской сетки.
+		for frame in range(3):
+			await g.get_tree().process_frame
+		var overlaps: Array = []
+		var clipped: Array = []
+		var stamp_hits: Array = []
+		for row_name in ["DailyRow", "WeeklyRow"]:
+			for card in board.get_node(row_name).get_children():
+				var detail := card.get_node("Hang/Detail") as Control
+				var reward := card.get_node("Hang/Reward") as Label
+				var paper := card.get_node("Hang/Paper") as Control
+				if detail.position.y + detail.size.y + 4.0 > reward.position.y + 0.5:
+					overlaps.append(str(card.name))
+				if reward.get_visible_line_count() < reward.get_line_count():
+					clipped.append(str(card.name))
+				if reward.position.y + reward.size.y + 4.0 > paper.size.y - 46.0 + 0.5:
+					stamp_hits.append(str(card.name))
+		if not overlaps.is_empty() or not clipped.is_empty() or not stamp_hits.is_empty():
+			print("LAYOUT_DIAG finds=", count, " overlaps=", overlaps,
+				" clipped=", clipped, " stamp_hits=", stamp_hits)
+		Selftest.check("layout %d finds: details stay above rewards" % count, overlaps.is_empty())
+		Selftest.check("layout %d finds: every reward line is visible" % count, clipped.is_empty())
+		Selftest.check("layout %d finds: rewards stay above the stamp band" % count, stamp_hits.is_empty())
+	board.queue_free()
+	await g.get_tree().process_frame
+	_cb_restore(c, saved)
+
+	# Фиксированный шаг рядов тоже неверен: высокая карточка требует места
+	# до следующего ряда, а пустой/обычный ряд сохраняет прежнюю раскладку.
+	var row := Control.new()
+	row.size = Vector2(420, 50)
+	for i in range(5):
+		var card := Control.new()
+		card.custom_minimum_size = Vector2(100, 100 if i == 0 else 50)
+		row.add_child(card)
+	ContractBoard._place(row, Vector2(100, 50))
+	Selftest.check("layout grid places the next row below the tallest card",
+		(row.get_child(4) as Control).position == Vector2(160, 108)
+		and is_equal_approx(row.size.y, 158.0))
+	row.free()
+
 
 static func _contract_board_checks(g: Game) -> void:
 	# §5.2/§5.4: полная проверка доски — слои, карточки, записки, попап, закрытие.
@@ -3694,14 +3764,15 @@ static func _contract_card_checks(g: Game) -> void:
 	Selftest.check("§5.3 a note is paper, nail, seal and stamp — not one code-drawn box",
 		states_ok and bad.is_empty() and _cc_assets(unfinished) >= 4 and _cc_assets(wgold) >= 4)
 
-	# 2. Бумага рисуется в своём логическом размере: PNG @2x, rect @1x (§5.5).
+	# 2. Исходные PNG и ширина @1x сохраняются; длинный текст увеличивает высоту.
 	var up: TextureRect = unfinished.get("_paper") if states_ok else null
 	var wp: TextureRect = wgold.get("_paper") if states_ok else null
 	var paper_ok := up != null and wp != null and up.texture != null and wp.texture != null
-	Selftest.check("§5.3 the weekly note hangs on bigger paper, both at the real PNG size",
+	Selftest.check("§5.3 paper keeps original textures and widths with content-sized height",
 		paper_ok and Vector2(up.texture.get_size()) == Vector2(280, 392)
 		and Vector2(wp.texture.get_size()) == Vector2(368, 488)
-		and up.size == ContractCard.DAILY_SIZE and wp.size == ContractCard.WEEKLY_SIZE)
+		and up.size.x == ContractCard.DAILY_SIZE.x and up.size.y >= ContractCard.DAILY_SIZE.y
+		and wp.size.x == ContractCard.WEEKLY_SIZE.x and wp.size.y >= ContractCard.WEEKLY_SIZE.y)
 
 	# 3. Наклон детерминирован по id и не больше ±4°.
 	var tilt_ok := states_ok
