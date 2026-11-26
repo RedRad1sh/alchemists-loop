@@ -484,7 +484,9 @@ func _experiment_status(a: String, b: String, target_mode := false) -> Dictionar
 	var key := g._pair_key(a, b)
 	if not target_mode and known_recipes.has(key):
 		return {"ok": false, "reason": "Эта комбинация уже записана в книге рецептов."}
-	if not target_mode and _rejected_pairs.has(key):
+	# Локальный каталог авторитетнее устаревшего отказа сервера: пара из
+	# g.RECIPES варится без сети и не должна блокироваться кэшем отказов.
+	if not target_mode and _rejected_pairs.has(key) and g._online._find_recipe(a, b).is_empty():
 		return {"ok": false, "reason": "Эта комбинация уже признана несочетаемой."}
 	var cooldown := _experiment_cooldown_remaining()
 	if cooldown > 0.0:

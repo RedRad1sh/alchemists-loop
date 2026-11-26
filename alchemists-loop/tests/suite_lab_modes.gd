@@ -548,8 +548,9 @@ static func run(g: Game) -> void:
 	g._engine.known_recipe_defs[pt_launch_pair] = {"a": "fire", "b": "water", "out": "steam"}
 	g._pages._experiment_cauldron_items = ["fire", "water"]
 	g._pages._experiment_launch_pair()
-	Selftest.check("active target launch accepts locally known pair",
-		g._pages._experiment_cauldron_items == ["fire", "water"] and g._engine._experiment_pending_pair.is_empty())
+	# Отказ офлайн освобождает котёл: прежнее удержание пары и было «зависанием».
+	Selftest.check("active target offline launch releases cauldron without spending",
+		g._pages._experiment_cauldron_items.is_empty() and g._engine._experiment_pending_pair.is_empty())
 	Selftest.check("target launch copy does not claim reagent return",
 		not g._pages._experiment_status.text.contains("Реагенты возвращены"))
 	g._online._target_state = pt_launch_target

@@ -70,7 +70,7 @@ func _build_ui() -> void:
 	vbox.add_child(_input)
 
 	var help := Label.new()
-	help.text = "add <id> | unlock <mode> | set ether <N> | reset day | clear inventory | force circle open"
+	help.text = "give all [N] | give layer <L> [N] | give <id> [N] | add <id> | unlock <mode> | set ether <N> | reset day | clear inventory | force circle open"
 	help.add_theme_font_size_override("font_size", 11)
 	help.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -108,6 +108,8 @@ func _on_command(text: String) -> void:
 	match parts[0]:
 		"add":
 			_cmd_add(parts)
+		"give":
+			_cmd_give(parts)
 		"unlock":
 			_cmd_unlock(parts)
 		"set":
@@ -123,7 +125,7 @@ func _on_command(text: String) -> void:
 		"sfx":
 			_cmd_sfx(parts)
 		"help":
-			_log_text("Commands: add <id>, unlock <mode>, set ether <N>, reset day, clear inventory, force circle open, sigil rotate|free <0|1|2>|chroma|ritual, sfx list|play <name>")
+			_log_text("Commands: give all [N] | give layer <L> [N] | give <id> [N], add <id>, unlock <mode>, set ether <N>, reset day, clear inventory, force circle open, sigil rotate|free <0|1|2>|chroma|ritual, sfx list|play <name>")
 		_:
 			_log_text("[color=red]Unknown command: %s[/color]" % parts[0])
 
@@ -148,6 +150,92 @@ func _cmd_sfx(parts: Array) -> void:
 		_log_text("Playing event: %s" % ev)
 		return
 	_log_text("[color=red]Usage: sfx list | sfx play <event>[/color]")
+
+## Быстрая выдача веществ для приёмки. Работает только в редакторе (гейт
+## _on_command). Выданное вещество открывается вместе с рецептом, которым оно
+## получается: иначе Эксперимент и Мастерская его бы не видели.
+##   give all [N]        — весь локальный каталог по N штук (по умолчанию 10)
+##   give layer <L> [N]  — вещества слоя сложности ≤ L
+##   give <id> [N]       — одно вещество
+func _cmd_give(parts: Array) -> void:
+	if parts.size() < 2:
+		_log_text("[color=red]Usage: give all [N] | give layer <L> [N] | give <id> [N][/color]")
+		return
+	var what := str(parts[1])
+	var count := 10
+	var ids: Array[String] = []
+	if what == "all":
+		if parts.size() >= 3:
+			count = maxi(int(parts[2]), 1)
+		for raw in _g.ITEMS.keys():
+			ids.append(String(raw))
+	elif what == "layer":
+		if parts.size() < 3:
+			_log_text("[color=red]Usage: give layer <L> [N][/color]")
+			return
+		var max_layer := maxi(int(parts[2]), 0)
+		if parts.size() >= 4:
+			count = maxi(int(parts[3]), 1)
+		var depth := _catalog_depth()
+		for raw in depth.keys():
+			if int(depth[raw]) <= max_layer:
+				ids.append(String(raw))
+	else:
+		if not _g.ITEMS.has(what):
+			_log_text("[color=red]Unknown element: %s[/color]" % what)
+			return
+		if parts.size() >= 3:
+			count = maxi(int(parts[2]), 1)
+		ids.append(what)
+	var granted := give_items(ids, count)
+	_log_text("Granted %d elements x%d, recipes known: %d" % [granted, count, _g._engine.known_recipes.size()])
+
+
+## Глубина вещества по всему локальному каталогу (стихии — 0), не по уже
+## известным рецептам: иначе в свежей игре слои были бы пустыми.
+func _catalog_depth() -> Dictionary:
+	var depth := {}
+	for id in Game.BASE_IDS:
+		depth[String(id)] = 0
+	var changed := true
+	while changed:
+		changed = false
+		for recipe in _g.RECIPES:
+			var a := String(recipe["a"])
+			var b := String(recipe["b"])
+			var out := String(recipe.get("out", ""))
+			if out == "" or not depth.has(a) or not depth.has(b):
+				continue
+			var d := maxi(int(depth[a]), int(depth[b])) + 1
+			if not depth.has(out) or d < int(depth[out]):
+				depth[out] = d
+				changed = true
+	return depth
+
+## Выдать вещества и открыть рецепты их получения; возвращает число веществ.
+func give_items(ids: Array[String], count: int) -> int:
+	var wanted := {}
+	for id in ids:
+		wanted[id] = true
+	var granted := 0
+	for id in ids:
+		if not _g.ITEMS.has(id):
+			continue
+		_g._engine.inventory[id] = int(_g._engine.inventory.get(id, 0)) + count
+		granted += 1
+	for recipe in _g.RECIPES:
+		var out := String(recipe.get("out", ""))
+		if wanted.has(out) and not _g._engine.known_recipes.has(_g._pair_key(String(recipe["a"]), String(recipe["b"]))):
+			_g._engine.learn_recipe(String(recipe["a"]), String(recipe["b"]), out)
+	_g._engine._cost_cache.clear()
+	_g._engine._layer_cache.clear()
+	_g._engine._refresh()
+	_g._pages._ensure_modes()
+	if _g._workshop != null:
+		_g._workshop.changed.emit()
+	_g._saves._save_game()
+	return granted
+
 
 func _cmd_add(parts: Array) -> void:
 	if parts.size() < 2:
