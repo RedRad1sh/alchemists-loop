@@ -30,13 +30,14 @@ func _build_companion() -> void:
 	_companion = (load("res://game/home/companion.gd") as GDScript).new()
 	_companion.name = "Companion"
 	_companion.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	# компактный маскот в правом верхнем углу (конец панели вкладок) — контент не трогаем
-	_companion.offset_left = -72.0
-	_companion.offset_right = -8.0
-	# Отдельное место между эфиром и вкладками: Светик не попадает
-	# под навигацию и не закрывает кнопки поля.
-	_companion.offset_top = 100.0
-	_companion.offset_bottom = 164.0
+	var s := g.size.x / 360.0
+	# Светик висит ПОД правой колонкой кнопок (Дом/Лавка), а не поверх неё:
+	# колонка заканчивается на ~171*s, маскот начинается ниже (176*s) и масшта-
+	# бируется вместе с HUD, поэтому на узком экране не ложится на HouseEntry.
+	_companion.offset_left = -56.0 * s
+	_companion.offset_right = -8.0 * s
+	_companion.offset_top = 176.0 * s
+	_companion.offset_bottom = 224.0 * s
 	_companion.z_index = 3
 	_companion.tapped.connect(_on_companion_tapped)
 	g.add_child(_companion)
@@ -120,15 +121,38 @@ func _build_companion_dialog() -> void:
 	actions.add_child(close_b)
 
 func _refresh_companion_visible() -> void:
-	if _companion != null:
-		var on_lab := g._tabs_ref == null or g._tabs_ref.current_tab == Game.TAB_EXPERIMENT or g._tabs_ref.current_tab == Game.TAB_LAB
-		_companion.visible = on_lab and _companion_unlocked
-		# У верхней шапки нет свободного места для всплывающего облачка:
-		# текст Светика живёт в его окне общения и не закрывает навигацию.
-		_companion.set_bubble_allowed(false)
-		if not _companion.visible:
-			_companion.set_shake(false)
-			_companion.set_process(false)
+	if _companion == null:
+		return
+	var on_lab := g._tabs_ref == null or g._tabs_ref.current_tab == Game.TAB_EXPERIMENT or g._tabs_ref.current_tab == Game.TAB_LAB
+	# Только Стол и только когда поверх нет полноэкранного окна: иначе маскот
+	# ложится на оверлей и крадёт клики (z=3 выше вкладок/HUD).
+	_companion.visible = on_lab and _companion_unlocked and not _overlay_open()
+	# У верхней шапки нет свободного места для всплывающего облачка:
+	# текст Светика живёт в его окне общения и не закрывает навигацию.
+	_companion.set_bubble_allowed(false)
+	if not _companion.visible:
+		_companion.set_shake(false)
+		_companion.set_process(false)
+
+
+## Полноэкранный оверлей поверх Стола: экран механик, дом, социалка, коллекция
+## сигилов или любой видимый узел группы modal_ui (попапы/подтверждения/обмен).
+## Собственный диалог Светика сюда не входит — маскот остаётся рядом с окном.
+func _overlay_open() -> bool:
+	if g._screens != null and g._screens.is_open():
+		return true
+	if g._home != null and g._home._house_screen != null and g._home._house_screen.visible:
+		return true
+	if g._social_ui != null and g._social_ui.is_open():
+		return true
+	if g._sigil_ui != null and g._sigil_ui._sigil_coll != null:
+		return true
+	var tree := g.get_tree()
+	if tree != null:
+		for node in tree.get_nodes_in_group("modal_ui"):
+			if node is CanvasItem and (node as CanvasItem).is_visible_in_tree():
+				return true
+	return false
 
 
 func _companion_unlock() -> void:

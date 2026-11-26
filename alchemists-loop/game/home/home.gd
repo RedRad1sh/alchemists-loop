@@ -562,6 +562,7 @@ func _open_house_screen() -> void:
 	if _house_tray_open:
 		_lift_house_room()
 	_house_spirit_tick(0.0)
+	g._spirit._refresh_companion_visible()
 
 
 func _close_house_screen() -> void:
@@ -577,6 +578,7 @@ func _close_house_screen() -> void:
 	if _house_screen != null:
 		_house_screen.visible = false
 	Sfx.click()
+	g._spirit._refresh_companion_visible()
 
 
 func _build_house_screen() -> void:

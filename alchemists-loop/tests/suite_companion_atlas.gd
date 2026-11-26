@@ -145,6 +145,43 @@ static func run(g: Game) -> void:
 	g._hub._profile_dim.visible = t28_dim0
 	g._hub._profile_popup.visible = t28_popup0
 
+	# ============ Светик: место и видимость (оп C) ============
+	# Маскот живёт ПОД правыми кнопками (Дом/Лавка) и только на Столе; любой
+	# полноэкранный оверлей гасит его, чтобы он не ложился поверх окон и не крал
+	# клики. Различники: вернуть offset_top=100 (пересечение с HouseEntry) или
+	# убрать вызов _refresh_companion_visible из _open_house_screen.
+	var sp_tab0 := g._tabs_ref.current_tab
+	var sp_unlock0 := g._spirit._companion_unlocked
+	g._spirit._companion_unlocked = true
+	g._tabs_ref.current_tab = Game.TAB_EXPERIMENT
+	g._spirit._refresh_companion_visible()
+	await g.get_tree().process_frame
+	Selftest.check("spirit visible on lab", g._spirit._companion.visible)
+	g._tabs_ref.current_tab = Game.TAB_WORLD
+	g._spirit._refresh_companion_visible()
+	Selftest.check("spirit hidden outside lab", not g._spirit._companion.visible)
+	g._tabs_ref.current_tab = Game.TAB_EXPERIMENT
+	g._spirit._refresh_companion_visible()
+	await g.get_tree().process_frame
+	var house_b := g._hud.sides.find_child("HouseEntry", true, false) as Control
+	var shop_b := g._hud.sides.find_child("ShopBtn", true, false) as Control
+	# Маскот обязан быть НИЖЕ правой колонки кнопок при любом масштабе. До фикса
+	# offset_top=100 фиксирован: на узком экране (s≈1.5) кнопки поднимаются и
+	# HouseEntry ложится под маскот; в headless (s≈2.67) кнопки ниже, поэтому
+	# проверяем не пересечение, а именно «верх маскота ниже низа ShopBtn».
+	# Различник: вернуть фиксированный offset_top=100 — краснеет на любом s.
+	Selftest.check("spirit below side buttons",
+		house_b != null and shop_b != null
+		and g._spirit._companion.get_global_rect().position.y >= shop_b.get_global_rect().end.y
+		and not g._spirit._companion.get_global_rect().intersects(house_b.get_global_rect()))
+	g._home._open_house_screen()
+	Selftest.check("spirit hidden under house screen", not g._spirit._companion.visible)
+	g._home._close_house_screen()
+	Selftest.check("spirit returns after house close", g._spirit._companion.visible)
+	g._tabs_ref.current_tab = sp_tab0
+	g._spirit._companion_unlocked = sp_unlock0
+	g._spirit._refresh_companion_visible()
+
 	# редкость веществ и «Атлас алхимика»
 	Selftest.check("rarity base", g._engine._rarity_of("fire")["name"] == "первостихия"
 		and int(g._engine._rarity_of("fire")["bounty"]) == 0)

@@ -158,6 +158,8 @@ static func run(g: Game) -> void:
 		await load("res://tests/suite_avatar_profiles.gd").run(g)
 	elif OS.get_cmdline_user_args().has("--suite=engraved"):
 		await load("res://tests/suite_ui_engraved.gd").run(g)
+	elif OS.get_cmdline_user_args().has("--suite=companion"):
+		await SuiteCompanionAtlas.run(g)
 	elif OS.get_cmdline_user_args().has("--suite=i18n"):
 		var i18n_s: Script = load("res://tests/suite_ui_i18n.gd")
 		if i18n_s != null and i18n_s.can_instantiate():
