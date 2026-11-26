@@ -9,7 +9,9 @@ class_name HouseItems
 ##     спрайтом, шейдер зеркалит меш сам — дубль PNG не нужен.
 ##   <id>.json — label, cost, reward, tint, order, refl_mode ("none" выключает
 ##     отражение), flip_ok, grade, wall_view, sprite (id-донор картинки для
-##     вариантов-перекрасок) и метрики box/vbox/off/alpha.
+##     вариантов-перекрасок), wall (повесить на стену: полка, бра),
+##     footprint [ширина, глубина] и точные метрики
+##     box/vbox/off/alpha.
 ## Без json метрики берутся из непрозрачной области PNG: ширина и глубина —
 ## по умолчанию категории, высота подбирается так, чтобы изометрическая
 ## проекция бокса совпала с пропорцией картинки.
@@ -120,8 +122,9 @@ static func _scan_item(cat: String, dir: String, id: String) -> Dictionary:
 		"reward": bool(meta.get("reward", false)),
 		"tint": String(meta.get("tint", "")),
 		"ppm": PPM,
-		"wall": WALL_CATS.has(cat),
-		"wall_view": int(meta.get("wall_view", CAT_WALL_VIEW.get(cat, -1))),
+		"wall": bool(meta.get("wall", WALL_CATS.has(cat))),
+		"wall_view": int(meta.get("wall_view", CAT_WALL_VIEW.get(cat,
+			0 if bool(meta.get("wall", false)) else -1))),
 		"flip_ok": bool(meta.get("flip_ok", true)),
 		"_order": int(meta.get("order", 1000000)),
 	}
@@ -158,6 +161,9 @@ static func _scan_item(cat: String, dir: String, id: String) -> Dictionary:
 		var a: Array = meta["alpha"]
 		item["alpha"] = Rect2(a[0], a[1], a[2], a[3])
 		item["_has_alpha"] = true
+	if meta.has("footprint"):
+		var fp: Array = meta["footprint"]
+		item["_footprint"] = Vector2(fp[0], fp[1])
 	if not meta.has("sprite") and not item.has("box"):
 		_auto_metrics(item, cat)
 	return item
@@ -176,7 +182,7 @@ static func _auto_metrics(item: Dictionary, cat: String) -> void:
 		used = Rect2(tex.get_image().get_used_rect())
 	if not item.has("alpha"):
 		item["alpha"] = used
-	var fp: Vector2 = CAT_FOOTPRINT.get(cat, Vector2(0.6, 1.0))
+	var fp: Vector2 = item.get("_footprint", CAT_FOOTPRINT.get(cat, Vector2(0.6, 1.0)))
 	var a: Rect2 = item["alpha"]
 	var aspect := a.size.y / maxf(a.size.x, 1.0)
 	var h := _height_for_aspect(fp.x, fp.y, aspect)
