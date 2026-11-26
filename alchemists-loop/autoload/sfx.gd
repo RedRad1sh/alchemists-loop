@@ -355,15 +355,16 @@ func _slice_wav(w: AudioStreamWAV, start_sec: float, len_sec: float, file_path: 
 	len_f = clampi(len_f, 1, total_frames - start_f)
 	var sub := bytes.slice(data_off + start_f * frame_bytes,
 		data_off + (start_f + len_f) * frame_bytes)
-	# Фейд-аут 10мс.
-	var fade_frames := mini(int(0.010 * sr), len_f)
-	for i in fade_frames:
-		var idx := (len_f - fade_frames + i) * frame_bytes
-		var v := int(sub.decode_s16(idx)) * (fade_frames - i) / fade_frames
-		sub.encode_s16(idx, v)
-		if ch == 2:
-			var v2 := int(sub.decode_s16(idx + 2)) * (fade_frames - i) / fade_frames
-			sub.encode_s16(idx + 2, v2)
+	# Одноразовому куску нужен фейд; подготовленный loop сохраняет свой стык.
+	if not loop:
+		var fade_frames := mini(int(0.010 * sr), len_f)
+		for i in fade_frames:
+			var idx := (len_f - fade_frames + i) * frame_bytes
+			var v := int(sub.decode_s16(idx)) * (fade_frames - i) / fade_frames
+			sub.encode_s16(idx, v)
+			if ch == 2:
+				var v2 := int(sub.decode_s16(idx + 2)) * (fade_frames - i) / fade_frames
+				sub.encode_s16(idx + 2, v2)
 	var out := AudioStreamWAV.new()
 	out.format = AudioStreamWAV.FORMAT_16_BITS
 	out.mix_rate = sr

@@ -200,8 +200,12 @@ func finish_now(payload: Variant = null) -> void:
 
 ## Жёсткое закрытие без финала.
 func abort() -> void:
+	Sfx.ritual_spin_stop()
 	on_complete.emit()
 	queue_free()
+
+func _exit_tree() -> void:
+	Sfx.ritual_spin_stop()
 
 
 ## Прямоугольник, где «материализуется» карта — родитель ставит карту сюда.
@@ -242,15 +246,13 @@ func _enter_phase(next: int) -> void:
 			on_activation.emit()
 		Phase.MATERIALIZE:
 			Sfx.ritual_phase()  # материализация: 1 раз в середине
-			# TODO(звук): зацикленное верчение (Sfx.ritual_spin + ritual_spin_stop)
-			# отключено — кусок/луп подобраны плохо, звук «сломан». Доделать:
-			# подобрать start_sec/len_sec под ритм и фейд петли, затем раскомментить.
+			Sfx.ritual_spin()
 			_hint.text = "ФОРМА ОБРЕТАЕТ ПЛОТЬ"
 			_flash = 0.65; _shake = 0.9
 			on_core_morph.emit()
 			_spawn_sparks()
 		Phase.FLASH:
-			# TODO(звук): Sfx.ritual_spin_stop() — см. MATERIALIZE (верчение отключено).
+			Sfx.ritual_spin_stop()
 			_hint.text = "ТРАНСМУТАЦИЯ ЗАВЕРШЕНА"
 			_flash = 1.0; _shake = 1.2
 			on_flash.emit()

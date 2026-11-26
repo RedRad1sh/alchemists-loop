@@ -51,7 +51,7 @@
       "about": "Открытие новой карты (легендарная)"
     },
     "discovery": {
-      "file": "res://assets/audio/ritual/mixkit-magic-swoosh-1460.wav",
+      "file": "res://assets/audio/cc0/freesound_treasure_reveal_short_878615.wav",
       "volume_db": -3.0,
       "pitch": 1.0,
       "delay": 0.0,
@@ -93,14 +93,12 @@
       "about": "Ритуал: нажатие руны на круге трансмутации — тихий отклик"
     },
     "ritual_spin": {
-      "file": "res://assets/audio/ritual/mixkit-strong-wild-wind-in-a-storm-2407.wav",
-      "volume_db": -10.0,
+      "file": "res://assets/audio/cc0/freesound_spell_charge_seamless_500910.wav",
+      "volume_db": 1.0,
       "pitch": 1.0,
       "delay": 0.0,
-      "start_sec": 5.0,
-      "len_sec": 0.8,
       "loop": true,
-      "about": "TODO(звук): верчение ОТКЛЮЧЕНО в ritual.gd (loop-кусок подобран плохо). Доделать: подобрать start_sec/len_sec под ритм, фейд петли"
+      "about": "Ритуал пентаграммы: бесшовный магический гул и мерцание во время материализации формы"
     },
     "ritual_reveal": {
       "file": "res://assets/audio/cc0/oga_magic_words.wav",
@@ -124,11 +122,11 @@
       "about": "Вход в игру: приветственный аккорд при старте (не в selftest)"
     },
     "brew_discover": {
-      "file": "res://assets/audio/craft/mixkit-video-game-magic-potion-2830.wav",
-      "volume_db": -3.0,
+      "file": "res://assets/audio/cc0/kenney_interface_confirmation_004.wav",
+      "volume_db": -6.0,
       "pitch": 1.0,
       "delay": 0.0,
-      "about": "Эксперимент в котле: найдено новое сочетание (попап нового рецепта)"
+      "about": "Эксперимент в котле: найдено новое сочетание — короткое подтверждение открытия рецепта"
     },
     "craft_start": {
       "file": "res://assets/audio/cc0/kenney_interface_confirmation_003.wav",
