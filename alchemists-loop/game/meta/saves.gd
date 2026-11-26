@@ -464,10 +464,10 @@ func _load_game() -> void:
 			if typeof(e) == TYPE_DICTIONARY:
 				g._hub._log_events.append(e)
 	if Locale != null and String(Locale.get("_cli_lang")) == "":
-		if data.get("locale") is String and String(data["locale"]) != "":
-			Locale.apply_locale(String(data["locale"]), true)
-		elif UserData != null and UserData.has_method("get_locale"):
+		if UserData != null and UserData.has_method("get_locale"):
 			Locale.apply_locale(UserData.get_locale(), false)
+		elif data.get("locale") is String and String(data["locale"]) != "":
+			Locale.apply_locale(String(data["locale"]), false)
 	if data.get("music_on") is bool:
 		if bool(data["music_on"]) != Sfx.music_on:
 			Sfx.toggle_music()

@@ -3390,8 +3390,15 @@ static func _contract_asset_checks() -> void:
 			var by := int(ci_h * (0.2 + 0.15 * k))
 			ci_top = ci_top and ci_img.get_pixel(bx, 8).a > 0.9
 			ci_left = ci_left and ci_img.get_pixel(8, by).a > 0.9
+		# 20% попадает в законное плечо уголка; свободные кромки проверяем
+		# дальше от угла, чтобы непрозрачная полоса снизу/справа не прошла.
+		var ci_bottom := true
+		var ci_right := true
+		for ratio in [0.5, 0.65, 0.8]:
+			ci_bottom = ci_bottom and ci_img.get_pixel(int(ci_w * ratio), ci_h - 8).a < 0.05
+			ci_right = ci_right and ci_img.get_pixel(ci_w - 8, int(ci_h * ratio)).a < 0.05
 		var ci_hollow := ci_img.get_pixel(int(ci_w * 0.65), int(ci_h * 0.65)).a < 0.05
-		ci_ok = ci_clean and ci_top and ci_left and ci_hollow
+		ci_ok = ci_clean and ci_top and ci_left and ci_bottom and ci_right and ci_hollow
 	Selftest.check("§5.3 corner_iron is an L-bracket cut-out with a transparent body", ci_ok)
 
 	# §5.3: stamp_frame — красная двойная рамка с прозрачной серединой.
