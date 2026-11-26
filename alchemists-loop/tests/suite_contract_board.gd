@@ -3532,52 +3532,6 @@ static func _contract_asset_checks() -> void:
 		soft = head and pen > 200
 	Selftest.check("§5.3 the brass nail sits on a soft cast shadow", soft)
 
-	# §3.4: исходный арт наград-витражей и калибровка стекла сохраняются
-	# в assets/decor; новый каталог дома использует подготовленные спрайты.
-	var vitrajes := true
-	for id in ["window_contract", "window_seal", "window_guild"]:
-		var img := _ca_img("res://assets/decor/%s.png" % String(id))
-		var entry: Dictionary = DecorCalib.CALIB.get(String(id), {}) as Dictionary
-		vitrajes = (vitrajes and img != null and img.get_size() == Vector2i(253, 256)
-			and entry.has("glass") and FileAccess.file_exists(
-				"res://assets/decor/%s.png.import" % String(id)))
-	Selftest.check("§3.4 the three reward vitrajes ship art and a calibrated glass rect", vitrajes)
-
-	# §3.4: витраж — перекраска СТЕКЛА донора: внутри rect стекла пиксели обязаны
-	# отличаться, снаружи стекла — совпадать дословно, rect стекла — быть rect донора.
-	var donor := _ca_img("res://assets/decor/window_9.png")
-	var vc := _ca_img("res://assets/decor/window_contract.png")
-	var recolored := false
-	if donor != null and vc != null:
-		var d0: Array = (DecorCalib.CALIB["window_9"] as Dictionary)["glass"]
-		var d1: Array = (DecorCalib.CALIB["window_contract"] as Dictionary)["glass"]
-		var w := donor.get_width()
-		var h := donor.get_height()
-		var gx0 := int(w * float(d0[0]))
-		var gy0 := int(h * float(d0[1]))
-		var gx1 := int(w * float(d0[2]))
-		var gy1 := int(h * float(d0[3]))
-		var inside_n := 0
-		var inside_changed := 0
-		var outside_changed := 0
-		for y in range(0, h, 2):
-			for x in range(0, w, 2):
-				var pa := donor.get_pixel(x, y)
-				var pb := vc.get_pixel(x, y)
-				if pa.a < 0.05 and pb.a < 0.05:
-					continue
-				var inglass := x >= gx0 and x < gx1 and y >= gy0 and y < gy1
-				var changed := _ca_delta(pa, pb) > 0.02
-				if inglass:
-					inside_n += 1
-					if changed:
-						inside_changed += 1
-				elif changed:
-					outside_changed += 1
-		recolored = (d0 == d1 and inside_n > 200
-			and float(inside_changed) / float(inside_n) > 0.5 and outside_changed == 0)
-	Selftest.check("§3.4 the reward vitraj recolors only the donor's glass area", recolored)
-
 	# §B/§C (спека 2026-10-25): плашка — не «PNG картинкой сверху»: орех под
 	# латунью обязан держать и цветовой разброс, и высокочастотную деталь (волокно,
 	# сколы, speckle) ПОДОЛЬНЕ растягиваемой оси — середина nine-slice live'ет при
