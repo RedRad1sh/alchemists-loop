@@ -1353,11 +1353,12 @@ func _experiment_launch_pair() -> void:
 	_experiment_cauldron_items.clear()
 	_refresh_experiment_cauldron()
 	var started := g._online._start_experiment(a, b)
-	if started:
+	if started and g._engine._experiment_pending_pair.size() == 2:
 		_experiment_status.text = "Светик раздувает огонь… эфир спишется только за выданный успешный результат."
 	else:
-		_experiment_cauldron_items = [a, b]
-		_refresh_experiment_cauldron()
+		# Котёл не держит пару после отказа: иначе без сервера он «зависал»,
+		# и ни одна, даже локальная, комбинация уже не проходила.
+		_experiment_status.text = g._engine.status_text
 	_refresh_experiment_drawer()
 
 
