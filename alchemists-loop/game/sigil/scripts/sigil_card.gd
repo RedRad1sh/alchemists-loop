@@ -100,7 +100,7 @@ func _ensure_nodes() -> void:
 		title.ellipsis_char = "…"
 		title.add_theme_color_override("font_outline_color", UIStyle.INK)
 		title.add_theme_constant_override("outline_size", 2)
-		title.add_theme_font_override("font", load("res://assets/fonts/Divagon.otf"))
+		title.add_theme_font_override("font", load("res://assets/fonts/CormorantSC-SemiBold.ttf"))
 		title.add_theme_constant_override("line_spacing", 4)
 		add_child(title)
 	if glitch == null:

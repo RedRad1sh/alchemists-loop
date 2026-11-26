@@ -320,7 +320,7 @@ func _cmd_force(parts: Array) -> void:
 	_g._contracts._last_visit_day = ""
 	_g._engine._experiment_day = ""
 	_g._saves._save_game()
-	_log_text("Daily board keys cleared (hearth/visit and experiment open again)")
+	_log_text("Daily board keys cleared (visit and experiment open again)")
 
 func _cmd_sigil(parts: Array) -> void:
 	if parts.size() < 2:

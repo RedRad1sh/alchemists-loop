@@ -317,9 +317,12 @@
     "случайное открытое вещество +1 каждые 2 минуты": "+1 random discovered element every 2 minutes",
     "Алхимик": "Alchemist",
     "Новичок": "Novice",
+    "Ранг Круга": "Circle Rank",
+    "высший ранг Круга": "highest Circle rank",
+    "Вехи дней: закрывай дневные контракты — дни считаются в круг\nВехи очков: тир закрытого контракта приносит вечные очки": "Day milestones: complete daily contracts to advance your circle days\nPoint milestones: completed contract tiers grant permanent points",
     "Уголёк": "Ember",
     "Тлеющий": "Smoldering",
-    "Полено": "Hearthlog",
+    "Жар": "Emberheat",
     "Горящий": "Blazing",
     "Сердце": "Heartfire",
     "Пламенный": "Radiant Flame",
@@ -458,11 +461,11 @@
     "Цель дня": "Daily Goal",
     "Цепочка варок": "Brew Chain",
     "Ярмарка гильдии": "Guild Fair",
-    "варка в котле идёт быстрее": "cauldron brewing is faster",
-    "крафт Аркана тратит меньше эфира": "Arcana crafting costs less ether",
-    "линии Мастерской проходят этапы быстрее": "Workshop lines finish stages faster",
-    "родник даёт больше материала за такт": "the Spring yields more per tick",
-    "эфир копится быстрее": "ether regenerates faster",
+    "Варка в котле идёт быстрее": "Cauldron brewing is faster",
+    "Крафт Аркана тратит меньше эфира": "Arcana crafting costs less ether",
+    "Линии Мастерской проходят этапы быстрее": "Workshop lines finish stages faster",
+    "Родник даёт больше материала за такт": "The Spring yields more per tick",
+    "Эфир копится быстрее": "Ether regenerates faster",
     "Контрактная доска": "Contract Board",
     "Закрыть доску и вернуться в Дом": "Close board and return to Room",
     "Вехи дней: закрывай дневные контракты — дни считаются в круг": "Day milestones: complete daily contracts to advance your circle days",
@@ -591,7 +594,7 @@
     "Версия: MVP": "Version: MVP",
     "Алхимический Сигил": "Alchemical Sigil",
     "Лор: зелье, сплавленное из огня и тени…": "Lore: a draught fused from fire and shadow…",
-    "Шрифты: Manrope (UI), Divagon (названия), Manasco (лор), Alchemist Runic (заголовок)": "Fonts: Manrope (UI), Divagon (titles), Manasco (lore), Alchemist Runic (header)",
+    "Шрифты: Manrope (UI), Cormorant SC (названия), Manasco (лор), Alchemist Runic (заголовок)": "Fonts: Manrope (UI), Cormorant SC (titles), Manasco (lore), Alchemist Runic (header)",
     "ПРОФИЛЬ АЛХИМИКА": "ALCHEMIST PROFILE",
     "Имя видят другие алхимики. Выбери образ — его можно изменить позже.": "Other alchemists see your name. Choose an appearance — you can change it later.",
     "Выбери мужской или женский образ": "Choose a male or female appearance",
@@ -632,7 +635,7 @@
     "Колода на столе — Аркан Сигилов, лист на доске — контракты дня и недели, свиток на полу — письма Светика.": "Deck on the table — Sigil Arcana; note on the board — daily & weekly contracts; scroll on the floor — Lumi's letters.",
     "Стрелка справа ведёт во вторую комнату: Родник, Верстак и Реторта работают без тебя, пока ты не в игре.": "The right arrow leads to the Workshop room: Spring, Workbench, and Retort keep running while you're offline.",
     "Эфир копится сам. Трать его на улучшения (значок в шапке) и подсказки Светика.": "Ether regenerates over time. Spend it on upgrades (header icon) and Lumi's hints.",
-    "Divagon, Manasco — шрифты названий и лора.": "Divagon, Manasco — display and lore typefaces.",
+    "Cormorant SC, Manasco — шрифты названий и лора.": "Cormorant SC, Manasco — display and lore typefaces.",
     "Alchemist Runic — нарисован для игры, все права у проекта.": "Alchemist Runic — custom-drawn for the game, all rights reserved.",
     "Иконки game-icons.net (Lorc, Delapouite, Faithtoken) — CC BY 3.0.": "Icons from game-icons.net (Lorc, Delapouite, Faithtoken) — CC BY 3.0.",
     "первостихия": "primal",
@@ -3518,6 +3521,21 @@
       "n": 1
     },
     {
+      "rx": "(?s)^Вехи:\\ дней\\ ([^\\n]+?)\\ ·\\ очки\\ ([^\\n]+)$",
+      "en": "Milestones: days {0} · points {1}",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^далее:\\ «([^\\n]+?)»\\ ·\\ ещё\\ (-?\\d+)\\ (день|дня|дней)$",
+      "en": "next: \"{0}\" · {1} days left",
+      "n": 2
+    },
+    {
+      "rx": "(?s)^далее:\\ «([^\\n]+?)»\\ ·\\ ещё\\ (-?\\d+)\\ (очко|очка|очков)$",
+      "en": "next: \"{0}\" · {1} pts left",
+      "n": 2
+    },
+    {
       "rx": "(?s)^Достижение:\\ ([^\\n]+)$",
       "en": "Achievement: {0}",
       "n": 1
@@ -3530,11 +3548,6 @@
     {
       "rx": "(?s)^Палитра\\ ·\\ (-?\\d+)\\ ⚡$",
       "en": "Palette · {0} ⚡",
-      "n": 1
-    },
-    {
-      "rx": "(?s)^Полешко:\\ \\+(-?\\d+)\\ ⚡$",
-      "en": "Hearth Log: +{0} ⚡",
       "n": 1
     },
     {

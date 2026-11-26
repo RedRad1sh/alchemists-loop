@@ -32,9 +32,7 @@ var _day_hint := ""
 # живут в блоке contracts v2 — круговые ключи верхнего уровня сейва больше не
 # пишутся. Визит-день = день закрытия дневного контракта.
 var _visit_days: Array = []
-var _streak_run := 0
 var _last_visit_day := ""
-var _hearth_claim := ""
 var _pts_total := 0
 var _mdays := 0
 var _mpts := 0
@@ -746,9 +744,7 @@ func save_block() -> Dictionary:
 		"last_output": _last_output,
 		# доска v2 (Task 6, спека §6): очаг/вехи/ранг + недельный слой. Массивы и
 		# словари копируются deep, чтобы живые мутации не текли в записанный блок.
-		"streak_run": _streak_run,
 		"visit_days": _visit_days.duplicate(true),
-		"hearth_claim": _hearth_claim,
 		"pts_total": _pts_total,
 		"mdays": _mdays,
 		"mpts": _mpts,
@@ -791,9 +787,7 @@ func load_block(raw: Variant) -> void:
 		_last_output = String(anchor)
 	# доска v2 (Task 6, спека §6): переехавшие поля. Версия 1 принимает их
 	# отсутствие — cleaners возвращают дефолты, дропа блока нет.
-	_streak_run = _clean_whole_int(d.get("streak_run", null))
 	_visit_days = _clean_day_keys(d.get("visit_days", null))
-	_hearth_claim = _clean_plain_string(d.get("hearth_claim", null))
 	_pts_total = _clean_whole_int(d.get("pts_total", null))
 	_mdays = _clean_milestone(d.get("mdays", null), Game.CIRCLE_DAY_MILES.size())
 	_mpts = _clean_milestone(d.get("mpts", null), Game.CIRCLE_PTS_MILES.size())
@@ -828,9 +822,7 @@ func _clear_state() -> void:
 	# load_block обязан начинать с чистого листа целиком, а presence-миграция
 	# перезаписывает их только при наличии старых ключей.
 	_visit_days = []
-	_streak_run = 0
 	_last_visit_day = ""
-	_hearth_claim = ""
 	_pts_total = 0
 	_mdays = 0
 	_mpts = 0
@@ -1554,9 +1546,6 @@ const TIER_POINTS := {"bronze": 1, "silver": 2, "gold": 3}
 func _visit_today() -> String:
 	return Time.get_date_string_from_system()
 
-func _visit_yesterday() -> String:
-	return Time.get_date_string_from_unix_time(Time.get_unix_time_from_system() - 86400.0)
-
 func track_visit() -> void:
 	var today := _visit_today()
 	if _last_visit_day == today:
@@ -1565,28 +1554,8 @@ func track_visit() -> void:
 		_visit_days.append(today)
 		while _visit_days.size() > 400:
 			_visit_days.pop_front()
-	_streak_run = _streak_run + 1 if _last_visit_day == _visit_yesterday() else 1
 	_last_visit_day = today
 	_check_day_miles()
-	g._saves._save_game()
-	refresh_board()
-	g._engine._refresh()
-
-func hearth_reward() -> int:
-	return int(round(Game.HEARTH_BASE * (1.0 + minf(float(_streak_run), 10.0) * 0.1)))
-
-func hearth_claimable() -> bool:
-	return _hearth_claim != _visit_today()
-
-func claim_hearth() -> void:
-	if not hearth_claimable():
-		return
-	_hearth_claim = _visit_today()
-	var gain := hearth_reward()
-	g._engine._grant_ether(gain, "hearth")
-	g._engine.status_text = "Очаг вспыхнул! +%d ⚡ (серия %d). Заглядывай завтра — угли не гаснут." % [gain, _streak_run]
-	Sfx.stage_up()
-	Analytics.track("hearth_claim", {"streak": _streak_run})
 	g._saves._save_game()
 	refresh_board()
 	g._engine._refresh()
@@ -1743,16 +1712,6 @@ func _mile_regen_bonus() -> float:
 func hearth_aura() -> bool:
 	return _mdays >= Game.CIRCLE_DAY_MILES.size()
 
-func flame() -> String:
-	# ✦ вместо эмодзи огня: шрифт проекта не содержит 🔥 (тофу на кадре)
-	if _streak_run >= 7:
-		return "✦✦✦"
-	if _streak_run >= 3:
-		return "✦✦"
-	if _streak_run >= 1:
-		return "✦"
-	return "·"
-
 func rank_title(lvl: int) -> String:
 	if lvl < 1:
 		return "Новичок"
@@ -1826,10 +1785,9 @@ func _boardfull_frozen() -> bool:
 
 # Слияние удалённых _inject_circle_demo (retention.gd:135) и _inject_week_demo
 # (retention.gd:334) в поля Contracts по именам после переезда, без страниц.
-# Очаг/вехи/ранг: 100 визит-дней, заканчивающихся сегодня (ранг-4 «Полено» —
-# порог 100 дней; в старом круговом демо было 3 дня и ранг-3), короткая серия
-# streak 3 (пламя ✦✦), полешко сегодня не брано, вечные очки 61 (одна веха
-# очков из трёх). Недельный слой — живые кеши: цикл «vc:demo» с тремя каплями
+# Очаг/вехи/ранг: 100 визит-дней, заканчивающихся сегодня (ранг-4 «Жар» —
+# порог 100 дней; в старом круговом демо было 3 дня и ранг-3), вечные очки 61
+# (одна веха очков из трёх). Недельный слой — живые кеши: цикл «vc:demo» с тремя каплями
 # статусов registered/pending_server/poured и открытый котёл ярмарки 14/22.
 # Дневные бумаги: goal_day — чистая цель (progress=0), orders — три выполненных
 # заказа гильдии, зеркало 3/3 → карточка готова. В конце обязательный
@@ -1841,9 +1799,7 @@ func _inject_board_demo() -> void:
 	for i in range(100):
 		days.append(day_key_from(_days_to_dt(base_d - (99 - i))))
 	_visit_days = days
-	_streak_run = 3
 	_last_visit_day = _visit_today()
-	_hearth_claim = ""
 	_pts_total = 61
 	_mdays = 3
 	_mpts = 1

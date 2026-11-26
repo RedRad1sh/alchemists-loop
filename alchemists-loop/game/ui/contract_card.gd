@@ -6,8 +6,8 @@ class_name ContractCard
 
 const ASSET_DIR := "res://assets/contracts/"
 const FADE_SHADER := "res://assets/contracts/paper_fade.gdshader"
-const DAILY_SIZE := Vector2(196, 196)
-const WEEKLY_SIZE := Vector2(196, 234)
+const DAILY_SIZE := Vector2(196, 204)
+const WEEKLY_SIZE := Vector2(196, 262)
 const TILT_MAX := 4.0
 const NAIL_SIZE := 32.0
 const SEAL_SIZE := 52.0
@@ -30,8 +30,8 @@ const STAMP_BAND := 50.0
 const PAD := 17.0
 const PAD_WEEKLY := 24.0
 ## Кегль заголовка и его потолок вниз при подборе (§D, `_fit_title`).
-const TITLE_FS := 16
-const TITLE_FS_MIN := 11
+const TITLE_FS := 18
+const TITLE_FS_MIN := 13
 const HOVER_SCALE := 1.03
 const HOVER_SECONDS := 0.12
 const SEAL_SCALE := 1.5
@@ -43,16 +43,16 @@ const DETAIL_GAP := 4.0
 # Насколько можно увести курсор между нажатием и отпусканием, чтобы клик
 # всё ещё считался тапом по бумаге, а не началом перетаскивания доски.
 const TAP_SLOP := 10.0
-const REWARD_FS := 11
-const REWARD_FS_MIN := 9
+const REWARD_FS := 13
+const REWARD_FS_MIN := 11
 const VEIN_ROWS := 3
-const POUR_SIZE := Vector2(76, 26)
+const POUR_SIZE := Vector2(76, 28)
 
 const INK := Color(0.16, 0.11, 0.07)
 const STAMP_INK := Color(0.60, 0.24, 0.20)
 const TIER_INK := {
 	"bronze": Color(0.45, 0.24, 0.10),
-	"silver": Color(0.27, 0.31, 0.37),
+	"silver": Color(0.34, 0.32, 0.28),
 	"gold": Color(0.44, 0.31, 0.05),
 }
 
@@ -83,10 +83,10 @@ static func tex(fname: String) -> Texture2D:
 ## читался как интерфейсная заглушка.
 const PAPER_FONT := "res://assets/fonts/PTSerif-Regular.ttf"
 const PAPER_FONT_BOLD := "res://assets/fonts/PTSerif-Bold.ttf"
-## Заголовки объявлений, вывеска и письмо награды — рисованная антиква Divagon,
-## как «Bounty»/«Wanted» на досках объявлений; цифры и мелкий текст остаются
-## на PT Serif, иначе на телефоне не прочитать.
-const TITLE_FONT := "res://assets/fonts/Divagon.otf"
+## Заголовки объявлений, вывеска и письмо награды — книжная антиква Cormorant SC
+## (капитель, OFL); цифры и мелкий текст остаются на PT Serif, иначе на телефоне
+## не прочитать.
+const TITLE_FONT := "res://assets/fonts/CormorantSC-SemiBold.ttf"
 
 static func paper_font(l: Control, bold: bool = false) -> void:
 	var f := load(PAPER_FONT_BOLD if bold else PAPER_FONT) as Font
@@ -138,7 +138,7 @@ func setup(c: Dictionary) -> void:
 	var pad := PAD_WEEKLY if weekly else PAD
 	var top := WEEKLY_TITLE_Y if weekly else DAILY_TITLE_Y
 	_title.position = Vector2(pad, top)
-	_title.size = Vector2(w - 2.0 * pad, 24.0)
+	_title.size = Vector2(w - 2.0 * pad, 28.0)
 	_title.add_theme_color_override("font_color",
 		TIER_INK.get(String(c.get("tier", "bronze")), INK))
 	_count.position = Vector2(pad, top + 26.0)
@@ -156,7 +156,7 @@ func setup(c: Dictionary) -> void:
 	_seal.position = Vector2(w - SEAL_SIZE + 4.0, h - SEAL_SIZE + 4.0)
 	_seal.size = Vector2(SEAL_SIZE, SEAL_SIZE)
 	_seal.texture = tex(SEALS[String(c.get("tier", "bronze"))])
-	_stamp.position = Vector2(14.0, h - STAMP_BAND + 2.0)
+	_stamp.position = Vector2(14.0, h - STAMP_BAND + 6.0)
 	_stamp.size = STAMP_SIZE
 	# Гвоздь — ребёнок карточки, не листа: он в доске и не поворачивается.
 	_nail.position = Vector2(w / 2.0 - NAIL_SIZE / 2.0, -NAIL_SIZE / 2.0)
@@ -305,7 +305,7 @@ func _build() -> void:
 	_detail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hang.add_child(_detail)
 
-	_reward = g._label("", 11)
+	_reward = g._label("", REWARD_FS)
 	_reward.name = "Reward"
 	_reward.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_reward.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -492,7 +492,9 @@ func _reward_text(c: Dictionary) -> String:
 	var decor := String(r["decor"])
 	if decor != "":
 		parts.append(String(ContractsBalance.DECOR_LABEL.get(decor, "")))
-	return " · ".join(parts)
+	# Буллет с неразрывным пробелом после себя: перенос не оставляет « · »
+	# висящим в конце строки.
+	return " ·\u00A0".join(parts)
 
 # Точная награда для наведения: процент силы и срок баффа печатаются из
 # reward_for — на бумаде их нет, единый множитель §3.1 меняет числа каждый день.
@@ -528,7 +530,7 @@ func _fill_detail(id: String, type: String) -> void:
 		return
 	var lines: Array = g._contracts.card_detail_lines(id)
 	for raw in lines:
-		var l := g._label(String(raw), 10)
+		var l := g._label(String(raw), 12)
 		l.name = "FairPot" if type == "fair" else "GoalDay"
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		paper_font(l)
@@ -542,8 +544,8 @@ func _fill_detail(id: String, type: String) -> void:
 				l.tooltip_text = "мир: %s" % hint
 		_detail.add_child(l)
 
-# Жила: мини-капли VeinDrop текущего цикла; у registered — «Влить». Три ряда
-# влезают в weekly-полосу (184×244), остальные сворачиваются в «…ещё N».
+# Жила: мини-капли VeinDrop текущего цикла; у registered — «Влить». Ряды, не
+# влезшие в полосу над наградой, сворачиваются в «…ещё N».
 func _fill_vein(max_rows: int = VEIN_ROWS) -> void:
 	for ch in _detail.get_children():
 		_detail.remove_child(ch)
@@ -563,7 +565,7 @@ func _fill_vein(max_rows: int = VEIN_ROWS) -> void:
 		hbox.add_child(drop)
 		var word := "ждёт мира" if st == "pending_server" else ("влита ✓" \
 			if st == "poured" or st == "auto_applied" else "«%s»" % String(row_data["tag"]))
-		var fl := g._label(word, 9)
+		var fl := g._label(word, 12)
 		fl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		fl.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -579,15 +581,15 @@ func _fill_vein(max_rows: int = VEIN_ROWS) -> void:
 			# и гвоздики девятипалой нарезки поедут в центр.
 			pb.custom_minimum_size = POUR_SIZE
 			pb.focus_mode = Control.FOCUS_NONE
-			pb.add_theme_font_size_override("font_size", 10)
+			pb.add_theme_font_size_override("font_size", 12)
 			# 6 px, а не 4: §D-поле для подписи кнопки. При высоте 28 строка
-			# шрифта 10 оставляет 16 px — «Влить» центрируется, а не режется.
+			# шрифта 12 оставляет 12 px — «Влить» центрируется, а не режется.
 			ContractBoard.style_plate(pb, 6.0)
 			pb.pressed.connect(_on_pour_pressed.bind(String(row_data["find_id"])))
 			pb.pressed.connect(func() -> void: Juice.pop(drop, row_data["color"] as Color))
 			hbox.add_child(pb)
 	if rows.size() > shown:
-		var more := g._label("…ещё %d" % (rows.size() - shown), 9)
+		var more := g._label("…ещё %d" % (rows.size() - shown), 11)
 		more.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		paper_font(more)
 		more.add_theme_color_override("font_color", INK)

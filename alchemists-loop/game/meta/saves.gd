@@ -237,8 +237,6 @@ func _migrate_retention_into_contracts(data: Dictionary) -> void:
 		return
 	var c := g._contracts
 	c._visit_days = Contracts._clean_day_keys(data.get("circle_days", null))
-	c._streak_run = Contracts._clean_whole_int(data.get("circle_run", null))
-	c._hearth_claim = Contracts._clean_plain_string(data.get("hearth_claim", null))
 	c._pts_total = Contracts._clean_whole_int(data.get("circle_pts_total", null))
 	c._mdays = Contracts._clean_milestone(data.get("circle_mdays", null), Game.CIRCLE_DAY_MILES.size())
 	c._mpts = Contracts._clean_milestone(data.get("circle_mpts", null), Game.CIRCLE_PTS_MILES.size())

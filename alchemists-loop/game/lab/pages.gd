@@ -1472,7 +1472,7 @@ const MORE_HELP := [
 ]
 const MORE_LICENSES := [
 	"Manrope, PT Serif — SIL Open Font License 1.1.",
-	"Divagon, Manasco — шрифты названий и лора.",
+	"Cormorant SC, Manasco — шрифты названий и лора.",
 	"Alchemist Runic — нарисован для игры, все права у проекта.",
 	"Иконки game-icons.net (Lorc, Delapouite, Faithtoken) — CC BY 3.0.",
 	"Kenney UI Pack — CC0.",

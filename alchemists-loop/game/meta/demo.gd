@@ -696,7 +696,7 @@ func _tick_demo() -> bool:
 	return false
 
 # Task 8: кроп acceptance-кадра по объединению global-прямоугольников нод из
-# --shot-node ("Card4", "ShelfHearth,RankStrip"). Координаты Control — в
+# --shot-node ("Card4", "RankStrip"). Координаты Control — в
 # размерах вьюпорта, картинка рендера — в пикселях окна: при hidpi-масштабе
 # множители fx/fy пересчитывают прямоугольник. Пустой Rect2 — нода не найдена.
 func _shot_region(img: Image) -> Rect2i:

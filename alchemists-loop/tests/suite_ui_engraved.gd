@@ -57,6 +57,8 @@ static func run(g: Game) -> void:
 			btn.find_children("*", "Label", true, false).all(func(n): return n.name == "Badge"))
 	var boot_logo := load("res://assets/ui/icons/frame_crest.svg") as Texture2D
 	Selftest.check("loading emblem raster covers 280x80 at high density", boot_logo.get_width() >= 560 and boot_logo.get_height() >= 160)
+	var boot_source := FileAccess.get_file_as_string("res://game/ui/boot.gd")
+	Selftest.check("loading title uses Cormorant SC", boot_source.contains("res://assets/fonts/CormorantSC-SemiBold.ttf"))
 	var top_beam := g.find_child("TopBeam", true, false) as TextureRect
 	Selftest.check("reference top beam uses supplied artwork", top_beam != null and top_beam.texture.resource_path.ends_with("01_top_beam_panel.png"))
 	var social_panel := g._social_ui._screen.find_child("SocialPanel", true, false) as PanelContainer
@@ -134,7 +136,12 @@ static func run(g: Game) -> void:
 	Selftest.check("board heading remains clear while scrolling", board._sign.global_position == heading_position)
 	board._scroll_to(0)
 	Selftest.check("rank title has readable width", board._rank_title.size.x >= 80.0)
-	Selftest.check("rank title clears milestones", not board._rank_title.get_global_rect().intersects(board._mile_days.get_global_rect()))
+	Selftest.check("rank plate keeps milestones in tooltip, not a text row", board._rank_strip.find_child("MileLine", true, false) == null and board._strip_bg.tooltip_text.contains("Вехи"))
+	Selftest.check("rank plate keeps breathing room inside its frame",
+		board._rank_symbol.position.y >= 12.0 \
+		and board._rank_symbol.position.y + board._rank_symbol.size.y <= ContractBoard.RANK_H - 12.0 \
+		and board._rank_caption.position.y >= 12.0 \
+		and board._rank_title.position.y + board._rank_title.size.y <= ContractBoard.RANK_H - 12.0)
 	for tier in ["bronze", "silver", "gold"]:
 		var seal_card := board._cards[0] as ContractCard
 		var data := seal_card._c.duplicate(true)
