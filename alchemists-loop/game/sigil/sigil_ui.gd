@@ -109,6 +109,7 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 	# busy/_shield, поэтому запускать их одновременно нельзя.
 	_sigil_build_page(start_tab)
 	_open_sigil_book_and_show_tab.call_deferred(start_tab)
+	main._spirit._refresh_companion_visible()
 
 
 ## Открыть книгу Аркана (обложка откидывается) и показать стартовую страницу.
@@ -1789,6 +1790,7 @@ func _close_sigil_collection() -> void:
 	_sigil_book = null
 	_sigil_pages = {}
 	Sfx.click()
+	main._spirit._refresh_companion_visible()
 
 func _sigil_thumb(item: Dictionary) -> Control:
 	var id := str(item["id"])

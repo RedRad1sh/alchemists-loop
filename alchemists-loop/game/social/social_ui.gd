@@ -128,6 +128,7 @@ func open(tab: int = 0) -> void:
 		g._social.refresh()
 	if g._bottom_nav != null:
 		g._bottom_nav._repaint()
+	g._spirit._refresh_companion_visible()
 
 func close() -> void:
 	_confirm_close()
@@ -141,6 +142,7 @@ func close() -> void:
 	if g._bottom_nav != null:
 		g._bottom_nav._repaint()
 	Sfx.click()
+	g._spirit._refresh_companion_visible()
 
 func is_open() -> bool:
 	return _screen != null and _screen.visible

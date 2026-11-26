@@ -310,6 +310,7 @@ func open(key: String, title: String, content: Control,
 	if g._rooms != null:
 		g._rooms.set_scene_visible(false)
 	Sfx.click()
+	g._spirit._refresh_companion_visible()
 
 
 func close() -> void:
@@ -336,3 +337,4 @@ func close() -> void:
 		g._rooms.set_scene_visible(g._tabs_ref.current_tab == Game.TAB_EXPERIMENT)
 	if was != "" and cb.is_valid():
 		cb.call()
+	g._spirit._refresh_companion_visible()
