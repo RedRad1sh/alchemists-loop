@@ -21,6 +21,7 @@ static func run(g: Game) -> void:
 	g.add_child(view)
 	view.setup(g, w)
 	Selftest.check("workshop UI real add button exists", view.find_child("Add_line_1", true, false) is Button)
+	await _visual_controls(g, w, view)
 	await _guided_controls(g, w, view)
 	await _screen(g, w, view)
 	_guide_states(g, w, view)
@@ -49,26 +50,73 @@ static func _press(view: Node, node_name: String) -> bool:
 	return true
 
 static func _choose(view: Node, line: String, target: String, amount: int, stock := false) -> bool:
-	var pick := _node(view, "Target_" + line) as OptionButton
-	var mode := _node(view, "Mode_" + line) as OptionButton
-	var count := _node(view, "Amount_" + line) as SpinBox
-	if pick == null or mode == null or count == null:
+	var tile := _node(view, "Recipe_%s_%s" % [line, target]) as Button
+	var mode := _node(view, ("ModeStock_" if stock else "ModeBatch_") + line) as Button
+	var minus := _node(view, "AmountMinus_" + line) as Button
+	var plus := _node(view, "AmountPlus_" + line) as Button
+	if tile == null or mode == null or minus == null or plus == null:
 		return false
-	for index in pick.item_count:
-		if pick.get_item_metadata(index) == target:
-			pick.select(index)
-			pick.item_selected.emit(index)
-			mode.select(1 if stock else 0)
-			mode.item_selected.emit(mode.selected)
-			count.value = amount
-			return true
-	return false
+	tile.pressed.emit()
+	mode.pressed.emit()
+	for _i in Game.CRAFT_INVENTORY_STACK_CAP:
+		if minus.disabled:
+			break
+		minus.pressed.emit()
+	for _i in amount - 1:
+		plus.pressed.emit()
+	return _text(view, "Amount_" + line) == str(amount)
+
+static func _visual_controls(g: Game, w: Workshop, view: Node) -> void:
+	# Экран мастерской: живая сцена станций, вкладки линий, плитки рецептов
+	# и шаговый счётчик вместо выпадающих списков.
+	var scene := _node(view, "WorkshopScene") as Control
+	Selftest.check("workshop scene draws one station per rank line", scene != null
+		and (scene.get("stations") as Array).size() == Workshop.Rules.RANKS.size())
+	if scene == null:
+		return
+	var stations: Array = scene.get("stations")
+	Selftest.check("workshop scene marks unbuilt lines locked and built lines open",
+		String(stations[0]["status"]) != "locked" and String(stations[1]["status"]) != "locked"
+		and String(stations[2]["status"]) == "locked" and String(stations[3]["status"]) == "locked")
+	Selftest.check("workshop has no dropdown or spin controls",
+		view.find_children("*", "OptionButton", true, false).is_empty()
+		and view.find_children("*", "SpinBox", true, false).is_empty())
+	Selftest.check("workshop recipe tiles show item art and stock", _node(view, "Recipes_line_1") != null
+		and _node(view, "Recipes_line_1").get_child_count() > 0
+		and _node(view, "Recipes_line_1").get_child(0).find_children("*", "ElementOrb", true, false).size() == 1)
+	Selftest.check("workshop shows only the selected line page", (_node(view, "LinePage_1") as Control).visible
+		and not (_node(view, "LinePage_2") as Control).visible)
+	# Вне дерева окна сцена не разложена: задаём размер, как у экрана 540 px.
+	scene.size = Vector2(500, 290)
+	var tap := InputEventMouseButton.new()
+	tap.button_index = MOUSE_BUTTON_LEFT
+	tap.pressed = true
+	tap.position = scene.call("_center", 1)
+	scene.call("_gui_input", tap)
+	Selftest.check("workshop station tap selects its line", (_node(view, "LinePage_2") as Control).visible
+		and not (_node(view, "LinePage_1") as Control).visible and int(scene.get("selected")) == 1)
+	tap.position = scene.call("_center", 3)
+	scene.call("_gui_input", tap)
+	Selftest.check("workshop locked station tap keeps current line", (_node(view, "LinePage_2") as Control).visible)
+	_press(view, "LineTab_1")
+	Selftest.check("workshop line tab returns to first line", (_node(view, "LinePage_1") as Control).visible)
+	_press(view, "AmountMax_line_1")
+	Selftest.check("workshop max fills batch up to shared stack cap",
+		int(_text(view, "Amount_line_1")) >= 1 and int(_text(view, "Amount_line_1")) <= Game.CRAFT_INVENTORY_STACK_CAP
+		and (_node(view, "AmountPlus_line_1") as Button) != null)
+	_press(view, "ModeStock_line_1")
+	_press(view, "AmountMax_line_1")
+	Selftest.check("workshop max for stock is the stack cap", _text(view, "Amount_line_1") == str(Game.CRAFT_INVENTORY_STACK_CAP))
+	Selftest.check("workshop plus stops at stack cap", (_node(view, "AmountPlus_line_1") as Button).disabled)
+	_press(view, "ModeBatch_line_1")
+	Selftest.check("workshop selector never enqueues", w.lines[0]["queue"].is_empty())
+	_choose(view, "line_1", "steam", 1)
 
 static func _guided_controls(g: Game, w: Workshop, view: Node) -> void:
 	var upgrades := _node(view, "WorkshopUpgrades") as Control
 	var guide := _node(view, "GuideSteps") as Control
 	Selftest.check("workshop upgrades do not precede production", upgrades != null
-		and not upgrades.visible and _node(view, "LineCard_1").get_parent().get_index() < upgrades.get_index())
+		and not upgrades.visible and _node(view, "ProductionLines").get_index() < _node(view, "UpgradesPanel").get_index())
 	Selftest.check("workshop unavailable lines do not fill the working screen",
 		not _node(view, "LineCard_3").is_visible_in_tree() and not _node(view, "LineCard_4").is_visible_in_tree())
 	Selftest.check("workshop instruction stays optional", guide != null and not guide.visible)
@@ -79,11 +127,13 @@ static func _guided_controls(g: Game, w: Workshop, view: Node) -> void:
 	var ether := g._engine._available_ether()
 	_press(view, "GuideToggle")
 	_press(view, "GuideRecipe")
+	var focused := view.get_viewport().gui_get_focus_owner()
 	Selftest.check("workshop recipe step focuses actual recipe picker", guide.visible
-		and (_node(view, "Target_line_1") as Control).has_focus())
+		and focused != null and String(focused.name).begins_with("Recipe_line_1_"))
 	_press(view, "GuideAmount")
+	focused = view.get_viewport().gui_get_focus_owner()
 	Selftest.check("workshop quantity step focuses actual production mode",
-		(_node(view, "Mode_line_1") as Control).has_focus())
+		focused != null and String(focused.name).begins_with("Mode"))
 	_press(view, "GuideQueue")
 	Selftest.check("workshop queue step focuses actual add action",
 		(_node(view, "Add_line_1") as Control).has_focus())
@@ -151,11 +201,11 @@ static func _screen(g: Game, w: Workshop, view: Node) -> void:
 	_press(view, "Details_line_1")
 	Selftest.check("workshop wallet includes active ether and reserve", _text(view, "EtherWallet").contains(str(g._engine._available_ether()))
 		and (_node(view, "EtherWallet") as Control).tooltip_text.contains("резерва"))
-	var targets := _node(view, "Target_line_1") as OptionButton
-	var only_known := targets != null
+	var targets := _node(view, "Recipes_line_1") as GridContainer
+	var only_known := targets != null and targets.get_child_count() > 0
 	if targets != null:
-		for i in targets.item_count:
-			only_known = only_known and w.known_target_recipe(String(targets.get_item_metadata(i)))
+		for tile in targets.get_children():
+			only_known = only_known and w.known_target_recipe(String(tile.get_meta("item", "")))
 	Selftest.check("workshop target picker contains known nonbase recipes only", only_known)
 	var touch_safe := true
 	for button in view.find_children("*", "Button", true, false):
