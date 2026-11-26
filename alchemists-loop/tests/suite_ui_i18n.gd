@@ -174,6 +174,22 @@ static func run(g: Game) -> void:
 	Selftest.check("i18n welcome bubble keeps the player nickname untranslated (raw group)",
 		welcome.contains("Welcome back") and welcome.contains("Огонь") and not welcome.contains("Fire"))
 
+	# Неудачный lookup не должен навсегда блокировать поздно появившуюся запись.
+	var en_translation: Object = locale_node.get("_en_tr")
+	var cache_probe := "Редкий кэш-пробник"
+	var exact_probe := "Поздний перевод"
+	var en_cache: Dictionary = en_translation.get("_cache")
+	var en_exact: Dictionary = en_translation.get("_exact")
+	en_cache.erase(cache_probe)
+	en_exact.erase(cache_probe)
+	var first_probe := String(en_translation.call("_get_message", StringName(cache_probe)))
+	en_exact[cache_probe] = exact_probe
+	var second_probe := String(en_translation.call("_get_message", StringName(cache_probe)))
+	Selftest.check("i18n a cached translation miss recovers after the entry appears",
+		first_probe.is_empty() and second_probe == exact_probe)
+	en_cache.erase(cache_probe)
+	en_exact.erase(cache_probe)
+
 	# Карточно-независимый RU-заголовок (шаблон без {target}/{source}) не должен
 	# переводиться именем карты: иначе две карты с одинаковым RU-заголовком
 	# делили бы глобальную запись и одна носила имя другой.
@@ -280,16 +296,17 @@ static func run(g: Game) -> void:
 	g._online.set("_target_view_state", saved_target_view_for_locale)
 	g._online.call("_render_personal_target_state")
 
-	# Сохранение и загрузка игры восстанавливают выбранный язык ("en" -> save -> reset to "ru" -> load -> "en").
+	# Сохранение и загрузка не заменяют текущий выбор из UserData языком сейва.
 	g._saves._save_game()
 	locale_node.call("set_lang", "ru")
 	Selftest.check("i18n set_lang(ru) restores Russian immediately",
 		String(locale_node.get("lang")) == "ru"
 		and g._engine._brew_btn.atr(g._engine._brew_btn.text) == "ВАРИТЬ")
 	g._saves._load_game()
-	Selftest.check("i18n _load_game restores saved language preference",
-		String(locale_node.get("lang")) == "en"
-		and g._engine._brew_btn.atr(g._engine._brew_btn.text) == "BREW")
+	Selftest.check("i18n _load_game keeps current UserData language preference",
+		String(locale_node.get("lang")) == "ru"
+		and UserData.get_locale() == "ru"
+		and g._engine._brew_btn.atr(g._engine._brew_btn.text) == "ВАРИТЬ")
 
 	# CLI-оверрайд --lang временный (persist=false): сейв хранит выбор игрока из
 	# UserData, а не активную локаль, иначе --lang=en навсегда менял бы язык.
@@ -299,9 +316,19 @@ static func run(g: Game) -> void:
 	locale_node.call("apply_locale", "en", false)
 	locale_node.set("_cli_lang", "en")
 	g._saves._save_game()
+	var stale_file := FileAccess.open(g.SAVE_PATH, FileAccess.READ)
+	var stale_data: Variant = JSON.parse_string(stale_file.get_as_text()) if stale_file != null else null
+	if stale_file != null:
+		stale_file.close()
+	if stale_data is Dictionary:
+		stale_data["locale"] = "en"
+		var stale_write := FileAccess.open(g.SAVE_PATH, FileAccess.WRITE)
+		if stale_write != null:
+			stale_write.store_string(JSON.stringify(stale_data, "\t", true, true))
+			stale_write.close()
 	locale_node.set("_cli_lang", "")
 	g._saves._load_game()
-	Selftest.check("i18n save does not leak a temporary CLI locale into the permanent choice",
+	Selftest.check("i18n old save locale cannot overwrite UserData preference",
 		String(locale_node.get("lang")) == "ru" and UserData.get_locale() == "ru")
 	locale_node.set("_cli_lang", cli_saved)
 	UserData.set_locale(ud_saved)
@@ -309,6 +336,9 @@ static func run(g: Game) -> void:
 
 
 	# В английском режиме доска контрактов держит все подписи, бафф-записки и штампы внутри бумаги без обрезки.
+	# Язык выставляется явно: загрузка сейва больше не переключает его на «en».
+	var board_lang := String(locale_node.get("lang"))
+	locale_node.call("apply_locale", "en", false)
 	var saved_buffs_i18n := g._contracts._active_buffs.duplicate(true)
 	g._contracts._inject_vein_ready()
 	g._contracts.grant_buff("brew_speed", 7200, 0.25, -1)
@@ -350,6 +380,7 @@ static func run(g: Game) -> void:
 		cb_en._on_close()
 		await g.get_tree().process_frame
 	g._contracts._active_buffs = saved_buffs_i18n
+	locale_node.call("apply_locale", board_lang, false)
 	Selftest.check("i18n English ContractBoard keeps all text, notes and stamps inside paper bounds",
 		cb_bounds_bad.is_empty())
 	if not cb_bounds_bad.is_empty():
