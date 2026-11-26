@@ -30,11 +30,11 @@
       "about": "Успех/награда: короткий положительный отклик за успешное действие, улучшение или награду"
     },
     "morph": {
-      "file": "",
+      "file": "res://assets/audio/cc0/morph.wav",
       "volume_db": -6.0,
       "pitch": 1.0,
       "delay": 0.0,
-      "about": "Морфинг: преобразование формы — долгий свип"
+      "about": "Морфинг: преобразование формы — реверсивный магический свип. CC0: JW_Audio, freesound.org/s/831805 (кусок 0.9–2.9 с, нормализован)"
     },
     "draft_open": {
       "file": "res://assets/audio/cc0/kenney_rpg_book_flip_3.ogg",
@@ -93,14 +93,12 @@
       "about": "Ритуал: нажатие руны на круге трансмутации — тихий отклик"
     },
     "ritual_spin": {
-      "file": "res://assets/audio/ritual/mixkit-strong-wild-wind-in-a-storm-2407.wav",
+      "file": "res://assets/audio/cc0/ritual_spin.wav",
       "volume_db": -10.0,
       "pitch": 1.0,
       "delay": 0.0,
-      "start_sec": 5.0,
-      "len_sec": 0.8,
       "loop": true,
-      "about": "TODO(звук): верчение ОТКЛЮЧЕНО в ritual.gd (loop-кусок подобран плохо). Доделать: подобрать start_sec/len_sec под ритм, фейд петли"
+      "about": "Верчение круга: бесшовная петля магического роя. CC0: IENBA «Magic Fireflies», freesound.org/s/875330 (кроссфейд стыка 30 мс, нормализован)"
     },
     "ritual_reveal": {
       "file": "res://assets/audio/cc0/oga_magic_words.wav",

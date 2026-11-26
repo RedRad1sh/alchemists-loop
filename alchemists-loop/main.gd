@@ -1639,8 +1639,6 @@ func _init_new_game() -> bool:
 	_engine._source_taps = 0
 	for item_id in BASE_IDS:
 		_engine.inventory[item_id] = 5
-	_engine.learn_recipe("fire", "water")
-	_engine.learn_recipe("earth", "fire")
 	_engine.ether = START_ETHER
 	_engine.ether_overflow = 0
 	_engine.mastery_rank = 0

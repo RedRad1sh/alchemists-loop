@@ -798,8 +798,6 @@ func _do_prestige() -> void:
 		g._engine.inventory[b] = 3
 	g._engine.known_recipes.clear()
 	g._engine.known_recipe_defs.clear()
-	g._engine.learn_recipe("fire", "water")
-	g._engine.learn_recipe("earth", "fire")
 	g._engine.upgrades.clear()
 	g._engine._craft_job.clear()
 	g._engine._blueprints.clear()

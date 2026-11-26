@@ -59,7 +59,10 @@ static func run(g: Game) -> void:
 
 	g._init_new_game()
 	Selftest.check("new game bases", int(g._engine.inventory.get("fire", 0)) == 5 and g._engine.inventory.size() == 4)
-	Selftest.check("new game known", g._engine.known_recipes.size() == 2)
+	Selftest.check("new game leaves recipes undiscovered", g._engine.known_recipes.is_empty()
+		and g._engine.known_recipe_defs.is_empty())
+	g._engine.learn_recipe("fire", "water")
+	g._engine.learn_recipe("earth", "fire")
 
 	# орбы-источники и ячейки
 	Selftest.check("source orbs 4", g._engine._source_orbs.size() == 4)
@@ -188,6 +191,7 @@ static func run(g: Game) -> void:
 	g._engine.inventory["steam"] = 0  # убрать остатки прошлых варок
 	var p_steam := g._guild._plan_craft("steam")
 	Selftest.check("plan steam ok", bool(p_steam.get("ok", false)) and int(p_steam.get("total", 0)) == 1)
+	g._engine.learn_recipe("earth", "fire")
 	var p_stone := g._guild._plan_craft("stone")
 	Selftest.check("plan stone ok", bool(p_stone.get("ok", false)))
 	var p_brick := g._guild._plan_craft("brick")
@@ -377,6 +381,7 @@ static func run(g: Game) -> void:
 	g._init_new_game()
 	g.BREW_SECONDS = 0.05
 	g._engine.ether = 1000
+	g._engine.learn_recipe("fire", "water")
 	var u9_plan := g._guild._plan_craft("steam")
 	# (a) верстак + ручная варка на последний юнит: стек не в минус, выход один
 	g._engine.inventory["fire"] = 1
@@ -404,12 +409,7 @@ static func run(g: Game) -> void:
 	g._engine.selected = ["fire", "water"]
 	g._engine._brew()
 	Selftest.check("brew sets busy before await", g._engine.brewing)
-	# U9-фикс I1: fire+water была в known_recipes с бутстрапа новой игры, и
-	# отказ проходил по гейту «уже известна» даже без мьютекса (вакусно).
-	# fire+air — не известна (после _init_new_game открыты только fire+water и
-	# earth+fire), не отклонена, в запасе (fire=4, air=5), эфир/кулдаун/лимит
-	# проходима — без гейта brewing||_auto||_bench_busy в _experiment_status
-	# вернулась бы ok:true, а с ним — ok:false именно с причиной мьютекса.
+	# Неизвестная fire+air исключает отказ по гейту уже изученного рецепта.
 	var u9_exp := g._engine._experiment_status("fire", "air")
 	Selftest.check("experiment refused during brew", not bool(u9_exp.get("ok", false))
 		and String(u9_exp.get("reason", "")).contains("Котёл занят варкой или производством")
@@ -455,6 +455,8 @@ static func run(g: Game) -> void:
 	Selftest.check("new game refuses during brew", not g._init_new_game()
 		and g._engine.brew_epoch == u9_epoch and g._engine.inventory.size() == 39)
 	g._hub._do_prestige()
+	Selftest.check("prestige leaves recipes undiscovered", g._engine.known_recipes.is_empty()
+		and g._engine.known_recipe_defs.is_empty())
 	Selftest.check("prestige bumps epoch and clears experiment bookkeeping", g._engine.brew_epoch > u9_epoch
 		and g._engine._experiment_pending_pair.is_empty() and g._engine._source_taps == 0)
 	await g.get_tree().create_timer(1.0).timeout
@@ -472,6 +474,7 @@ static func run(g: Game) -> void:
 	Selftest.check("epoch bump aborts manual brew silently", int(g._engine.inventory.get("fire", 0)) == 4
 		and g._engine.attempts == 0 and not g._engine.brewing)
 	g._engine.selected = []
+	g._engine.learn_recipe("fire", "water")
 	g._engine._run_bench_plan("steam", u9_plan)
 	g._engine.brew_epoch += 1
 	await g.get_tree().create_timer(1.0).timeout

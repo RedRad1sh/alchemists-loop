@@ -12,9 +12,11 @@ static func run(g: Game) -> void:
 	var sg_before := g._engine.sage_gold
 	g._hub._do_prestige()
 	Selftest.check("prestige resets", g._engine.sage_gold > sg_before and g._engine.inventory.size() == 4
-		and g._engine.ether == Game.START_ETHER and g._engine.upgrades.is_empty() and g._engine.known_recipes.size() == 2)
+		and g._engine.ether == Game.START_ETHER and g._engine.upgrades.is_empty()
+		and g._engine.known_recipes.is_empty() and g._engine.known_recipe_defs.is_empty())
 
 	# повтор последней пары
+	g._engine.learn_recipe("fire", "water")
 	g._engine.inventory["fire"] = 3
 	g._engine.inventory["water"] = 3
 	g._engine._last_pair = ["fire", "water"]
@@ -44,6 +46,25 @@ static func run(g: Game) -> void:
 	Sfx.set_sfx_volume(2.5)
 	Selftest.check("sfx volume clamp", Sfx.sfx_volume == 1.0)
 	Sfx.set_sfx_volume(_v0)
+
+	# CC0-звуки: morph/mystic/stage_up играют файлы, не процедурный fallback.
+	var _cfg: Dictionary = Sfx._sound_cfg
+	for _ev in ["morph", "mystic", "stage_up"]:
+		var _file := str((_cfg.get(_ev, {}) as Dictionary).get("file", ""))
+		Selftest.check("sfx %s plays a real file" % _ev,
+			_file != "" and FileAccess.file_exists(_file) and load(_file) is AudioStream)
+	var _spin_cfg: Dictionary = _cfg.get("ritual_spin", {})
+	var _spin_file := str(_spin_cfg.get("file", ""))
+	Selftest.check("ritual_spin loops a real file", _spin_file != ""
+		and FileAccess.file_exists(_spin_file) and bool(_spin_cfg.get("loop", false)))
+	var _ms := Sfx._music_player.stream
+	Selftest.check("music stream loops",
+		(_ms is AudioStreamWAV and (_ms as AudioStreamWAV).loop_mode == AudioStreamWAV.LOOP_FORWARD)
+		or (_ms is AudioStreamOggVorbis and (_ms as AudioStreamOggVorbis).loop))
+	Sfx.ritual_spin()
+	Selftest.check("ritual_spin starts loop player", Sfx._spin_player.playing)
+	Sfx.ritual_spin_stop()
+	Selftest.check("ritual_spin stops loop player", not Sfx._spin_player.playing)
 
 	# что варить сейчас
 	g._engine.known_recipes.clear()
