@@ -399,7 +399,7 @@ func _build_settings_popup() -> void:
 	col.custom_minimum_size = Vector2(330, 0)
 	card.add_child(col)
 	var t := g._label("НАСТРОЙКИ", 24)
-	t.add_theme_font_override("font", load("res://assets/fonts/Divagon.otf"))
+	t.add_theme_font_override("font", load("res://assets/fonts/CormorantSC-SemiBold.ttf"))
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	t.add_theme_color_override("font_color", UIStyle.BRASS_HI)
 	col.add_child(t)
@@ -517,7 +517,7 @@ func _build_credits_popup() -> void:
 	col.add_child(ttl)
 	# Заглушка: централизованное место про шрифты/тему, чтобы не забыть.
 	# Дальше — дизайн (портрет авторов, лицензии, ссылки).
-	var fonts_line := "Шрифты: Manrope (UI), Divagon (названия), Manasco (лор), Alchemist Runic (заголовок)"
+	var fonts_line := "Шрифты: Manrope (UI), Cormorant SC (названия), Manasco (лор), Alchemist Runic (заголовок)"
 	var fl := g._label(fonts_line, 12)
 	fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -527,7 +527,7 @@ func _build_credits_popup() -> void:
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ver.add_theme_color_override("font_color", UIStyle.TEXT_MUTED)
 	col.add_child(ver)
-	# Превью шрифтов: Divagon на названии, Manasco на лоре, Runic на заголовке.
+	# Превью шрифтов: Cormorant SC на названии, Manasco на лоре, Runic на заголовке.
 	var prev_runic := g._label("ПЕТЛЯ АЛХИМИКА", 24)
 	prev_runic.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if g._font_runic != null:

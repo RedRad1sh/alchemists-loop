@@ -2,7 +2,7 @@ extends RefCounted
 class_name SuiteRiddlesRetention
 # письма/атлас/панч-лист + бывшие круг/неделя (оп B1). Доска v2 Task 5:
 # вкладки «Круг»/«Неделя» удалены — проверки их страниц сняты, поведение
-# очага/жилы/ярмарки проверяется на поверхности Contracts.
+# вех/жилы/ярмарки проверяется на поверхности Contracts.
 
 static func run(g: Game) -> void:
 	# письма Светика: паттерн, вехи, очередь, solve-хендлер, страница
@@ -187,30 +187,24 @@ static func run(g: Game) -> void:
 		"len_a": 4, "len_b": 4, "solved": false})
 	Selftest.check("letter card", lc is PanelContainer)
 	lc.queue_free()
-	# --- v29: дневной круг → доска v2 Task 4: очаг/вехи/ранг переехали в Contracts.
-	# Старые «шаги диска» и награда 75⚡ за закрытый круг удалены (спека §1/§3);
-	# ниже — замены 1:1: очки = тир закрытого контракта, цель дня = контракт
-	# goal_day, «круг закрыт» = зеркало заказов гильдии на строке orders.
+	# --- v29: дневной круг → доска v2 Task 4: вехи/ранг переехали в Contracts.
+	# Старые «шаги диска», награда 75⚡ за закрытый круг и механика полешка
+	# удалены (спека §1/§3); ниже — замены 1:1: очки = тир закрытого контракта,
+	# цель дня = контракт goal_day, «круг закрыт» = зеркало заказов гильдии.
 	var cb4_snap := SuiteContractBoard._cb_snapshot(g._contracts)
 	var cb4_ether := g._engine.ether
 	g._contracts._visit_days = ["2026-01-01", "2026-01-02"]
-	g._contracts._last_visit_day = g._contracts._visit_yesterday()
-	g._contracts._streak_run = 4
+	g._contracts._last_visit_day = "2026-01-02"
 	g._contracts.track_visit()
-	Selftest.check("circle visit run+", g._contracts._streak_run == 5 and g._contracts._last_visit_day == g._contracts._visit_today() and g._contracts._visit_days.has(g._contracts._visit_today()))
+	Selftest.check("circle visit opens today", g._contracts._last_visit_day == g._contracts._visit_today() and g._contracts._visit_days.has(g._contracts._visit_today()))
+	var cb4_days := g._contracts._visit_days.size()
 	g._contracts.track_visit()
-	Selftest.check("circle visit idem", g._contracts._streak_run == 5)
+	Selftest.check("circle visit idem", g._contracts._visit_days.size() == cb4_days)
 	g._contracts._last_visit_day = "2020-01-01"
 	g._contracts.track_visit()
-	Selftest.check("circle visit gap", g._contracts._streak_run == 1)
-	g._contracts._streak_run = 3
-	g._contracts._hearth_claim = ""
-	Selftest.check("circle hearth math", g._contracts.hearth_reward() == 13 and g._contracts.hearth_claimable())
-	g._engine.ether = 0
-	g._contracts.claim_hearth()
-	Selftest.check("circle hearth claim", g._engine.ether == 13 and not g._contracts.hearth_claimable())
-	g._contracts.claim_hearth()
-	Selftest.check("circle hearth once", g._engine.ether == 13)
+	Selftest.check("circle visit gap does not duplicate the day",
+		g._contracts._visit_days.size() == cb4_days
+		and g._contracts._last_visit_day == g._contracts._visit_today())
 	# Очки вех = тир закрытого контракта (было: шаги диска по числу синтезов).
 	g._contracts._pts_total = 0
 	g._contracts._mpts = 0
@@ -275,8 +269,7 @@ static func run(g: Game) -> void:
 		and g._contracts.is_done(cb4_gd_id))
 	Selftest.check("goal contract reward once only",
 		String(g._contracts.claim(cb4_gd_id)["reason"]) == "claimed")
-	# доска v2 Task 5: чип-индикаторы вкладки «Круг» удалены вместе с вкладкой —
-	# claimable-очаг виден на доске (hearth_claimable уже проверен выше).
+	# доска v2 Task 5: чип-индикаторы вкладки «Круг» удалены вместе с вкладкой.
 	g._engine.ether = cb4_ether
 	SuiteContractBoard._cb_restore(g._contracts, cb4_snap)
 	# ============ U35 (A3): цель дня = закреплённый контракт goal_day ============
@@ -458,12 +451,12 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 			"_source_taps", "_collect_last_gain", "_gift_clock", "spring_on", "spring_source",
 			"_experiment_pending_pair", "_experiment_day", "_experiment_count", "_experiment_last_at",
 			"_rejected_pairs", "_first_open_calls"])],
-		# Доска v2 (Task 5): Retention удалён — снимок очага/вех/ранга целиком
+		# Доска v2 (Task 5): Retention удалён — снимок вех/ранга целиком
 		# едет в записи Contracts ниже (индекс snapshots[1]).
 		[g._contracts, _circle_snapshot(g._contracts, ["_week_cache", "_cycle_cache", "_vein_finds",
 			"_vein_cap_total", "_fair_regen_total", "_fair_local_week", "_fair_local_brews",
-			"_fair_off_claim_week", "_visit_days", "_streak_run", "_last_visit_day",
-			"_hearth_claim", "_pts_total", "_mdays", "_mpts", "_unlocked_titles",
+			"_fair_off_claim_week", "_visit_days", "_last_visit_day",
+			"_pts_total", "_mdays", "_mpts", "_unlocked_titles",
 			"_active_title", "_day_hint", "_day_goal_cache", "_contracts_daily",
 			"_contracts_daily_prog", "_contracts_daily_done", "_contracts_weekly",
 			"_contracts_weekly_prog", "_contracts_weekly_done", "_contracts_last_daily",
@@ -517,9 +510,7 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 	SuiteContractBoard._force_set(g._contracts, [s4_brew, s4_goal, s4_orders, s4_orders2], g._contracts._contracts_weekly)
 	SuiteContractBoard._clear_prog(g._contracts)
 	g._contracts._visit_days = []
-	g._contracts._streak_run = 0
 	g._contracts._last_visit_day = ""
-	g._contracts._hearth_claim = ""
 	g._contracts._pts_total = 0
 	g._contracts._mdays = 0
 	g._contracts._mpts = 0
@@ -533,7 +524,7 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 	var s4_orders_got := g._contracts.claim(s4_o_id)
 	Selftest.check("circle claim of closed orders records visit day",
 		bool(s4_orders_got["ok"]) and g._contracts._visit_days.has(today)
-		and g._contracts._streak_run == 1 and g._contracts._pts_total == 3)
+		and g._contracts._pts_total == 3)
 	g._engine.selected = ["fire", "water"]
 	var manual: Dictionary = await g._engine._brew()
 	Selftest.check("circle manual known brew bumps contract once", not bool(manual.get("failed", true))
@@ -581,7 +572,7 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 		and g._engine._available_ether() == s4_double_ether
 		and g._contracts._pts_total == s4_double_pts)
 	# доска v2 Task 5: страница «Круг» удалена вместе с вкладкой — её контент
-	# (описание доски, счётчик очага, подсказка режима) больше не что проверять;
+	# (описание доски, подсказка режима) больше не что проверять;
 	# живой эквивалент счётчика — track_visit/claim выше.
 	# Отрицательные трассы: сорванный вход / ноль эфира / неизвестный рецепт /
 	# родник и подарок — варки нет, значит ни один счётчик доски не двигается.
@@ -695,7 +686,7 @@ static func _test_circle_synthesis_paths(g: Game) -> void:
 		and g._engine.known_recipes == engine_before["known_recipes"]
 		and g._engine.ether == engine_before["ether"] and g._engine.ether_overflow == engine_before["ether_overflow"]
 		and g._contracts._pts_total == contracts_before["_pts_total"]
-		and g._contracts._hearth_claim == contracts_before["_hearth_claim"]
+		and g._contracts._visit_days == contracts_before["_visit_days"]
 		and g._contracts._contracts_daily == contracts_before["_contracts_daily"]
 		and g.is_processing() == processing_before)
 	g._engine._refresh()

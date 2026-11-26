@@ -36,7 +36,6 @@ const ATLAS_MILE_EVERY: int = BalanceConfig.BASELINE_DATA["atlas"]["mile_every"]
 const ATLAS_CAP_EACH: int = BalanceConfig.BASELINE_DATA["atlas"]["cap_each"]
 const ATLAS_PENDING_MAX: int = BalanceConfig.BASELINE_DATA["atlas"]["pending_max"]
 
-const HEARTH_BASE: int = BalanceConfig.BASELINE_DATA["circle"]["hearth_base"]
 const CIRCLE_DAY_MILES: Array = BalanceConfig.BASELINE_DATA["circle"]["day_miles"]
 const CIRCLE_DAY_CAP: Dictionary = BalanceConfig.BASELINE_DATA["circle"]["day_cap"]
 const CIRCLE_DAY_REGEN: Dictionary = BalanceConfig.BASELINE_DATA["circle"]["day_regen"]

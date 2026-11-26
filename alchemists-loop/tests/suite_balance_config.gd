@@ -147,7 +147,6 @@ static func run(g: Game) -> void:
 		and int(base.get_value("atlas.mile_every", -1)) == Balance.ATLAS_MILE_EVERY
 		and int(base.get_value("atlas.cap_each", -1)) == Balance.ATLAS_CAP_EACH
 		and int(base.get_value("atlas.pending_max", -1)) == Balance.ATLAS_PENDING_MAX
-		and int(base.get_value("circle.hearth_base", -1)) == Balance.HEARTH_BASE
 		and _eq_val(base.get_value("circle.day_miles", []), Balance.CIRCLE_DAY_MILES)
 		and _eq_val(base.get_value("circle.pts_miles", []), Balance.CIRCLE_PTS_MILES)
 		and int(base.get_value("vein.streak_cap", -1)) == Balance.VEIN_STREAK_CAP

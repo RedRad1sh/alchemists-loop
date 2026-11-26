@@ -141,12 +141,10 @@ static func _cb_snapshot(c: Contracts) -> Dictionary:
 		"buffs": c._active_buffs.duplicate(true),
 		"decor": c._unlocked_decor.duplicate(true),
 		"last_output": c._last_output,
-		# Task 4: claim() теперь трогает очаг/вехи/ранг — каждый блок обязан это
+		# Task 4: claim() теперь трогает вехи/ранг — каждый блок обязан это
 		# откатывать, иначе краснеют следующие блоки по await-списку.
 		"visit_days": c._visit_days.duplicate(true),
-		"streak_run": c._streak_run,
 		"last_visit_day": c._last_visit_day,
-		"hearth_claim": c._hearth_claim,
 		"pts_total": c._pts_total,
 		"mdays": c._mdays,
 		"mpts": c._mpts,
@@ -181,9 +179,7 @@ static func _cb_restore(c: Contracts, s: Dictionary) -> void:
 	c._unlocked_decor = s["decor"]
 	c._last_output = String(s["last_output"])
 	c._visit_days = s["visit_days"]
-	c._streak_run = int(s["streak_run"])
 	c._last_visit_day = String(s["last_visit_day"])
-	c._hearth_claim = String(s["hearth_claim"])
 	c._pts_total = int(s["pts_total"])
 	c._mdays = int(s["mdays"])
 	c._mpts = int(s["mpts"])
@@ -355,13 +351,17 @@ static func run(g: Game) -> void:
 	# Баг владельца 2026-10-20: «Спешка в мастерской — мастерская спешит» игрок
 	# не понял. Текст эффекта обязан называть подсистему и то, что с ней
 	# происходит, а не повторять заголовок другими словами.
+	var brew_effect := String(ContractsBalance.BUFF_TEXT["brew_speed"]).to_lower()
+	var spring_effect := String(ContractsBalance.BUFF_TEXT["spring_yield"]).to_lower()
+	var craft_effect := String(ContractsBalance.BUFF_TEXT["craft_discount"]).to_lower()
+	var ether_effect := String(ContractsBalance.BUFF_TEXT["ether_regen"]).to_lower()
 	Selftest.check("§5.4 buff effect texts name the subsystem and the effect, not the title",
 		String(ContractsBalance.BUFF_TEXT["workshop_speed"]).contains("Мастерской")
 		and not String(ContractsBalance.BUFF_TEXT["workshop_speed"]).contains("спешит")
-		and String(ContractsBalance.BUFF_TEXT["brew_speed"]).contains("варка")
-		and String(ContractsBalance.BUFF_TEXT["spring_yield"]).contains("материала")
-		and String(ContractsBalance.BUFF_TEXT["craft_discount"]).contains("эфира")
-		and String(ContractsBalance.BUFF_TEXT["ether_regen"]).contains("эфир"))
+		and brew_effect.contains("варка")
+		and spring_effect.contains("материала")
+		and craft_effect.contains("эфира")
+		and ether_effect.contains("эфир"))
 	Selftest.check("§3.3 brew_speed base is 7200 s at power 0.25",
 		ContractsBalance.BUFF_BASE.get("brew_speed", {}) == {"duration": 7200, "power": 0.25})
 	Selftest.check("§3.3 spring_yield base is 1800 s at power 1.0",
@@ -800,12 +800,10 @@ static func run(g: Game) -> void:
 	var t4_inv := g._engine.inventory.duplicate(true)
 	var t4_ether := g._engine.ether
 	var t4_status := g._engine.status_text
-	# Обнуляем очаг детерминированно: проверки сверяют точные числа, а не
+	# Обнуляем визиты детерминированно: проверки сверяют точные числа, а не
 	# ambient-значения из подгруженного сейва.
 	g._contracts._visit_days = []
-	g._contracts._streak_run = 0
 	g._contracts._last_visit_day = ""
-	g._contracts._hearth_claim = ""
 	g._contracts._pts_total = 0
 	var t4_d1 := _mk(g._contracts, "daily", "brew", "bronze", 1)
 	var t4_d2 := _mk(g._contracts, "daily", "brew", "silver", 1)
@@ -817,9 +815,8 @@ static func run(g: Game) -> void:
 	var t4_res := g._contracts.claim(t4_id1)
 	var t4_today := Contracts.day_key_from(Time.get_datetime_dict_from_system())
 	var t4_delta := g._contracts._pts_total - t4_pts_before
-	Selftest.check("first daily claim of the day opens a visit day and streak",
-		bool(t4_res["ok"]) and g._contracts._visit_days.has(t4_today)
-		and g._contracts._streak_run >= 1)
+	Selftest.check("first daily claim of the day opens a visit day",
+		bool(t4_res["ok"]) and g._contracts._visit_days.has(t4_today))
 	Selftest.check("milestone points equal closed-contract tier value", t4_delta == 1)
 	var t4_days_after := g._contracts._visit_days.size()
 	var t4_id2 := String(t4_d2["id"])
@@ -847,11 +844,11 @@ static func run(g: Game) -> void:
 		and g._contracts._visit_days.size() == t4_days3
 		and g._engine.ether == t4_ether3
 		and g._engine.inventory == t4_inv_before)
-	var t4_run3 := g._contracts._streak_run
+	var t4_days_idem := g._contracts._visit_days.size()
 	g._contracts.mark_day_challenge()
 	Selftest.check("mark_day_challenge is idempotent",
 		g._contracts.is_done(t4_gd_id) and g._contracts._pts_total == t4_pts3
-		and g._contracts._streak_run == t4_run3)
+		and g._contracts._visit_days.size() == t4_days_idem)
 	# Эквивалентность формул: кап/реген движка обязан оставаться суммой базы
 	# и бонусов Contracts — считаем против живой формулы дифференциально
 	# (обнуление → известное состояние). На заглушках движок ещё читает
@@ -916,8 +913,8 @@ static func run(g: Game) -> void:
 			t8_statuses.append(String((t8_f as Dictionary)["status"]))
 	var t8_fair: Dictionary = g._contracts._week_fair()
 	var t8_orders_id := String((g._contracts.daily() as Array)[1]["id"])
-	Selftest.check("§8 boardfull demo: streak 3, rank 4, three current-cycle vein statuses, active fair pot, orders 3/3, board refreshed",
-		g._contracts._streak_run == 3 and g._contracts.rank_level() == 4
+	Selftest.check("§8 boardfull demo: 100 visit days, rank 4, three current-cycle vein statuses, active fair pot, orders 3/3, board refreshed",
+		g._contracts._visit_days.size() == 100 and g._contracts.rank_level() == 4
 		and t8_cyc != "" and t8_statuses.size() == 3
 		and t8_statuses.has("registered") and t8_statuses.has("pending_server")
 		and t8_statuses.has("poured")
@@ -1569,13 +1566,11 @@ static func run(g: Game) -> void:
 		"decor": c6._unlocked_decor.duplicate(true),
 		"unlocked": g._home.house_unlocked.duplicate(),
 		"prog": _snap_progress(g),
-		# Task 4: успешный claim больше не нейтрален — очаг/вехи/ранг мутируются
+		# Task 4: успешный claim больше не нейтрален — вехи/ранг мутируются
 		# каждым claim() → блок обязан вернуть и их, иначе следующие блоки
 		# видят чужие визит-дни и очки.
 		"visit_days": c6._visit_days.duplicate(true),
-		"streak_run": c6._streak_run,
 		"last_visit_day": c6._last_visit_day,
-		"hearth_claim": c6._hearth_claim,
 		"pts_total": c6._pts_total,
 		"mdays": c6._mdays,
 		"mpts": c6._mpts,
@@ -1765,12 +1760,10 @@ static func run(g: Game) -> void:
 	# восстановление живого состояния (Review Focus 7)
 	c6._active_buffs = claim_snap["buffs"]
 	c6._unlocked_decor = claim_snap["decor"]
-	# доска v2 Task 4: claim() цепляет очаг/вехи — возвращаем и их, иначе
+	# доска v2 Task 4: claim() цепляет вехи — возвращаем и их, иначе
 	# фантомные визит-дни утекли бы в сейв-блок и в чужие проверки.
 	c6._visit_days = claim_snap["visit_days"]
-	c6._streak_run = int(claim_snap["streak_run"])
 	c6._last_visit_day = String(claim_snap["last_visit_day"])
-	c6._hearth_claim = String(claim_snap["hearth_claim"])
 	c6._pts_total = int(claim_snap["pts_total"])
 	c6._mdays = int(claim_snap["mdays"])
 	c6._mpts = int(claim_snap["mpts"])
@@ -1846,10 +1839,7 @@ static func _contract_board_checks(g: Game) -> void:
 	# StyleBoxTexture с plate_brass.png» краснеет и от возврата к теме, и от
 	# плашки без текстуры. Числа в хелпере литеральные, не константы ContractBoard:
 	# понижать поле в коде — это решение, а пин обязан его заметить.
-	var t8b_hearth: Button = board.get("_hearth_btn") as Button
 	Selftest.check("board close keeps a visible focus indicator", not close_btn.get_theme_stylebox("focus") is StyleBoxEmpty)
-	Selftest.check("§C the board's hearth button is uses the shared matte material",
-		_plate_state(t8b_hearth) == "")
 
 	# 9. Доска v2: восемь карточек — 4 daily + 4 weekly (было 3+2).
 	var dr: Control = board.find_child("DailyRow", true, false) as Control
@@ -1864,12 +1854,11 @@ static func _contract_board_checks(g: Game) -> void:
 		dr != null and wr != null and dr.get_class() == "Control" and wr.get_class() == "Control")
 
 	# 10b. Доска v2 (Task 7, спека §5): состав экрана — 4 карточки на полку,
-	# полка очага под дневным рядом, строка ранга внизу.
+	# строка ранга внизу.
 	var t7_daily_cards := dr.get_child_count() if dr != null else 0
 	var t7_weekly_cards := wr.get_child_count() if wr != null else 0
-	Selftest.check("board v2 renders four cards per shelf with hearth shelf and rank strip",
+	Selftest.check("board v2 renders four cards per shelf with rank strip",
 		t7_daily_cards == 4 and t7_weekly_cards == 4 and board != null
-		and board.find_child("ShelfHearth", true, false) != null
 		and board.get_node_or_null("RankStrip") != null)
 
 	# 10c. Task 7: _place — wrapping-сетка: при ширине ровно на 4 карточки
@@ -1891,39 +1880,18 @@ static func _contract_board_checks(g: Game) -> void:
 	Selftest.check("board v2 wrapping _place puts the fifth card on a centered second row",
 		t7_wrap_ok)
 
-	# 10d. Полка очага: кнопка «Полешко: +N ⚡» и пламя серии (✦✦ при 3).
-	c._hearth_claim = ""
-	c._streak_run = 3
+	# 10d. Механика полешка удалена: полки очага на доске быть не должно.
+	# Краснеет, если ShelfHearth/HearthBtn вернутся в build доски.
 	board.refresh()
 	await g.get_tree().process_frame
-	var t7_shelf := board.find_child("ShelfHearth", true, false)
-	var t7_hearth_btn: Button = null
-	var t7_flame_lbl: Label = null
-	if t7_shelf != null:
-		t7_hearth_btn = t7_shelf.find_child("HearthBtn", true, false) as Button
-		t7_flame_lbl = t7_shelf.find_child("HearthFlame", true, false) as Label
-	var t7_claimable := t7_hearth_btn != null and not t7_hearth_btn.disabled \
-		and t7_hearth_btn.text == "Полешко: +%d ⚡" % c.hearth_reward() \
-		and t7_flame_lbl != null and t7_flame_lbl.text == c.flame()
-	Selftest.check("board v2 hearth shelf offers the daily log with the streak flame",
-		t7_claimable)
+	Selftest.check("board v2 has no hearth shelf after the log mechanic removal",
+		board.find_child("ShelfHearth", true, false) == null
+		and board.find_child("HearthBtn", true, false) == null
+		and board.find_child("HearthFlame", true, false) == null)
 
-	# 10e. Полка очага после дневного забора: кнопка гаснет и называется «Забрано ✓».
-	# Task 9 (T7 minor 1): пин disabled==true — «Забрано ✓» без гашения кнопка
-	# обещала бы второй забор; краснеет на удалении _hearth_btn.disabled в
-	# contract_board.gd (_refresh_hearth), т.к. Button.disabled по умолчанию false.
-	c._hearth_claim = Time.get_date_string_from_system()
-	board.refresh()
-	await g.get_tree().process_frame
-	var t7_claimed_txt := t7_hearth_btn != null and t7_hearth_btn.text == "Забрано ✓" \
-		and t7_hearth_btn.disabled
-	Selftest.check("board v2 hearth shelf shows «Забрано ✓» after today's log",
-		t7_claimed_txt)
-	c._hearth_claim = ""
-	c._streak_run = 0
-
-	# 10f. Строка ранга: символ + титул + два бумажных свитка вех (спека §5 —
-	# иммерсивныеPaper-ленты, не Label-простыня).
+	# 10f. Строка ранга: латунная титульная плашка — монета ранга, подпись
+	# «Ранг Круга», титул, одна строка вех и прогресс до следующего ранга.
+	# Тёмных свитков-плашек MileDays/MilePts больше нет.
 	c._visit_days = ["2026-09-10"]
 	c._mdays = 1
 	c._mpts = 1
@@ -1933,27 +1901,39 @@ static func _contract_board_checks(g: Game) -> void:
 	var t7_strip := board.get_node_or_null("RankStrip")
 	var t7_sym: Node = null
 	var t7_title: Label = null
-	var t7_md: Node = null
-	var t7_mp: Node = null
+	var t7_caption: Label = null
+	var t7_next: Label = null
+	var t7_mile: Label = null
+	var t7_bg: Panel = null
 	if t7_strip != null:
 		t7_sym = t7_strip.find_child("RankSymbol", true, false)
 		t7_title = t7_strip.find_child("RankTitle", true, false) as Label
-		t7_md = t7_strip.find_child("MileDays", true, false)
-		t7_mp = t7_strip.find_child("MilePts", true, false)
-	var t7_mile_days := ""
-	var t7_mile_pts := ""
-	if t7_md != null:
-		var l1 := (t7_md as Node).find_child("Word", true, false) as Label
-		t7_mile_days = l1.text if l1 != null else ""
-	if t7_mp != null:
-		var l2 := (t7_mp as Node).find_child("Word", true, false) as Label
-		t7_mile_pts = l2.text if l2 != null else ""
+		t7_caption = t7_strip.find_child("RankCaption", true, false) as Label
+		t7_next = t7_strip.find_child("RankNext", true, false) as Label
+		t7_mile = t7_strip.find_child("MileLine", true, false) as Label
+		t7_bg = t7_strip.find_child("StripBg", true, false) as Panel
+	var t7_plate_tex := false
+	if t7_bg != null:
+		var t7_sb := t7_bg.get_theme_stylebox("panel") as StyleBoxTexture
+		t7_plate_tex = t7_sb != null and t7_sb.texture != null \
+			and t7_sb.texture.resource_path.ends_with("plate_brass_wide.png")
 	var t7_rank_ok := t7_strip != null and t7_sym is CircleRankSymbol and t7_title != null \
 		and t7_title.text == c.rank_title(c.rank_level()) \
-		and t7_mile_days.contains(c.mile_strip("дней", Game.CIRCLE_DAY_MILES, 1)) \
-		and t7_mile_pts.contains(c.mile_strip("очков", Game.CIRCLE_PTS_MILES, 1))
-	Selftest.check("board v2 rank strip carries symbol, title and two mile scrolls",
+		and t7_caption != null and t7_caption.text == "Ранг Круга" \
+		and t7_plate_tex \
+		and t7_strip.find_child("MileLine", true, false) == null \
+		and t7_bg != null and t7_bg.tooltip_text.contains("Вехи дней") \
+		and t7_bg.tooltip_text.contains("Вехи очков") \
+		and t7_strip.find_child("MileDays", true, false) == null \
+		and t7_strip.find_child("MilePts", true, false) == null
+	Selftest.check("board v2 rank plate is brass, carries symbol/caption/title, milestones in tooltip",
 		t7_rank_ok)
+	# 50 очков = ранг 3; следующий «Жар» за 100 дней, при 1 дне осталось 99.
+	var t7_next_ok := t7_next != null and t7_next.text.contains("Жар") \
+		and t7_next.text.contains("99")
+	Selftest.check("board v2 rank plate shows next rank title and remaining days", t7_next_ok)
+	Selftest.check("rank emblem is the crafted shield-flame badge, not a polygon or outline",
+		CircleRankSymbol.emblem_glyph(4) == "shield_flame" and CircleRankSymbol.emblem_glyph(1) == "shield_flame")
 
 	# 10g. Тела карточек goal_day/vein/fair (спека §5): цель дня строкой
 	# «свари …» + хинт мира в tooltip, ряды капель текущего цикла с кнопкой
@@ -2004,6 +1984,27 @@ static func _contract_board_checks(g: Game) -> void:
 		t7_goal_line == t7_goal_want and t7_goal_want != "свари «» из и " \
 		and t7_goal_tip.contains("мир: из двух баз"))
 
+	# #98: кегль бумаги карточки — короткий заголовок «Варка» ≥18, награда
+	# ≥13 (было 16/11: владелец назвал шрифт в бумажках мелким). Краснеет,
+	# если вернуть TITLE_FS/REWARD_FS к прежним значениям.
+	var t98_brew: ContractCard = dr.get_child(1) as ContractCard
+	var t98_title := t98_brew.get_node_or_null("Hang/Title") as Label
+	var t98_reward := t98_brew.get_node_or_null("Hang/Reward") as Label
+	Selftest.check("paper card title >= 18 and reward >= 13 on a short-title brew",
+		t98_title != null and t98_reward != null
+		and String(t98_title.text) == "Варка"
+		and int(t98_title.get_theme_font_size("font_size")) >= 18
+		and int(t98_reward.get_theme_font_size("font_size")) >= 13)
+
+	# #99: заголовки больше не на Divagon (владелец: «качает из стороны в
+	# сторону»). Краснеет, если вернуть Divagon в TITLE_FONT или theme.json.
+	var t99_card_font := t98_title.get_theme_font("font") if t98_title != null else null
+	var t99_display: Font = g._font_display
+	Selftest.check("card titles and the display face are not Divagon",
+		t99_card_font != null and t99_display != null
+		and not String(t99_card_font.resource_path).contains("Divagon")
+		and not String(t99_display.resource_path).contains("Divagon"))
+
 	# Жила: ровно по ряду капель на находку ТЕКУЩЕГО цикла (старый цикл — мимо),
 	# у registered — кнопка «Влить».
 	var t7_vein_card: Control = wr.get_child(0) as Control
@@ -2019,6 +2020,22 @@ static func _contract_board_checks(g: Game) -> void:
 				t7_pour_btns += 1
 	Selftest.check("vein card exposes one VeinDropRow per current-cycle find plus a pour button",
 		t7_drop_rows == 2 and t7_pour_btns == 1)
+
+	# #98: кегль бумаги жилы — подпись капли и кнопка «Влить» ≥12 (было 9/10).
+	# Краснеет, если вернуть прежние кегли в _fill_vein.
+	var t98_row := t7_vein_detail.get_node_or_null("VeinDropRow0") as HBoxContainer
+	var t98_row_lbl: Label = null
+	var t98_pour: Button = null
+	if t98_row != null:
+		for ch in t98_row.get_children():
+			if ch is Label:
+				t98_row_lbl = ch as Label
+			elif ch is Button:
+				t98_pour = ch as Button
+	Selftest.check("paper vein row label and pour button use font >= 12",
+		t98_row_lbl != null and t98_pour != null
+		and int(t98_row_lbl.get_theme_font_size("font_size")) >= 12
+		and int(t98_pour.get_theme_font_size("font_size")) >= 12)
 
 	# Ярмарка: строка котла — ровно fair_pot_line(), офлайн-вариант виден текстом.
 	var t7_fair_card: Control = wr.get_child(1) as Control
@@ -2140,6 +2157,16 @@ static func _contract_board_checks(g: Game) -> void:
 		note_ok = note_ok and note.size == ContractBoard.NOTE_SIZE
 	Selftest.check("§5.4 a note is the board note texture at the declared NOTE_SIZE", note_ok)
 
+	# #98: расшифровка записки по клику — кегль ≥12 (было 10). Краснеет,
+	# если вернуть detail-кегль в _on_note_pressed.
+	if note != null:
+		board._on_note_pressed(note)
+		var t98_word := ContractBoard._word_of(note)
+		var t98_detail_fs := int(t98_word.get_theme_font_size("font_size")) if t98_word != null else 0
+		Selftest.check("note detail expansion uses font >= 12",
+			t98_word != null and bool(note.get_meta("shown_detail", false)) and t98_detail_fs >= 12)
+		board._on_note_pressed(note)
+
 	# 14. На записке — время Ч:ММ.
 	var time_lbl: Label = null
 	if note != null:
@@ -2174,6 +2201,27 @@ static func _contract_board_checks(g: Game) -> void:
 	if time_lbl != null:
 		time_back = time_lbl.text == time_text
 	Selftest.check("§5.4 tapping the note again restores the time display", time_back)
+
+	# 16b. Расшифровка переживает тики таймера: пока набор баффов тот же, записка
+	# обязана жить, а не пересобираться (секунды в сигнатуре роняли её каждый тик).
+	# Время при этом обязано обновляться in-place: 2:00 → 1:59 за три тика.
+	if note != null and is_instance_valid(note):
+		(note as TextureButton).pressed.emit()
+	var note_inst: Node = note
+	for tick_i in 3:
+		c._active_buffs["brew_speed"]["until"] = int(Time.get_unix_time_from_system()) + 7200 - (tick_i + 1) * 2
+		board._process(ContractBoard.NOTE_TICK)
+	await g.get_tree().process_frame
+	var detail_alive := false
+	if notes.get_child_count() == 1 and note_inst != null and is_instance_valid(note_inst):
+		detail_alive = notes.get_child(0) == note_inst \
+			and bool((notes.get_child(0) as TextureButton).get_meta("shown_detail", false)) \
+			and is_instance_valid(time_lbl) \
+			and time_lbl.text.contains(String(ContractsBalance.BUFF_TEXT["brew_speed"])) \
+			and time_lbl.text.contains("1:")
+	Selftest.check("§5.4 an opened note keeps its effect text across timer ticks", detail_alive)
+	if note_inst != null and is_instance_valid(note_inst):
+		(note_inst as TextureButton).pressed.emit()
 
 	# --- Попап ---
 	c._active_buffs = saved_buffs
@@ -2334,7 +2382,7 @@ static func _contract_board_checks(g: Game) -> void:
 	Selftest.check("§7 the board entry is the room prop, not a bottom bar item",
 		not nav_board and g._rooms._host.find_child("Prop_Board", true, false) != null)
 
-	# --- Juice Task 4: hover, stamp, board/reward, hearth/rank ---
+	# --- Juice Task 4: hover, stamp, board/reward, rank ---
 	# T4-1. Наведение считается по всей бумаге: STOP-потомок (строка награды,
 	# тело, штамп) больше не крадёт hover у корня карточки — владелец видел
 	# реакцию только на части листа (баг 2026-10-20).
@@ -2428,30 +2476,6 @@ static func _contract_board_checks(g: Game) -> void:
 		t4_fade_done = is_equal_approx(t4_pop.modulate.a, 1.0)
 	Selftest.check("reward popup fades in", t4_fade_in and t4_fade_done)
 	board._close_reward()
-
-	# T4-6. Hearth claim pops flame.
-	c._hearth_claim = ""
-	c._streak_run = 3
-	c._pts_total = 0
-	c._mdays = 0
-	c._mpts = 0
-	var t4_lvl_before := c.rank_level()
-	board.refresh()
-	await g.get_tree().process_frame
-	var t4_active_before := Juice.active_count()
-	var t4_hearth_btn := board.get("_hearth_btn") as Button
-	if t4_hearth_btn != null:
-		t4_hearth_btn.pressed.emit()
-	await g.get_tree().process_frame
-	var t4_active_after := Juice.active_count()
-	Selftest.check("hearth claim pops flame",
-		t4_active_after > t4_active_before
-		and c._hearth_claim == Time.get_date_string_from_system())
-	c._hearth_claim = ""
-	c._streak_run = 0
-	c._pts_total = 0
-	c._mdays = 0
-	c._mpts = 0
 
 	# --- Баг владельца 2026-10-20: клик по бумаге и доступ к нижним рядам ---
 	# B1. Клик по любому месту листа закрывает готовый контракт: раньше работал
@@ -2673,16 +2697,16 @@ static func _contracts_durability_checks(g: Game) -> void:
 	var shape := c.save_block()
 	var names: Array = shape.keys()
 	names.sort()
-	# доска v2 Task 6 (спека §6): к четырёмнадцати ключам §4.1 добавлены семнадцать
+	# доска v2 Task 6 (спека §6): к четырёмнадцати ключам §4.1 добавлены пятнадцать
 	# мигрированных полей (круг/ярмарка/жила) — circle_last в блоке нет.
 	var expect: Array = ["active_title", "buffs", "cycle_cache", "daily", "daily_done",
 		"daily_prog", "day_hint", "decor", "fair_local_brews", "fair_local_week",
-		"fair_off_claim_week", "fair_regen_total", "hearth_claim", "last_daily",
+		"fair_off_claim_week", "fair_regen_total", "last_daily",
 		"last_output", "last_weekly", "mdays", "mpts", "pts_total", "set_week",
-		"streak_run", "unlocked_titles", "variety", "vein_cap_total", "vein_finds",
+		"unlocked_titles", "variety", "vein_cap_total", "vein_finds",
 		"version", "visit_days", "week_cache", "weekly", "weekly_done", "weekly_prog"]
 	expect.sort()
-	Selftest.check("§4.2 save_block carries exactly the thirty-one state keys (§4.1 + §6)",
+	Selftest.check("§4.2 save_block carries exactly the twenty-nine state keys (§4.1 + §6)",
 		names == expect)
 
 	# ---- 2. round-trip (§6.16): rich-состояние → файл → память начисто → загрузка ----
@@ -2902,9 +2926,7 @@ static func _cb_clear_migrated(c: Contracts) -> void:
 	# _clear_state их не чистит, и проверки обязаны краснеть поведением миграции,
 	# а не случайным остатком живого состояния.
 	c._visit_days = []
-	c._streak_run = 0
 	c._last_visit_day = ""
-	c._hearth_claim = ""
 	c._pts_total = 0
 	c._mdays = 0
 	c._mpts = 0
@@ -2922,7 +2944,7 @@ static func _cb_clear_migrated(c: Contracts) -> void:
 
 static func _cb_save_v5_checks(g: Game) -> void:
 	var c := g._contracts
-	var migrated_keys := ["streak_run", "visit_days", "hearth_claim", "pts_total",
+	var migrated_keys := ["visit_days", "pts_total",
 		"mdays", "mpts", "unlocked_titles", "active_title", "day_hint", "week_cache",
 		"cycle_cache", "vein_finds", "vein_cap_total", "fair_regen_total",
 		"fair_local_week", "fair_local_brews", "fair_off_claim_week"]
@@ -2986,7 +3008,7 @@ static func _cb_save_v5_checks(g: Game) -> void:
 	var cap_before := g._engine._max_ether()
 	g._saves._migrate_retention_into_contracts(mig)
 	Selftest.check("migration v4→v5 moves retention into contracts",
-		c._streak_run == 3 and c._visit_days == ["2026-10-18"]
+		c._visit_days == ["2026-10-18"]
 		and c._pts_total == 61 and c._vein_cap_total == 2
 		and absf(c._fair_regen_total - 0.05) < 0.0001
 		and c._day_hint == "Мох")
@@ -3005,11 +3027,11 @@ static func _cb_save_v5_checks(g: Game) -> void:
 	# прогон на свежем сейве обязан быть no-op.
 	c._clear_state()
 	_cb_clear_migrated(c)
-	c._streak_run = 9
+	c._pts_total = 9
 	g._saves._migrate_retention_into_contracts(baseline_data)
 	Selftest.check("migration without legacy keys is a presence-gated no-op",
-		c._streak_run == 9)
-	c._streak_run = 0
+		c._pts_total == 9)
+	c._pts_total = 0
 
 	# ---- 2. интеграция: v4-файл целиком проходит через _load_game ----
 	c._clear_state()
@@ -3019,7 +3041,7 @@ static func _cb_save_v5_checks(g: Game) -> void:
 	mf.close()
 	g._saves._load_game()
 	Selftest.check("save v4 file loads and migrates through _load_game",
-		c._streak_run == 3 and c._visit_days == ["2026-10-18"] and c._day_hint == "Мох"
+		c._visit_days == ["2026-10-18"] and c._day_hint == "Мох"
 		and c._vein_cap_total == 2 and absf(c._fair_regen_total - 0.05) < 0.0001
 		and c._last_visit_day == "2026-10-18")
 	g._saves._save_game()
@@ -3034,16 +3056,17 @@ static func _cb_save_v5_checks(g: Game) -> void:
 	Selftest.check("resave after migration writes v5 without legacy keys",
 		legacy_gone and raw.has("server_tags") and not raw.has("circle_last"))
 	Selftest.check("resave carries block v2 with the migrated keys",
-		int(blk.get("version", 0)) == 2 and int(blk.get("streak_run", -1)) == 3
+		int(blk.get("version", 0)) == 2 and int(blk.get("pts_total", -1)) == 61
 		and blk.get("visit_days") == ["2026-10-18"] and String(blk.get("day_hint", "")) == "Мох"
 		and int(blk.get("vein_cap_total", -1)) == 2
+		and not blk.has("streak_run") and not blk.has("hearth_claim")
 		and not blk.has("circle_last") and not blk.has("last_visit_day"))
 	# Второй заход: ключей нет — состояние целиком из блока v2, миграция не нужна.
 	c._clear_state()
 	_cb_clear_migrated(c)
 	g._saves._load_game()
 	Selftest.check("second load restores migrated fields from block v2",
-		c._streak_run == 3 and c._visit_days == ["2026-10-18"] and c._pts_total == 61
+		c._visit_days == ["2026-10-18"] and c._pts_total == 61
 		and c._mdays == 1 and c._mpts == 1 and c._day_hint == "Мох"
 		and c._vein_cap_total == 2 and absf(c._fair_regen_total - 0.05) < 0.0001
 		and c._last_visit_day == "2026-10-18" and c._unlocked_titles.has("Искра"))
@@ -3052,9 +3075,7 @@ static func _cb_save_v5_checks(g: Game) -> void:
 	var p1 := Contracts.new(g)
 	p1.ensure_period()
 	p1._visit_days = ["2026-10-18"]
-	p1._streak_run = 3
 	p1._last_visit_day = "2026-10-18"
-	p1._hearth_claim = "2026-10-17"
 	p1._pts_total = 61
 	p1._mdays = 1
 	p1._mpts = 1
@@ -3074,7 +3095,7 @@ static func _cb_save_v5_checks(g: Game) -> void:
 	for k in migrated_keys:
 		if not v2blk.has(String(k)):
 			has_all = false
-	Selftest.check("contracts block v2 carries the seventeen migrated keys and no circle_last",
+	Selftest.check("contracts block v2 carries the fifteen migrated keys and no circle_last",
 		has_all)
 	# duplicate(true): мутация источника не должна протекать в записанный блок.
 	p1._visit_days.append("2999-12-31")
@@ -3084,8 +3105,7 @@ static func _cb_save_v5_checks(g: Game) -> void:
 	var p2 := Contracts.new(g)
 	p2.load_block(v2blk)
 	Selftest.check("v2 block round-trips every migrated field and re-derives last visit",
-		p2._streak_run == 3 and p2._visit_days == ["2026-10-18"]
-		and p2._hearth_claim == "2026-10-17" and p2._pts_total == 61
+		p2._visit_days == ["2026-10-18"] and p2._pts_total == 61
 		and p2._mdays == 1 and p2._mpts == 1 and p2._unlocked_titles == ["Искра"]
 		and p2._active_title == "Искра" and p2._day_hint == "Мох"
 		and p2._week_cache == {"week": "2026-W42"} and p2._cycle_cache == {"cycle_id": "vc:m"}
@@ -3101,17 +3121,17 @@ static func _cb_save_v5_checks(g: Game) -> void:
 	for k in migrated_keys:
 		v1blk.erase(String(k))
 	var p3 := Contracts.new(g)
-	p3._streak_run = 9
+	p3._pts_total = 9
 	p3._day_hint = "остаток"
 	p3.load_block(v1blk)
 	Selftest.check("a version-1 block still loads its axes and leaves migrated fields default",
 		p3._contracts_daily.size() == 4 and p3._contracts_weekly.size() == 4
-		and p3._streak_run == 0 and p3._visit_days.is_empty() and p3._day_hint == ""
+		and p3._pts_total == 0 and p3._visit_days.is_empty() and p3._day_hint == ""
 		and p3._week_cache.is_empty() and p3._vein_finds.is_empty()
 		and p3._fair_regen_total == 0.0 and p3._last_visit_day == "")
 
 	# ---- 4. новая игра (§6): reset_new_game чистит и переехавшие поля ----
-	c._streak_run = 3
+	c._pts_total = 61
 	c._day_hint = "Мох"
 	c._vein_cap_total = 2
 	c._week_cache = {"week": "w"}
@@ -3119,12 +3139,12 @@ static func _cb_save_v5_checks(g: Game) -> void:
 	c._visit_days = ["2026-10-18"]
 	var reset_ok := g._init_new_game()
 	Selftest.check("§6.19 new game wipes every migrated retention field too",
-		reset_ok and c._streak_run == 0 and c._visit_days.is_empty()
+		reset_ok and c._visit_days.is_empty()
 		and c._day_hint == "" and c._vein_cap_total == 0 and c._week_cache.is_empty()
 		and c._cycle_cache.is_empty() and c._vein_finds.is_empty()
 		and c._fair_regen_total == 0.0 and c._fair_local_week == ""
 		and c._fair_local_brews.is_empty() and c._fair_off_claim_week == ""
-		and c._hearth_claim == "" and c._pts_total == 0 and c._mdays == 0
+		and c._pts_total == 0 and c._mdays == 0
 		and c._mpts == 0 and c._unlocked_titles.is_empty() and c._active_title == ""
 		and c._last_visit_day == "")
 
