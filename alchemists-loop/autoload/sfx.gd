@@ -120,6 +120,74 @@ func _mix(parts: Array) -> PackedFloat32Array:
 			out[i] += p[i]
 	return out
 
+## ---- Debug-примерка звука (только редактор) ----
+## Правишь sounds.json или параметры из консоли (`sfx ...`) и слышишь сразу,
+## без перезапуска игры.
+var _cfg_mtime := 0
+
+## Перечитать sounds.json и сбросить кэш потоков (поменялся сам файл звука).
+func reload_config() -> void:
+	_stream_cache.clear()
+	_sound_cfg = {}
+	_load_sound_cfg()
+	_cfg_mtime = FileAccess.get_modified_time(SOUNDS_CFG_PATH)
+
+
+## В редакторе перед каждым событием проверяет mtime sounds.json: сохранил файл —
+## следующий звук уже играет по новым значениям.
+func _reload_if_changed() -> void:
+	if not OS.has_feature("editor"):
+		return
+	var m := FileAccess.get_modified_time(SOUNDS_CFG_PATH)
+	if m != _cfg_mtime:
+		reload_config()
+
+
+## Временно (до reload/перезапуска) меняет параметр события; `debug_save` пишет в файл.
+func debug_set(event_name: String, key: String, value: Variant) -> void:
+	var ev: Dictionary = _sound_cfg.get(event_name, {})
+	ev[key] = value
+	_sound_cfg[event_name] = ev
+
+
+## Записывает текущие параметры событий обратно в sounds.json (комментарий и
+## порядок ключей сохраняются).
+func debug_save(path: String = SOUNDS_CFG_PATH) -> bool:
+	var doc: Dictionary = {}
+	if FileAccess.file_exists(path):
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+		if parsed is Dictionary:
+			doc = parsed
+	doc["events"] = _sound_cfg
+	var raw := FileAccess.get_file_as_string(path) if FileAccess.file_exists(path) else ""
+	var txt := JSON.stringify(doc, "  ", false)
+	if raw.contains("\r\n"):
+		txt = txt.replace("\n", "\r\n")
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return false
+	f.store_string(txt + ("\r\n" if raw.contains("\r\n") else "\n"))
+	f.close()
+	if path == SOUNDS_CFG_PATH:
+		_cfg_mtime = FileAccess.get_modified_time(SOUNDS_CFG_PATH)
+	return true
+
+
+## Проиграть файл напрямую (без события): `sfx file <путь> [volume_db] [pitch]`.
+func debug_play_file(file: String, vol_db: float = 0.0, pitch: float = 1.0) -> bool:
+	var stream := load(file) as AudioStream
+	if stream == null:
+		return false
+	_play_stream(stream, vol_db, pitch)
+	return true
+
+
+func debug_stop() -> void:
+	ritual_spin_stop()
+	for p in _players:
+		(p as AudioStreamPlayer).stop()
+
+
 ## Загрузить конфиг звуков из sounds.json.
 func _load_sound_cfg() -> void:
 	if FileAccess.file_exists(SOUNDS_CFG_PATH):
@@ -212,6 +280,7 @@ func _rng() -> bool:
 ## Воспроизвести событие по имени (из конфига или процедурный fallback).
 ## Используется из кода для UI/событий/ритуала и из debug-меню прослушивания.
 func play_event(event_name: String) -> void:
+	_reload_if_changed()
 	var ev: Dictionary = _sound_cfg.get(event_name, {})
 	var file := str(ev.get("file", ""))
 	if file != "" and _play_file(event_name, file, float(ev.get("volume_db", 0.0)),

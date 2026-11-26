@@ -66,6 +66,22 @@ static func run(g: Game) -> void:
 	Sfx.ritual_spin_stop()
 	Selftest.check("ritual_spin stops loop player", not Sfx._spin_player.playing)
 
+	# Debug-примерка звука: параметр меняется на лету, reload возвращает файл,
+	# save пишет конфиг, не теряя комментарий и события.
+	var _cfg_vol := float((Sfx._sound_cfg.get("click", {}) as Dictionary).get("volume_db", 0.0))
+	Sfx.debug_set("click", "volume_db", _cfg_vol - 7.0)
+	Selftest.check("sfx debug_set changes an event parameter at runtime",
+		is_equal_approx(float((Sfx._sound_cfg["click"] as Dictionary)["volume_db"]), _cfg_vol - 7.0))
+	var _tmp := "user://sfx_debug_probe.json"
+	Selftest.check("sfx debug_save writes events and keeps the comment", Sfx.debug_save(_tmp)
+		and str(JSON.parse_string(FileAccess.get_file_as_string(_tmp)).get("events", {}).get("click", {}).get("volume_db", "")) == str(_cfg_vol - 7.0))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(_tmp))
+	Sfx.reload_config()
+	Selftest.check("sfx reload_config restores the file values and drops cached streams",
+		is_equal_approx(float((Sfx._sound_cfg["click"] as Dictionary).get("volume_db", 0.0)), _cfg_vol)
+		and Sfx._stream_cache.is_empty())
+	Selftest.check("sfx debug_play_file refuses a missing file", not Sfx.debug_play_file("res://assets/audio/no_such.wav"))
+
 	# что варить сейчас
 	g._engine.known_recipes.clear()
 	g._engine.inventory.clear()

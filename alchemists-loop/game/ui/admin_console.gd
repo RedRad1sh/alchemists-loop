@@ -70,7 +70,7 @@ func _build_ui() -> void:
 	vbox.add_child(_input)
 
 	var help := Label.new()
-	help.text = "give all [N] | give layer <L> [N] | give <id> [N] | add <id> | unlock <mode> | set ether <N> | reset day | clear inventory | force circle open"
+	help.text = "give all [N] | give layer <L> [N] | give <id> [N] | sfx play|set|file|reload|save | add <id> | unlock <mode> | set ether <N> | reset day | clear inventory | force circle open"
 	help.add_theme_font_size_override("font_size", 11)
 	help.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -133,23 +133,83 @@ func _on_command(text: String) -> void:
 func _cmd_sfx(parts: Array) -> void:
 	if OS.has_feature("editor") == false:
 		return
+	var usage := "sfx list | play <event> | set <event> <key> <value> | file <путь> [дБ] [pitch] | reload | save | stop   (ключи: file volume_db pitch delay start_sec len_sec loop)"
 	if parts.size() < 2:
-		_log_text("[color=red]Usage: sfx list | sfx play <event>[/color]")
+		_log_text("[color=red]Usage: %s[/color]" % usage)
 		return
 	var sub: String = str(parts[1])
-	if sub == "list":
-		var names: Array = []
-		for k in Sfx._sound_cfg.keys():
-			names.append(String(k))
-		names.sort()
-		_log_text("Events (%d): %s" % [names.size(), ", ".join(names)])
-		return
-	if sub == "play" and parts.size() >= 3:
-		var ev: String = str(parts[2])
-		Sfx.play_event(ev)
-		_log_text("Playing event: %s" % ev)
-		return
-	_log_text("[color=red]Usage: sfx list | sfx play <event>[/color]")
+	match sub:
+		"list":
+			var names: Array = []
+			for k in Sfx._sound_cfg.keys():
+				names.append(String(k))
+			names.sort()
+			_log_text("Events (%d): %s" % [names.size(), ", ".join(names)])
+		"play":
+			if parts.size() < 3:
+				_log_text("[color=red]sfx play <event>[/color]")
+				return
+			var ev: String = str(parts[2])
+			Sfx.play_event(ev)
+			_log_text("Playing event: %s  %s" % [ev, _sfx_summary(ev)])
+		"reload":
+			Sfx.reload_config()
+			_log_text("sounds.json перечитан, кэш звуков сброшен (%d событий)" % Sfx._sound_cfg.size())
+		"set":
+			if parts.size() < 5:
+				_log_text("[color=red]sfx set <event> <key> <value>[/color]")
+				return
+			var ev := str(parts[2])
+			var key := str(parts[3])
+			if not (key in ["file", "volume_db", "pitch", "delay", "start_sec", "len_sec", "loop"]):
+				_log_text("[color=red]Unknown key: %s[/color]" % key)
+				return
+			var raw := str(parts[4])
+			var value: Variant = raw
+			if key == "file":
+				value = _sfx_path(raw)
+			elif key == "loop":
+				value = raw == "true" or raw == "1"
+			else:
+				value = float(raw)
+			Sfx.debug_set(ev, key, value)
+			Sfx.play_event(ev)
+			_log_text("%s.%s = %s → играю  (в файл: sfx save)" % [ev, key, str(value)])
+		"file":
+			if parts.size() < 3:
+				_log_text("[color=red]sfx file <путь> [дБ] [pitch][/color]")
+				return
+			var path := _sfx_path(str(parts[2]))
+			var vol := float(parts[3]) if parts.size() >= 4 else 0.0
+			var pitch := float(parts[4]) if parts.size() >= 5 else 1.0
+			if Sfx.debug_play_file(path, vol, pitch):
+				_log_text("Играет %s (%.1f дБ, pitch %.2f)" % [path, vol, pitch])
+			else:
+				_log_text("[color=red]Файл не найден или не импортирован: %s[/color]" % path)
+		"save":
+			if Sfx.debug_save():
+				_log_text("[color=green]Записано в assets/audio/sounds.json[/color]")
+			else:
+				_log_text("[color=red]Не удалось записать sounds.json[/color]")
+		"stop":
+			Sfx.debug_stop()
+			_log_text("Звук остановлен")
+		_:
+			_log_text("[color=red]Usage: %s[/color]" % usage)
+
+
+## Короткий путь → res://: `cc0/morph.wav` = res://assets/audio/cc0/morph.wav.
+func _sfx_path(raw: String) -> String:
+	if raw.begins_with("res://"):
+		return raw
+	return "res://assets/audio/" + raw.trim_prefix("/")
+
+
+func _sfx_summary(ev: String) -> String:
+	var d: Dictionary = Sfx._sound_cfg.get(ev, {})
+	if d.is_empty():
+		return "(нет в конфиге — процедурный звук)"
+	return "file=%s vol=%s pitch=%s" % [str(d.get("file", "")).get_file(), str(d.get("volume_db", 0.0)), str(d.get("pitch", 1.0))]
 
 ## Быстрая выдача веществ для приёмки. Работает только в редакторе (гейт
 ## _on_command). Выданное вещество открывается вместе с рецептом, которым оно
