@@ -1353,11 +1353,12 @@ func _experiment_launch_pair() -> void:
 	_experiment_cauldron_items.clear()
 	_refresh_experiment_cauldron()
 	var started := g._online._start_experiment(a, b)
-	if started:
+	if started and g._engine._experiment_pending_pair.size() == 2:
 		_experiment_status.text = "Светик раздувает огонь… эфир спишется только за выданный успешный результат."
 	else:
-		_experiment_cauldron_items = [a, b]
-		_refresh_experiment_cauldron()
+		# Котёл не держит пару после отказа: иначе без сервера он «зависал»,
+		# и ни одна, даже локальная, комбинация уже не проходила.
+		_experiment_status.text = g._engine.status_text
 	_refresh_experiment_drawer()
 
 
@@ -1471,7 +1472,7 @@ const MORE_HELP := [
 ]
 const MORE_LICENSES := [
 	"Manrope, PT Serif — SIL Open Font License 1.1.",
-	"Divagon, Manasco — шрифты названий и лора.",
+	"Cormorant SC, Manasco — шрифты названий и лора.",
 	"Alchemist Runic — нарисован для игры, все права у проекта.",
 	"Иконки game-icons.net (Lorc, Delapouite, Faithtoken) — CC BY 3.0.",
 	"Kenney UI Pack — CC0.",

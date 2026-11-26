@@ -55,7 +55,6 @@ const LETTER_PENDING_MAX := Balance.LETTER_PENDING_MAX
 const ATLAS_MILE_EVERY := Balance.ATLAS_MILE_EVERY
 const ATLAS_CAP_EACH := Balance.ATLAS_CAP_EACH
 const ATLAS_PENDING_MAX := Balance.ATLAS_PENDING_MAX
-const HEARTH_BASE := Balance.HEARTH_BASE
 const CIRCLE_DAY_MILES := Balance.CIRCLE_DAY_MILES
 const CIRCLE_DAY_CAP := Balance.CIRCLE_DAY_CAP
 const CIRCLE_DAY_REGEN := Balance.CIRCLE_DAY_REGEN
@@ -545,7 +544,7 @@ var _font_reg: Font = null
 var _font_semi: Font = null
 var _font_bold: Font = null
 var _font_xbold: Font = null
-var _font_display: Font = null  # Divagon: названия (заголовки карточек)
+var _font_display: Font = null  # Cormorant SC: названия (заголовки карточек)
 var _font_lore: Font = null     # Manasco: лор/описания карточек
 var _font_runic: Font = null    # Alchemist Runic: рунический заголовок шапки
 var _ui_tex: Dictionary = {}   # path -> Texture2D (кэш)
@@ -1640,8 +1639,6 @@ func _init_new_game() -> bool:
 	_engine._source_taps = 0
 	for item_id in BASE_IDS:
 		_engine.inventory[item_id] = 5
-	_engine.learn_recipe("fire", "water")
-	_engine.learn_recipe("earth", "fire")
 	_engine.ether = START_ETHER
 	_engine.ether_overflow = 0
 	_engine.mastery_rank = 0

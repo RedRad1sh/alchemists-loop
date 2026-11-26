@@ -76,7 +76,7 @@ static func make_friend_row() -> StyleBoxFlat:
 # печати: 20a / 20b / 20c, закрытие в правом верхнем углу: 21_close_icon_x_brass.png.
 # ==============================================================================
 
-## Тёмная скошенная кнопка действия на доске («Полешко: +10 ⚡»)
+## Тёмная скошенная кнопка действия на доске (кнопки доски и «Влить» у жилы)
 static func make_board_action_button(hovered: bool = false) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color("#241B13") if hovered else Color("#1B140E")
@@ -89,17 +89,4 @@ static func make_board_action_button(hovered: bool = false) -> StyleBoxFlat:
 	sb.content_margin_right = 18
 	sb.content_margin_top = 8
 	sb.content_margin_bottom = 8
-	return sb
-
-## Нижние контурные плашки вех («Вехи дней: 7·30·100·365», «Вехи очков: 50·150·500»)
-static func make_board_milestone_box() -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.09, 0.07, 0.05, 0.88)
-	sb.border_color = Color("#6E5637")
-	sb.set_border_width_all(1)
-	_set_chamfer(sb, 6)
-	sb.content_margin_left = 14
-	sb.content_margin_right = 14
-	sb.content_margin_top = 7
-	sb.content_margin_bottom = 7
 	return sb

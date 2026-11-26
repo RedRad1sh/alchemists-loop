@@ -17,17 +17,13 @@ const SIGN_SIZE := Vector2(400, 48)
 const CLOSE_SIZE := Vector2(40, 40)
 const SCROLL_STEP := 72.0
 const SCROLL_HINT_SIZE := Vector2(160, 24)
-const NOTE_SIZE := Vector2(132, 88)
+const NOTE_SIZE := Vector2(200, 150)
 const POPUP_SIZE := Vector2(276, 400)
 const NOTE_TICK := 1.0
 const SEAL_HOLD := 0.26
-# доска v2 (Task 7, спека §5): полка очага под дневным рядом и строка ранга
-# над нижним рельсом.
-const HEARTH_H := 56.0
-const RANK_H := 104.0
+# доска v2 (Task 7, спека §5): строка ранга над нижним рельсом.
+const RANK_H := 84.0
 const CONTENT_BOTTOM_GAP := 40.0
-const RANK_NOTE := Vector2(150, 48)
-const FLAME_INK := Color(1.0, 0.72, 0.30)
 # Слои отрисовки: контент листается под рамой, поэтому рама, строка ранга,
 # подсказка и кнопка закрытия обязаны лежать выше него.
 const Z_RAIL := 2
@@ -68,21 +64,15 @@ var g: Game
 var _w := 0.0
 var _h := 0.0
 var _bg: TextureRect
+var _light: TextureRect
+var _vignette: TextureRect
 var _scrim: TextureRect
 var _strip_bg: Panel
-var _strip_shadow: ColorRect
-var _strip_cut: ColorRect
-var _shelf_hearth: Control
-var _hearth_box: HBoxContainer
-var _hearth_btn: Button
-var _hearth_flame: Label
 var _rank_strip: Control
 var _rank_symbol: CircleRankSymbol
 var _rank_title: Label
-var _mile_days: Panel
-var _mile_pts: Panel
-var _mile_days_word: Label
-var _mile_pts_word: Label
+var _rank_caption: Label
+var _rank_next: Label
 var _sign: Control
 var _sign_word: Label
 var _close_btn: Button
@@ -189,6 +179,18 @@ func _build_layers() -> void:
 	_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_bg)
+	# Тёплый световой пул сверху (ADD): доска читается свечной, а не плоской.
+	_light = TextureRect.new()
+	_light.name = "CandleLight"
+	_light.texture = ContractCard.tex("board_light.png")
+	_light.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_light.stretch_mode = TextureRect.STRETCH_SCALE
+	_light.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var add_blend := CanvasItemMaterial.new()
+	add_blend.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	_light.material = add_blend
+	_light.modulate = Color(1, 1, 1, 0.75)
+	add_child(_light)
 	_sign = Control.new()
 	_sign.name = "Sign"
 	_sign.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -208,6 +210,17 @@ func _build_layers() -> void:
 	_content.clip_contents = true
 	_content.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(_content)
+	# Виньетка поверх бумаг, но под плашкой ранга и кнопками: глубина кадра,
+	# края тонут в тени, центр остаётся читаемым.
+	_vignette = TextureRect.new()
+	_vignette.name = "Vignette"
+	_vignette.texture = ContractCard.tex("board_vignette.png")
+	_vignette.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_vignette.stretch_mode = TextureRect.STRETCH_SCALE
+	_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_vignette.modulate = Color(1, 1, 1, 0.75)
+	_vignette.z_index = 1
+	add_child(_vignette)
 
 	_daily_row = Control.new()
 	_daily_row.name = "DailyRow"
@@ -223,34 +236,6 @@ func _build_layers() -> void:
 	_notes.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_content.add_child(_notes)
 
-	# Полка очага (доска v2, спека §5): та же доска-полка, на ней — полешко и
-	# пламя серии. Иммерсивность: реальная текстура shelf_bar, не Label-полоса.
-	_shelf_hearth = Control.new()
-	_shelf_hearth.name = "ShelfHearth"
-	_shelf_hearth.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_content.add_child(_shelf_hearth)
-	_hearth_box = HBoxContainer.new()
-	_hearth_box.name = "HearthBox"
-	_hearth_box.add_theme_constant_override("separation", 8)
-	_hearth_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_shelf_hearth.add_child(_hearth_box)
-	_hearth_btn = g._small_button("", Vector2(176, 38), 2)
-	_hearth_btn.name = "HearthBtn"
-	style_plate(_hearth_btn)
-	_hearth_btn.add_theme_font_size_override("font_size", BTN_FS)
-	_hearth_btn.pressed.connect(_on_hearth_pressed)
-	_hearth_box.add_child(_hearth_btn)
-	_hearth_flame = g._label("", 16)
-	_hearth_flame.name = "HearthFlame"
-	# g._label ставит autowrap: серия «✦✦» переносилась в два ряда и на кадре
-	# выглядела двумя отдельными искрами рядом с кнопкой, а не серией.
-	_hearth_flame.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_hearth_flame.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_hearth_flame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_hearth_flame.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_hearth_flame.add_theme_color_override("font_color", FLAME_INK)
-	_hearth_box.add_child(_hearth_flame)
-
 	# Маски ввода поверх полос рамы: листаясь, бумага уходит под рельс и под
 	# строку ранга, и клик по ней там был бы кликом по невидимому контракту.
 	# Добавлены ДО строки ранга и кнопки закрытия, чтобы те перехватывали ввод
@@ -258,50 +243,59 @@ func _build_layers() -> void:
 	_mask_top = _input_mask("MaskTop")
 	_mask_bottom = _input_mask("MaskBottom")
 
-	# Строка ранга (спека §5): символ + титул + два бумажных свитка вех, над
-	# нижним рельсом.
+	# Строка ранга (спека §5): латунная титульная плашка над нижним рельсом —
+	# монета ранга, подпись, титул, строка вех и прогресс до следующего ранга.
 	_rank_strip = Control.new()
 	_rank_strip.name = "RankStrip"
 	_rank_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_rank_strip.z_index = Z_RANK
 	add_child(_rank_strip)
-	# §A: строка ранга — плашка футера. Непрозрачная доска гасит бумаги, ушедшие
-	# под неё при прокрутке (маска нижнего края ловит только ввод), а 2 px тени
-	# над плашкой и 1 px светлого среза дают ей толщину рейки.
+	# §A: непрозрачная латунная плашка гасит бумаги, ушедшие под неё при
+	# прокрутке (маска нижнего края ловит только ввод). Тень и фаска запечены
+	# в текстуру plate_brass; поля 36/10 держат ободок без растяжения.
 	_strip_bg = Panel.new()
 	_strip_bg.name = "StripBg"
-	_strip_bg.add_theme_stylebox_override("panel", ModalStyle.make_board_milestone_box())
-	_strip_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var plate := StyleBoxTexture.new()
+	# Широкая плашка с офлайн-зашитым бесшовным центром: GPU уменьшает зерно
+	# (0.73×) вместо растяжения 2.76× — мыло ушло, швов нет.
+	plate.texture = ContractCard.tex("plate_brass_wide.png")
+	plate.texture_margin_left = PLATE_SIDE_FIELD
+	plate.texture_margin_right = PLATE_SIDE_FIELD
+	plate.texture_margin_top = PLATE_EDGE_FIELD
+	plate.texture_margin_bottom = PLATE_EDGE_FIELD
+	# Без тайлинга: швы повторения читались как ложная рама посередине плашки,
+	# пересекающая текст и эмблему. Центр тянется, зерно дерева это терпит.
+	plate.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
+	plate.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
+	_strip_bg.add_theme_stylebox_override("panel", plate)
+	# Пояснения вех живут в тултипе плашки: отдельная строка вех превращала
+	# титул в служебную строку состояния (независимое ревью кадра).
+	_strip_bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	_strip_bg.tooltip_text = "Вехи дней: закрывай дневные контракты — дни считаются в круг\nВехи очков: тир закрытого контракта приносит вечные очки"
 	_rank_strip.add_child(_strip_bg)
-	_strip_shadow = ColorRect.new()
-	_strip_shadow.name = "StripShadow"
-	_strip_shadow.color = Color(0.04, 0.02, 0.01, 0.55)
-	_strip_shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_strip_shadow.position = Vector2(0.0, -2.0)
-	_rank_strip.add_child(_strip_shadow)
-	_strip_cut = ColorRect.new()
-	_strip_cut.name = "StripCut"
-	_strip_cut.color = Color(1.0, 0.86, 0.62, 0.16)
-	_strip_cut.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_rank_strip.add_child(_strip_cut)
 	_rank_symbol = CircleRankSymbol.new()
 	_rank_symbol.name = "RankSymbol"
 	_rank_symbol.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_rank_strip.add_child(_rank_symbol)
-	_rank_title = g._label("", 14)
+	_rank_caption = g._label("Ранг Круга", 12)
+	_rank_caption.name = "RankCaption"
+	_rank_caption.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_rank_caption.add_theme_color_override("font_color", PLATE_INK)
+	_rank_strip.add_child(_rank_caption)
+	_rank_title = g._label("", 22)
 	_rank_title.name = "RankTitle"
 	_rank_title.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_rank_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	if g._font_semi != null:
-		_rank_title.add_theme_font_override("font", g._font_semi)
-	_rank_title.add_theme_color_override("font_color", SIGN_INK)
+	ContractCard.title_font(_rank_title)
+	_rank_title.add_theme_color_override("font_color", PLATE_INK)
 	_rank_strip.add_child(_rank_title)
-	_mile_days = _rank_note("MileDays", "Вехи дней: закрывай дневные контракты — дни считаются в круг")
-	_mile_pts = _rank_note("MilePts", "Вехи очков: тир закрытого контракта приносит вечные очки")
-	_rank_strip.add_child(_mile_days)
-	_rank_strip.add_child(_mile_pts)
-	_mile_days_word = _mile_days.get_node("Word") as Label
-	_mile_pts_word = _mile_pts.get_node("Word") as Label
+	_rank_next = g._label("", 12)
+	_rank_next.name = "RankNext"
+	_rank_next.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_rank_next.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_rank_next.clip_text = true
+	_rank_next.add_theme_color_override("font_color", PLATE_INK)
+	_rank_strip.add_child(_rank_next)
 
 	_scroll_hint = g._label("", 12)
 	_scroll_hint.name = "ScrollHint"
@@ -346,27 +340,6 @@ func _add_card(row: Control) -> void:
 	row.add_child(card)
 	_cards.append(card)
 
-# Бумажный свиток вех в строке ранга: real paper_note.png +(child Label, как
-# записки баффов — правило immersive UI, не Label-простыня.
-func _rank_note(node_name: String, tip: String) -> Panel:
-	var r := Panel.new()
-	r.name = node_name
-	r.add_theme_stylebox_override("panel", ModalStyle.make_board_milestone_box())
-	r.mouse_filter = Control.MOUSE_FILTER_STOP
-	r.tooltip_text = tip
-	var w := g._label("", 10)
-	w.name = "Word"
-	w.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	w.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	w.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	ContractCard.paper_font(w)
-	w.add_theme_color_override("font_color", Color("c6b294"))
-	w.clip_text = true
-	w.position = Vector2(16.0, 7.0)
-	w.size = RANK_NOTE - Vector2(32.0, 14.0)
-	r.add_child(w)
-	return r
-
 func _relayout() -> void:
 	var vp: Vector2 = g.get_viewport_rect().size
 	_w = vp.x
@@ -374,6 +347,8 @@ func _relayout() -> void:
 	position = Vector2.ZERO
 	size = vp
 	_bg.size = vp
+	_light.size = vp
+	_vignette.size = vp
 
 	var inner := _w - 2.0 * RAIL
 	var view_top := RAIL + SIGN_SIZE.y + 12.0
@@ -397,23 +372,21 @@ func _relayout() -> void:
 	_rank_strip.position = Vector2(RAIL, _h - RAIL - RANK_H)
 	_rank_strip.size = Vector2(inner, RANK_H)
 	_strip_bg.size = Vector2(inner, RANK_H)
-	_strip_shadow.size = Vector2(inner, 2.0)
-	_strip_cut.position = Vector2(0.0, 0.0)
-	_strip_cut.size = Vector2(inner, 1.0)
-	_rank_symbol.position = Vector2(8.0, 0.0)
+	# Эстетика плашки: контент живёт внутри рамы с воздухом ≥12 px, эмблема
+	# не пересекает раму и латунные уголки, тексты не прижаты к кромкам.
+	_rank_symbol.position = Vector2(28.0, 18.0)
 	_rank_symbol.size = Vector2(48.0, 48.0)
-	_rank_title.position = Vector2(64.0, 0.0)
-	_rank_title.size = Vector2(inner - 72.0, 48.0)
+	var next_w := 210.0 if inner >= 400.0 else 80.0
+	var text_x := 88.0
+	var right_m := 56.0
+	var text_w := inner - text_x - next_w - right_m - 8.0
+	_rank_caption.position = Vector2(text_x, 19.0)
+	_rank_caption.size = Vector2(text_w, 15.0)
+	_rank_title.position = Vector2(text_x, 36.0)
+	_rank_title.size = Vector2(text_w, 30.0)
 	_rank_title.clip_text = true
-	var note_size := Vector2((inner - 24.0) / 2.0, 48.0)
-	_mile_days.position = Vector2(8.0, 48.0)
-	_mile_days.size = note_size
-	_mile_pts.position = Vector2(16.0 + note_size.x, 48.0)
-	_mile_pts.size = note_size
-	for word in [_mile_days_word, _mile_pts_word]:
-		word.position = Vector2(10.0, 7.0)
-		word.size = note_size - Vector2(20.0, 14.0)
-		word.add_theme_font_size_override("font_size", 10)
+	_rank_next.position = Vector2(inner - next_w - right_m, 31.0)
+	_rank_next.size = Vector2(next_w, 40.0)
 
 	_mask_top.position = Vector2.ZERO
 	_mask_top.size = Vector2(_w, view_top)
@@ -438,23 +411,26 @@ func _relayout() -> void:
 	if _popup != null:
 		_popup.position = Vector2((_w - POPUP_SIZE.x) / 2.0, (_h - POPUP_SIZE.y) / 2.0)
 
-# Поток контента: вывеска → записки баффов → дневная полка и ряд → очаг →
+# Поток контента: вывеска → записки баффов → дневная полка и ряд →
 # недельная полка и ряд. `top` — верх видимой полосы с учётом прокрутки.
 func _layout_flow(top: float, inner: float) -> void:
-	_notes.position = Vector2(RAIL + BAND_DX, top + 8.0)
-	var band_w := inner - 2.0 * BAND_DX
+	# Левая кромка бумаги записки вровень с левой кромкой бумаги карточек:
+	# те центрируются сеткой с ячейкой +48 и сдвигом +24, бумага записки
+	# начинается на +6 от узла — компенсируем разницу.
+	var cell_x := ContractCard.DAILY_SIZE.x + 48.0
+	var per_c := maxi(1, int((inner + CARD_GAP) / (cell_x + CARD_GAP)))
+	var cnt := mini(per_c, _daily_row.get_child_count())
+	var total_c := float(cnt) * cell_x + float(cnt - 1) * CARD_GAP
+	var x0_c := (inner - total_c) / 2.0
+	var band_dx := 20.0 + x0_c
+	_notes.position = Vector2(RAIL + band_dx, top + 8.0)
+	var band_w := inner - band_dx - BAND_DX
 	_notes.size = Vector2(band_w, _notes_band_h(band_w))
 	var daily_top := _notes.position.y + _notes.size.y + 12.0
 	_daily_row.position = Vector2(RAIL, daily_top)
 	_daily_row.size = Vector2(inner, ContractCard.DAILY_SIZE.y)
 	_place(_daily_row, ContractCard.DAILY_SIZE)
-	# Доска v2 (Task 7): полка очага — ПОСЛЕ дневного ряда, поэтому её точка
-	# привязки читается фактической высотой ряда, которую вернул wrapping-_place.
-	_shelf_hearth.position = Vector2(RAIL, _daily_row.position.y + _daily_row.size.y + ROW_DY)
-	_shelf_hearth.size = Vector2(inner, HEARTH_H)
-	_hearth_box.position = Vector2(8.0, 8.0)
-	_hearth_box.size = Vector2(inner - 16.0, 40.0)
-	_weekly_row.position = Vector2(RAIL, _shelf_hearth.position.y + HEARTH_H + ROW_DY)
+	_weekly_row.position = Vector2(RAIL, _daily_row.position.y + _daily_row.size.y + ROW_DY)
 	_weekly_row.size = Vector2(inner, ContractCard.WEEKLY_SIZE.y)
 	_place(_weekly_row, ContractCard.WEEKLY_SIZE)
 
@@ -534,50 +510,39 @@ func refresh() -> void:
 			card.visible = true
 		else:
 			card.visible = false
-	_refresh_hearth()
 	_refresh_rank()
 	_relayout()
-
-# Очаг (спека §5): полешко раз в день, пламя — шкала серии.
-func _refresh_hearth() -> void:
-	var c := g._contracts
-	var claimable := c.hearth_claimable()
-	_hearth_btn.text = "Полешко: +%d ⚡" % c.hearth_reward() if claimable else "Забрано ✓"
-	_hearth_btn.disabled = not claimable
-	_hearth_flame.text = c.flame()
 
 func _refresh_rank() -> void:
 	var c := g._contracts
 	var lvl := c.rank_level()
 	_rank_symbol.setup(lvl)
 	_rank_title.text = c.rank_title(lvl)
-	_mile_days_word.text = "Вехи дней: %s" % c.mile_strip("дней", Game.CIRCLE_DAY_MILES, c._mdays)
-	_mile_pts_word.text = "Вехи очков: %s" % c.mile_strip("очков", Game.CIRCLE_PTS_MILES, c._mpts)
-	_fit_note_label(_mile_days_word, 10, 7)
-	_fit_note_label(_mile_pts_word, 10, 7)
+	_rank_next.text = _next_rank_text(c, lvl)
 
 
-static func _fit_note_label(l: Label, max_fs: int, min_fs: int) -> void:
-	if l == null:
-		return
-	var f := l.get_theme_font("font")
-	if f == null or l.size.x <= 0.0:
-		return
-	var shown := l.atr(l.text)
-	for fs in range(max_fs, min_fs - 1, -1):
-		if f.get_string_size(shown, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= l.size.x:
-			l.add_theme_font_size_override("font_size", fs)
-			return
-	l.add_theme_font_size_override("font_size", min_fs)
+static func _next_rank_text(c: Contracts, lvl: int) -> String:
+	for rk in Game.CIRCLE_RANKS:
+		if int(rk["level"]) != lvl + 1:
+			continue
+		var days := String(rk["kind"]) == "дней"
+		var have := c._visit_days.size() if days else c._pts_total
+		var left := maxi(0, int(rk["threshold"]) - have)
+		# Полные слова, не сокращения: «89 очк.» читается как обрезанный текст.
+		var word := _plural(left, "день", "дня", "дней") if days \
+			else _plural(left, "очко", "очка", "очков")
+		return "далее: «%s» · ещё %d %s" % [String(rk["title"]), left, word]
+	return "высший ранг Круга"
 
-func _on_hearth_pressed() -> void:
-	Sfx.click()
-	var lvl_before := g._contracts.rank_level()
-	g._contracts.claim_hearth()
-	Juice.pop(_hearth_flame, UIStyle.TEAL)
-	if g._contracts.rank_level() > lvl_before:
-		Juice.pop(_rank_symbol, UIStyle.GOLD)
-		Juice.ring(_rank_symbol, _rank_symbol.get_global_rect().get_center(), UIStyle.GOLD, 60.0)
+
+static func _plural(n: int, one: String, few: String, many: String) -> String:
+	var m10 := n % 10
+	var m100 := n % 100
+	if m10 == 1 and m100 != 11:
+		return one
+	if m10 >= 2 and m10 <= 4 and (m100 < 12 or m100 > 14):
+		return few
+	return many
 
 # Полоса записок растёт по числу рядов: без баффов пустой полосы над дневной
 # полкой нет вовсе, и контракты начинаются сразу под вывеской.
@@ -594,6 +559,9 @@ func _layout_notes() -> void:
 	var buffs: Array = g._contracts.active_buffs()
 	var sig := _notes_sig(buffs)
 	if sig == _notes_sig_cache and _notes.get_child_count() == buffs.size():
+		# Набор баффов тот же — записки живут, время обновляется на месте.
+		# Пересборка сбрасывала раскрытую игроком расшифровку каждый тик.
+		_refresh_note_times(buffs)
 		return
 	_notes_sig_cache = sig
 	# Бафф истёк по таймеру — полоса сменила высоту, ряды под ней надо сдвинуть.
@@ -614,11 +582,45 @@ func _layout_notes() -> void:
 		i += 1
 
 func _notes_sig(buffs: Array) -> String:
+	# Подпись — только набор id и ширина полосы. Секунды сюда не входят: иначе
+	# каждый тик менял бы подпись и полоса пересобиралась, роняя расшифровку.
 	var parts: Array = ["%d" % int(_notes.size.x)]
 	for raw in buffs:
 		var b := raw as Dictionary
-		parts.append("%s:%d" % [String(b["id"]), int(b["left"])])
+		parts.append(String(b["id"]))
 	return "|".join(parts)
+
+# Время на записке обновляется на месте, без пересборки: раскрытая расшифровка
+# и сам узел переживают тики таймера.
+func _refresh_note_times(buffs: Array) -> void:
+	var by_id := {}
+	for raw in buffs:
+		var b := raw as Dictionary
+		by_id[String(b["id"])] = _mm(int(b["left"]))
+	for ch in _notes.get_children():
+		var note := ch as TextureButton
+		if note == null:
+			continue
+		var shown := String(by_id.get(String(note.get_meta("id", "")), ""))
+		if shown.is_empty():
+			continue
+		note.set_meta("time", shown)
+		note.tooltip_text = "%s — %s (+%s), осталось %s" % [String(note.get_meta("title")),
+			String(note.get_meta("effect")), String(note.get_meta("pct")), shown]
+		var w := _word_of(note)
+		if w == null:
+			continue
+		w.text = _detail_text(note) if bool(note.get_meta("shown_detail", false)) else _face_text(note)
+
+# Лицевая сторона: имя баффа и сила видны всегда, время — под ними. Расшифровка
+# по клику показывает, что именно делает бафф.
+func _face_text(note: Node) -> String:
+	return "%s\n+%s · %s" % [String(note.get_meta("title")),
+		String(note.get_meta("pct")), String(note.get_meta("time"))]
+
+func _detail_text(note: Node) -> String:
+	return "%s\n+%s · %s" % [String(note.get_meta("effect")),
+		String(note.get_meta("pct")), String(note.get_meta("time"))]
 
 func _make_note(b: Dictionary) -> TextureButton:
 	var id := String(b["id"])
@@ -641,7 +643,7 @@ func _make_note(b: Dictionary) -> TextureButton:
 		String(ContractsBalance.BUFF_TEXT.get(id, "")), String(note.get_meta("pct")), shown]
 	note.pressed.connect(_on_note_pressed.bind(note))
 
-	var w := g._label(shown, 13)
+	var w := g._label(_face_text(note), 13)
 	w.name = "Time"
 	w.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	w.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -649,8 +651,17 @@ func _make_note(b: Dictionary) -> TextureButton:
 	w.clip_text = true
 	ContractCard.paper_font(w)
 	w.add_theme_color_override("font_color", NOTE_INK)
-	w.position = Vector2(12.0, 20.0)
-	w.size = Vector2(NOTE_SIZE.x - 24.0, 58.0)
+	# Текстура записки (264x176): сплошной лист занимает x 7..201, y 6..136 —
+	# ~73% rect, остальное прозрачные поля и тень. Label и гвоздь садятся по
+	# границам листа, иначе строки рисуются на дереве за кромкой бумаги.
+	# Четыре строки расшифровки при кегле 12 занимают ~80 px: clip_text целиком
+	# выбрасывает строку за границей label. Высота листа — с запасом под самую
+	# длинную расшифровку и перевод, а не под один демо-бафф.
+	var paper_pos := NOTE_SIZE * Vector2(0.03, 0.04)
+	var paper_size := NOTE_SIZE * Vector2(0.73, 0.73)
+	w.position = paper_pos + Vector2(7.0, 7.0)
+	w.size = paper_size - Vector2(14.0, 14.0)
+	_fit_face(w, note)
 	note.add_child(w)
 
 	# Гвоздь поверх записки — тот же приём, что у бумаг Task 9: приколотый лист,
@@ -661,7 +672,7 @@ func _make_note(b: Dictionary) -> TextureButton:
 	pin.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pin.stretch_mode = TextureRect.STRETCH_SCALE
 	pin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pin.position = Vector2(NOTE_SIZE.x / 2.0 - 16.0, -16.0)
+	pin.position = Vector2(NOTE_SIZE.x * 0.395 - 16.0, -12.0)
 	pin.size = Vector2(32.0, 32.0)
 	note.add_child(pin)
 	return note
@@ -673,19 +684,33 @@ static func _word_of(note: Node) -> Label:
 			return l
 	return null
 
+# Имя баффа — одна строка лицевой стороны: подбираем кегль, чтобы оно не
+# упиралось в кромку листа и не переносилось третьей строкой под обрез.
+static func _fit_face(w: Label, note: Node) -> void:
+	var f := w.get_theme_font("font")
+	if f == null or w.size.x <= 0.0:
+		return
+	var title := String(note.get_meta("title"))
+	for fs in range(13, 10, -1):
+		if f.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= w.size.x:
+			w.add_theme_font_size_override("font_size", fs)
+			return
+	w.add_theme_font_size_override("font_size", 11)
+
 func _on_note_pressed(note: Node) -> void:
 	Sfx.click()
 	var w := _word_of(note)
 	if w == null:
 		return
+	# Toggle персистентный: состояние живёт в мете записки, а не сбрасывается
+	# пересборкой полосы (её теперь нет на каждом тике).
 	if bool(note.get_meta("shown_detail", false)):
-		w.add_theme_font_size_override("font_size", 13)
-		w.text = String(note.get_meta("time"))
+		_fit_face(w, note)
+		w.text = _face_text(note)
 		note.set_meta("shown_detail", false)
 		return
-	w.add_theme_font_size_override("font_size", 10)
-	w.text = "%s\n%s · %s" % [String(note.get_meta("title")),
-		String(note.get_meta("effect")), String(note.get_meta("pct"))]
+	w.add_theme_font_size_override("font_size", 12)
+	w.text = _detail_text(note)
 	note.set_meta("shown_detail", true)
 
 func _process(delta: float) -> void:

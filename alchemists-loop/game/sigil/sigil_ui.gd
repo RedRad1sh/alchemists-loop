@@ -109,6 +109,7 @@ func _open_sigil_modal(start_tab: String = "crafts") -> void:
 	# busy/_shield, поэтому запускать их одновременно нельзя.
 	_sigil_build_page(start_tab)
 	_open_sigil_book_and_show_tab.call_deferred(start_tab)
+	main._spirit._refresh_companion_visible()
 
 
 ## Открыть книгу Аркана (обложка откидывается) и показать стартовую страницу.
@@ -393,7 +394,7 @@ func _sigil_set_panel(set_def: Dictionary) -> Control:
 	box.add_child(head)
 	var title: Label = main._label(str(set_def.get("title", "")), 17)
 	title.name = "SigilSetTitle"
-	title.add_theme_font_override("font", load("res://assets/fonts/Divagon.otf"))
+	title.add_theme_font_override("font", load("res://assets/fonts/CormorantSC-SemiBold.ttf"))
 	title.add_theme_font_size_override("font_size", 22)
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title.add_theme_color_override("font_color", accent)
@@ -519,7 +520,7 @@ func _open_sigil_set_screen(set_id: String) -> void:
 	var title: Label = main._label("%s · %d/%d" % [str(set_def.get("title", "")),
 		collected, main.SIGIL_SET_SIZE], 20)
 	title.name = "SigilSetScreenTitle"
-	title.add_theme_font_override("font", load("res://assets/fonts/Divagon.otf"))
+	title.add_theme_font_override("font", load("res://assets/fonts/CormorantSC-SemiBold.ttf"))
 	title.add_theme_font_size_override("font_size", 22)
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title.add_theme_color_override("font_color", accent)
@@ -1273,7 +1274,7 @@ func _sigil_craft_row(craft: Dictionary) -> Control:
 	row.add_child(info)
 
 	var name_lbl: Label = main._label(title, 22)
-	name_lbl.add_theme_font_override("font", load("res://assets/fonts/Divagon.otf"))
+	name_lbl.add_theme_font_override("font", load("res://assets/fonts/CormorantSC-SemiBold.ttf"))
 	name_lbl.add_theme_color_override("font_color", UIStyle.PAPER_HI)
 	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1789,6 +1790,7 @@ func _close_sigil_collection() -> void:
 	_sigil_book = null
 	_sigil_pages = {}
 	Sfx.click()
+	main._spirit._refresh_companion_visible()
 
 func _sigil_thumb(item: Dictionary) -> Control:
 	var id := str(item["id"])

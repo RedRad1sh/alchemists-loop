@@ -122,7 +122,6 @@ const BASELINE_DATA := {
 		"pending_max": 20,
 	},
 	"circle": {
-		"hearth_base": 10,
 		"day_miles": [7, 30, 100, 365],
 		"day_cap": {7: 5, 100: 10},
 		"day_regen": {30: 0.05},
@@ -133,7 +132,7 @@ const BASELINE_DATA := {
 			{"level": 1, "kind": "дней",  "threshold": 7,   "title": "Искра",     "shape": "dot",      "color": "#ffe08a"},
 			{"level": 2, "kind": "дней",  "threshold": 30,  "title": "Уголёк",    "shape": "circle",   "color": "#e88a3c"},
 			{"level": 3, "kind": "очков", "threshold": 50,  "title": "Тлеющий",   "shape": "triangle", "color": "#e05252"},
-			{"level": 4, "kind": "дней",  "threshold": 100, "title": "Полено",    "shape": "square",   "color": "#a03028"},
+			{"level": 4, "kind": "дней",  "threshold": 100, "title": "Жар",       "shape": "square",   "color": "#d06030"},
 			{"level": 5, "kind": "очков", "threshold": 150, "title": "Горящий",   "shape": "diamond",  "color": "#ff6a3c"},
 			{"level": 6, "kind": "дней",  "threshold": 365, "title": "Сердце",    "shape": "star",     "color": "#ffd21f"},
 			{"level": 7, "kind": "очков", "threshold": 500, "title": "Пламенный", "shape": "flame",    "color": "#fff4d6"},

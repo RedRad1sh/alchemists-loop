@@ -1,27 +1,22 @@
 extends Control
 class_name CircleRankSymbol
-# Символ-ранг «Огонёк очага» (§2.2): процедурный, 7 форм, без анимации в v1.
+# Символ-ранг Круга: геральдический щит с латунной рамой, полем цвета ранга,
+# пламенем о трёх языках и звездой сверху — композиция просмотренного рефа
+# (щит-бейдж ранга), матово, без glow. Без анимации.
 
 var level := 0
 
+
 func setup(lvl: int) -> void:
 	level = lvl
-	custom_minimum_size = Vector2(64, 64)
 	queue_redraw()
 
-## Толщина силуэта (спека крафта §A): тёмная нижняя грань и светлый верхний срез
-## рисуются теми же контурами со сдвигом по вертикали, поэтому одна форма даёт
-## «штампованную монету», а не плоскую заливку из пеинта.
-const FACE_DY := -1.4
-const SHADOWS := [
-	[Vector2(2.0, 3.0), Color(0.05, 0.02, 0.01, 0.30)],
-	[Vector2(1.3, 2.0), Color(0.05, 0.02, 0.01, 0.18)],
-	[Vector2(0.7, 1.0), Color(0.05, 0.02, 0.01, 0.08)],
-]
-## Латунный обод: без него насыщенный символ ранга читается красным пятном на
-## ореховой доске. Обод — металл палитры доски, не новый цвет.
-const RIM_INK := Color(0.62, 0.45, 0.20)
-const RIM_K := 1.16
+
+static func emblem_glyph(lvl: int) -> String:
+	if lvl < 1:
+		return ""
+	return "shield_flame"
+
 
 func _draw() -> void:
 	if level < 1:
@@ -32,46 +27,42 @@ func _draw() -> void:
 			rk = r
 	if rk.is_empty():
 		return
-	var shape := String(rk["shape"])
 	var col := Color(String(rk["color"]))
-	for s in SHADOWS:
-		_shape(shape, size * 0.5 + (s[0] as Vector2), s[1] as Color, RIM_K)
-	var c := size * 0.5
-	_shape(shape, c + Vector2(0.0, 0.8), RIM_INK, RIM_K)
-	_shape(shape, c, col.darkened(0.45))
-	_shape(shape, c + Vector2(0.0, FACE_DY - 1.0), col.lightened(0.32))
-	_shape(shape, c + Vector2(0.0, FACE_DY), col)
+	var shield := [Vector2(0.16, 0.14), Vector2(0.84, 0.14), Vector2(0.86, 0.44),
+		Vector2(0.72, 0.72), Vector2(0.50, 0.94), Vector2(0.28, 0.72),
+		Vector2(0.14, 0.44)]
+	# Рама: тёмный обод, латунная фаска со сдвигом вниз, светлая латунь.
+	draw_colored_polygon(_sp(shield, 1.0), Color("5c3a1e"))
+	draw_colored_polygon(_sp(shield, 0.93, 0.015), Color("8a6c42"))
+	draw_colored_polygon(_sp(shield, 0.93), Color("d9b36a"))
+	# Поле цвета ранга: тёмная основа + основной тон + светлый верх для глубины.
+	draw_colored_polygon(_sp(shield, 0.78), col.darkened(0.35))
+	draw_colored_polygon(_sp(shield, 0.72), col)
+	draw_colored_polygon(_sp(shield, 0.72, -0.02),
+		Color(col.r, col.g, col.b, 0.30).lightened(0.2))
+	# Пламя о трёх языках с тенью и светлым ядром.
+	var flame := [Vector2(0.50, 0.28), Vector2(0.56, 0.38), Vector2(0.63, 0.33),
+		Vector2(0.60, 0.46), Vector2(0.66, 0.53), Vector2(0.61, 0.65),
+		Vector2(0.50, 0.74), Vector2(0.39, 0.65), Vector2(0.34, 0.53),
+		Vector2(0.40, 0.46), Vector2(0.37, 0.33), Vector2(0.44, 0.38)]
+	draw_colored_polygon(_sp(flame, 1.0, 0.015), Color(0.05, 0.02, 0.01, 0.35))
+	draw_colored_polygon(_sp(flame, 1.0), Color("ffd98a"))
+	draw_colored_polygon(_sp([Vector2(0.50, 0.44), Vector2(0.55, 0.55),
+		Vector2(0.50, 0.66), Vector2(0.45, 0.55)], 1.0), Color(1.0, 0.95, 0.82, 0.9))
+	# Звезда-венец над щитом.
+	var star := PackedVector2Array()
+	for k in 10:
+		var a := TAU * float(k) / 10.0 - PI / 2.0
+		var rad := 0.08 if k % 2 == 0 else 0.034
+		star.append(Vector2(0.5 + cos(a) * rad, 0.09 + sin(a) * rad))
+	draw_colored_polygon(_sp(star, 1.0, 0.012), Color(0.05, 0.02, 0.01, 0.35))
+	draw_colored_polygon(_sp(star, 1.0), Color("ffd21f"))
 
-## Одна отливка символа: центр `c`, чернила `col`, масштаб силуэта `mul`.
-func _shape(shape: String, c: Vector2, col: Color, mul: float = 1.0) -> void:
-	var rr := minf(size.x, size.y) * 0.36 * mul
-	match shape:
-		"dot":
-			draw_circle(c, rr * 0.30, col)
-		"circle":
-			draw_circle(c, rr * 0.55, col)
-		"triangle":
-			draw_colored_polygon(_poly(c, [Vector2(0, -rr),
-				Vector2(rr * 0.87, rr * 0.5), Vector2(-rr * 0.87, rr * 0.5)]), col)
-		"square":
-			draw_colored_polygon(_poly(c, [Vector2(-rr * 0.75, -rr * 0.75),
-				Vector2(rr * 0.75, -rr * 0.75), Vector2(rr * 0.75, rr * 0.75),
-				Vector2(-rr * 0.75, rr * 0.75)]), col)
-		"diamond":
-			draw_colored_polygon(_poly(c, [Vector2(0, -rr), Vector2(rr * 0.7, 0),
-				Vector2(0, rr), Vector2(-rr * 0.7, 0)]), col)
-		"star":
-			var pts := PackedVector2Array()
-			for k in 10:
-				var a := TAU * float(k) / 10.0 - PI / 2.0
-				var rad := rr if k % 2 == 0 else rr * 0.42
-				pts.append(c + Vector2(cos(a), sin(a)) * rad)
-			draw_colored_polygon(pts, col)
-		"flame":
-			ElementGlyphs.draw(self, "fire", c, rr, col)
 
-func _poly(c: Vector2, offs: Array) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	for o in offs:
-		pts.append(c + (o as Vector2))
-	return pts
+## Доли силуэта → пиксели: масштаб k вокруг центра и сдвиг dy по вертикали.
+func _sp(pts, k: float, dy: float = 0.0) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for p in pts:
+		var v := p as Vector2
+		out.append(Vector2((v.x - 0.5) * k + 0.5, (v.y - 0.5) * k + 0.5 + dy) * size)
+	return out

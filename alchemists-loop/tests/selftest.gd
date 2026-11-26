@@ -150,6 +150,10 @@ static func run(g: Game) -> void:
 
 	if OS.get_cmdline_user_args().has("--suite=house_v2"):
 		await SuiteHouseV2.run(g)
+	elif OS.get_cmdline_user_args().has("--suite=experiment_recovery"):
+		await load("res://tests/suite_experiment_recovery.gd").run(g)
+	elif OS.get_cmdline_user_args().has("--suite=workshop_ui"):
+		await load("res://tests/suite_workshop_ui.gd").run(g)
 	elif OS.get_cmdline_user_args().has("--suite=contracts"):
 		await SuiteContractBoard.run(g)
 	elif OS.get_cmdline_user_args().has("--suite=navigation"):
@@ -158,6 +162,8 @@ static func run(g: Game) -> void:
 		await load("res://tests/suite_avatar_profiles.gd").run(g)
 	elif OS.get_cmdline_user_args().has("--suite=engraved"):
 		await load("res://tests/suite_ui_engraved.gd").run(g)
+	elif OS.get_cmdline_user_args().has("--suite=companion"):
+		await SuiteCompanionAtlas.run(g)
 	elif OS.get_cmdline_user_args().has("--suite=i18n"):
 		var i18n_s: Script = load("res://tests/suite_ui_i18n.gd")
 		if i18n_s != null and i18n_s.can_instantiate():
@@ -232,6 +238,7 @@ static func run(g: Game) -> void:
 				ui_script != null and ui_script.can_instantiate())
 			if ui_script != null and ui_script.can_instantiate():
 				await ui_script.run(g)
+		await load("res://tests/suite_experiment_recovery.gd").run(g)
 		await load("res://tests/suite_avatar_profiles.gd").run(g)
 
 	_u20_wipe([g.SAVE_PATH, g.TEMP_PATH, g.BACKUP_PATH] + U20_ST_FILES)

@@ -201,7 +201,7 @@ func add_page(title: String, page: Control) -> int:
 	b.text = title
 	b.focus_mode = Control.FOCUS_NONE
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b.add_theme_font_override("font", load("res://assets/fonts/Divagon.otf"))
+	b.add_theme_font_override("font", load("res://assets/fonts/CormorantSC-SemiBold.ttf"))
 	b.add_theme_font_size_override("font_size", 17)
 	b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	b.pressed.connect(func() -> void: go_to(idx))

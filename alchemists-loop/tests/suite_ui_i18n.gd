@@ -351,10 +351,12 @@ static func run(g: Game) -> void:
 	if cb_en == null:
 		cb_bounds_bad.append("no ContractBoard")
 	else:
-		for rn in [cb_en._mile_days, cb_en._mile_pts]:
-			var rw := rn.get_node("Word") as Label
-			if rw.position.x < 10.0 or rw.position.x + rw.size.x > rn.size.x - 10.0 or rw.get_visible_line_count() < rw.get_line_count():
-				cb_bounds_bad.append("rank_note:" + rn.name)
+		for rl in [cb_en._rank_next, cb_en._rank_caption]:
+			if rl == null:
+				cb_bounds_bad.append("rank_label:missing")
+				continue
+			if rl.get_visible_line_count() < rl.get_line_count():
+				cb_bounds_bad.append("rank_label:" + rl.name)
 		for bnote in cb_en._notes.get_children():
 			cb_en._on_note_pressed(bnote)
 			await g.get_tree().process_frame

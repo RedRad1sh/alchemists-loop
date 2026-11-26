@@ -516,6 +516,10 @@ func _start_experiment(a: String, b: String) -> bool:
 			Sfx.error()
 			return false
 		if not target_mode and not _discovery_available():
+			# Отказ офлайн сразу пробует связь: после восстановления сервера
+			# следующий эксперимент проходит без перезапуска.
+			if _net_enabled and Net.base_url != "":
+				Net._ping()
 			var message := ("Эксперимент требует связи с миром: "
 				+ "новый элемент нельзя создать офлайн.")
 			_set_status(message)
@@ -666,6 +670,8 @@ func _resume_pending_experiment() -> void:
 	Net.check_pair(a, b, _net_nick, _device_id, true)
 
 func _tick_pending_experiment() -> void:
+	# Просроченный ответ освобождает котёл и без новых регистраций.
+	_prune_pending_requests()
 	if not _target_attempt_receipt.is_empty():
 		if _resume_experiment_wait and Net.is_available():
 			_resume_pending_target_attempt()

@@ -219,6 +219,8 @@ static func acceptance_flow(g: Game) -> Dictionary:
 	var unknown := w.enqueue(line_ids[0], {"target": "dust", "mode": "batch", "amount": 1})
 	result["unknown_post_prestige_rejected"] = not unknown.get("ok", true) and inventory == g._engine.inventory and before == g._engine._available_ether()
 	if w.lines.size() >= 2:
+		g._engine.learn_recipe("fire", "water")
+		g._engine.learn_recipe("earth", "fire")
 		w.enqueue(line_ids[0], {"target": "steam", "mode": "batch", "amount": 1})
 		w.enqueue(line_ids[1], {"target": "stone", "mode": "batch", "amount": 1})
 		g._process(Game.BENCH_INTERVAL)
