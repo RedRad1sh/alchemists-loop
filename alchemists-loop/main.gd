@@ -2387,10 +2387,8 @@ func _show_sigil_card(tex: ImageTexture, item_id: String, display_name: String, 
 			close_fn.call()
 	)
 
-	if is_special:
-		Sfx.legendary()
-	else:
-		Sfx.discovery()
+	# Звук по редкости: normal / legend / mythic (chromatic) — свои файлы.
+	Sfx.card(rarity)
 
 
 ## Запуск reveal-анимаций на кадре после раскладки. К этому моменту center
