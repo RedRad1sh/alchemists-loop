@@ -1,99 +1,97 @@
 {
-  "comment": "Центральный конфиг звуков. Ключ = имя события (вызов Sfx.play_event('имя') или Sfx.<имя>() в коде). Значение: file (путь к wav/ogg, опционально), volume_db, pitch (скорость), delay (сек до проигрывания), about (пояснение). Если file пуст/не найден — используется процедурный звук как раньше. Класть wav в res://assets/audio/ и писать путь в file (res://assets/audio/имя.wav).",
+  "comment": "Центральный конфиг звуков. Ключ = имя события (Sfx.<имя>() или Sfx.play_event('имя')). Файлы лежат в папках по группам: ui, craft, ritual, reward, spirit (имя файла = событие). Поля: file (wav/ogg/mp3), volume_db, pitch, delay, start_sec/len_sec (нарезка wav), loop, about. Если file пуст/не найден — процедурный звук. Подбор на слух без перезапуска: консоль `~` → sfx set/file/save. _candidates/ — запасные варианты, нигде не подключены.",
   "events": {
     "click": {
-      "file": "res://assets/audio/cc0/kenney_ui_click1.wav",
-      "volume_db": -4.0,
+      "group": "ui",
+      "file": "res://assets/audio/ui/click.mp3",
+      "volume_db": -7.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "UI-клик: кнопки, ячейки, закрытие окон — базовый щелчок интерфейса"
     },
     "error": {
-      "file": "res://assets/audio/cc0/kenney_interface_error_003.wav",
+      "group": "ui",
+      "file": "res://assets/audio/ui/error.wav",
       "volume_db": -12.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Ошибка: неудачное действие, отказ, крафт не прошёл — низкий тревожный тон"
     },
+    "craft_start": {
+      "group": "ui",
+      "file": "res://assets/audio/ui/craft_start.wav",
+      "volume_db": -8.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Старт крафта: подтверждение на доске (списание ингредиентов, начало ритуала)"
+    },
+    "game_start": {
+      "group": "ui",
+      "file": "res://assets/audio/ui/game_start.wav",
+      "volume_db": -4.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Вход в игру: приветственный аккорд при старте (не в selftest)"
+    },
     "bubble": {
-      "file": "res://assets/audio/cc0/oga_plop_02.ogg",
+      "group": "craft",
+      "file": "res://assets/audio/craft/bubble.mp3",
       "volume_db": -6.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Пузырёк/варка в котле: добавление элемента в слоты эксперимента"
     },
+    "draft_open": {
+      "group": "craft",
+      "file": "res://assets/audio/craft/draft_open.mp3",
+      "volume_db": 2.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Открытие чертежа/рецепта: панель крафта, дневной оффер"
+    },
+    "brew_discover": {
+      "group": "craft",
+      "file": "res://assets/audio/craft/brew_discover.mp3",
+      "volume_db": -3.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Эксперимент в котле: найдено новое сочетание (попап нового рецепта)"
+    },
     "divide": {
-      "file": "res://assets/audio/cc0/oga_ding_positive.ogg",
+      "group": "craft",
+      "file": "res://assets/audio/craft/divide.ogg",
       "volume_db": -6.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Успех/награда: короткий положительный отклик за успешное действие, улучшение или награду"
     },
     "morph": {
-      "file": "res://assets/audio/cc0/morph.wav",
+      "group": "craft",
+      "file": "res://assets/audio/craft/morph.wav",
       "volume_db": -6.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Морфинг: преобразование формы — реверсивный магический свип. CC0: JW_Audio, freesound.org/s/831805 (кусок 0.9–2.9 с, нормализован)"
     },
-    "draft_open": {
-      "file": "res://assets/audio/cc0/kenney_rpg_book_flip_3.ogg",
-      "volume_db": 2.0,
-      "pitch": 1.0,
-      "delay": 0.0,
-      "about": "Открытие чертежа/рецепта: панель крафта, дневной оффер"
-    },
-    "legendary": {
-      "file": "res://assets/audio/ritual/mixkit-fairy-sparkle-whoosh-869.wav",
-      "volume_db": -2.0,
-      "pitch": 1.0,
-      "delay": 0.0,
-      "about": "Открытие новой карты (легендарная)"
-    },
-    "discovery": {
-      "file": "res://assets/audio/ritual/mixkit-magic-swoosh-1460.wav",
-      "volume_db": -3.0,
-      "pitch": 1.0,
-      "delay": 0.0,
-      "about": "Открытие новой карты (обычная)"
-    },
-    "mystic": {
-      "file": "res://assets/audio/cc0/krank_water_link.wav",
-      "volume_db": -2.0,
-      "pitch": 1.0,
-      "delay": 0.0,
-      "about": "Мистическое событие (мир/QTE): нарастающий глиссандо + мерцание"
-    },
-    "stage_up": {
-      "file": "res://assets/audio/cc0/oga_ding_levelup.ogg",
-      "volume_db": -6.0,
-      "pitch": 1.0,
-      "delay": 0.0,
-      "about": "Повышение стадии/уровня: восходящее трезвучие"
-    },
-    "pet": {
-      "file": "res://assets/audio/lighty.mp3",
-      "volume_db": -12.0,
-      "pitch": 1.0,
-      "delay": 0.0,
-      "about": "Питомец/ласка: короткий весёлый свип"
-    },
     "ritual_phase": {
-      "file": "res://assets/audio/ritual/ignite-6.wav",
+      "group": "ritual",
+      "file": "res://assets/audio/ritual/phase.wav",
       "volume_db": -15.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Ритуал: смена фазы (призыв -> стихии -> форма -> вспышка)"
     },
     "ritual_rune": {
-      "file": "res://assets/audio/ritual/ignite-4.wav",
+      "group": "ritual",
+      "file": "res://assets/audio/ritual/rune.wav",
       "volume_db": -12.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Ритуал: нажатие руны на круге трансмутации — тихий отклик"
     },
     "ritual_spin": {
-      "file": "res://assets/audio/cc0/ritual_spin.wav",
+      "group": "ritual",
+      "file": "res://assets/audio/ritual/spin_loop.wav",
       "volume_db": -10.0,
       "pitch": 1.0,
       "delay": 0.0,
@@ -101,41 +99,63 @@
       "about": "Верчение круга: бесшовная петля магического роя. CC0: IENBA «Magic Fireflies», freesound.org/s/875330 (кроссфейд стыка 30 мс, нормализован)"
     },
     "ritual_reveal": {
-      "file": "res://assets/audio/cc0/oga_magic_words.wav",
+      "group": "ritual",
+      "file": "res://assets/audio/ritual/reveal.wav",
       "volume_db": -6.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Хроматик: раскрытие карты (фуллскрин) — торжественный звук вместо click"
     },
+    "stage_up": {
+      "group": "reward",
+      "file": "res://assets/audio/reward/stage_up.ogg",
+      "volume_db": -6.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Повышение стадии/уровня: восходящее трезвучие"
+    },
     "achievement": {
-      "file": "res://assets/audio/cc0/oga_ding_levelup.ogg",
+      "group": "reward",
+      "file": "res://assets/audio/reward/stage_up.ogg",
       "volume_db": -6.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Достижение: клейм награды комплекта (милстоун Аркана) — торжественный аккорд"
     },
-    "game_start": {
-      "file": "res://assets/audio/enter.wav",
-      "volume_db": -4.0,
+    "legendary": {
+      "group": "reward",
+      "file": "res://assets/audio/reward/legendary.wav",
+      "volume_db": -2.0,
       "pitch": 1.0,
       "delay": 0.0,
-      "about": "Вход в игру: приветственный аккорд при старте (не в selftest)"
+      "about": "Открытие новой карты (легендарная)"
     },
-    "brew_discover": {
-      "file": "res://assets/audio/craft/mixkit-video-game-magic-potion-2830.wav",
+    "discovery": {
+      "group": "reward",
+      "file": "res://assets/audio/reward/discovery.wav",
       "volume_db": -3.0,
       "pitch": 1.0,
       "delay": 0.0,
-      "about": "Эксперимент в котле: найдено новое сочетание (попап нового рецепта)"
+      "about": "Открытие новой карты (обычная)"
     },
-    "craft_start": {
-      "file": "res://assets/audio/cc0/kenney_interface_confirmation_003.wav",
-      "volume_db": -8.0,
+    "mystic": {
+      "group": "reward",
+      "file": "res://assets/audio/reward/mystic.wav",
+      "volume_db": -2.0,
       "pitch": 1.0,
       "delay": 0.0,
-      "about": "Старт крафта: подтверждение на доске (списание ингредиентов, начало ритуала)"
+      "about": "Мистическое событие (мир/QTE): нарастающий глиссандо + мерцание"
+    },
+    "pet": {
+      "group": "spirit",
+      "file": "res://assets/audio/spirit/pet.mp3",
+      "volume_db": -12.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Питомец/ласка: короткий весёлый свип"
     },
     "music": {
+      "group": "music",
       "file": "",
       "volume_db": -10.0,
       "pitch": 1.0,
