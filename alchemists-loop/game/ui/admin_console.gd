@@ -140,11 +140,15 @@ func _cmd_sfx(parts: Array) -> void:
 	var sub: String = str(parts[1])
 	match sub:
 		"list":
-			var names: Array = []
+			# По группам (ui, craft, ritual, reward, spirit), как папки в assets/audio.
+			var groups := {}
 			for k in Sfx._sound_cfg.keys():
-				names.append(String(k))
-			names.sort()
-			_log_text("Events (%d): %s" % [names.size(), ", ".join(names)])
+				var g := str((Sfx._sound_cfg[k] as Dictionary).get("group", "other"))
+				if not groups.has(g):
+					groups[g] = []
+				(groups[g] as Array).append(String(k))
+			for g in groups.keys():
+				_log_text("[b]%s[/b]: %s" % [str(g), ", ".join(groups[g])])
 		"play":
 			if parts.size() < 3:
 				_log_text("[color=red]sfx play <event>[/color]")
