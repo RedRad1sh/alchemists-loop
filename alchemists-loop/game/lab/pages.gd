@@ -1290,7 +1290,7 @@ func _experiment_add_to_cauldron(item_id: String) -> void:
 	if _experiment_cauldron != null:
 		_experiment_cauldron.trigger_ingredient(g._item_colors.get(item_id, Color.WHITE))
 	Input.vibrate_handheld(12)
-	Sfx.bubble()
+	Sfx.cauldron_add()
 	if _experiment_cauldron_items.size() < Game.EXPERIMENT_ARITY_MAX:
 		_experiment_status.text = "«%s» в котле. Можно добавить ещё вещества на поле." % g._online._item_name(item_id)
 	elif _experiment_cauldron_items.size() == Game.EXPERIMENT_ARITY_MAX:

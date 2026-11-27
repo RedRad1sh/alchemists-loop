@@ -133,7 +133,7 @@ func _on_command(text: String) -> void:
 func _cmd_sfx(parts: Array) -> void:
 	if OS.has_feature("editor") == false:
 		return
-	var usage := "sfx list | play <event> | set <event> <key> <value> | file <путь> [дБ] [pitch] | reload | save | stop   (ключи: file volume_db pitch delay start_sec len_sec loop)"
+	var usage := "sfx list | play <event> [N] | rarity <редкость> | set <event[.N]> <key> <value> | file <путь> [дБ] [pitch] | reload | save | stop   (ключи: file volume_db pitch delay start_sec len_sec loop)"
 	if parts.size() < 2:
 		_log_text("[color=red]Usage: %s[/color]" % usage)
 		return
@@ -154,7 +154,8 @@ func _cmd_sfx(parts: Array) -> void:
 				_log_text("[color=red]sfx play <event>[/color]")
 				return
 			var ev: String = str(parts[2])
-			Sfx.play_event(ev)
+			var variant := int(parts[3]) - 1 if parts.size() >= 4 else -1
+			Sfx.play_event(ev, variant)
 			_log_text("Playing event: %s  %s" % [ev, _sfx_summary(ev)])
 		"reload":
 			Sfx.reload_config()
@@ -177,7 +178,7 @@ func _cmd_sfx(parts: Array) -> void:
 			else:
 				value = float(raw)
 			Sfx.debug_set(ev, key, value)
-			Sfx.play_event(ev)
+			Sfx.play_event(ev.get_slice(".", 0), ev.get_slice(".", 1).to_int() - 1 if ev.contains(".") else -1)
 			_log_text("%s.%s = %s → играю  (в файл: sfx save)" % [ev, key, str(value)])
 		"file":
 			if parts.size() < 3:
@@ -195,6 +196,13 @@ func _cmd_sfx(parts: Array) -> void:
 				_log_text("[color=green]Записано в assets/audio/sounds.json[/color]")
 			else:
 				_log_text("[color=red]Не удалось записать sounds.json[/color]")
+		"rarity":
+			# Проверка звука раскрытия по редкости: sfx rarity legendary
+			if parts.size() < 3:
+				_log_text("[color=red]sfx rarity <common|rare|epic|legendary|mythic|chromatic>[/color]")
+				return
+			Sfx.card(str(parts[2]))
+			_log_text("Карта %s → %s" % [str(parts[2]), Sfx.card_event_for(str(parts[2]))])
 		"stop":
 			Sfx.debug_stop()
 			_log_text("Звук остановлен")
@@ -213,7 +221,9 @@ func _sfx_summary(ev: String) -> String:
 	var d: Dictionary = Sfx._sound_cfg.get(ev, {})
 	if d.is_empty():
 		return "(нет в конфиге — процедурный звук)"
-	return "file=%s vol=%s pitch=%s" % [str(d.get("file", "")).get_file(), str(d.get("volume_db", 0.0)), str(d.get("pitch", 1.0))]
+	var vs: Array = d.get("variants", [])
+	var tail := "  вариантов: %d (sfx play %s N — конкретный)" % [vs.size(), ev] if not vs.is_empty() else ""
+	return "file=%s vol=%s pitch=%s%s" % [str(d.get("file", "")).get_file(), str(d.get("volume_db", 0.0)), str(d.get("pitch", 1.0)), tail]
 
 ## Быстрая выдача веществ для приёмки. Работает только в редакторе (гейт
 ## _on_command). Выданное вещество открывается вместе с рецептом, которым оно

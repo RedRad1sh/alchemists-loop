@@ -1,5 +1,5 @@
 {
-  "comment": "Центральный конфиг звуков. Ключ = имя события (Sfx.<имя>() или Sfx.play_event('имя')). Файлы лежат в папках по группам: ui, craft, ritual, reward, spirit (имя файла = событие). Поля: file (wav/ogg/mp3), volume_db, pitch, delay, start_sec/len_sec (нарезка wav), loop, about. Если file пуст/не найден — процедурный звук. Подбор на слух без перезапуска: консоль `~` → sfx set/file/save. _candidates/ — запасные варианты, нигде не подключены.",
+  "comment": "Центральный конфиг звуков. Ключ = имя события (Sfx.<имя>() или Sfx.play_event('имя')). Файлы лежат в папках по группам: ui, craft, card, ritual, reward, spirit (имя файла = событие). Поля: file (wav/ogg/mp3), volume_db, pitch, delay, start_sec/len_sec (нарезка wav), loop, about. Если file пуст/не найден — процедурный звук. Подбор на слух без перезапуска: консоль `~` → sfx set/file/save. _candidates/ — запасные варианты, нигде не подключены. variants: [{file, volume_db}] — случайный вариант без повтора подряд (поля варианта перекрывают поля события).",
   "events": {
     "click": {
       "group": "ui",
@@ -35,11 +35,33 @@
     },
     "bubble": {
       "group": "craft",
-      "file": "res://assets/audio/craft/bubble.mp3",
+      "file": "res://assets/audio/craft/bubble_2.mp3",
       "volume_db": -6.0,
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Пузырёк/варка в котле: добавление элемента в слоты эксперимента"
+    },
+    "cauldron_add": {
+      "group": "craft",
+      "file": "res://assets/audio/craft/bubble_2.mp3",
+      "volume_db": -6.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "variants": [
+        {
+          "file": "res://assets/audio/craft/bubble_1.mp3",
+          "volume_db": 0.0
+        },
+        {
+          "file": "res://assets/audio/craft/bubble_2.mp3",
+          "volume_db": -6.0
+        },
+        {
+          "file": "res://assets/audio/craft/bubble_3.mp3",
+          "volume_db": 0.0
+        }
+      ],
+      "about": "Добавление вещества в котёл эксперимента: случайный из трёх пузырьков, подряд не повторяется. Громкость вариантов выровнена по среднему уровню (bubble_2 -6 дБ ≈ bubble_1/3 при 0 дБ)"
     },
     "draft_open": {
       "group": "craft",
@@ -145,6 +167,30 @@
       "pitch": 1.0,
       "delay": 0.0,
       "about": "Мистическое событие (мир/QTE): нарастающий глиссандо + мерцание"
+    },
+    "card_normal": {
+      "group": "card",
+      "file": "res://assets/audio/card/normal.mp3",
+      "volume_db": -2.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Раскрытие карты: обычная/необычная/редкая/эпическая. Уровень выровнен с card_legend и card_mythic"
+    },
+    "card_legend": {
+      "group": "card",
+      "file": "res://assets/audio/card/legend.mp3",
+      "volume_db": 0.5,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Раскрытие карты: легендарная"
+    },
+    "card_mythic": {
+      "group": "card",
+      "file": "res://assets/audio/card/mythic.mp3",
+      "volume_db": 1.0,
+      "pitch": 1.0,
+      "delay": 0.0,
+      "about": "Раскрытие карты: мифическая и хроматик"
     },
     "pet": {
       "group": "spirit",
