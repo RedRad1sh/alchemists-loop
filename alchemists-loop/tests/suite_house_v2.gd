@@ -17,6 +17,7 @@ static func run(g: Game) -> void:
 
 
 static func _assets() -> void:
+	_folder_catalog()
 	var missing: Array = []
 	for id in HouseItems.ITEMS:
 		var path := String(HouseItems.ITEMS[id]["sprite"])
@@ -323,7 +324,7 @@ static func _save_and_guest(g: Game) -> void:
 
 
 static func _catalog() -> void:
-	Selftest.check("hv2 catalog has 25 items", HouseItems.ITEMS.size() == 25)
+	Selftest.check("hv2 catalog has 33 items", HouseItems.ITEMS.size() == 33)
 	var per_cat := {}
 	var base_total := 0
 	var ids_ok := true
@@ -342,7 +343,7 @@ static func _catalog() -> void:
 		var is_reward := bool(it.get("reward", false))
 		costs_ok = costs_ok and (int(it.get("cost", -1)) == 0 if is_reward else int(it.get("cost", 0)) > 0)
 		var cat := String(it.get("cat", ""))
-		var want_wall := cat in ["window", "door"]
+		var want_wall := cat in ["window", "door"] or String(raw_id) in ["lantern_wall", "shelf_alchemist"]
 		walls_ok = walls_ok and bool(it.get("wall", false)) == want_wall
 		if not is_reward:
 			per_cat[cat] = int(per_cat.get(cat, 0)) + 1
@@ -356,8 +357,8 @@ static func _catalog() -> void:
 		starter_ok = starter_ok and starter != "" \
 			and String(HouseItems.get_item(starter).get("cat", "")) == String(cat) \
 			and not bool(HouseItems.get_item(starter).get("reward", false))
-	Selftest.check("hv2 catalog has six categories with nineteen base items",
-		per_cat.size() == 6 and base_total == 19)
+	Selftest.check("hv2 catalog has six categories with twenty-seven base items",
+		per_cat.size() == 6 and base_total == 27)
 	Selftest.check("hv2 every category has a base starter item", starter_ok)
 	Selftest.check("hv2 every item has positive box/ppm/path and known category", fields_ok)
 	Selftest.check("hv2 rewards are free, everything else costs ether", costs_ok)
@@ -1020,3 +1021,43 @@ static func _final() -> void:
 	Selftest.check("hv2 legacy Home properties removed", legacy.is_empty())
 	var decor: Script = load("res://game/data/decor.gd")
 	Selftest.check("hv2 legacy decor constant removed", not decor.get_script_constant_map().has("DECOR"))
+
+
+## Каталог собирается из папок assets/house/items/<категория>/: предмет — это
+## PNG (или json-вариант донора), отражение — только запечённое advanced.
+static func _folder_catalog() -> void:
+	var in_folder := true
+	var dup_refl: Array = []
+	for raw_id in HouseItems.ITEMS:
+		var it: Dictionary = HouseItems.ITEMS[raw_id]
+		var dir := "%s/%s/" % [HouseItems.ROOT, String(it["cat"])]
+		in_folder = in_folder and String(it["sprite"]).begins_with(dir)
+		var refl := String(it.get("refl", ""))
+		if String(it.get("refl_mode", "")) == "regular" and refl != String(it["sprite"]):
+			dup_refl.append(String(raw_id))
+	Selftest.check("house items load from per-category folders", in_folder and HouseItems.ITEMS.size() == 33)
+	Selftest.check("regular reflections reuse the sprite instead of a duplicate png", dup_refl.is_empty())
+	Selftest.check("advanced reflection comes from <id>.reflection.png",
+		String(HouseItems.ITEMS["window"].get("refl", "")) == HouseItems.ROOT + "/window/window.reflection.png"
+		and String(HouseItems.ITEMS["window"]["refl_mode"]) == "advanced")
+	var pouf: Dictionary = HouseItems.ITEMS.get("pouf_rune", {})
+	Selftest.check("png with only label/cost/footprint json gets auto metrics",
+		not pouf.is_empty() and String(pouf["cat"]) == "decor" and int(pouf["cost"]) == 140
+		and is_equal_approx((pouf["box"] as Vector3).x, 0.45) and (pouf["box"] as Vector3).y > 0.0
+		and String(pouf["refl"]) == String(pouf["sprite"]) and String(pouf["refl_mode"]) == "regular")
+	Selftest.check("json variant borrows its donor picture",
+		String(HouseItems.ITEMS["window_seal"]["sprite"]) == String(HouseItems.ITEMS["window"]["sprite"])
+		and String(HouseItems.ITEMS["window_seal"]["tint"]) == "#a34a3c")
+	# PNG без json: alpha — непрозрачная область, высота бокса — по пропорции.
+	var path := HouseItems.ROOT + "/table/table_herbs.png"
+	var probe := {"sprite": path}
+	HouseItems._auto_metrics(probe, "table")
+	var img := Image.load_from_file(ProjectSettings.globalize_path(path))
+	var a: Rect2 = probe["alpha"]
+	var box: Vector3 = probe["box"]
+	var basis := Basis.from_euler(Vector3(deg_to_rad(-35.264), deg_to_rad(45.0), 0.0))
+	var iso := HouseItems._iso_size(box, basis)
+	Selftest.check("png without json gets alpha from opaque pixels and box from its aspect",
+		img != null and a == Rect2(img.get_used_rect())
+		and is_equal_approx(box.x, 0.6) and is_equal_approx(box.z, 1.0) and box.y > 0.0
+		and absf(iso.y / iso.x - a.size.y / a.size.x) < 0.01)

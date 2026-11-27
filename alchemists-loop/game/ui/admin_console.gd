@@ -70,7 +70,7 @@ func _build_ui() -> void:
 	vbox.add_child(_input)
 
 	var help := Label.new()
-	help.text = "give all [N] | give layer <L> [N] | give <id> [N] | sfx play|set|file|reload|save | add <id> | unlock <mode> | set ether <N> | reset day | clear inventory | force circle open"
+	help.text = "give all [N] | give layer <L> [N] | give <id> [N] | house all | house <id> | sfx play|set|file|rarity|reload|save | add <id> | unlock <mode> | set ether <N> | reset day | clear inventory | force circle open"
 	help.add_theme_font_size_override("font_size", 11)
 	help.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -110,6 +110,8 @@ func _on_command(text: String) -> void:
 			_cmd_add(parts)
 		"give":
 			_cmd_give(parts)
+		"house":
+			_cmd_house(parts)
 		"unlock":
 			_cmd_unlock(parts)
 		"set":
@@ -508,3 +510,32 @@ func _on_sigil_chroma_done(result: Dictionary) -> void:
 
 func _log_text(msg: String) -> void:
 	_log.append_text(msg + "\n")
+
+
+## Открывает мебель дома без покупки: «house all» — весь каталог (вместе с только
+## что положенными в assets/house/items PNG), «house <id>» — один предмет.
+## Домик строится, если ещё не построен, чтобы предмет сразу можно было поставить.
+func _cmd_house(parts: Array) -> void:
+	if parts.size() < 2:
+		_log_text("[color=red]Usage: house all | house <id>[/color]")
+		return
+	HouseItems.reload()
+	var home = _g._home
+	var ids: Array = []
+	if str(parts[1]) == "all":
+		ids = HouseItems.ITEMS.keys()
+	elif HouseItems.exists(str(parts[1])):
+		ids = [str(parts[1])]
+	else:
+		_log_text("[color=red]Unknown item: %s[/color]" % str(parts[1]))
+		return
+	if not home._cosmetic_house:
+		home._cosmetic_house = true
+		home._apply_cosmetic()
+	var added := 0
+	for id in ids:
+		if home._unlock_item(String(id)):
+			added += 1
+	_g._saves._save_game()
+	home._refresh_house_screen()
+	_log_text("[color=green]Мебель открыта: %d (всего в каталоге %d)[/color]" % [added, HouseItems.ITEMS.size()])

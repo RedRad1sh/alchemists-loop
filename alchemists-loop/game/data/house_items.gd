@@ -1,9 +1,21 @@
 extends RefCounted
 class_name HouseItems
 
-# Только те предметы, у которых в PlayerHouse есть нарисованный ассет: метрики
-# box/vbox/off/alpha взяты из .asset файлов один в один. Категорий без исходного
-# арта в магазине нет — заглушек в каталоге больше не держим.
+## Каталог мебели собирается из папок, а не из кода. Чтобы добавить предмет,
+## положи PNG в `assets/house/items/<категория>/<id>.png` и открой проект
+## в редакторе (он создаст .import). Необязательно рядом:
+##   <id>.reflection.png — отдельное запечённое отражение (режим advanced:
+##     затемнено и дотянуто до линии пола). Без него отражение рисуется тем же
+##     спрайтом, шейдер зеркалит меш сам — дубль PNG не нужен.
+##   <id>.json — label, cost, reward, tint, order, refl_mode ("none" выключает
+##     отражение), flip_ok, grade, wall_view, sprite (id-донор картинки для
+##     вариантов-перекрасок), wall (повесить на стену: полка, бра),
+##     footprint [ширина, глубина] и точные метрики
+##     box/vbox/off/alpha.
+## Без json метрики берутся из непрозрачной области PNG: ширина и глубина —
+## по умолчанию категории, высота подбирается так, чтобы изометрическая
+## проекция бокса совпала с пропорцией картинки.
+const ROOT := "res://assets/house/items"
 const CATS: Array = ["window", "door", "table", "rug", "bed", "decor"]
 ## Во столько раз исходные метрики предмета крупнее в комнате.
 const ITEM_SCALE := 2.0
@@ -11,35 +23,200 @@ const ITEM_SCALE := 2.0
 ## 1,0×1,07 м и дверь 1,0×1,67 м в стену 2,4 м, а удвоение превращало окно
 ## в две трети стены и делало дверь выше клампа `Placement.clamp_record`.
 const WALL_ITEM_SCALE := 1.0
+const PPM := 256.0
+const WALL_CATS := ["window", "door"]
+## Ширина (x) и глубина (z) бокса по умолчанию для PNG без json, в метрах
+## исходного масштаба (до ITEM_SCALE). Высоту даёт пропорция картинки.
+const CAT_FOOTPRINT := {
+	"window": Vector2(1.0, 0.12), "door": Vector2(1.0, 0.09),
+	"table": Vector2(0.6, 1.0), "rug": Vector2(0.6, 1.0),
+	"bed": Vector2(1.0, 0.78), "decor": Vector2(0.46, 1.0),
+}
+const CAT_WALL_VIEW := {"window": 0, "door": 1}
+const DEFAULT_COST := 100
+const ISO_ROTATION_DEG := Vector3(-35.264, 45.0, 0.0)
 
 static var _scaled: Dictionary = {}
-const ITEMS := {
-	"window": {"id": "window", "label": "Классическое окно", "cat": "window", "cost": 70, "sprite": "res://assets/house/items/common_window_sprite.png", "box": Vector3(1.000000, 1.074396, 0.146734), "vbox": Vector3(0.995000, 0.991469, 0.146000), "off": Vector3(0.014299, -0.028598, 0.014299), "alpha": Rect2(3.0, 3.0, 415.0, 656.0), "refl_mode": "advanced", "refl": "res://assets/house/items/common_window_reflection.png", "ppm": 256.0, "wall": true, "wall_view": 0, "flip_ok": true, "reward": false, "tint": ""},
-	"window_alt": {"id": "window_alt", "label": "Окно с гардой", "cat": "window", "cost": 110, "sprite": "res://assets/house/items/common_window_sprite2.png", "box": Vector3(1.000000, 0.903140, 0.094394), "vbox": Vector3(0.995000, 0.886931, 0.093922), "off": Vector3(0.014299, -0.028598, 0.014299), "alpha": Rect2(3.0, 3.0, 392.0, 595.0), "refl_mode": "advanced", "refl": "res://assets/house/items/common_window_reflection2.png", "ppm": 256.0, "wall": true, "wall_view": 0, "flip_ok": true, "reward": false, "tint": ""},
-	"door": {"id": "door", "label": "Дубовая дверь", "cat": "door", "cost": 150, "sprite": "res://assets/house/items/common_door_01_sprite.png", "box": Vector3(1.000000, 1.671154, 0.087241), "vbox": Vector3(0.995000, 1.653594, 0.086804), "off": Vector3(0.003380, -0.006760, 0.003380), "alpha": Rect2(3.0, 3.0, 295.0, 691.0), "refl_mode": "advanced", "refl": "res://assets/house/items/common_door_01_reflection.png", "ppm": 256.0, "wall": true, "wall_view": 1, "flip_ok": true, "reward": false, "tint": ""},
-	"table": {"id": "table", "label": "Старый стол оружейника", "cat": "table", "cost": 120, "sprite": "res://assets/house/items/table_gunmaker_sprite.png", "box": Vector3(0.500000, 0.447960, 1.000000), "vbox": Vector3(0.497500, 0.362570, 0.995000), "off": Vector3(0.014857, -0.029713, 0.014857), "alpha": Rect2(3.0, 3.0, 401.0, 344.0), "refl_mode": "regular", "refl": "res://assets/house/items/table_gunmaker_reflection.png", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"table_herbs": {"id": "table_herbs", "label": "Стол с травами", "cat": "table", "cost": 160, "sprite": "res://assets/house/items/table_herbs_sprite.png", "box": Vector3(0.735330, 0.775413, 1.000000), "vbox": Vector3(0.731654, 0.639557, 0.995000), "off": Vector3(0.023366, -0.046732, 0.023366), "alpha": Rect2(3.0, 3.0, 396.0, 398.0), "refl_mode": "regular", "refl": "res://assets/house/items/table_herbs_reflection.png", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"table_merchant": {"id": "table_merchant", "label": "Прилавок торговца", "cat": "table", "cost": 210, "sprite": "res://assets/house/items/table_merchant_sprite.png", "box": Vector3(0.505882, 0.444434, 1.000000), "vbox": Vector3(0.503353, 0.401726, 0.995000), "off": Vector3(0.007745, -0.015491, 0.007745), "alpha": Rect2(3.0, 3.0, 398.0, 353.0), "refl_mode": "regular", "refl": "res://assets/house/items/table_merchant_reflection.png", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"table_alt": {"id": "table_alt", "label": "Рабочий стол алхимика", "cat": "table", "cost": 190, "sprite": "res://assets/house/items/alchemy_table_sprite.png", "box": Vector3(0.624204, 0.645245, 1.000000), "vbox": Vector3(0.621083, 0.511458, 0.995000), "off": Vector3(0.022975, -0.045950, 0.022975), "alpha": Rect2(3.0, 3.0, 402.0, 379.0), "refl_mode": "regular", "refl": "res://assets/house/items/alchemy_table_reflection.png", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"rug": {"id": "rug", "label": "Тканый ковёр", "cat": "rug", "cost": 80, "sprite": "res://assets/house/items/rug_01_sprite.png", "box": Vector3(0.659091, 0.059043, 1.000000), "vbox": Vector3(0.655795, 0.045142, 0.995000), "off": Vector3(0.003008, -0.006016, 0.003008), "alpha": Rect2(2.0, 2.0, 964.0, 587.0), "refl_mode": "regular", "refl": "res://assets/house/items/rug_01_reflection.png", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"rug_alt": {"id": "rug_alt", "label": "Круглый ковёр", "cat": "rug", "cost": 130, "sprite": "res://assets/house/items/rug_02_sprite.png", "box": Vector3(0.724747, 0.047200, 1.000000), "vbox": Vector3(0.721124, 0.025473, 0.995000), "off": Vector3(0.004340, -0.008680, 0.004340), "alpha": Rect2(4.0, 4.0, 979.0, 582.0), "refl_mode": "none", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"rug_step": {"id": "rug_step", "label": "Придорожный коврик", "cat": "rug", "cost": 55, "sprite": "res://assets/house/items/rug_var_sprite2.png", "box": Vector3(0.601562, 0.032313, 1.000000), "vbox": Vector3(0.598555, 0.009950, 0.995000), "off": Vector3(0.004394, -0.008789, 0.004394), "alpha": Rect2(18.0, 12.0, 376.0, 214.0), "refl_mode": "none", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"rug_braided": {"id": "rug_braided", "label": "Плетёный ковёр", "cat": "rug", "cost": 70, "sprite": "res://assets/house/items/rug_var_sprite3.png", "box": Vector3(0.591615, 0.029337, 1.000000), "vbox": Vector3(0.588657, 0.009950, 0.995000), "off": Vector3(0.003894, -0.007789, 0.003894), "alpha": Rect2(16.0, 12.0, 381.0, 217.0), "refl_mode": "none", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"rug_field": {"id": "rug_field", "label": "Полевой ковёр", "cat": "rug", "cost": 85, "sprite": "res://assets/house/items/rug_var_sprite4.png", "box": Vector3(0.600000, 0.031941, 1.000000), "vbox": Vector3(0.597000, 0.009950, 0.995000), "off": Vector3(0.004332, -0.008664, 0.004332), "alpha": Rect2(16.0, 12.0, 381.0, 219.0), "refl_mode": "none", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"rug_ash": {"id": "rug_ash", "label": "Пепельный ковёр", "cat": "rug", "cost": 95, "sprite": "res://assets/house/items/rug_var_sprite5.png", "box": Vector3(0.603774, 0.033428, 1.000000), "vbox": Vector3(0.600755, 0.009950, 0.995000), "off": Vector3(0.004581, -0.009163, 0.004581), "alpha": Rect2(14.0, 12.0, 385.0, 222.0), "refl_mode": "none", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"rug_moss": {"id": "rug_moss", "label": "Мховый ковёр", "cat": "rug", "cost": 105, "sprite": "res://assets/house/items/rug_var_sprite6.png", "box": Vector3(0.591615, 0.029709, 1.000000), "vbox": Vector3(0.588657, 0.009950, 0.995000), "off": Vector3(0.003956, -0.007913, 0.003956), "alpha": Rect2(14.0, 12.0, 384.0, 223.0), "refl_mode": "none", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"rug_dusk": {"id": "rug_dusk", "label": "Вечерний ковёр", "cat": "rug", "cost": 115, "sprite": "res://assets/house/items/rug_var_sprite7.png", "box": Vector3(0.600000, 0.031569, 1.000000), "vbox": Vector3(0.597000, 0.009950, 0.995000), "off": Vector3(0.004270, -0.008540, 0.004270), "alpha": Rect2(15.0, 12.0, 383.0, 221.0), "refl_mode": "none", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"rug_ember": {"id": "rug_ember", "label": "Угольный ковёр", "cat": "rug", "cost": 125, "sprite": "res://assets/house/items/rug_var_sprite8.png", "box": Vector3(0.602504, 0.035280, 1.000000), "vbox": Vector3(0.599491, 0.009950, 0.995000), "off": Vector3(0.004889, -0.009779, 0.004889), "alpha": Rect2(13.0, 12.0, 386.0, 222.0), "refl_mode": "none", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"rug_tide": {"id": "rug_tide", "label": "Приливный ковёр", "cat": "rug", "cost": 140, "sprite": "res://assets/house/items/rug_var_sprite9.png", "box": Vector3(0.608150, 0.041205, 1.000000), "vbox": Vector3(0.605110, 0.009950, 0.995000), "off": Vector3(0.005879, -0.011759, 0.005879), "alpha": Rect2(13.0, 13.0, 386.0, 218.0), "refl_mode": "none", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"bed": {"id": "bed", "label": "Кровать", "cat": "bed", "cost": 250, "sprite": "res://assets/house/items/bed_test_fixed_sprite.png", "box": Vector3(1.000000, 0.597537, 0.780870), "vbox": Vector3(0.995000, 0.564139, 0.776965), "off": Vector3(0.006308, -0.012617, 0.006308), "alpha": Rect2(1.0, 1.0, 1381.0, 1305.0), "refl_mode": "advanced", "refl": "res://assets/house/items/bed_test_fixed_reflection.png", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"planetarium": {"id": "planetarium", "label": "Планетарий", "cat": "decor", "cost": 320, "sprite": "res://assets/house/items/planetarium_01_sprite.png", "box": Vector3(0.455909, 0.574459, 1.000000), "vbox": Vector3(0.453630, 0.562685, 0.995000), "off": Vector3(0.002569, -0.005138, 0.002569), "alpha": Rect2(5.0, 5.0, 812.0, 833.0), "refl_mode": "regular", "refl": "res://assets/house/items/planetarium_01_reflection.png", "ppm": 256.0, "grade": Vector4(1.0, 1.0, 1.0, 0.5), "wall": false, "wall_view": -1, "flip_ok": true, "reward": false, "tint": ""},
-	"window_contract": {"id": "window_contract", "label": "Контрактный витраж", "cat": "window", "cost": 0, "sprite": "res://assets/house/items/common_window_sprite3.png", "box": Vector3(1.000000, 0.881154, 0.105724), "vbox": Vector3(0.995000, 0.864590, 0.105195), "off": Vector3(0.014299, -0.028598, 0.014299), "alpha": Rect2(3.0, 3.0, 394.0, 585.0), "refl_mode": "advanced", "refl": "res://assets/house/items/common_window_reflection3.png", "ppm": 256.0, "wall": true, "wall_view": 0, "flip_ok": true, "reward": true, "tint": "#c9a24d"},
-	"window_seal": {"id": "window_seal", "label": "Витраж с печатью", "cat": "window", "cost": 0, "sprite": "res://assets/house/items/common_window_sprite.png", "box": Vector3(1.000000, 1.074396, 0.146734), "vbox": Vector3(0.995000, 0.991469, 0.146000), "off": Vector3(0.014299, -0.028598, 0.014299), "alpha": Rect2(3.0, 3.0, 415.0, 656.0), "refl_mode": "advanced", "refl": "res://assets/house/items/common_window_reflection.png", "ppm": 256.0, "wall": true, "wall_view": 0, "flip_ok": true, "reward": true, "tint": "#a34a3c"},
-	"window_guild": {"id": "window_guild", "label": "Витраж гильдии", "cat": "window", "cost": 0, "sprite": "res://assets/house/items/common_window_sprite2.png", "box": Vector3(1.000000, 0.903140, 0.094394), "vbox": Vector3(0.995000, 0.886931, 0.093922), "off": Vector3(0.014299, -0.028598, 0.014299), "alpha": Rect2(3.0, 3.0, 392.0, 595.0), "refl_mode": "advanced", "refl": "res://assets/house/items/common_window_reflection2.png", "ppm": 256.0, "wall": true, "wall_view": 0, "flip_ok": true, "reward": true, "tint": "#4d7ab7"},
-	"door_guild": {"id": "door_guild", "label": "Дверь гильдии", "cat": "door", "cost": 0, "sprite": "res://assets/house/items/common_door_01_sprite.png", "box": Vector3(1.000000, 1.671154, 0.087241), "vbox": Vector3(0.995000, 1.653594, 0.086804), "off": Vector3(0.003380, -0.006760, 0.003380), "alpha": Rect2(3.0, 3.0, 295.0, 691.0), "refl_mode": "advanced", "refl": "res://assets/house/items/common_door_01_reflection.png", "ppm": 256.0, "wall": true, "wall_view": 1, "flip_ok": true, "reward": true, "tint": "#4d7ab7"},
-	"bed_carved": {"id": "bed_carved", "label": "Резная кровать", "cat": "bed", "cost": 0, "sprite": "res://assets/house/items/bed_test_fixed_sprite.png", "box": Vector3(1.000000, 0.597537, 0.780870), "vbox": Vector3(0.995000, 0.564139, 0.776965), "off": Vector3(0.006308, -0.012617, 0.006308), "alpha": Rect2(1.0, 1.0, 1381.0, 1305.0), "refl_mode": "advanced", "refl": "res://assets/house/items/bed_test_fixed_reflection.png", "ppm": 256.0, "wall": false, "wall_view": -1, "flip_ok": true, "reward": true, "tint": "#c9a24d"},
-	"planetarium_ember": {"id": "planetarium_ember", "label": "Планетарий «Уголь»", "cat": "decor", "cost": 0, "sprite": "res://assets/house/items/planetarium_01_sprite.png", "box": Vector3(0.455909, 0.574459, 1.000000), "vbox": Vector3(0.453630, 0.562685, 0.995000), "off": Vector3(0.002569, -0.005138, 0.002569), "alpha": Rect2(5.0, 5.0, 812.0, 833.0), "refl_mode": "regular", "refl": "res://assets/house/items/planetarium_01_reflection.png", "ppm": 256.0, "grade": Vector4(1.0, 1.0, 1.0, 0.5), "wall": false, "wall_view": -1, "flip_ok": true, "reward": true, "tint": "#ff7a2e"},
-}
+static var _items: Dictionary = {}
+static var _loaded := false
+## Совместимость: потребители читают HouseItems.ITEMS как словарь каталога.
+static var ITEMS: Dictionary:
+	get:
+		_ensure_loaded()
+		return _items
+
+
+static func reload() -> void:
+	_loaded = false
+	_items = {}
+	_scaled = {}
+	_ensure_loaded()
+
+
+static func _ensure_loaded() -> void:
+	if _loaded:
+		return
+	_loaded = true
+	var found: Array = []
+	for cat in CATS:
+		var dir := "%s/%s" % [ROOT, cat]
+		var names := ResourceLoader.list_directory(dir)
+		for raw in names:
+			var name := String(raw)
+			if not name.ends_with(".png") or name.ends_with(".reflection.png"):
+				continue
+			found.append(_scan_item(String(cat), dir, name.get_basename()))
+		for raw in names:
+			var name := String(raw)
+			if name.ends_with(".json") and not names.has(name.get_basename() + ".png"):
+				# Вариант без собственной картинки (перекраска донора).
+				found.append(_scan_item(String(cat), dir, name.get_basename()))
+	found.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var oa := int(a.get("_order", 1000000))
+		var ob := int(b.get("_order", 1000000))
+		return oa < ob if oa != ob else String(a["id"]) < String(b["id"]))
+	for item in found:
+		if item.is_empty():
+			continue
+		item.erase("_order")
+		_items[String(item["id"])] = item
+	# Донор картинки задаётся по id: путь подставляем после полного скана.
+	for id in _items:
+		var it: Dictionary = _items[id]
+		var donor := String(it.get("_donor", ""))
+		it.erase("_donor")
+		if donor == "":
+			continue
+		var src: Dictionary = _items.get(donor, {})
+		if src.is_empty():
+			push_error("HouseItems: %s ссылается на неизвестный спрайт %s" % [id, donor])
+			continue
+		it["sprite"] = src["sprite"]
+		if not it.has("refl") and src.has("refl"):
+			it["refl"] = src["refl"]
+			if not it.has("_mode_set"):
+				it["refl_mode"] = src["refl_mode"]
+		for k in ["box", "vbox", "off", "alpha"]:
+			if not it.has("_has_" + k):
+				it[k] = src[k]
+	for id in _items:
+		var it: Dictionary = _items[id]
+		for k in it.keys():
+			if String(k).begins_with("_"):
+				it.erase(k)
+
+
+static func _scan_item(cat: String, dir: String, id: String) -> Dictionary:
+	var meta := {}
+	var json_path := "%s/%s.json" % [dir, id]
+	if FileAccess.file_exists(json_path):
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(json_path))
+		if parsed is Dictionary:
+			meta = parsed
+		else:
+			push_error("HouseItems: битый json %s" % json_path)
+	var item := {
+		"id": id, "cat": cat,
+		"label": String(meta.get("label", id.capitalize())),
+		"cost": int(meta.get("cost", DEFAULT_COST)),
+		"reward": bool(meta.get("reward", false)),
+		"tint": String(meta.get("tint", "")),
+		"ppm": PPM,
+		"wall": bool(meta.get("wall", WALL_CATS.has(cat))),
+		"wall_view": int(meta.get("wall_view", CAT_WALL_VIEW.get(cat,
+			0 if bool(meta.get("wall", false)) else -1))),
+		"flip_ok": bool(meta.get("flip_ok", true)),
+		"_order": int(meta.get("order", 1000000)),
+	}
+	if meta.has("grade"):
+		var gr: Array = meta["grade"]
+		item["grade"] = Vector4(gr[0], gr[1], gr[2], gr[3])
+	if meta.has("refl_mode"):
+		item["_mode_set"] = true
+	var png := "%s/%s.png" % [dir, id]
+	if meta.has("sprite"):
+		item["_donor"] = String(meta["sprite"])
+	elif ResourceLoader.exists(png):
+		item["sprite"] = png
+	else:
+		push_error("HouseItems: у %s нет ни PNG, ни донора sprite" % id)
+		return {}
+	var refl := "%s/%s.reflection.png" % [dir, id]
+	var mode := String(meta.get("refl_mode", ""))
+	if ResourceLoader.exists(refl):
+		item["refl"] = refl
+		item["refl_mode"] = mode if mode != "" else "advanced"
+	elif not meta.has("sprite"):
+		# Без запечённого отражения шейдер зеркалит сам спрайт.
+		item["refl"] = png
+		item["refl_mode"] = mode if mode != "" else "regular"
+	elif mode != "":
+		item["refl_mode"] = mode
+	for k in ["box", "vbox", "off"]:
+		if meta.has(k):
+			var v: Array = meta[k]
+			item[k] = Vector3(v[0], v[1], v[2])
+			item["_has_" + k] = true
+	if meta.has("alpha"):
+		var a: Array = meta["alpha"]
+		item["alpha"] = Rect2(a[0], a[1], a[2], a[3])
+		item["_has_alpha"] = true
+	if meta.has("footprint"):
+		var fp: Array = meta["footprint"]
+		item["_footprint"] = Vector2(fp[0], fp[1])
+	if not meta.has("sprite") and not item.has("box"):
+		_auto_metrics(item, cat)
+	return item
+
+
+## Метрики для PNG без json: alpha — непрозрачная область картинки, бокс —
+## footprint категории, высота — та, при которой изопроекция бокса имеет ту же
+## пропорцию, что alpha-прямоугольник.
+static func _auto_metrics(item: Dictionary, cat: String) -> void:
+	var img := Image.load_from_file(ProjectSettings.globalize_path(String(item["sprite"])))
+	var tex: Texture2D = load(String(item["sprite"]))
+	var used := Rect2(Vector2.ZERO, tex.get_size() if tex != null else Vector2.ONE)
+	if img != null:
+		used = Rect2(img.get_used_rect())
+	elif tex != null and tex.get_image() != null:
+		used = Rect2(tex.get_image().get_used_rect())
+	if not item.has("alpha"):
+		item["alpha"] = used
+	var fp: Vector2 = item.get("_footprint", CAT_FOOTPRINT.get(cat, Vector2(0.6, 1.0)))
+	var a: Rect2 = item["alpha"]
+	var aspect := a.size.y / maxf(a.size.x, 1.0)
+	var h := _height_for_aspect(fp.x, fp.y, aspect)
+	item["box"] = Vector3(fp.x, h, fp.y)
+	item["vbox"] = Vector3(fp.x * 0.995, h, fp.y * 0.995)
+	item["off"] = Vector3.ZERO
+
+
+static func _height_for_aspect(x: float, z: float, aspect: float) -> float:
+	var basis := Basis.from_euler(Vector3(
+		deg_to_rad(ISO_ROTATION_DEG.x), deg_to_rad(ISO_ROTATION_DEG.y), 0.0))
+	var lo := 0.001
+	var hi := 10.0
+	for _i in 48:
+		var mid := (lo + hi) * 0.5
+		var r := _iso_size(Vector3(x, mid, z), basis)
+		if r.y / maxf(r.x, 0.0001) < aspect:
+			lo = mid
+		else:
+			hi = mid
+	return (lo + hi) * 0.5
+
+
+static func _iso_size(box: Vector3, basis: Basis) -> Vector2:
+	var lo := Vector2(1e30, 1e30)
+	var hi := Vector2(-1e30, -1e30)
+	for sx in [-0.5, 0.5]:
+		for sy in [0.0, 1.0]:
+			for sz in [-0.5, 0.5]:
+				var p := Vector3(box.x * sx, box.y * sy, box.z * sz)
+				var s := Vector2(p.dot(basis.x), p.dot(basis.y))
+				lo = Vector2(minf(lo.x, s.x), minf(lo.y, s.y))
+				hi = Vector2(maxf(hi.x, s.x), maxf(hi.y, s.y))
+	return hi - lo
 
 
 static func get_item(id: String) -> Dictionary:
@@ -51,7 +228,7 @@ static func get_item(id: String) -> Dictionary:
 	return _scaled[id]
 
 
-## Метрики в ITEMS остаются один в один из .asset, а в комнату предмет попадает
+## Метрики каталога остаются в исходном масштабе .asset, а в комнату предмет попадает
 ## увеличенным: на 7-метровом полу оригинальные 0,5×1 м выглядят игрушечными.
 ## Множитель стоит на путях `get_item()`, потому что из `box` растут и спрайт
 ## (`_build_projected_box_mesh`), и площадь расстановки (`Placement.footprint`) —

@@ -49,6 +49,7 @@ var _action_room_spike := false
 var _action_room_camera := false
 var _action_rating := false
 var _action_decor := false
+var _house_showcase := ""
 var _decor_demo_cat := "rug"
 var _action_guesthouse := false
 var _action_palette := false
@@ -93,7 +94,7 @@ func _init(game: Game) -> void:
 	g = game
 
 func house_capture_action() -> bool:
-	return _action_house_tray or _action_house_touch or _action_room_spike_full or _action_decor or _action_guesthouse or _action_palette
+	return _action_house_tray or _action_house_touch or _action_room_spike_full or _action_decor or _action_guesthouse or _action_palette or _house_showcase != ""
 
 
 static func full_house_layout() -> Array[Dictionary]:
@@ -116,6 +117,37 @@ static func full_house_layout() -> Array[Dictionary]:
 	return full
 
 
+## Расстановка для примерки: перечисленные предметы по сетке пола, настенные —
+## вдоль левой стены. Невалидная клетка (пересечение) пропускается.
+static func showcase_layout(ids: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var floor_slots := [[-1.6, 1.6], [1.6, 1.6], [-1.6, -1.6], [1.6, -1.6], [0.0, 0.0],
+		[-2.6, 0.0], [2.6, 0.0], [0.0, 2.6], [0.0, -2.6]]
+	var fi := 0
+	var wz := -1.8
+	for raw in ids:
+		var id := String(raw).strip_edges()
+		if not HouseItems.exists(id):
+			continue
+		var item := HouseItems.get_item(id)
+		var p: Dictionary
+		if bool(item.get("wall", false)):
+			p = Placement.clamp_record({"id": id, "x": -3.3, "z": wz, "y": 1.1, "flip": false,
+				"wall": int(item.get("wall_view", 0))})
+			wz += 1.8
+		else:
+			var placed := false
+			while fi < floor_slots.size() and not placed:
+				var s: Array = floor_slots[fi]
+				fi += 1
+				p = Placement.snap_record({"id": id, "x": s[0], "z": s[1], "y": 0.0, "flip": false, "wall": -1})
+				placed = Placement.valid(p, out)
+			if not placed:
+				continue
+		if Placement.valid(p, out):
+			out.append(p)
+	return out
+
 func _seed_house() -> void:
 	g._home._cosmetic_house = not (_action_house_tray or _action_house_touch)
 	g._home.house_unlocked.clear()
@@ -125,6 +157,8 @@ func _seed_house() -> void:
 		g._home.house_placements = HouseLayout.default_placements()
 		for cat in HouseItems.CATS:
 			g._home._unlock_item(HouseItems.base_item(String(cat)))
+		for id in _house_showcase.split(",", false):
+			g._home._unlock_item(String(id).strip_edges())
 	else:
 		g._engine.ether = 2000
 		g._engine.ether_overflow = 0

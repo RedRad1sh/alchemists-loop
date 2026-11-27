@@ -837,6 +837,8 @@ func _ready() -> void:
 	for a in args:
 		if a.begins_with("--gif="):
 			_demo_harness._gif_dir = a.substr("--gif=".length())
+		elif a.begins_with("--house-showcase="):
+			_demo_harness._house_showcase = a.substr("--house-showcase=".length())
 		elif a.begins_with("--shot="):
 			_demo_harness._shot_path = a.substr("--shot=".length())
 		elif a.begins_with("--roompan="):
@@ -1096,6 +1098,12 @@ func _ready() -> void:
 	if _demo_harness._demo and _demo_harness._action_room_spike_full:
 		_demo_harness._seed_house()
 		_home.house_placements = Demo.full_house_layout()
+		_home._open_house_screen()
+	if _demo_harness._demo and _demo_harness._house_showcase != "":
+		# Кадр примерки новых предметов: --house-showcase=id1,id2,... ставит их
+		# в комнату по свободным клеткам, остальное — стартовая раскладка.
+		_demo_harness._seed_house()
+		_home.house_placements = Demo.showcase_layout(_demo_harness._house_showcase.split(","))
 		_home._open_house_screen()
 	if _demo_harness._demo and _demo_harness._action_master:
 		# кадр приёмки комнаты 2: карусель открывается на Мастерской
