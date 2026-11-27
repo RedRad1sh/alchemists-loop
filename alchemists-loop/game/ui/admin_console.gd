@@ -70,7 +70,7 @@ func _build_ui() -> void:
 	vbox.add_child(_input)
 
 	var help := Label.new()
-	help.text = "give all [N] | give layer <L> [N] | give <id> [N] | house all | house <id> | add <id> | unlock <mode> | set ether <N> | reset day | clear inventory | force circle open"
+	help.text = "give all [N] | give layer <L> [N] | give <id> [N] | house all | house <id> | sfx play|set|file|rarity|reload|save | add <id> | unlock <mode> | set ether <N> | reset day | clear inventory | force circle open"
 	help.add_theme_font_size_override("font_size", 11)
 	help.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -135,23 +135,97 @@ func _on_command(text: String) -> void:
 func _cmd_sfx(parts: Array) -> void:
 	if OS.has_feature("editor") == false:
 		return
+	var usage := "sfx list | play <event> [N] | rarity <редкость> | set <event[.N]> <key> <value> | file <путь> [дБ] [pitch] | reload | save | stop   (ключи: file volume_db pitch delay start_sec len_sec loop)"
 	if parts.size() < 2:
-		_log_text("[color=red]Usage: sfx list | sfx play <event>[/color]")
+		_log_text("[color=red]Usage: %s[/color]" % usage)
 		return
 	var sub: String = str(parts[1])
-	if sub == "list":
-		var names: Array = []
-		for k in Sfx._sound_cfg.keys():
-			names.append(String(k))
-		names.sort()
-		_log_text("Events (%d): %s" % [names.size(), ", ".join(names)])
-		return
-	if sub == "play" and parts.size() >= 3:
-		var ev: String = str(parts[2])
-		Sfx.play_event(ev)
-		_log_text("Playing event: %s" % ev)
-		return
-	_log_text("[color=red]Usage: sfx list | sfx play <event>[/color]")
+	match sub:
+		"list":
+			# По группам (ui, craft, ritual, reward, spirit), как папки в assets/audio.
+			var groups := {}
+			for k in Sfx._sound_cfg.keys():
+				var g := str((Sfx._sound_cfg[k] as Dictionary).get("group", "other"))
+				if not groups.has(g):
+					groups[g] = []
+				(groups[g] as Array).append(String(k))
+			for g in groups.keys():
+				_log_text("[b]%s[/b]: %s" % [str(g), ", ".join(groups[g])])
+		"play":
+			if parts.size() < 3:
+				_log_text("[color=red]sfx play <event>[/color]")
+				return
+			var ev: String = str(parts[2])
+			var variant := int(parts[3]) - 1 if parts.size() >= 4 else -1
+			Sfx.play_event(ev, variant)
+			_log_text("Playing event: %s  %s" % [ev, _sfx_summary(ev)])
+		"reload":
+			Sfx.reload_config()
+			_log_text("sounds.json перечитан, кэш звуков сброшен (%d событий)" % Sfx._sound_cfg.size())
+		"set":
+			if parts.size() < 5:
+				_log_text("[color=red]sfx set <event> <key> <value>[/color]")
+				return
+			var ev := str(parts[2])
+			var key := str(parts[3])
+			if not (key in ["file", "volume_db", "pitch", "delay", "start_sec", "len_sec", "loop"]):
+				_log_text("[color=red]Unknown key: %s[/color]" % key)
+				return
+			var raw := str(parts[4])
+			var value: Variant = raw
+			if key == "file":
+				value = _sfx_path(raw)
+			elif key == "loop":
+				value = raw == "true" or raw == "1"
+			else:
+				value = float(raw)
+			Sfx.debug_set(ev, key, value)
+			Sfx.play_event(ev.get_slice(".", 0), ev.get_slice(".", 1).to_int() - 1 if ev.contains(".") else -1)
+			_log_text("%s.%s = %s → играю  (в файл: sfx save)" % [ev, key, str(value)])
+		"file":
+			if parts.size() < 3:
+				_log_text("[color=red]sfx file <путь> [дБ] [pitch][/color]")
+				return
+			var path := _sfx_path(str(parts[2]))
+			var vol := float(parts[3]) if parts.size() >= 4 else 0.0
+			var pitch := float(parts[4]) if parts.size() >= 5 else 1.0
+			if Sfx.debug_play_file(path, vol, pitch):
+				_log_text("Играет %s (%.1f дБ, pitch %.2f)" % [path, vol, pitch])
+			else:
+				_log_text("[color=red]Файл не найден или не импортирован: %s[/color]" % path)
+		"save":
+			if Sfx.debug_save():
+				_log_text("[color=green]Записано в assets/audio/sounds.json[/color]")
+			else:
+				_log_text("[color=red]Не удалось записать sounds.json[/color]")
+		"rarity":
+			# Проверка звука раскрытия по редкости: sfx rarity legendary
+			if parts.size() < 3:
+				_log_text("[color=red]sfx rarity <common|rare|epic|legendary|mythic|chromatic>[/color]")
+				return
+			Sfx.card(str(parts[2]))
+			_log_text("Карта %s → %s" % [str(parts[2]), Sfx.card_event_for(str(parts[2]))])
+		"stop":
+			Sfx.debug_stop()
+			_log_text("Звук остановлен")
+		_:
+			_log_text("[color=red]Usage: %s[/color]" % usage)
+
+
+## Короткий путь → res://: `cc0/morph.wav` = res://assets/audio/cc0/morph.wav.
+func _sfx_path(raw: String) -> String:
+	if raw.begins_with("res://"):
+		return raw
+	return "res://assets/audio/" + raw.trim_prefix("/")
+
+
+func _sfx_summary(ev: String) -> String:
+	var d: Dictionary = Sfx._sound_cfg.get(ev, {})
+	if d.is_empty():
+		return "(нет в конфиге — процедурный звук)"
+	var vs: Array = d.get("variants", [])
+	var tail := "  вариантов: %d (sfx play %s N — конкретный)" % [vs.size(), ev] if not vs.is_empty() else ""
+	return "file=%s vol=%s pitch=%s%s" % [str(d.get("file", "")).get_file(), str(d.get("volume_db", 0.0)), str(d.get("pitch", 1.0)), tail]
 
 ## Быстрая выдача веществ для приёмки. Работает только в редакторе (гейт
 ## _on_command). Выданное вещество открывается вместе с рецептом, которым оно

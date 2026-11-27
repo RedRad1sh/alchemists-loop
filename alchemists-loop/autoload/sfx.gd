@@ -120,6 +120,86 @@ func _mix(parts: Array) -> PackedFloat32Array:
 			out[i] += p[i]
 	return out
 
+## ---- Debug-примерка звука (только редактор) ----
+## Правишь sounds.json или параметры из консоли (`sfx ...`) и слышишь сразу,
+## без перезапуска игры.
+var _cfg_mtime := 0
+
+## Перечитать sounds.json и сбросить кэш потоков (поменялся сам файл звука).
+func reload_config() -> void:
+	_stream_cache.clear()
+	_sound_cfg = {}
+	_load_sound_cfg()
+	_cfg_mtime = FileAccess.get_modified_time(SOUNDS_CFG_PATH)
+
+
+## В редакторе перед каждым событием проверяет mtime sounds.json: сохранил файл —
+## следующий звук уже играет по новым значениям.
+func _reload_if_changed() -> void:
+	if not OS.has_feature("editor"):
+		return
+	var m := FileAccess.get_modified_time(SOUNDS_CFG_PATH)
+	if m != _cfg_mtime:
+		reload_config()
+
+
+## Временно (до reload/перезапуска) меняет параметр события; `debug_save` пишет в файл.
+## Адрес `событие.N` правит N-й вариант (с 1), например `cauldron_add.2`.
+func debug_set(event_name: String, key: String, value: Variant) -> void:
+	var base := event_name
+	var variant := -1
+	if event_name.contains("."):
+		base = event_name.get_slice(".", 0)
+		variant = event_name.get_slice(".", 1).to_int() - 1
+	var ev: Dictionary = _sound_cfg.get(base, {})
+	if variant >= 0:
+		var list: Array = ev.get("variants", [])
+		if variant >= list.size():
+			return
+		(list[variant] as Dictionary)[key] = value
+	else:
+		ev[key] = value
+	_sound_cfg[base] = ev
+
+
+## Записывает текущие параметры событий обратно в sounds.json (комментарий и
+## порядок ключей сохраняются).
+func debug_save(path: String = SOUNDS_CFG_PATH) -> bool:
+	var doc: Dictionary = {}
+	if FileAccess.file_exists(path):
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+		if parsed is Dictionary:
+			doc = parsed
+	doc["events"] = _sound_cfg
+	var raw := FileAccess.get_file_as_string(path) if FileAccess.file_exists(path) else ""
+	var txt := JSON.stringify(doc, "  ", false)
+	if raw.contains("\r\n"):
+		txt = txt.replace("\n", "\r\n")
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return false
+	f.store_string(txt + ("\r\n" if raw.contains("\r\n") else "\n"))
+	f.close()
+	if path == SOUNDS_CFG_PATH:
+		_cfg_mtime = FileAccess.get_modified_time(SOUNDS_CFG_PATH)
+	return true
+
+
+## Проиграть файл напрямую (без события): `sfx file <путь> [volume_db] [pitch]`.
+func debug_play_file(file: String, vol_db: float = 0.0, pitch: float = 1.0) -> bool:
+	var stream := load(file) as AudioStream
+	if stream == null:
+		return false
+	_play_stream(stream, vol_db, pitch)
+	return true
+
+
+func debug_stop() -> void:
+	ritual_spin_stop()
+	for p in _players:
+		(p as AudioStreamPlayer).stop()
+
+
 ## Загрузить конфиг звуков из sounds.json.
 func _load_sound_cfg() -> void:
 	if FileAccess.file_exists(SOUNDS_CFG_PATH):
@@ -129,6 +209,7 @@ func _load_sound_cfg() -> void:
 			var parsed: Variant = JSON.parse_string(txt)
 			if parsed is Dictionary and (parsed as Dictionary).has("events"):
 				_sound_cfg = (parsed as Dictionary)["events"] as Dictionary
+	_cfg_mtime = FileAccess.get_modified_time(SOUNDS_CFG_PATH)
 
 ## ЭКСПЕРИМЕНТ В КОТЛЕ: найдено новое сочетание (попап открытия рецепта).
 func brew_discover() -> void:
@@ -211,8 +292,9 @@ func _rng() -> bool:
 
 ## Воспроизвести событие по имени (из конфига или процедурный fallback).
 ## Используется из кода для UI/событий/ритуала и из debug-меню прослушивания.
-func play_event(event_name: String) -> void:
-	var ev: Dictionary = _sound_cfg.get(event_name, {})
+func play_event(event_name: String, variant: int = -1) -> void:
+	_reload_if_changed()
+	var ev: Dictionary = _resolve_event(event_name, variant)
 	var file := str(ev.get("file", ""))
 	if file != "" and _play_file(event_name, file, float(ev.get("volume_db", 0.0)),
 			float(ev.get("pitch", 1.0)), float(ev.get("delay", 0.0))):
@@ -239,6 +321,9 @@ func play_event(event_name: String) -> void:
 		"game_start": game_start()
 		"brew_discover": brew_discover()
 		"craft_start": craft_start()
+		"cauldron_add": cauldron_add()
+		"card_normal": discovery()
+		"card_legend", "card_mythic": legendary()
 
 ## Загрузить поток события с нарезкой (start_sec/len_sec) и loop.
 func _load_event_stream(event_name: String, file: String) -> AudioStream:
@@ -387,12 +472,82 @@ func _play_ui(samples: PackedFloat32Array, vol_db: float = 0.0) -> void:
 ## Если в конфиге для события задан файл — проиграть его и вернуть true,
 ## иначе false (продолжить процедурный звук).
 func _check_cfg_event(event_name: String) -> bool:
-	var ev: Dictionary = _sound_cfg.get(event_name, {})
+	_reload_if_changed()
+	var ev := _resolve_event(event_name)
 	var file := str(ev.get("file", ""))
 	if file == "":
 		return false
 	return _play_file(event_name, file, float(ev.get("volume_db", 0.0)),
 		float(ev.get("pitch", 1.0)), float(ev.get("delay", 0.0)))
+
+
+## Последний сыгранный вариант каждого события (индекс с 0) — для «не повторять подряд».
+var _last_variant: Dictionary = {}
+
+
+## Параметры события для проигрывания. Если в конфиге есть `variants`
+## ([{file, volume_db, ...}]), берётся один из них (случайный, не тот же, что в
+## прошлый раз; `forced` ≥ 0 — конкретный, для примерки), а поля варианта
+## перекрывают поля события.
+func _resolve_event(event_name: String, forced: int = -1) -> Dictionary:
+	var ev: Dictionary = _sound_cfg.get(event_name, {})
+	var variants: Array = ev.get("variants", [])
+	if variants.is_empty():
+		return ev
+	var idx := forced if forced >= 0 and forced < variants.size() \
+		else _pick_variant_index(event_name, variants.size())
+	_last_variant[event_name] = idx
+	var out := ev.duplicate()
+	out.erase("variants")
+	var pick: Variant = variants[idx]
+	if pick is Dictionary:
+		out.merge(pick as Dictionary, true)
+	else:
+		out["file"] = str(pick)
+	return out
+
+
+## Случайный индекс из n, не равный прошлому у этого события.
+func _pick_variant_index(event_name: String, n: int) -> int:
+	if n <= 1:
+		return 0
+	var last := int(_last_variant.get(event_name, -1))
+	var idx := randi() % (n - 1)
+	if last >= 0 and idx >= last:
+		idx += 1
+	elif last < 0:
+		idx = randi() % n
+	return idx
+
+
+## Добавление вещества в котёл эксперимента: один из трёх пузырьков (cauldron_add).
+func cauldron_add() -> void:
+	if _check_cfg_event("cauldron_add"):
+		return
+	bubble()
+
+
+## Редкость карты → событие: legendary → card_legend, mythic/chromatic → card_mythic,
+## остальные (common…epic) → card_normal.
+func card_event_for(rarity: String) -> String:
+	match rarity:
+		"legendary":
+			return "card_legend"
+		"mythic", "chromatic":
+			return "card_mythic"
+		_:
+			return "card_normal"
+
+
+## Звук раскрытия карты по редкости. Без файла в конфиге — прежние процедурные
+## (особые → legendary, остальные → discovery).
+func card(rarity: String) -> void:
+	if _check_cfg_event(card_event_for(rarity)):
+		return
+	if rarity in ["legendary", "mythic", "chromatic"]:
+		legendary()
+	else:
+		discovery()
 
 
 func bubble() -> void:

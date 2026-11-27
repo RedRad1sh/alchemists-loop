@@ -66,6 +66,57 @@ static func run(g: Game) -> void:
 	Sfx.ritual_spin_stop()
 	Selftest.check("ritual_spin stops loop player", not Sfx._spin_player.playing)
 
+	# Debug-примерка звука: параметр меняется на лету, reload возвращает файл,
+	# save пишет конфиг, не теряя комментарий и события.
+	var _cfg_vol := float((Sfx._sound_cfg.get("click", {}) as Dictionary).get("volume_db", 0.0))
+	Sfx.debug_set("click", "volume_db", _cfg_vol - 7.0)
+	Selftest.check("sfx debug_set changes an event parameter at runtime",
+		is_equal_approx(float((Sfx._sound_cfg["click"] as Dictionary)["volume_db"]), _cfg_vol - 7.0))
+	var _tmp := "user://sfx_debug_probe.json"
+	Selftest.check("sfx debug_save writes events and keeps the comment", Sfx.debug_save(_tmp)
+		and str(JSON.parse_string(FileAccess.get_file_as_string(_tmp)).get("events", {}).get("click", {}).get("volume_db", "")) == str(_cfg_vol - 7.0))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(_tmp))
+	Sfx.reload_config()
+	Selftest.check("sfx reload_config restores the file values and drops cached streams",
+		is_equal_approx(float((Sfx._sound_cfg["click"] as Dictionary).get("volume_db", 0.0)), _cfg_vol)
+		and Sfx._stream_cache.is_empty())
+	Selftest.check("sfx debug_play_file refuses a missing file", not Sfx.debug_play_file("res://assets/audio/no_such.wav"))
+
+	# Звуки с вариантами и редкостью карт.
+	var _bub: Dictionary = Sfx._sound_cfg.get("cauldron_add", {})
+	var _vs: Array = _bub.get("variants", [])
+	var _files := {}
+	var _no_repeat := true
+	var _prev := -2
+	for _i in 60:
+		var _r := Sfx._resolve_event("cauldron_add")
+		_files[str(_r.get("file", ""))] = true
+		var _ix := int(Sfx._last_variant.get("cauldron_add", -1))
+		_no_repeat = _no_repeat and _ix != _prev
+		_prev = _ix
+	Selftest.check("cauldron_add has three bubble variants", _vs.size() == 3)
+	Selftest.check("cauldron_add draws every variant over many calls", _files.size() == 3)
+	Selftest.check("cauldron_add never plays the same variant twice in a row", _no_repeat)
+	Selftest.check("cauldron_add variants all point to real audio",
+		_vs.all(func(x): return load(str((x as Dictionary).get("file", ""))) is AudioStream))
+	Selftest.check("a variant overrides the event volume", is_equal_approx(
+		float(Sfx._resolve_event("cauldron_add", 0).get("volume_db", 99.0)), float((_vs[0] as Dictionary).get("volume_db", -1.0))))
+	Selftest.check("card rarity maps to its own event",
+		Sfx.card_event_for("common") == "card_normal" and Sfx.card_event_for("epic") == "card_normal"
+		and Sfx.card_event_for("legendary") == "card_legend"
+		and Sfx.card_event_for("mythic") == "card_mythic" and Sfx.card_event_for("chromatic") == "card_mythic")
+	var _cf := {}
+	for _e in ["card_normal", "card_legend", "card_mythic"]:
+		_cf[str((Sfx._sound_cfg.get(_e, {}) as Dictionary).get("file", ""))] = true
+	Selftest.check("normal, legend and mythic cards use three different audio files",
+		_cf.size() == 3 and not _cf.has("") and _cf.keys().all(func(f): return load(f) is AudioStream))
+	# sfx set до первого проигрывания не должен затираться перечитыванием файла.
+	Sfx.debug_set("click", "volume_db", -33.0)
+	Sfx._reload_if_changed()
+	Selftest.check("sfx set survives the first play (config not re-read over it)",
+		is_equal_approx(float((Sfx._sound_cfg["click"] as Dictionary).get("volume_db", 0.0)), -33.0))
+	Sfx.reload_config()
+
 	# что варить сейчас
 	g._engine.known_recipes.clear()
 	g._engine.inventory.clear()
